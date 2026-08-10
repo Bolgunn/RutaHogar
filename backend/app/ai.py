@@ -23,17 +23,6 @@ if _env_path.exists():
 # Se puede cambiar sin tocar código con la variable GROQ_MODEL en backend/.env.
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 
-
-def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
-    """Wrapper interno que consulta el modelo configurado vía Groq.
-
-    Devuelve el texto generado o None si la IA no está disponible o falló;
-    los textos de estado/error jamás se exponen como contenido.
-    """
-    if Groq is None:
-        print("[ai] Librería de Groq no instalada; IA deshabilitada.", flush=True)
-        return None
-
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("[ai] GROQ_API_KEY no configurada; IA deshabilitada.", flush=True)

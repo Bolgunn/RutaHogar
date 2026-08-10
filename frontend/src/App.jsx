@@ -87,7 +87,7 @@ function getChannel() {
     const validChannels = ['web', 'chatbot', 'whatsapp', 'vendedor'];
     const channel = params.get('channel');
     if (channel && validChannels.includes(channel)) return channel;
-  } catch {}
+  } catch { }
   return 'web';
 }
 
@@ -120,9 +120,9 @@ const hasCompletedOnboarding = (data) => {
 
   return Boolean(
     data.objetivo_principal &&
-      data.tipo_propiedad &&
-      data.comuna_interes &&
-      data.plazo_compra,
+    data.tipo_propiedad &&
+    data.comuna_interes &&
+    data.plazo_compra,
   );
 };
 
@@ -413,10 +413,10 @@ export default function App() {
     ? profile?.onboarding_data || null
     : profile
       ? profile.onboarding_data ||
-        onboarding[userId] ||
-        onboarding[profile?.id] ||
-        onboarding[profile?.email] ||
-        null
+      onboarding[userId] ||
+      onboarding[profile?.id] ||
+      onboarding[profile?.email] ||
+      null
       : null;
   const onboardingCompleted = hasCompletedOnboarding(userOnboarding);
   const currentScoreNumber = currentEvaluation
@@ -425,9 +425,9 @@ export default function App() {
   const currentScore =
     currentEvaluation && currentScoreNumber !== null
       ? {
-          score: currentScoreNumber,
-          classification: currentEvaluation.result.classification,
-        }
+        score: currentScoreNumber,
+        classification: currentEvaluation.result.classification,
+      }
       : null;
 
   useEffect(() => {
@@ -494,7 +494,7 @@ export default function App() {
         console.error(err);
         if (active)
           setDataError(
-            "No pudimos cargar tu historial. Revisa que las tablas de Supabase esten creadas y vuelve a intentar.",
+            "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde.",
           );
       }
     }
@@ -767,7 +767,8 @@ export default function App() {
         setSignupOfferError("Cuenta creada, pero no pudimos guardar tu evaluación. Por favor intenta de nuevo.");
         setAuth(nextAuth);
       } else {
-        setSignupOfferError(err?.message || "No se pudo crear la cuenta. Intenta nuevamente.");
+        console.log("Error de Auth en registro:", err);
+        setSignupOfferError("No pudimos crear tu cuenta en este momento. Verifica que tus datos sean correctos o que el correo no esté ya registrado.");
       }
     } finally {
       setSignupOfferLoading(false);
@@ -803,7 +804,7 @@ export default function App() {
         console.error(err);
         setAuth(nextAuth);
         setDataError(
-          "Iniciaste sesion, pero no pudimos migrar la preevaluación previa. Tus datos temporales se conservaron para reintentar.",
+          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu evaluación anterior. Puedes volver a intentarlo desde tu perfil.",
         );
         const fallbackPage = getInitialPageForProfile(nextAuth.profile);
         navigateToPageForProfile(fallbackPage, nextAuth.profile, { replace: true });
@@ -962,7 +963,7 @@ export default function App() {
       if (resultRef.current !== resultSnapshot) return;
       setResultSaved(false);
       setDataError(
-        "El score se calculó, pero no pudimos guardar la preevaluación. Revisa que tu sesión siga activa y que Supabase permita insertar evaluaciones.",
+        "Tu pre-evaluación finalizó, pero hubo un problema al guardarla en tu historial. Si el problema persiste, vuelve a iniciar sesión.",
       );
     }
   };
@@ -1130,29 +1131,57 @@ export default function App() {
       setDataError("No pudimos guardar el avance mensual.");
     }
   };
-
+  // Esta funcion es la que permite registrar un nuevo hito y recalcular el score.
   const handleRegisterMilestone = async (milestoneData) => {
     if (!currentEvaluation) return;
     try {
       setDataError("");
       setMilestoneSuccess("");
-      
+
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
       const scoreUrl = `${apiBase.replace(/\/$/, "")}/score`;
 
+      // 1. SANITIZAR DATOS: Mapear "renta_mensual" a "ingreso_mensual" si es necesario
+      // y forzar que los valores financieros sean números para evitar que la API crashee.
+      const parsedMilestoneData = { ...milestoneData };
+
+      if (parsedMilestoneData.renta_mensual !== undefined) {
+        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.renta_mensual);
+        delete parsedMilestoneData.renta_mensual; // Limpiamos el campo incorrecto
+      } else if (parsedMilestoneData.ingreso_mensual !== undefined) {
+        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.ingreso_mensual);
+      }
+
+      if (parsedMilestoneData.ahorro_disponible !== undefined) {
+        parsedMilestoneData.ahorro_disponible = Number(parsedMilestoneData.ahorro_disponible);
+      }
+
+      console.log('RegisterMilestone: parsedMilestoneData', parsedMilestoneData);
+
+      // 2. Construir el input mezclando la evaluación anterior con los datos sanitizados
       const newFinancialInput = buildFinancialInput({
         ...currentEvaluation.input,
-        ...milestoneData,
+        ...parsedMilestoneData,
       });
 
-      const res = await fetch(scoreUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newFinancialInput),
-      });
+      console.log('Payload enviado a la API:', newFinancialInput);
+
+      let res;
+      try {
+        res = await fetch(scoreUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newFinancialInput),
+        });
+      } catch (fetchErr) {
+        console.error('Network error al contactar API de scoring (¿Está encendido el servidor en el puerto 8000?)', fetchErr);
+        throw new Error(`Error de conexión con el motor de evaluación.`);
+      }
 
       if (!res.ok) {
-        throw new Error(`Error en el scoring: ${res.status}`);
+        const errorText = await res.text();
+        console.error('Error interno en API de scoring', { status: res.status, body: errorText });
+        throw new Error(`El motor rechazó los datos (Código ${res.status}). Revisa la consola del backend.`);
       }
 
       const scoreResult = await res.json();
@@ -1161,25 +1190,22 @@ export default function App() {
       const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
         email: profile?.email || "sin-email",
         onboarding: userOnboarding ? { ...userOnboarding } : null,
-        input: newFinancialInput,
+        input: newFinancialInput, // Guardamos el nuevo input en Supabase
         result: resultSnapshot,
         channel: getChannel(),
       });
 
-      setEvaluations((prev) => {
-        const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
-        return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
-      });
+      console.log('Milestone savedEvaluation', savedEvaluation);
+
       prependEvaluation(savedEvaluation);
 
       setMilestoneSuccess("¡Hito registrado exitosamente! Tu score y plan han sido recalculados.");
-      setPage("tracking"); 
-      
-      // Auto-hide success message after 5 seconds
+      setPage("tracking");
+
       setTimeout(() => setMilestoneSuccess(""), 5000);
     } catch (err) {
       console.error("Error registrando hito", err);
-      setDataError("Hubo un problema registrando el hito. Por favor intenta de nuevo.");
+      setDataError("Hubo un problema al registrar tu nuevo hito. Por favor, verifica tus datos e intenta nuevamente.");
     }
   };
 
@@ -1318,6 +1344,35 @@ export default function App() {
               onResult={handleAnonResult}
             />
           </section>
+              {anonOnboarding && (
+                <div className="context-summary">
+                  <strong>Contexto inicial</strong>
+                  <span>
+                    {anonOnboarding.comuna_interes} ·{" "}
+                    {plazoLabels[anonOnboarding.plazo_compra] || anonOnboarding.plazo_compra}
+                  </span>
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() => navigateToPage("anon-onboarding")}
+                  >
+                    Editar contexto
+                  </button>
+                </div>
+              )}
+              <ScoreForm
+                targetCommune={anonOnboarding?.comuna_interes}
+                objective={anonOnboarding?.objetivo_principal}
+                onboardingData={anonOnboarding}
+                birthDate={null}
+                profile={null}
+                consentGranted={true}
+                isAnon
+                onConsentAccept={() => { }}
+                onResult={handleAnonResult}
+              />
+            </section>
+          </div>
         </div>
       );
     }

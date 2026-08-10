@@ -17,13 +17,13 @@ help:
 
 install-backend:
 	python3 -m venv $(BACKEND_DIR)/.venv
-	$(BACKEND_DIR)/.venv/bin/python -m pip install -r $(BACKEND_DIR)/requirements.txt
+	$(BACKEND_DIR)/.venv/bin/pip install -r $(BACKEND_DIR)/requirements.txt
 
 install-frontend:
 	cd $(FRONTEND_DIR) && npm install
-
+install: install-backend install-frontend
 run-backend:
-	cd $(BACKEND_DIR) && .venv/Scripts/uvicorn app.main:app --reload --port 8000
+	cd $(BACKEND_DIR) && .venv/bin/uvicorn app.main:app --reload --port 8000
 
 run-frontend:
 	cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
