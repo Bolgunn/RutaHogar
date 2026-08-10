@@ -23,7 +23,7 @@ def _ask_groq(prompt: str, max_tokens: int = 300) -> str:
     if Groq is None:
         return "Resumen IA no disponible en entorno local."
 
-    api_key = "os.environ.get("GROQ_API_KEY")"
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return "Resumen IA no disponible: GROQ_API_KEY no configurada."
 

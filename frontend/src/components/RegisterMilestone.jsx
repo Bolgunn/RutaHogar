@@ -8,10 +8,11 @@ const continuityOptions = [
 ];
 
 export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
-  const [activeType, setActiveType] = useState(null); // 'ahorro', 'deuda', 'laboral'
+  const [activeType, setActiveType] = useState(null); // 'ahorro', 'deuda', 'laboral', 'renta'
   const [newSavings, setNewSavings] = useState("");
   const [newDebt, setNewDebt] = useState("");
   const [newContinuity, setNewContinuity] = useState("");
+  const [newIncome, setNewIncome] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -19,6 +20,7 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const currentSavings = Number(inputData.ahorro_disponible) || 0;
   const currentDebt = Number(inputData.deuda_mensual) || 0;
   const currentContinuity = inputData.continuidad_laboral || "";
+  const currentIncome = Number(inputData.ingreso_mensual) || 0;
 
   const handleAhorroSubmit = async (e) => {
     e.preventDefault();
@@ -80,6 +82,27 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
     setIsSubmitting(false);
   };
 
+  const handleRentaSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    const incomeVal = Number(newIncome);
+    if (!Number.isFinite(incomeVal) || incomeVal <= 0 || newIncome === "") {
+      setError("La renta debe ser un número válido mayor a 0.");
+      return;
+    }
+    if (incomeVal === currentIncome) {
+      setError(
+        `El nuevo monto es idéntico a tu renta declarada previamente (${formatClp(
+          currentIncome
+        )}).`
+      );
+      return;
+    }
+    setIsSubmitting(true);
+    await onRegister({ ingreso_mensual: incomeVal });
+    setIsSubmitting(false);
+  };
+
   return (
     <section className="section-block milestone-registration-panel">
       <div className="section-heading">
@@ -93,11 +116,11 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         </p>
       </div>
 
-      <div className="milestone-cards-container" style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
+      <div className="milestone-cards-container" style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "2rem" }}>
         <button
           className={`card-button ${activeType === 'ahorro' ? 'active' : ''}`}
           onClick={() => { setActiveType('ahorro'); setError(""); }}
-          style={{ flex: 1, padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'ahorro' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'ahorro' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
         >
           <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💰 Aumento de Ahorro</h3>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He logrado ahorrar más dinero para mi pie.</p>
@@ -106,7 +129,7 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         <button
           className={`card-button ${activeType === 'deuda' ? 'active' : ''}`}
           onClick={() => { setActiveType('deuda'); setError(""); }}
-          style={{ flex: 1, padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'deuda' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'deuda' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
         >
           <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💳 Reducción de Deuda</h3>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He pagado parte o la totalidad de mis deudas.</p>
@@ -115,10 +138,19 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         <button
           className={`card-button ${activeType === 'laboral' ? 'active' : ''}`}
           onClick={() => { setActiveType('laboral'); setError(""); }}
-          style={{ flex: 1, padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'laboral' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'laboral' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
         >
           <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💼 Mejora Laboral</h3>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He cambiado mi tipo de contrato o antigüedad.</p>
+        </button>
+
+        <button
+          className={`card-button ${activeType === 'renta' ? 'active' : ''}`}
+          onClick={() => { setActiveType('renta'); setError(""); }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'renta' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+        >
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>📈 Aumento de Renta</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>Han subido mis ingresos mensuales líquidos.</p>
         </button>
       </div>
 
@@ -198,6 +230,33 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
                   </option>
                 ))}
               </select>
+            </label>
+            {error && <div className="warning-note" style={{ marginTop: "1rem" }}>{error}</div>}
+            <div style={{ marginTop: "1.5rem" }}>
+              <button type="submit" className="primary-button" disabled={isSubmitting}>
+                {isSubmitting ? "Calculando nuevo score..." : "Registrar y Recalcular"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {activeType === "renta" && (
+          <form onSubmit={handleRentaSubmit} className="milestone-form" style={{ padding: "1.5rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--surface-color)" }}>
+            <h3>Actualiza tu Renta Mensual</h3>
+            <p className="field-help" style={{ marginBottom: "1.5rem" }}>
+              Actualmente tienes declarado: <strong>{formatClp(currentIncome)}</strong>
+            </p>
+            <label className="field-label">
+              Nueva Renta Mensual Líquida (CLP)
+              <input
+                type="number"
+                min="0"
+                value={newIncome}
+                onChange={(e) => setNewIncome(e.target.value)}
+                placeholder="Ej. 1200000"
+                className="text-input"
+                autoFocus
+              />
             </label>
             {error && <div className="warning-note" style={{ marginTop: "1rem" }}>{error}</div>}
             <div style={{ marginTop: "1.5rem" }}>
