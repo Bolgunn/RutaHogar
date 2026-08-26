@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { mockProjects } from "../data/mockProjects";
 import {
   buildAccessibleAlternatives,
   buildComparisonInsights,
@@ -8,7 +7,13 @@ import {
   getMaxValueRange,
   getScenarioFromManualValue,
 } from "../lib/simulation/compatibility";
+import { resolveActiveComparison, shouldShowComparisonWarning } from "../lib/simulation/comparisonState";
 import { CLP_FORMATTER } from "../services/financialTracking";
+import {
+  getSimulationProjectById,
+  getSimulationProjects,
+  projectToSimulationScenario,
+} from "../services/projectSimulationService";
 import { plazoLabels, propertyLabels } from "../constants";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
@@ -66,16 +71,7 @@ function getProjectLabel(project) {
 
 function projectToComparable(project, context, ufValueClp) {
   if (!project) return null;
-  const scenario = {
-    id: project.id,
-    source: "project",
-    label: project.nombre,
-    comuna: project.comuna,
-    tipo_vivienda: project.tipo_vivienda,
-    valueUf: Number(project.valor_uf) || 0,
-    valueClp: Number(project.valor_clp) || Math.round((Number(project.valor_uf) || 0) * ufValueClp),
-    project,
-  };
+  const scenario = projectToSimulationScenario(project, ufValueClp);
   return evaluateScenario(context, scenario);
 }
 
@@ -142,9 +138,9 @@ function AdvantageList({ title, items }) {
 }
 
 const chartViews = [
+  { id: "goals", label: "Metas" },
   { id: "bars", label: "Barras" },
   { id: "deltas", label: "Diferencias" },
-  { id: "cards", label: "Resumen" },
 ];
 
 function ChartViewIcon({ type }) {
@@ -219,6 +215,110 @@ function ComparisonBars({ metrics, currentName, alternativeName }) {
   );
 }
 
+function getPercent(value, max) {
+  const numericValue = Number(value);
+  const numericMax = Number(max);
+  if (!Number.isFinite(numericValue) || !Number.isFinite(numericMax) || numericMax <= 0) return 0;
+  return Math.max(0, Math.min(100, (numericValue / numericMax) * 100));
+}
+
+function getSavingsGoal(result) {
+  if (!result) return null;
+  if (result.savingsUf >= result.pieRecomendadoUf) {
+    return { label: "Cubre recomendado", tone: "good" };
+  }
+  if (result.savingsUf >= result.pieMinimoUf) {
+    return { label: "Cubre minimo", tone: "near" };
+  }
+  return { label: "Falta pie", tone: "adjust" };
+}
+
+function getDividendGoal(result) {
+  if (!result || result.dividend <= 0 || result.prudentDividend <= 0) {
+    return { label: "Sin dividendo declarado", tone: "muted" };
+  }
+  if (result.dividend <= result.prudentDividend) {
+    return { label: "Dentro del limite", tone: "good" };
+  }
+  return { label: "Sobre el limite", tone: "adjust" };
+}
+
+function BulletGoal({ title, measuredLabel, measuredValue, measuredPercent, markers = [], status }) {
+  return (
+    <div className="comparison-goal">
+      <div className="comparison-goal-heading">
+        <span>{title}</span>
+        <strong className={`goal-status ${status.tone}`}>{status.label}</strong>
+      </div>
+      <div className="comparison-goal-track" aria-label={`${title}: ${measuredLabel}`}>
+        <i className={`goal-fill ${status.tone}`} style={{ width: `${Math.max(4, measuredPercent)}%` }} />
+        {markers.map((marker) => (
+          <b
+            className={`goal-marker ${marker.tone || ""}`}
+            key={marker.label}
+            style={{ left: `${marker.percent}%` }}
+            title={marker.label}
+          />
+        ))}
+      </div>
+      <div className="comparison-goal-legend">
+        <span>{measuredLabel}</span>
+        <strong>{measuredValue}</strong>
+      </div>
+      {markers.length ? (
+        <div className="comparison-goal-markers">
+          {markers.map((marker) => (
+            <small key={marker.label}>{marker.label}: {marker.value}</small>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ScenarioGoals({ result, name }) {
+  const savingsMax = Math.max(result.savingsUf, result.pieRecomendadoUf, result.pieMinimoUf, 1);
+  const dividendMax = Math.max(result.dividend, result.prudentDividend, 1);
+  const savingsStatus = getSavingsGoal(result);
+  const dividendStatus = getDividendGoal(result);
+
+  return (
+    <article className="comparison-goal-card">
+      <strong>{name}</strong>
+      <BulletGoal
+        title="Pie"
+        measuredLabel="Ahorro disponible"
+        measuredValue={formatUf(result.savingsUf)}
+        measuredPercent={getPercent(result.savingsUf, savingsMax)}
+        status={savingsStatus}
+        markers={[
+          { label: "Minimo", value: formatUf(result.pieMinimoUf), percent: getPercent(result.pieMinimoUf, savingsMax), tone: "minimum" },
+          { label: "Recomendado", value: formatUf(result.pieRecomendadoUf), percent: getPercent(result.pieRecomendadoUf, savingsMax), tone: "recommended" },
+        ]}
+      />
+      <BulletGoal
+        title="Dividendo"
+        measuredLabel={result.dividend > 0 ? "Dividendo declarado" : "Dato no declarado"}
+        measuredValue={result.dividend > 0 ? formatClp(result.dividend) : "$0"}
+        measuredPercent={getPercent(result.dividend, dividendMax)}
+        status={dividendStatus}
+        markers={result.prudentDividend > 0 ? [
+          { label: "Limite prudente", value: formatClp(result.prudentDividend), percent: getPercent(result.prudentDividend, dividendMax), tone: "recommended" },
+        ] : []}
+      />
+    </article>
+  );
+}
+
+function ComparisonGoals({ current, alternative, currentName, alternativeName }) {
+  return (
+    <div className="comparison-goal-grid" aria-label="Metas financieras de escenarios comparados">
+      <ScenarioGoals result={current} name={currentName} />
+      <ScenarioGoals result={alternative} name={alternativeName} />
+    </div>
+  );
+}
+
 function getMetricDelta(metric) {
   if (metric.currentLabel || metric.alternativeLabel) {
     return `${metric.currentLabel || metric.current} / ${metric.alternativeLabel || metric.alternative}`;
@@ -250,25 +350,7 @@ function ComparisonDeltas({ metrics, currentName, alternativeName }) {
   );
 }
 
-function ComparisonCards({ metrics, currentName, alternativeName }) {
-  return (
-    <div className="comparison-card-visual" aria-label="Resumen visual de escenarios">
-      {[{ name: currentName, key: "current" }, { name: alternativeName, key: "alternative" }].map((scenario) => (
-        <article key={scenario.key}>
-          <strong>{scenario.name}</strong>
-          {metrics.map((metric) => (
-            <p key={metric.id}>
-              <span>{metric.label}</span>
-              <b>{metric[`${scenario.key}Label`] || formatMetricValue(metric[scenario.key], metric.unit)}</b>
-            </p>
-          ))}
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function ComparisonVisual({ metrics, currentName, alternativeName, view, onViewChange }) {
+function ComparisonVisual({ metrics, current, alternative, currentName, alternativeName, view, onViewChange }) {
   return (
     <div className="comparison-visual">
       <div className="comparison-visual-heading">
@@ -280,10 +362,10 @@ function ComparisonVisual({ metrics, currentName, alternativeName, view, onViewC
       </div>
       {view === "deltas" ? (
         <ComparisonDeltas metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-      ) : view === "cards" ? (
-        <ComparisonCards metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-      ) : (
+      ) : view === "bars" ? (
         <ComparisonBars metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
+      ) : (
+        <ComparisonGoals current={current} alternative={alternative} currentName={currentName} alternativeName={alternativeName} />
       )}
     </div>
   );
@@ -293,7 +375,6 @@ function ConceptHelpCta({ onNavigate }) {
   return (
     <section className="simulation-academy-cta" aria-labelledby="simulation-academy-title">
       <div>
-        <span className="eyebrow">Academia financiera</span>
         <h2 id="simulation-academy-title">¿Tienes dudas con algún concepto?</h2>
         <p>Entra a la Academia e infórmate antes de decidir qué escenario quieres mirar con más detalle.</p>
       </div>
@@ -333,12 +414,14 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     [evaluation, onboarding],
   );
   const ufValueClp = Number(context.uf_value_clp) || 40695;
+  const simulationProjects = useMemo(() => getSimulationProjects(), []);
   const [mode, setMode] = useState("project");
-  const [selectedProjectId, setSelectedProjectId] = useState(mockProjects[0]?.id || "");
+  const [selectedProjectId, setSelectedProjectId] = useState(simulationProjects[0]?.id || "");
   const [compareProjectId, setCompareProjectId] = useState("");
-  const [manualUf, setManualUf] = useState("");
+  const [manualValue, setManualValue] = useState("");
+  const [manualUnit, setManualUnit] = useState("uf");
   const [comparison, setComparison] = useState(null);
-  const [comparisonView, setComparisonView] = useState("bars");
+  const [comparisonView, setComparisonView] = useState("goals");
   const [targetProject, setTargetProject] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(TARGET_PROJECT_KEY)) || null;
@@ -349,32 +432,23 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const comparisonRef = useRef(null);
 
   const selectedProject = useMemo(
-    () => mockProjects.find((project) => project.id === selectedProjectId) || mockProjects[0] || null,
-    [selectedProjectId],
+    () => getSimulationProjectById(selectedProjectId) || simulationProjects[0] || null,
+    [selectedProjectId, simulationProjects],
   );
   const compareProject = useMemo(
-    () => mockProjects.find((project) => project.id === compareProjectId) || null,
+    () => getSimulationProjectById(compareProjectId),
     [compareProjectId],
   );
 
   const manualScenario = useMemo(
-    () => getScenarioFromManualValue(manualUf, ufValueClp),
-    [manualUf, ufValueClp],
+    () => getScenarioFromManualValue(manualValue, ufValueClp, manualUnit),
+    [manualUnit, manualValue, ufValueClp],
   );
 
   const scenario = useMemo(() => {
     if (mode === "manual") return manualScenario;
     if (!selectedProject) return null;
-    return {
-      id: selectedProject.id,
-      source: "project",
-      label: selectedProject.nombre,
-      comuna: selectedProject.comuna,
-      tipo_vivienda: selectedProject.tipo_vivienda,
-      valueUf: Number(selectedProject.valor_uf) || 0,
-      valueClp: Number(selectedProject.valor_clp) || Math.round((Number(selectedProject.valor_uf) || 0) * ufValueClp),
-      project: selectedProject,
-    };
+    return projectToSimulationScenario(selectedProject, ufValueClp);
   }, [manualScenario, mode, selectedProject, ufValueClp]);
 
   const scenarioResult = useMemo(
@@ -382,16 +456,28 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     [context, scenario],
   );
   const alternatives = useMemo(
-    () => buildAccessibleAlternatives(mockProjects, context, onboarding, 4),
-    [context, onboarding],
+    () => buildAccessibleAlternatives(simulationProjects, context, onboarding, 4),
+    [context, onboarding, simulationProjects],
   );
   const maxRange = useMemo(() => getMaxValueRange(context), [context]);
-  const hasManualValue = mode !== "manual" || Number(manualUf) > 0;
+  const hasManualValue = mode !== "manual" || Number(manualValue) > 0;
   const currentComparable = scenarioResult && hasManualValue ? scenarioResult : null;
   const targetProjectId = targetProject?.id || "";
   const compareProjectResult = useMemo(
     () => projectToComparable(compareProject, context, ufValueClp),
     [compareProject, context, ufValueClp],
+  );
+  const selectorComparison = useMemo(() => {
+    if (!currentComparable || !compareProjectResult) return null;
+    return {
+      source: "project-selector",
+      current: currentComparable,
+      alternative: compareProjectResult,
+    };
+  }, [compareProjectResult, currentComparable]);
+  const activeComparison = useMemo(
+    () => resolveActiveComparison(comparison, selectorComparison),
+    [comparison, selectorComparison],
   );
   const hasDeclaredDividend = Number(context.dividendo_estimado) > 0;
   const comparisonPreferences = useMemo(
@@ -403,25 +489,17 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     [context.comuna_objetivo, context.plazo_compra, context.tipo_vivienda_preferida, onboarding],
   );
   const comparisonInsights = useMemo(
-    () => buildComparisonInsights(comparison?.current || currentComparable, comparison?.alternative, comparisonPreferences),
-    [comparison, comparisonPreferences, currentComparable],
+    () => buildComparisonInsights(activeComparison?.current || currentComparable, activeComparison?.alternative, comparisonPreferences),
+    [activeComparison, comparisonPreferences, currentComparable],
   );
+  const showScenarioWarning = mode === "manual" && !hasManualValue;
+  const showComparisonWarning = shouldShowComparisonWarning(comparison, activeComparison, showScenarioWarning);
 
   useEffect(() => {
-    if (comparison && comparisonRef.current) {
+    if ((activeComparison || showComparisonWarning) && comparisonRef.current) {
       comparisonRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [comparison]);
-
-  useEffect(() => {
-    if (comparison?.source === "project-selector" && currentComparable && compareProjectResult) {
-      setComparison({
-        source: "project-selector",
-        current: currentComparable,
-        alternative: compareProjectResult,
-      });
-    }
-  }, [comparison?.source, compareProjectResult, currentComparable]);
+  }, [activeComparison, showComparisonWarning]);
 
   const handleCompareProjectChange = (projectId) => {
     setCompareProjectId(projectId);
@@ -429,10 +507,10 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       setComparison((prev) => (prev?.source === "project-selector" ? null : prev));
       return;
     }
-    const nextProject = mockProjects.find((project) => project.id === projectId);
+    const nextProject = getSimulationProjectById(projectId);
     const nextResult = projectToComparable(nextProject, context, ufValueClp);
     if (!currentComparable || !nextResult) {
-      setComparison({ error: true });
+      setComparison({ source: "project-selector", error: true });
       return;
     }
     setComparison({
@@ -534,28 +612,54 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               <label className="simulator-field">
                 Proyecto referencial
                 <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>
-                  {mockProjects.map((project) => (
+                  {simulationProjects.map((project) => (
                     <option key={project.id} value={project.id}>
                       {getProjectLabel(project)}
                     </option>
                   ))}
                 </select>
-                <span className="field-help">
-                  Los proyectos mostrados son referenciales para simulación y pueden no representar disponibilidad real.
-                </span>
               </label>
             ) : (
               <label className="simulator-field">
-                Valor de vivienda en UF
-                <input
-                  min="0"
-                  inputMode="numeric"
-                  type="number"
-                  value={manualUf}
-                  onChange={(event) => setManualUf(event.target.value)}
-                  placeholder="Ej: 2800"
-                />
-                <span className="field-help">Se mostrará su equivalente aproximado en CLP usando la UF referencial disponible.</span>
+                Valor de vivienda
+                <div className="manual-value-input">
+                  <input
+                    min="0"
+                    inputMode="numeric"
+                    type="number"
+                    value={manualValue}
+                    onChange={(event) => setManualValue(event.target.value)}
+                    placeholder={manualUnit === "uf" ? "Ej: 2800" : "Ej: 112000000"}
+                  />
+                  <div className="segmented-control manual-unit-toggle" aria-label="Unidad del valor manual">
+                    <button
+                      className={manualUnit === "uf" ? "is-active" : ""}
+                      type="button"
+                      onClick={() => setManualUnit("uf")}
+                      aria-pressed={manualUnit === "uf"}
+                    >
+                      UF
+                    </button>
+                    <button
+                      className={manualUnit === "clp" ? "is-active" : ""}
+                      type="button"
+                      onClick={() => setManualUnit("clp")}
+                      aria-pressed={manualUnit === "clp"}
+                    >
+                      CLP
+                    </button>
+                  </div>
+                </div>
+                <span className="field-help">
+                  {manualUnit === "uf"
+                    ? "Se mostrará su equivalente aproximado en CLP usando la UF referencial disponible."
+                    : "Se mostrará su equivalente aproximado en UF usando la UF referencial disponible."}
+                </span>
+                {Number(manualValue) > 0 ? (
+                  <span className="field-help">
+                    Equivalencia referencial: {formatUfClp(manualScenario.valueUf, manualScenario.valueClp)}.
+                  </span>
+                ) : null}
               </label>
             )}
 
@@ -563,15 +667,12 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               Comparar con otro proyecto
               <select value={compareProjectId} onChange={(event) => handleCompareProjectChange(event.target.value)}>
                 <option value="">Selecciona proyecto para comparar</option>
-                {mockProjects.map((project) => (
+                {simulationProjects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {getProjectLabel(project)}
                   </option>
                 ))}
               </select>
-              <span className="field-help">
-                Este selector compara el escenario base contra cualquier proyecto referencial.
-              </span>
             </label>
           </div>
 
@@ -580,7 +681,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               <span className="eyebrow">Preferencias consideradas</span>
               <div className="simulation-preferences-copy">
                 <p>
-                  Estamos usando tus respuestas preliminares para comuna, tipo, horizonte y objetivo. Si quieres cambiarlas, actualízalas desde tu Perfil.
+                  Estamos usando tus respuestas preliminares. Si quieres cambiarlas, actualízalas.
                 </p>
                 {onNavigate ? (
                   <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("profile")}>
@@ -638,13 +739,13 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <span className="eyebrow">Comparación</span>
           <h2>Comparación de escenarios</h2>
           <p>
-            {comparison?.current && comparison?.alternative
+            {activeComparison?.current && activeComparison?.alternative
               ? comparisonInsights.summary
               : "Selecciona un proyecto en el comparador o usa una opción accesible para contrastarla con tu escenario actual."}
           </p>
         </div>
 
-        {comparison?.error || !currentComparable ? (
+        {showComparisonWarning ? (
           <div className="warning-box">
             Primero selecciona un proyecto o ingresa un valor manual para comparar.
           </div>
@@ -665,11 +766,11 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           </article>
           <article>
             <span>Alternativa</span>
-            {comparison?.alternative ? (
+            {activeComparison?.alternative ? (
               <>
-                <ProjectImagePlaceholder result={comparison.alternative} compact />
-                <strong>{getScenarioName(comparison.alternative)}</strong>
-                <small>{formatUfClp(comparison.alternative.valueUf, comparison.alternative.valueClp)} · {comparison.alternative.status}</small>
+                <ProjectImagePlaceholder result={activeComparison.alternative} compact />
+                <strong>{getScenarioName(activeComparison.alternative)}</strong>
+                <small>{formatUfClp(activeComparison.alternative.valueUf, activeComparison.alternative.valueClp)} · {activeComparison.alternative.status}</small>
               </>
             ) : (
               <small>Selecciona un proyecto para comparar o usa una opción accesible.</small>
@@ -677,7 +778,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           </article>
         </div>
 
-        {comparison?.current && comparison?.alternative ? (
+        {activeComparison?.current && activeComparison?.alternative ? (
           <div className="comparison-analysis">
             <div className="comparison-recommendation">
               <span>Recomendación referencial</span>
@@ -693,8 +794,10 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
 
             <ComparisonVisual
               metrics={comparisonInsights.metrics}
-              currentName={getScenarioChartName(comparison.current)}
-              alternativeName={getScenarioChartName(comparison.alternative)}
+              current={activeComparison.current}
+              alternative={activeComparison.alternative}
+              currentName={getScenarioChartName(activeComparison.current)}
+              alternativeName={getScenarioChartName(activeComparison.alternative)}
               view={comparisonView}
               onViewChange={setComparisonView}
             />
@@ -702,7 +805,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         ) : null}
 
         <div className="comparison-grid">
-          {[{ label: "Escenario A", data: comparison?.current || currentComparable }, { label: "Escenario B", data: comparison?.alternative }].map((item) => (
+          {[{ label: "Escenario A", data: activeComparison?.current || currentComparable }, { label: "Escenario B", data: activeComparison?.alternative }].map((item) => (
             <article className={!item.data ? "comparison-empty" : ""} key={item.label}>
               <span className="eyebrow">{item.label}</span>
               {item.data ? (
@@ -760,7 +863,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <p className="simulation-horizon">{scenarioResult.horizonMessage}</p>
 
           <div className="sim-metrics">
-            <div className="metric metric-highlight">
+            <div className="metric">
               <span>Valor escenario</span>
               <strong>{formatUfClp(scenarioResult.valueUf, scenarioResult.valueClp)}</strong>
             </div>
@@ -788,13 +891,12 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         </div>
       ) : (
         <div className="warning-box">
-          Ingresa un valor de vivienda en UF para calcular el escenario manual.
+          Ingresa un valor de vivienda en UF o CLP para calcular el escenario manual.
         </div>
       )}
 
       <div className="alternatives-block">
         <div className="section-heading compact">
-          <span className="eyebrow">Alternativas referenciales</span>
           <h2>Opciones más accesibles</h2>
           <p>
             Ordenadas por compatibilidad, menor brecha, comuna y tipo de vivienda preferidos. El horizonte ajusta mensajes, no cambia el score.

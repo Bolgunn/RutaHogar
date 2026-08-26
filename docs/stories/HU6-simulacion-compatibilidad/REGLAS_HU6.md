@@ -2,7 +2,7 @@
 
 ## Proposito de las reglas
 
-Estas reglas describen como HU6 deberia evaluar escenarios de vivienda de forma referencial, usando el perfil financiero actual del usuario y proyectos fake o valores ingresados manualmente.
+Estas reglas describen como HU6 deberia evaluar escenarios de vivienda de forma referencial, usando el perfil financiero actual del usuario y proyectos fake o valores ingresados manualmente en UF o CLP.
 
 HU6 no crea un scoring nuevo, no reemplaza el motor de scoring y no aprueba creditos. Su objetivo es traducir la evaluacion actual en una comparacion comprensible entre escenarios inmobiliarios.
 
@@ -32,10 +32,27 @@ Variables del escenario:
 
 - `valor_vivienda_uf`;
 - `valor_vivienda_clp`;
+- `unidad_valor_manual`, cuando el escenario se ingrese manualmente;
 - `comuna`;
 - `tipo_vivienda`;
 - `estado`;
 - `entrega_estimada`.
+
+## Regla de unidades para escenarios manuales
+
+Cuando el usuario ingrese un valor manual, HU6 debe aceptar UF o CLP y normalizar el escenario antes de evaluar compatibilidad:
+
+```text
+si unidad = UF:
+  valor_vivienda_uf = valor_ingresado
+  valor_vivienda_clp = valor_ingresado * valor_uf_clp
+
+si unidad = CLP:
+  valor_vivienda_clp = valor_ingresado
+  valor_vivienda_uf = valor_ingresado / valor_uf_clp
+```
+
+La UF usada para convertir debe venir del valor vigente disponible para la simulacion. Si no existe un valor valido, debe usarse el valor referencial configurado por el proyecto y mantener el resultado como referencial.
 
 ## Regla para pie minimo y pie recomendado
 
@@ -181,10 +198,10 @@ Todo escenario debe entregar:
 
 Cuando un escenario no sea Compatible:
 
-1. Buscar proyectos fake de menor valor.
+1. Buscar proyectos disponibles para simulacion de menor valor.
 2. Priorizar el mismo tipo de vivienda si existe preferencia declarada.
 3. Priorizar la misma comuna si existen alternativas compatibles o cercanas.
-4. Si no hay alternativas en la comuna objetivo, sugerir comunas cercanas disponibles en el mock.
+4. Si no hay alternativas en la comuna objetivo, sugerir comunas cercanas disponibles en la fuente de proyectos.
 5. Si el plazo de compra es corto, priorizar alternativas con menor brecha inmediata de pie/deuda/dividendo.
 6. Si el plazo es mas largo, permitir alternativas Cercanas acompañadas de mensajes de ahorro o mejora gradual.
 7. No presentar alternativas como garantizadas ni como cotizaciones.
@@ -205,8 +222,32 @@ Las alternativas accesibles deben ordenarse de forma estable y explicable, prior
 4. Coincidencia con tipo de vivienda preferido.
 5. Menor valor de vivienda cuando dos alternativas tengan compatibilidad y preferencias similares.
 
+Para brechas de pie, se debe distinguir entre:
+
+- brecha de pie minimo, que impide alcanzar el minimo referencial;
+- brecha de pie recomendado, que indica menor holgura pero no necesariamente impide evaluar el escenario.
+
+Si dos alternativas tienen el mismo estado de compatibilidad, una alternativa que cubre el pie minimo debe ordenarse antes que otra que no lo cubre, aunque la segunda tenga una brecha absoluta menor frente al pie minimo. La brecha de pie recomendado se usa despues para comparar holgura entre alternativas que ya cubren el minimo.
+
 El ordenamiento no debe ocultar alternativas de mayor compatibilidad solo porque no coincidan con una preferencia. La compatibilidad financiera es el criterio principal.
 El horizonte de compra ajusta el mensaje explicativo de la alternativa, pero no cambia el score ni reemplaza el orden financiero.
+
+## Regla de integracion con fuente de proyectos
+
+HU6 debe consumir proyectos mediante `frontend/src/services/projectSimulationService.js`. En Sprint 1, ese servicio lee los mocks de `frontend/src/data/mockProjects.js`; cuando HU7 entregue catalogo real, debe reemplazar o alimentar ese servicio manteniendo el contrato de datos.
+
+Campos minimos esperados:
+
+- `id`;
+- `nombre`;
+- `comuna`;
+- `tipo_vivienda`;
+- `valor_uf`;
+- `estado`.
+
+Los estados no disponibles, como `agotado`, `inactivo` o `no_disponible`, no deben entrar al selector ni a las alternativas de HU6.
+
+HU6 no debe consumir datos comerciales internos del proyecto ni exponer informacion reservada para ejecutivos.
 
 ## Regla para rango referencial por ahorro
 
@@ -280,6 +321,8 @@ Si no hay escenario actual, la UI debe mostrar un mensaje controlado: `Primero s
 
 La comparacion es referencial y no crea un score nuevo; reutiliza los indicadores calculados para cada escenario.
 
+Si el usuario selecciona primero el proyecto comparador y despues completa o cambia el escenario actual, la comparacion debe recalcularse automaticamente. El aviso por datos faltantes debe aparecer una sola vez y solo cuando falte el escenario actual o la alternativa.
+
 La comparacion no debe limitarse a mostrar dos columnas de valores. Debe derivar, usando solo indicadores ya calculados por HU6:
 
 - diferencias de valor de vivienda en UF;
@@ -312,7 +355,15 @@ El resultado de comparacion solo puede ser:
 - `similar`;
 - `sin_datos_suficientes`.
 
-Este resultado no es una decision financiera formal ni una recomendacion bancaria. La comparacion puede usar barras simples HTML/CSS para visualizar diferencias, sin librerias externas ni calculos hipotecarios avanzados.
+Este resultado no es una decision financiera formal ni una recomendacion bancaria. La comparacion puede usar graficos simples HTML/CSS para visualizar diferencias, sin librerias externas ni calculos hipotecarios avanzados.
+
+Las vistas graficas permitidas para HU6 son:
+
+- `Metas`: compara ahorro disponible contra pie minimo/pie recomendado, y dividendo declarado contra limite prudente si existe.
+- `Barras`: compara indicadores clave entre Escenario A y Escenario B.
+- `Diferencias`: resume el cambio entre ambos escenarios con texto breve y valores visibles.
+
+No se deben usar graficos circulares, radar o visualizaciones que dependan de tooltip para entender el resultado principal.
 
 ## Regla de presentacion y ayudas conceptuales
 

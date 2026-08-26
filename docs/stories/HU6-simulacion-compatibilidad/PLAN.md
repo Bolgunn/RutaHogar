@@ -16,6 +16,18 @@ Lead / usuario interesado en comprar vivienda.
 - Sprint: Sprint 1.
 - Story points: 8 SP.
 
+## Ficha SDD acotada
+
+| Pregunta | Respuesta |
+| --- | --- |
+| Que problema resuelve | Permite simular compatibilidad referencial entre el perfil financiero del lead y escenarios de vivienda, evitando confundir orientacion con aprobacion bancaria. |
+| Actor beneficiado | Lead / usuario interesado en comprar vivienda. |
+| Reglas afectadas | Usa reglas financieras vigentes: pie minimo 10%, pie recomendado 20%, dividendo prudente 25% del ingreso usado para capacidad y deuda alta sobre 40% del ingreso. No modifica el scoring vigente. |
+| Datos sensibles involucrados | Usa datos financieros ya declarados en la evaluacion: ingreso, deuda, ahorro, dividendo, complemento de renta y preferencias preliminares. No solicita documentos ni consulta fuentes externas. |
+| Cambios de contrato o integracion | No cambia `POST /score`, no requiere migracion y no integra CRM, CMF, bancos ni APIs externas. |
+| Fuera de alcance | Catalogo real HU7, cotizacion formal HU9, matching comercial HU10, ranking avanzado HU19, simuladores hipotecarios avanzados HU18/HU29 y persistencia historica de simulaciones. |
+| Pruebas o verificacion | Casos manuales y/o unitarios para ahorro suficiente, ahorro insuficiente, deuda alta, dividendo alto, comuna/tipo preferidos, horizonte corto/largo, datos incompletos y respuesta menor a 30 segundos. |
+
 ## Alcance
 
 - Documentar como se calculara la compatibilidad de escenarios.
@@ -42,9 +54,9 @@ Lead / usuario interesado en comprar vivienda.
 
 1. HU6 se mostrara como una pagina o pestana aparte llamada `Simulacion`.
 2. HU6 trabajara con proyectos fake o referenciales por ahora.
-3. Los proyectos fake deben vivir en `frontend/src/data/mockProjects.js`.
+3. Los proyectos fake deben declararse en `frontend/src/data/mockProjects.js` y HU6 debe consumirlos mediante `frontend/src/services/projectSimulationService.js`.
 4. La estructura de proyectos fake debe quedar preparada para acoplarse despues a HU7.
-5. HU6 permitira elegir un proyecto referencial o ingresar manualmente un valor de vivienda.
+5. HU6 permitira elegir un proyecto referencial o ingresar manualmente un valor de vivienda en UF o CLP.
 6. HU6 debe usar los datos del usuario obtenidos en la evaluacion y preguntas preliminares.
 7. HU6 no crea un scoring nuevo; se apoya en el resultado financiero actual del usuario.
 8. HU6 debe declarar siempre que sus resultados son referenciales.
@@ -63,7 +75,8 @@ Lead / usuario interesado en comprar vivienda.
 21. Las explicaciones de HU6 deben ser deterministicas o verificables. La IA no decide compatibilidad, no calcula estados y no modifica reglas.
 22. La comparacion no debe limitarse a valores lado a lado; debe explicar ventajas, desventajas, tradeoffs y una recomendacion referencial.
 23. La comparacion debe usar solo indicadores ya calculados por HU6 y no crear un score nuevo.
-24. La comparacion puede usar barras o graficos simples hechos con HTML/CSS, sin dependencias externas.
+24. La comparacion puede usar graficos simples hechos con HTML/CSS, sin dependencias externas.
+25. HU6 usara tres vistas comparativas maximas: metas financieras, barras comparativas y diferencias resumidas.
 
 ## Dependencias
 
@@ -96,7 +109,7 @@ Dado que el usuario realiza la simulacion de compatibilidad, cuando este termine
 La vista `Simulacion` deberia permitir dos caminos:
 
 - seleccionar un proyecto referencial desde una lista mock;
-- ingresar manualmente un valor de vivienda y parametros simples.
+- ingresar manualmente un valor de vivienda en UF o CLP y parametros simples.
 
 Para cada escenario, el sistema deberia mostrar:
 
@@ -239,6 +252,8 @@ Las alternativas deben ordenarse por:
 5. Coincidencia de tipo de vivienda.
 6. Menor valor cuando los criterios anteriores empatan.
 
+Cuando la brecha principal sea pie, las alternativas que ya cubren el pie minimo deben quedar antes que alternativas que aun tienen brecha de pie minimo, aunque estas ultimas tengan una brecha absoluta menor frente al pie recomendado. Esto evita sugerir como mas accesible una opcion que todavia no alcanza el minimo referencial.
+
 El horizonte de compra ajusta mensajes, no cambia el score ni reemplaza el orden financiero.
 
 Cada alternativa debe incluir un boton `Comparar` o `Comparar con escenario actual` para contrastarla directamente contra el escenario actual. Si no hay escenario actual, la UI debe mostrar un mensaje controlado: `Primero selecciona un proyecto o ingresa un valor manual para comparar`.
@@ -247,6 +262,8 @@ La comparacion principal debe estar visible cerca del selector de escenario. Deb
 
 Cuando se genere una comparacion desde una tarjeta, la interfaz debe llevar la vista al panel superior de comparacion para que el usuario no tenga que buscar el resultado al final de la pagina.
 
+Si el usuario ya selecciono un proyecto para comparar y luego cambia o completa el escenario actual, HU6 debe recalcular la comparacion automaticamente. El aviso de campos faltantes debe mostrarse una sola vez y solo cuando no exista un escenario actual valido o una alternativa valida.
+
 La comparacion debe ir mas alla de una tabla de valores. Debe explicar, de forma deterministica y referencial:
 
 - ventajas del escenario actual;
@@ -254,6 +271,12 @@ La comparacion debe ir mas alla de una tabla de valores. Debe explicar, de forma
 - tradeoffs entre compatibilidad financiera y preferencias declaradas;
 - diferencias principales en valor, pie minimo, pie recomendado y brecha de pie;
 - una recomendacion referencial: escenario actual, alternativa, similar o sin datos suficientes.
+
+La visualizacion principal debe mantenerse simple y comprensible para el lead:
+
+- `Metas`: muestra ahorro disponible contra pie minimo/pie recomendado, y dividendo contra limite prudente si existe.
+- `Barras`: compara Escenario A y Escenario B por valor, pie minimo, brecha y compatibilidad.
+- `Diferencias`: resume cuanto cambia cada indicador y cual escenario queda mejor en ese punto.
 
 Ejemplos de tradeoff:
 
@@ -301,7 +324,8 @@ Campos opcionales recomendados:
 - `inmobiliaria`;
 - `descripcion_corta`.
 
-El archivo acordado para implementacion es `frontend/src/data/mockProjects.js`.
+El archivo acordado para declarar mocks es `frontend/src/data/mockProjects.js`.
+La vista de HU6 debe consumirlos mediante `frontend/src/services/projectSimulationService.js`, para que HU7 pueda reemplazar la fuente sin cambiar las reglas de simulacion ni la UI principal.
 
 ## Acople futuro con HU7
 
@@ -310,7 +334,7 @@ HU6 no debe depender de un catalogo real en Sprint 1. Sin embargo, el mock debe 
 - `id` del mock sera equivalente al identificador del proyecto real.
 - `comuna`, `tipo_vivienda`, `valor_uf` y `estado` deben conservar nombres estables.
 - El estado del proyecto debe permitir excluir proyectos agotados cuando HU7 exista.
-- La vista de HU6 deberia consumir una fuente abstracta de proyectos para que despues pueda cambiar desde mock local a catalogo real.
+- La vista de HU6 debe consumir `projectSimulationService.js` como fuente intermedia de proyectos. HU7 puede adaptar ese servicio para leer el catalogo real sin reescribir la simulacion.
 - HU6 no debe asumir datos comerciales internos del proyecto que pertenezcan a ejecutivos o administradores.
 
 ## Riesgos
@@ -331,6 +355,19 @@ HU6 no debe depender de un catalogo real en Sprint 1. Sin embargo, el mock debe 
 - Los porcentajes de pie minimo, pie recomendado, carga financiera y dividendo prudente deben alinearse con reglas vigentes y no definirse de forma aislada en codigo de HU6.
 - El umbral de deuda/carga financiera debe provenir explicitamente de `docs/REGLAS_SCORING.md`: deuda mensual superior al 40% del ingreso mensual se considera carga alta.
 - Los proyectos fake son solo insumos de simulacion temprana.
+
+## Estado de implementacion HU6
+
+| Elemento | Estado | Evidencia |
+| --- | --- | --- |
+| Simulacion por proyecto referencial | Implementado | `frontend/src/components/SimulationPage.jsx` consume proyectos mediante `frontend/src/services/projectSimulationService.js`. |
+| Simulacion manual en UF o CLP | Implementado | `getScenarioFromManualValue` normaliza UF/CLP antes de evaluar compatibilidad. |
+| Alternativas accesibles | Implementado | `buildAccessibleAlternatives` prioriza compatibilidad, brechas, comuna, tipo de vivienda y valor. |
+| Comparacion de escenarios | Implementado | La vista muestra escenario actual, alternativa, ventajas, tradeoffs, recomendacion referencial y recalcula si ya existe un proyecto comparador seleccionado. |
+| Visualizaciones comparativas | Implementado | Incluye vistas `Metas`, `Barras` y `Diferencias`, implementadas con HTML/CSS sin libreria externa. |
+| Acople preparado para HU7 | Implementado inicial | La fuente de proyectos quedo aislada en `projectSimulationService.js`; HU7 debe reemplazar o alimentar ese servicio. |
+| Pruebas de simulacion | Implementado | `frontend/scripts/test-simulation.mjs` valida formulas, ordenamiento, comparacion, UF/CLP, filtros de estado y rendimiento. |
+| Verificacion de build | Implementado | `npm run build` queda disponible desde la raiz del proyecto usando Node 22. |
 
 ## Validaciones manuales esperadas
 

@@ -2444,6 +2444,21 @@ th {
   font-size: 1rem;
 }
 
+.manual-value-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.manual-unit-toggle {
+  min-width: 128px;
+}
+
+.manual-unit-toggle button {
+  min-width: 58px;
+}
+
 .simulator-codeudor-toggle {
   grid-column: 1 / -1;
 }
@@ -2505,11 +2520,6 @@ th {
 .sim-metrics .metric strong {
   color: #111827;
   font-size: 1.05rem;
-}
-
-.sim-metrics .metric.metric-highlight {
-  background: #eff6ff;
-  border-color: #bfdbfe;
 }
 
 .alternatives-block {
@@ -3085,61 +3095,221 @@ th {
 }
 
 .chart-view-icon {
-  display: grid;
-  gap: 2px;
-  width: 15px;
+  position: relative;
+  display: block;
+  width: 17px;
+  height: 14px;
 }
 
 .chart-view-icon i {
+  position: absolute;
   display: block;
-  height: 3px;
   border-radius: 999px;
   background: currentColor;
 }
 
+.chart-view-icon.goals i:nth-child(1) {
+  top: 6px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  opacity: 0.25;
+}
+
+.chart-view-icon.goals i:nth-child(2) {
+  top: 6px;
+  left: 0;
+  width: 58%;
+  height: 3px;
+}
+
+.chart-view-icon.goals i:nth-child(3) {
+  top: 1px;
+  left: 12px;
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.chart-view-icon.bars i {
+  left: 0;
+  height: 3px;
+}
+
 .chart-view-icon.bars i:nth-child(1) {
-  width: 70%;
+  top: 2px;
+  width: 72%;
 }
 
 .chart-view-icon.bars i:nth-child(2) {
+  top: 6px;
   width: 100%;
 }
 
 .chart-view-icon.bars i:nth-child(3) {
-  width: 52%;
-}
-
-.chart-view-icon.deltas {
-  grid-template-columns: repeat(3, 1fr);
-  align-items: end;
-  height: 14px;
+  top: 10px;
+  width: 48%;
 }
 
 .chart-view-icon.deltas i {
+  bottom: 1px;
   width: 3px;
-  height: 8px;
+}
+
+.chart-view-icon.deltas i:nth-child(1) {
+  left: 2px;
+  height: 7px;
 }
 
 .chart-view-icon.deltas i:nth-child(2) {
-  height: 13px;
+  left: 7px;
+  height: 12px;
 }
 
 .chart-view-icon.deltas i:nth-child(3) {
-  height: 5px;
+  left: 12px;
+  height: 4px;
 }
 
-.chart-view-icon.cards {
-  grid-template-columns: repeat(2, 1fr);
-  gap: 2px;
+.comparison-goal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.chart-view-icon.cards i {
-  width: 6px;
-  height: 6px;
+.comparison-goal-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
-.chart-view-icon.cards i:nth-child(3) {
-  display: none;
+.comparison-goal-card > strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.comparison-goal {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.comparison-goal-heading,
+.comparison-goal-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.comparison-goal-heading span,
+.comparison-goal-legend span {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.comparison-goal-legend strong {
+  color: #111827;
+  font-size: 0.92rem;
+  text-align: right;
+}
+
+.goal-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.76rem;
+}
+
+.goal-status.good {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.goal-status.near {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.goal-status.adjust {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.goal-status.muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.comparison-goal-track {
+  position: relative;
+  overflow: hidden;
+  height: 16px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.comparison-goal-track .goal-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: inherit;
+  background: #64748b;
+}
+
+.comparison-goal-track .goal-fill.good {
+  background: #16a34a;
+}
+
+.comparison-goal-track .goal-fill.near {
+  background: var(--rh-yellow);
+}
+
+.comparison-goal-track .goal-fill.adjust {
+  background: #dc2626;
+}
+
+.comparison-goal-track .goal-fill.muted {
+  background: #94a3b8;
+}
+
+.comparison-goal-track .goal-marker {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  display: block;
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  background: #0f172a;
+  transform: translateX(-50%);
+}
+
+.comparison-goal-track .goal-marker.recommended {
+  background: var(--rh-blue);
+}
+
+.comparison-goal-track .goal-marker.minimum {
+  background: #475569;
+}
+
+.comparison-goal-markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.comparison-goal-markers small {
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .comparison-bars {
@@ -3221,15 +3391,13 @@ th {
   background: var(--rh-yellow);
 }
 
-.comparison-delta-grid,
-.comparison-card-visual {
+.comparison-delta-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
-.comparison-delta-grid article,
-.comparison-card-visual article {
+.comparison-delta-grid article {
   display: grid;
   gap: 6px;
   padding: 14px;
@@ -3238,17 +3406,14 @@ th {
   background: #ffffff;
 }
 
-.comparison-delta-grid span,
-.comparison-card-visual span {
+.comparison-delta-grid span {
   color: #64748b;
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.comparison-delta-grid strong,
-.comparison-card-visual strong,
-.comparison-card-visual b {
+.comparison-delta-grid strong {
   color: #111827;
 }
 
@@ -3256,23 +3421,6 @@ th {
   color: #475569;
   font-weight: 700;
   line-height: 1.4;
-}
-
-.comparison-card-visual {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.comparison-card-visual p {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.comparison-card-visual b {
-  text-align: right;
 }
 
 .comparison-grid {
@@ -3349,8 +3497,8 @@ th {
   .simulation-layout,
   .simulation-preference-list,
   .simulation-range,
+  .comparison-goal-grid,
   .comparison-delta-grid,
-  .comparison-card-visual,
   .comparison-overview,
   .comparison-insight-grid,
   .comparison-grid,
@@ -3376,7 +3524,11 @@ th {
     flex-direction: column;
   }
 
-.simulation-page .alternative-grid {
+  .manual-value-input {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-page .alternative-grid {
     grid-template-columns: 1fr;
   }
 

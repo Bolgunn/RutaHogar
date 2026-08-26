@@ -64,8 +64,16 @@ function projectToScenario(project, ufValueClp) {
   };
 }
 
-export function getScenarioFromManualValue(valueUf, ufValueClp) {
-  const numericUf = toNumber(valueUf);
+export function getScenarioFromManualValue(value, ufValueClp, unit = "uf") {
+  const numericValue = toNumber(value);
+  const safeUfValueClp = toNumber(ufValueClp) || DEFAULT_UF_CLP;
+  const normalizedUnit = unit === "clp" ? "clp" : "uf";
+  const numericUf = normalizedUnit === "clp" && safeUfValueClp > 0
+    ? numericValue / safeUfValueClp
+    : numericValue;
+  const numericClp = normalizedUnit === "clp"
+    ? numericValue
+    : numericUf * safeUfValueClp;
   return {
     id: "manual",
     source: "manual",
@@ -73,7 +81,8 @@ export function getScenarioFromManualValue(valueUf, ufValueClp) {
     comuna: "",
     tipo_vivienda: "",
     valueUf: numericUf,
-    valueClp: Math.round(numericUf * ufValueClp),
+    valueClp: Math.round(numericClp),
+    valueUnit: normalizedUnit,
     project: null,
   };
 }
@@ -497,7 +506,10 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
 
 function getGapAmount(evaluation) {
   if (!evaluation) return Number.MAX_SAFE_INTEGER;
-  if (evaluation.mainGap === "pie") return evaluation.gapMinimo || evaluation.gapRecomendado || 0;
+  if (evaluation.mainGap === "pie") {
+    if (evaluation.gapMinimo > 0) return evaluation.gapMinimo + (evaluation.pieMinimo || 0);
+    return evaluation.gapRecomendado || 0;
+  }
   if (evaluation.mainGap === "deuda") return Math.max(evaluation.debt - evaluation.income * HIGH_DEBT_RATE, 0);
   if (evaluation.mainGap === "plazo/dividendo") return Math.max(evaluation.dividend - evaluation.prudentDividend, 0);
   if (evaluation.mainGap === "valor objetivo") return Math.max(evaluation.valueClp - evaluation.maxByMinDownPayment, 0);
