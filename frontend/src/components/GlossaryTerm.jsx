@@ -10,7 +10,10 @@ import { ACADEMY_GLOSSARY } from "../constants/academyContent";
  * Uso: <GlossaryTerm term="pie" onOpenArticle={openAcademyArticle} />
  */
 export default function GlossaryTerm({ term, onOpenArticle }) {
-  const entry = ACADEMY_GLOSSARY[term.toLowerCase()];
+  // El glosario tiene claves con mayúsculas (UF, IPC, RSH, DS1...), por lo
+  // que se busca primero la etiqueta tal cual y luego en minúsculas.
+  const entry =
+    ACADEMY_GLOSSARY[term] || ACADEMY_GLOSSARY[term.toLowerCase()];
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 

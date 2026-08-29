@@ -1,8 +1,8 @@
-# Frontend — ScoreLeads Plataforma Profesional
+# Frontend — RutaHogar Plataforma Profesional
 
 React 18 + Vite 8 + axios. Sin react-router (ruteo por estado en App.jsx). Sin librería de UI.
 
-ScoreLeads ya no es MVP. El frontend debe comunicar una plataforma profesional
+RutaHogar ya no es MVP. El frontend debe comunicar una plataforma profesional
 de precalificación financiera inmobiliaria. El score es orientativo y explicable:
 no aprueba créditos ni reemplaza evaluación bancaria formal. La IA solo redacta
 explicaciones; no decide el score.

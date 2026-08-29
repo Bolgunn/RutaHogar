@@ -46,7 +46,7 @@ Sorted by priority (most critical first):
 
 ## Related pages
 
-- [[UserStories/HU5-BasicSecurity\|HU 5 — Basic System Security]] mitigates risks 1 and 2.
+- [[RNF/RNF1-seguridad-basica\|RNF 1]] mitigates risks 1 and 2.
 - [[AtributosDeCalidad\|Atributos de calidad (RNF)]] — the quality attributes that formalize several mitigations.
 - [[deuda-tecnica\|Deuda técnica]] — the project's technical-debt tracking (risk 5).
 - Source: [[informes_entregas/E4 - GPI Plan de Proyecto 2026\|E4 — Plan de Proyecto 2026]], §5.

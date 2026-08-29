@@ -1,4 +1,4 @@
-# Tech Stack — ScoreLeads
+# Tech Stack — RutaHogar
 
 > Fuente: Entregable 1 (Justificación de Propuesta de Solución) y Entregable 2 (Historias de Usuario Corregidas).
 
@@ -6,7 +6,7 @@
 
 ## Arquitectura general
 
-ScoreLeads utiliza una arquitectura web de tres capas separadas: **frontend**, **backend** y **persistencia de datos**. El diseño prioriza una plataforma profesional de precalificación financiera inmobiliaria, con reglas explicables, trazabilidad, privacidad y operación sin dependencias externas obligatorias.
+RutaHogar utiliza una arquitectura web de tres capas separadas: **frontend**, **backend** y **persistencia de datos**. El diseño prioriza una plataforma profesional de precalificación financiera inmobiliaria, con reglas explicables, trazabilidad, privacidad y operación sin dependencias externas obligatorias.
 
 ---
 

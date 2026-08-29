@@ -939,12 +939,12 @@ export default function ScoreForm({
       const invalidNumbers = findInvalidScoringNumbers(payload);
       if (invalidNumbers.length) {
         if (DEBUG_SCORE_REQUESTS) {
-          console.error("ScoreLeads /score payload inválido", {
+          console.error("RutaHogar /score payload inválido", {
             invalidNumbers,
             payload,
           });
         } else {
-          console.warn("ScoreLeads /score payload inválido", {
+          console.warn("RutaHogar /score payload inválido", {
             invalidNumbers,
           });
         }
@@ -957,7 +957,7 @@ export default function ScoreForm({
       const apiBase = resolveApiBase();
       scoreUrl = `${apiBase}/score`;
       if (DEBUG_SCORE_REQUESTS) {
-        console.info("ScoreLeads /score request", {
+        console.info("RutaHogar /score request", {
           url: scoreUrl,
           payload,
           onboarding_data: onboardingData || {
@@ -990,7 +990,7 @@ export default function ScoreForm({
         errorLog.payload = scorePayload;
         errorLog.error = err;
       }
-      console.error("ScoreLeads /score error", errorLog);
+      console.error("RutaHogar /score error", errorLog);
       if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
         setError("La petición tardó demasiado, por favor intenta nuevamente.");
       } else if (import.meta.env.DEV && err.response?.status) {

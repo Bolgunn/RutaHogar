@@ -1,5 +1,8 @@
 import React from "react";
+import BankingChecklist from "./BankingChecklist";
+import AiExplanationBlock from "./AiExplanationBlock";
 import {
+
   formatBooleanText,
   formatClp,
   formatPlanActionMeta,
@@ -33,7 +36,7 @@ function MetricItem({ label, value }) {
   );
 }
 
-export default function Result({ data }) {
+export default function Result({ data, onRetryExplanation }) {
   const {
     score,
     classification,
@@ -49,7 +52,7 @@ export default function Result({ data }) {
   const tone = getClassificationTone(classification);
   const visibleRisks = normalizeDisplayList(risks);
   const briefRecommendations = normalizeDisplayList(recommendations).slice(0, 3);
-  const explanation = normalizeDisplayText(user_explanation_deterministic || ai_explanation);
+  const deterministicExplanation = normalizeDisplayText(user_explanation_deterministic);
   const hasAdjustedClassification = hasValue(original_classification) && original_classification !== classification;
   const adjustment = getClassificationAdjustment(data);
   const factors = getUserResultFactors(data);
@@ -80,7 +83,16 @@ export default function Result({ data }) {
       <div className="result-grid">
         <section>
           <strong>Explicación</strong>
-          <p>{explanation || "No hay explicación disponible para este resultado."}</p>
+          <p>{deterministicExplanation || "No hay explicación disponible para este resultado."}</p>
+        </section>
+
+        <section>
+          <strong>Explicación mejorada con IA</strong>
+
+          <AiExplanationBlock
+            text={ai_explanation}
+            onRetry={onRetryExplanation}
+          />
         </section>
 
         {factors.length ? (
@@ -151,6 +163,9 @@ export default function Result({ data }) {
           </ul>
         </section>
       </div>
+
+      <BankingChecklist result={data} />
     </div>
   );
 }
+

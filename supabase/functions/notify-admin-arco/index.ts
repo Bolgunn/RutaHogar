@@ -38,7 +38,7 @@ serve(async (req) => {
           Authorization: `Bearer ${resendApiKey}`,
         },
         body: JSON.stringify({
-          from: "ScoreLeads <onboarding@resend.dev>",
+          from: "RutaHogar <onboarding@resend.dev>",
           to: [adminEmail],
           subject: `Nueva solicitud ARCO de ${nombre_usuario}`,
           html: `
@@ -49,7 +49,7 @@ serve(async (req) => {
               <tr><td style="padding:8px;font-weight:bold;">Tipo</td><td style="padding:8px;">${tipoLabel}</td></tr>
               <tr><td style="padding:8px;font-weight:bold;">Descripción</td><td style="padding:8px;">${descripcion}</td></tr>
             </table>
-            <p>Puedes revisar y gestionar esta solicitud en el panel de administración de ScoreLeads.</p>
+            <p>Puedes revisar y gestionar esta solicitud en el panel de administración de RutaHogar.</p>
           `,
         }),
       });

@@ -1,6 +1,8 @@
 # Entregable 1 — Justificación de Propuesta de Solución
 
-| **Proyecto**         | **ScoreLeads** [Grupo 15-SJ] |
+> **Documento entregado — congelado.** Este informe usa la numeración vigente a su fecha de entrega y se conserva tal como fue presentado. No se actualiza con cambios posteriores del backlog.
+
+| **Proyecto**         | **RutaHogar** [Grupo 15-SJ] |
 | :------------------- | :--------------------------- |
 | **Descripción breve** | El producto está orientado a empresas inmobiliarias y leads inmobiliarios, ya que el problema radica principalmente en la dificultad de identificar tempranamente qué leads tienen reales probabilidades de compra, lo que genera pérdida de tiempo y baja eficiencia para las inmobiliarias, y frustración en los clientes. El problema se busca resolver mediante una plataforma de scoring predictivo y acompañamiento digital que evalúa y clasifica a los leads en tiempo real. Agrega valor a través de una mejor priorización comercial, reducción del tiempo perdido en prospectos no viables y preparación progresiva de futuros compradores. Se diferencia de alternativas como Creditú, lidz.ai y tuhipotecario.cl, siendo su característica distintiva la intervención temprana en el embudo, no sólo evaluando, sino también guiando y transformando leads desde el inicio. |
 | **Líder del proyecto** | Isaías Carte |
@@ -82,7 +84,7 @@ En el contexto de la solución propuesta, intervienen distintos actores. El usua
 
 ### 1.5 Flujo del usuario dentro de la solución
 
-El flujo del usuario dentro de ScoreLeads comienza cuando la persona accede a la plataforma e ingresa sus datos financieros básicos a través de un formulario guiado y simple. A partir de esta información, el sistema realiza una evaluación en tiempo real y entrega un diagnóstico inicial sobre su capacidad de compra. Si el usuario es considerado apto, es derivado al equipo comercial de la inmobiliaria para continuar el proceso. En caso contrario, el sistema no lo descarta, sino que le entrega una guía personalizada con acciones concretas —como mejorar su nivel de ahorro o reducir su carga de deuda— que le permitan prepararse para alcanzar las condiciones necesarias. Este flujo busca reducir la incertidumbre del usuario y entregarle claridad desde las primeras etapas del proceso.
+El flujo del usuario dentro de RutaHogar comienza cuando la persona accede a la plataforma e ingresa sus datos financieros básicos a través de un formulario guiado y simple. A partir de esta información, el sistema realiza una evaluación en tiempo real y entrega un diagnóstico inicial sobre su capacidad de compra. Si el usuario es considerado apto, es derivado al equipo comercial de la inmobiliaria para continuar el proceso. En caso contrario, el sistema no lo descarta, sino que le entrega una guía personalizada con acciones concretas —como mejorar su nivel de ahorro o reducir su carga de deuda— que le permitan prepararse para alcanzar las condiciones necesarias. Este flujo busca reducir la incertidumbre del usuario y entregarle claridad desde las primeras etapas del proceso.
 
 ---
 
@@ -151,7 +153,7 @@ Esta ineficiencia se alinea con las etapas iniciales del proceso previamente des
 
 ## 3. Solución Propuesta
 
-ScoreLeads propone una solución estructurada en tres etapas principales:
+RutaHogar propone una solución estructurada en tres etapas principales:
 
 **Primero**, en la captura y perfilamiento, el potencial comprador ingresaría a un flujo web guiado e intuitivo donde declararán sus datos financieros básicos, evitando la fricción de subir documentación pesada en esta etapa temprana. En esta fase, la información sería proporcionada directamente por el usuario bajo consentimiento explícito, solicitando únicamente los datos mínimos necesarios para la evaluación, sin requerir credenciales sensibles ni accesos a cuentas externas.
 

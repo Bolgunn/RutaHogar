@@ -72,7 +72,7 @@ alter table public.evaluations replica identity full;
 alter publication supabase_realtime add table public.evaluations;
 ```
 
-`REPLICA IDENTITY FULL` is necessary so Supabase can apply RLS filtering on realtime events. Both lines are in `schema.sql` and must be run manually on existing instances. See [[../Functionalities/notificacion-leads-alto]].
+`REPLICA IDENTITY FULL` is necessary so Supabase can apply RLS filtering on realtime events. Both lines are in `schema.sql` and must be run manually on existing instances. See las notas de implementacion de [[../UserStories/HU2-priorizacion-leads|HU 2]].
 
 ---
 

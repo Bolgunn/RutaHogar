@@ -4,6 +4,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
 from .scoring import calculate_score
+from .ai import (
+    generate_commercial_guidance,
+    generate_executive_summary,
+    generate_user_explanation,
+)
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
 VALID_CONTINUITY_VALUES = {"menos_6_meses", "entre_6_y_12_meses", "entre_1_y_3_anios", "mas_3_anios"}
@@ -26,7 +31,7 @@ VALID_RELATION_TYPES = {
     "hijo_hija", "hermano_hermana", "otro_familiar", "amigo", "otro",
 }
 
-app = FastAPI(title="ScoreLeads")
+app = FastAPI(title="RutaHogar")
 
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",
@@ -271,3 +276,61 @@ class ScoreRequest(BaseModel):
 async def score_endpoint(payload: ScoreRequest):
     result = calculate_score(payload.model_dump())
     return result
+
+
+class ExplainRequest(ScoreRequest):
+    # "user": solo la explicación del usuario. "all": incluye también los
+    # textos del ejecutivo (resumen y guía comercial).
+    scope: str = "user"
+
+    @field_validator("scope")
+    @classmethod
+    def validate_scope(cls, value):
+        if value not in {"user", "all"}:
+            raise ValueError("Scope inválido")
+        return value
+
+
+@app.post("/score/explain")
+async def explain_endpoint(payload: ExplainRequest):
+    """
+    Regenera los textos de IA para una preevaluación ya calculada.
+    Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
+    y devuelve únicamente los textos generados. Si un texto no pudo
+    generarse, su campo llega en null: el detalle del fallo nunca se expone
+    al cliente.
+    """
+    data = payload.model_dump(exclude={"scope"})
+    base = calculate_score(data, include_ai=False)
+
+    response = {
+        "score": base.get("score"),
+        "classification": base.get("classification"),
+        "ai_explanation": None,
+        "executive_summary": None,
+        "commercial_guidance": None,
+    }
+
+    response["ai_explanation"] = generate_user_explanation(
+        classification=base["classification"],
+        score=base["score"],
+        positive_indicators=base["positive_indicators"],
+        risks=base["risks"],
+    )
+
+    if payload.scope == "all":
+        response["executive_summary"] = generate_executive_summary(
+            classification=base["classification"],
+            score=base["score"],
+            positive_indicators=base["positive_indicators"],
+            risks=base["risks"],
+        )
+        response["commercial_guidance"] = generate_commercial_guidance(
+            classification=base["classification"],
+            score=base["score"],
+            positive_indicators=base["positive_indicators"],
+            risks=base["risks"],
+            recommendations=base["recommendations"],
+        )
+
+    return response

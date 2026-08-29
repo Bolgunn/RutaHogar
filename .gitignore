@@ -16,6 +16,9 @@ frontend/node_modules/
 # Build output
 frontend/dist
 
+# Generado por `make story-graph` a partir del wiki; se comparte como archivo suelto
+docs/story-graph.html
+
 # Python cache
 **/__pycache__/
 **/*.pyc
@@ -29,4 +32,16 @@ frontend/dist
 
 stuff.txt
 
+# Retired orchestration artifacts — see docs/HANDBOOK.md
+story-work/
+
+# Agent worktrees and local server logs
+.claude/worktrees/
+backend/uvicorn.log
+
 backend/vercel.json
+
+*.zip
+
+# Obsidian config in docs/
+docs/.obsidian/

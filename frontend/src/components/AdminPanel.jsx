@@ -1,8 +1,36 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { roleLabels } from "../services/auth";
+import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
 
 export default function AdminPanel({ evaluations, profile }) {
+  // Las solicitudes ARCO son datos personales de leads de todas las
+  // inmobiliarias: solo las ve el admin global (equipo ScoreLeads), no el admin
+  // de una inmobiliaria. En local hay un solo tenant, así que se muestran.
+  // Arranca en false: ante duda o error, no se expone el panel.
+  const [canSeeArco, setCanSeeArco] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    if (PROVIDER === "local") {
+      setCanSeeArco(true);
+      return undefined;
+    }
+
+    getTenantContext()
+      .then((context) => {
+        if (active) setCanSeeArco(context.isGlobalAdmin === true);
+      })
+      .catch(() => {
+        if (active) setCanSeeArco(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const counts = evaluations.reduce(
     (acc, item) => {
       acc.total += 1;
@@ -64,9 +92,12 @@ export default function AdminPanel({ evaluations, profile }) {
         </section>
       </div>
 
-      <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid var(--color-border, #ddd)" }} />
-
-      <AdminArcoRequests />
+      {canSeeArco && (
+        <>
+          <hr style={{ margin: "2rem 0", border: "none", borderTop: "1px solid var(--color-border, #ddd)" }} />
+          <AdminArcoRequests />
+        </>
+      )}
     </section>
   );
 }

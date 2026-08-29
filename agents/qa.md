@@ -1,9 +1,9 @@
-# QA — ScoreLeads Plataforma Profesional
+# QA — RutaHogar Plataforma Profesional
 
-Validación manual de ScoreLeads como plataforma profesional de precalificación
+Validación manual de RutaHogar como plataforma profesional de precalificación
 financiera inmobiliaria. No tratar como MVP.
 
-El score es orientativo, explicable y basado en reglas. ScoreLeads no aprueba
+El score es orientativo, explicable y basado en reglas. RutaHogar no aprueba
 créditos ni reemplaza una evaluación bancaria formal. La IA no decide el score:
 solo redacta explicaciones y guías desde datos calculados por el sistema.
 

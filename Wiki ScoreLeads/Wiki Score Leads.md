@@ -1,12 +1,12 @@
-# Wiki ScoreLeads
+# Wiki RutaHogar
 
-> **ScoreLeads** es una plataforma de precalificación y acompañamiento financiero para el sector inmobiliario. Evalúa la viabilidad crediticia preliminar de un usuario, lo clasifica según su perfil y le entrega recomendaciones personalizadas — todo antes de que ingrese a una evaluación bancaria formal.
+> **RutaHogar** es una plataforma de precalificación y acompañamiento financiero para el sector inmobiliario. Evalúa la viabilidad crediticia preliminar de un usuario, lo clasifica según su perfil y le entrega recomendaciones personalizadas — todo antes de que ingrese a una evaluación bancaria formal.
 
 ---
 
 ## Contenido
 
-1. [¿Qué es ScoreLeads?](#1-qué-es-scoreleads)
+1. [¿Qué es RutaHogar?](#1-qué-es-rutahogar)
 2. [Problema que resuelve](#2-problema-que-resuelve)
 3. [Propuesta de valor](#3-propuesta-de-valor)
 4. [Flujo general del sistema](#4-flujo-general-del-sistema)
@@ -19,9 +19,9 @@
 
 ---
 
-## 1. ¿Qué es ScoreLeads?
+## 1. ¿Qué es RutaHogar?
 
-ScoreLeads es una plataforma profesional de precalificación financiera inmobiliaria que permite a un usuario interesado en comprar una vivienda ingresar sus datos financieros básicos y recibir en segundos:
+RutaHogar es una plataforma profesional de precalificación financiera inmobiliaria que permite a un usuario interesado en comprar una vivienda ingresar sus datos financieros básicos y recibir en segundos:
 
 - Un **score de 0 a 100** basado en reglas del mundo hipotecario real.
 - Una **clasificación**: Alto, Medio o Bajo.
@@ -67,7 +67,7 @@ El contexto actual agrava el problema: dividendos en alza (de ~$300.000 a ~$790.
 | Creditú | Etapa avanzada (solicitud de crédito) | Solo evalúa si el usuario puede comprar hoy |
 | lidz.ai | Optimización interna comercial | No aborda al usuario final ni lo prepara |
 | tuhipotecario.cl | Simulación estática | No acompaña ni genera plan de mejora |
-| **ScoreLeads** | **Etapa inicial (antes de la promesa)** | **Evalúa, explica, prioriza y prepara** |
+| **RutaHogar** | **Etapa inicial (antes de la promesa)** | **Evalúa, explica, prioriza y prepara** |
 
 ---
 
@@ -176,7 +176,7 @@ El sistema incluye una tabla de precios referenciales en UF para ~50 comunas de 
 ## 6. Estructura del repositorio
 
 ```
-ScoreLeads/
+RutaHogar/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py        # FastAPI app + endpoint POST /score
@@ -191,13 +191,13 @@ ScoreLeads/
 │   ├── frontend.md        # Instrucciones agente frontend
 │   ├── devops.md          # Instrucciones agente DevOps
 │   └── qa.md              # Instrucciones agente QA
-├── Wiki ScoreLeads/
-│   ├── Wiki Score Leads.md        # ← este archivo
+├── Wiki RutaHogar/
+│   ├── Wiki RutaHogar.md        # ← este archivo
 │   ├── Tech Stack.md              # Stack tecnológico detallado
 │   └── informes_entregas/
-│       ├── Informe ScoreLeads.md  # E1 – Justificación de propuesta
-│       └── E2 - GPI 2026 - ScoreLeads.md  # E2 – Historias de usuario
-├── contexto-ScoreLeads.md  # Contexto consolidado del proyecto
+│       ├── Informe RutaHogar.md  # E1 – Justificación de propuesta
+│       └── E2 - GPI 2026 - RutaHogar.md  # E2 – Historias de usuario
+├── contexto-RutaHogar.md  # Contexto consolidado del proyecto
 ├── README.md               # Instrucciones de instalación y ejecución
 └── Makefile
 ```
@@ -312,11 +312,11 @@ Recibe los datos financieros del usuario y retorna el resultado de la evaluació
 | [[informes_entregas/Informe ScoreLeads]] | E1 — Justificación de propuesta: problema, cliente, solución, riesgos e hipótesis |
 | [[informes_entregas/E2 - GPI 2026 - ScoreLeads]] | E2 — Historias de usuario corregidas, criterios de aceptación y rúbrica |
 | [[informes_entregas/E4 - GPI Plan de Proyecto 2026]] | E4 — Plan de proyecto 2026: actores, atributos de calidad, riesgos, distribución en 3 sprints y detalle de 2 spikes + 33 HUs |
-| [[UserStories/index\|User Stories]] | Backlog completo (HU 1–33) con estado, sprint y páginas por historia |
+| [[UserStories/index\|User Stories]] | Backlog completo con estado, sprint y páginas por historia |
 | [[Distribucion\|Distribución / Sprints]] | Plan de 3 sprints + 2 spikes con totales de SP |
 | [[Riesgos\|Riesgos técnicos]] | 9 riesgos técnicos con fórmula de prioridad y mitigaciones |
 | [[AtributosDeCalidad\|Atributos de calidad (RNF)]] | 8 atributos de calidad con metas SMART y verificación |
 | [[Actores\|Actores / Roles]] | Los 4 actores del sistema con niveles de manejo tecnológico y de contexto |
-| `contexto-ScoreLeads.md` | Contexto consolidado: visión, flujo, variables de scoring y reglas del mundo hipotecario |
+| `contexto-RutaHogar.md` | Contexto consolidado: visión, flujo, variables de scoring y reglas del mundo hipotecario |
 | `agents/AGENTS.md` | Instrucciones generales para agentes IA del proyecto |
 | `README.md` | Instrucciones rápidas de instalación y ejecución |

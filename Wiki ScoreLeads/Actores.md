@@ -54,10 +54,10 @@ The four actors of the ScoreLeads system, from the **E4 Plan de Proyecto 2026**.
 
 | Actor | Tech (1–5) | Context (1–5) | Primary stories |
 | :---- | :--------: | :-----------: | :-------------- |
-| Lead | 3 | 1 | [[UserStories/HU1-FinancialDataEntry\|HU 1]], [[UserStories/HU3-HybridScoring\|HU 3]], [[UserStories/HU7-ImprovementPlan\|HU 7]], [[UserStories/HU29-MobileLeadExperience\|HU 29]] |
-| Sales Executive | 4 | 5 | [[UserStories/HU2-LeadPrioritization\|HU 2]], [[UserStories/HU13-LeadProjectMatching\|HU 13]], [[UserStories/HU30-MobileExecutiveDashboard\|HU 30]] |
-| Real Estate Admin | 3 | 5 | [[UserStories/HU17-ProjectCatalog\|HU 17]], [[UserStories/HU23-EventLogAnalytics\|HU 23]] |
-| Admin Dev | 5 | 3 | [[UserStories/HU5-BasicSecurity\|HU 5]] |
+| Lead | 3 | 1 | [[UserStories/HU1-ingreso-datos-financieros\|HU 1]], [[UserStories/HU3-scoring-hibrido\|HU 3]], [[UserStories/HU4-plan-de-mejora\|HU 4]], [[RNF/RNF6-experiencia-movil-lead\|RNF 6]] |
+| Sales Executive | 4 | 5 | [[UserStories/HU2-priorizacion-leads\|HU 2]], [[UserStories/HU10-matching-lead-proyecto\|HU 10]], [[RNF/RNF7-dashboard-movil-ejecutivo\|RNF 7]] |
+| Real Estate Admin | 3 | 5 | [[UserStories/HU7-catalogo-de-proyectos\|HU 7]], [[RNF/RNF4-auditoria-tecnica\|RNF 4]] |
+| Admin Dev | 5 | 3 | [[RNF/RNF1-seguridad-basica\|RNF 1]] |
 
 ---
 

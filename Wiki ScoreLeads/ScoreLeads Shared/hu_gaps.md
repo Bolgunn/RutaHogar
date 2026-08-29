@@ -2,7 +2,7 @@
 
 > Fecha: 2026-06-24
 > Origen: `Survey Cobertura Requisitos.md` + `ScoreLeads Blueprint.md`. Formato tomado de `hus_24-06-26_v2.md`.
-> Numeración desde HU34 para no chocar con las HU existentes (HU1–HU33 + 2 HU móviles).
+> Numeración desde HU34 para no chocar con el backlog vigente (HU 1–HU 30). Estas historias son una **propuesta de brechas**, no forman parte del backlog aprobado; ver [[../UserStories/index\|Historias de usuario]].
 > Cubren los requisitos con score 1 (No cubierto) y score 2 (Parcial) del survey.
 
 ## Mapa HU → requisito cubierto

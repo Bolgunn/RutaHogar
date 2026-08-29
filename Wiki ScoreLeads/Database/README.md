@@ -1,4 +1,4 @@
-# Database — ScoreLeads
+# Database — RutaHogar
 
 Supabase (PostgreSQL) project: **adgnxtjkqedtvkwcizzn** — East US (Ohio)
 

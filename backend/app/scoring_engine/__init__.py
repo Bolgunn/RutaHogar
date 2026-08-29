@@ -1,2 +1,2 @@
-"""Future professional scoring engine layers for ScoreLeads."""
+"""Future professional scoring engine layers for RutaHogar."""
 

@@ -1,0 +1,116 @@
+/* RutaHogar — identidad visual base */
+
+:root {
+  /* Marca */
+  --rh-blue: #0032b9;
+  --rh-blue-dark: #002687;
+  --rh-blue-light: #e8eeff;
+
+  --rh-yellow: #ffb700;
+  --rh-yellow-dark: #d99c00;
+  --rh-yellow-light: #fff7d6;
+
+  /* Neutros */
+  --rh-white: #ffffff;
+  --rh-background: #f9fafb;
+  --rh-surface: #ffffff;
+  --rh-text: #111827;
+  --rh-text-secondary: #6b7280;
+  --rh-border: #e5e7eb;
+
+  /* Estados */
+  --rh-success: #16a34a;
+  --rh-warning: #f59e0b;
+  --rh-danger: #dc2626;
+  --rh-info: #0284c7;
+
+  /* Tipografía */
+  --rh-font: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Extras útiles */
+  --rh-radius: 12px;
+  --rh-shadow: 0 6px 24px rgba(17, 24, 39, 0.08);
+}
+
+/* Utilidades optativas. No aplican tipografia ni estilos globales por si solas. */
+.rh-btn {
+  font: inherit;
+  font-weight: 600;
+  border-radius: var(--rh-radius);
+  border: 1px solid transparent;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.rh-btn-primary {
+  background: var(--rh-blue);
+  color: var(--rh-white);
+}
+
+.rh-btn-primary:hover {
+  background: var(--rh-blue-dark);
+}
+
+.rh-btn-accent {
+  background: var(--rh-yellow);
+  color: var(--rh-text);
+}
+
+.rh-btn-accent:hover {
+  background: var(--rh-yellow-dark);
+}
+
+.rh-btn-outline {
+  background: var(--rh-white);
+  color: var(--rh-blue);
+  border-color: var(--rh-blue);
+}
+
+.rh-btn-danger {
+  background: var(--rh-danger);
+  color: var(--rh-white);
+}
+
+/* Tarjetas */
+.rh-card {
+  background: var(--rh-surface);
+  border: 1px solid var(--rh-border);
+  border-radius: var(--rh-radius);
+  box-shadow: var(--rh-shadow);
+}
+
+/* Scores / estados */
+.rh-score-high,
+.rh-success {
+  color: var(--rh-success);
+}
+
+.rh-score-medium,
+.rh-warning {
+  color: var(--rh-warning);
+}
+
+.rh-score-low,
+.rh-danger {
+  color: var(--rh-danger);
+}
+
+.rh-info {
+  color: var(--rh-info);
+}
+
+/* Fondos suaves para avisos y selecciones */
+.rh-bg-primary-soft {
+  background: var(--rh-blue-light);
+}
+
+.rh-bg-accent-soft {
+  background: var(--rh-yellow-light);
+}
+
+/* Logo: el tamaño se controla desde CSS; no hace falta editar el SVG */
+.rh-logo {
+  display: block;
+  width: 175px;
+  height: auto;
+}

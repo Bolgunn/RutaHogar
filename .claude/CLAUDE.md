@@ -1,12 +1,12 @@
-# CLAUDE.md — ScoreLeads
+# CLAUDE.md — RutaHogar
 
 ## Qué es este proyecto
 
-ScoreLeads es una plataforma web de precalificación financiera para el sector inmobiliario. Permite a un usuario interesado en comprar vivienda ingresar sus datos financieros básicos y recibir en segundos un score de 0 a 100, una clasificación (Alto / Medio / Bajo), una explicación de los factores que determinaron el resultado, y un plan de mejora personalizado.
+RutaHogar es una plataforma web de precalificación financiera para el sector inmobiliario. Permite a un usuario interesado en comprar vivienda ingresar sus datos financieros básicos y recibir en segundos un score de 0 a 100, una clasificación (Alto / Medio / Bajo), una explicación de los factores que determinaron el resultado, y un plan de mejora personalizado.
 
 Para la inmobiliaria, los leads con score Alto quedan disponibles en un panel priorizado para que el ejecutivo comercial los contacte.
 
-ScoreLeads **ya no debe tratarse ni documentarse como MVP**. Es una plataforma profesional de precalificación financiera inmobiliaria, con scoring explicable, reglas versionadas, trazabilidad, privacidad, priorización comercial y plan de mejora financiero.
+RutaHogar **ya no debe tratarse ni documentarse como MVP**. Es una plataforma profesional de precalificación financiera inmobiliaria, con scoring explicable, reglas versionadas, trazabilidad, privacidad, priorización comercial y plan de mejora financiero.
 
 El sistema **no aprueba créditos** y **no reemplaza** una evaluación bancaria formal. Es una herramienta orientativa de precalificación temprana. La IA no decide el score: solo redacta explicaciones, resúmenes o guías a partir del resultado calculado por reglas auditables.
 
@@ -35,7 +35,7 @@ El sistema **no aprueba créditos** y **no reemplaza** una evaluación bancaria 
 ## Estructura del repositorio
 
 ```
-ScoreLeads/
+RutaHogar/
 ├── backend/
 │   └── app/
 │       ├── main.py        # FastAPI app + endpoint POST /score
@@ -45,7 +45,7 @@ ScoreLeads/
 │       ├── App.jsx        # Routing por estado de página + lógica de sesión
 │       ├── components/    # Componentes por vista
 │       └── services/      # Llamadas a Supabase y al backend
-├── Wiki ScoreLeads/       # Documentación del proyecto
+├── Wiki RutaHogar/       # Documentación del proyecto
 └── .claude/CLAUDE.md      # Este archivo
 ```
 

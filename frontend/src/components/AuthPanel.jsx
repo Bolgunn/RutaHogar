@@ -281,8 +281,8 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         </div>
       )}
       <div className="auth-copy">
-        <img src="/Logo ScoreLeads.png" alt="ScoreLeads" />
-        <span className="eyebrow">Acceso a ScoreLeads</span>
+        <img src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
+        <span className="eyebrow">Acceso a RutaHogar</span>
         <h1>Ingresa a tu pre-evaluación</h1>
         <p>
           Este acceso separa vistas por rol y protege la información del flujo. Con Supabase configurado se usa

@@ -1,73 +1,89 @@
-# Sprint Distribution — ScoreLeads
+# Distribución por sprints — RutaHogar
 
-Tentative distribution of user stories and research spikes across the three sprints, from the **E4 Plan de Proyecto 2026**. See per-story detail in [[UserStories/index\|User Stories]].
+Distribución de historias de usuario y spikes de investigación en los tres sprints, según el
+documento fuente del backlog. El detalle por historia está en [[UserStories/index|Historias de usuario]].
 
-**Categories** follow a MoSCoW-style scheme: Essential · Important · Desirable · Optional.
-
----
-
-## Sprint 1 — 62 SP
-
-| ID | Name | Category | SP | Page |
-| :- | :--- | :------- | :-: | :--- |
-| Spike 1 | Financial research: scoring, CMF, subsidies, financial education | Spike / Research | 10 | — |
-| HU 5 | Basic system security | Important | 8 | [[UserStories/HU5-BasicSecurity\|HU 5]] |
-| HU 7 | Personalized improvement plan generator | Important | 8 | [[UserStories/HU7-ImprovementPlan\|HU 7]] ✅ |
-| HU 12 | Contextual financial academy | Essential | 8 | [[UserStories/HU12-FinancialAcademy\|HU 12]] |
-| HU 13 | Lead–project matching for executives | Important | 5 | [[UserStories/HU13-LeadProjectMatching\|HU 13]] |
-| HU 17 | Real estate project catalog management | Essential | 5 | [[UserStories/HU17-ProjectCatalog\|HU 17]] |
-| HU 23 | Event-log metrics visualization & analysis | Important | 8 | [[UserStories/HU23-EventLogAnalytics\|HU 23]] |
-| HU 29 | Mobile experience for the lead | Essential | 5 | [[UserStories/HU29-MobileLeadExperience\|HU 29]] |
-| HU 30 | Mobile-adaptable executive dashboard | Essential | 5 | [[UserStories/HU30-MobileExecutiveDashboard\|HU 30]] |
+**Categorías** siguen un esquema tipo MoSCoW: Esencial · Importante · Deseable · Opcional.
 
 ---
 
-## Sprint 2 — 73 SP
+## Sprint 1 — 60 SP
 
-| ID | Name | Category | SP | Page |
-| :- | :--- | :------- | :-: | :--- |
-| Spike 2 | Technical validation: security, privacy, CMF, subsidies, external integrations | Spike / Research | 20 | — |
-| HU 4 | Commercial derivation & CRM integration | Desirable | 8 | [[UserStories/HU4-CommercialDerivation\|HU 4]] |
-| HU 6 | Privacy & personal data management panel | Desirable | 3 | [[UserStories/HU6-PrivacyPanel\|HU 6]] |
-| HU 8 | Monthly improvement-plan tracking | Important | 5 | [[UserStories/HU8-MonthlyPlanTracking\|HU 8]] |
-| HU 9 | Compatibility simulation & accessible alternatives | Essential | 5 | [[UserStories/HU9-CompatibilitySimulation\|HU 9]] |
-| HU 14 | Roles & permissions management | Desirable | 3 | [[UserStories/HU14-RolesAndPermissions\|HU 14]] |
-| HU 16 | Evaluation auditing | Desirable | 3 | [[UserStories/HU16-EvaluationAudit\|HU 16]] |
-| HU 18 | Lead financial evolution | Desirable | 5 | [[UserStories/HU18-LeadFinancialEvolution\|HU 18]] |
-| HU 19 | Supporting document upload | Desirable | 5 | [[UserStories/HU19-SupportingDocuments\|HU 19]] |
-| HU 21 | Dossier export for bank assessment | Optional | 3 | [[UserStories/HU21-DossierExport\|HU 21]] |
-| HU 22 | Commercial report & metrics | Optional | 3 | [[UserStories/HU22-CommercialReport\|HU 22]] |
-| HU 31 | Simulated CMF query | Optional | 5 | [[UserStories/HU31-SimulatedCMFQuery\|HU 31]] |
-| HU 33 | Immutable, versioned evaluation history | Desirable | 5 | [[UserStories/HU33-ImmutableEvaluationHistory\|HU 33]] |
+| ID | Nombre | Categoría | SP | Página |
+| :- | :----- | :-------- | :-: | :----- |
+| Spike 1 | Investigación financiera, scoring, educación financiera y criterios de priorización comercial | Spike | 13 | [E4 — Criterios de matching](../docs/research/spike1-e4-lead-project-matching-criteria.md) |
+| HU 4 | Generación de plan de mejora personalizado | Importante | 8 | [[UserStories/HU4-plan-de-mejora\|HU 4]] ⚠️ |
+| HU 5 | Academia financiera contextual | Esencial | 8 | [[UserStories/HU5-academia-financiera\|HU 5]] ✅ |
+| HU 6 | Simulación de compatibilidad y alternativas accesibles | Esencial | 8 | [[UserStories/HU6-simulacion-compatibilidad\|HU 6]] ⚠️ |
+| HU 7 | Gestión del catálogo de proyectos inmobiliarios | Esencial | 5 | [[UserStories/HU7-catalogo-de-proyectos\|HU 7]] ⚠️ |
+| HU 8 | Detector de beneficios habitacionales aplicables | Importante | 5 | [[UserStories/HU8-beneficios-habitacionales\|HU 8]] |
+| HU 9 | Cotización orientativa por proyecto | Esencial | 5 | [[UserStories/HU9-cotizacion-orientativa\|HU 9]] ⚠️ |
+| HU 10 | Matching lead-proyecto para ejecutivos comerciales | Importante | 5 | [[UserStories/HU10-matching-lead-proyecto\|HU 10]] ⚠️ |
+| HU 11 | Checklist de preparación bancaria | Importante | 3 | [[UserStories/HU11-checklist-preparacion-bancaria\|HU 11]] ⚠️ |
 
 ---
 
-## Sprint 3 — 45 SP
+## Sprint 2 — 62 SP
 
-| ID | Name | Category | SP | Page |
-| :- | :--- | :------- | :-: | :--- |
-| HU 10 | Real estate accessibility map visualization | Optional | 8 | [[UserStories/HU10-AccessibilityMap\|HU 10]] |
-| HU 11 | Dynamic accessibility-map update | Optional | 5 | [[UserStories/HU11-AccessibilityMapUpdate\|HU 11]] |
-| HU 15 | Scoring parameter configuration | Optional | 5 | [[UserStories/HU15-ScoringParameters\|HU 15]] |
-| HU 20 | Economic simulation with UF & rates | Optional | 3 | [[UserStories/HU20-EconomicSimulation\|HU 20]] |
-| HU 24 | Report fraudulent users/leads | Desirable | 5 | [[UserStories/HU24-FraudulentLeadReporting\|HU 24]] |
-| HU 25 | Housing subsidy simulation | Desirable | 5 | [[UserStories/HU25-SubsidySimulation\|HU 25]] |
-| HU 26 | Credit-term variation simulation | Optional | 3 | [[UserStories/HU26-CreditTermSimulation\|HU 26]] |
-| HU 27 | Sales conversion-rate dashboard | Desirable | 5 | [[UserStories/HU27-ConversionDashboard\|HU 27]] |
-| HU 28 | Demographic & socioeconomic visualization | Optional | 1 | [[UserStories/HU28-DemographicVisualization\|HU 28]] |
-| HU 32 | System availability & scalability | Desirable | 5 | [[UserStories/HU32-SystemAvailability\|HU 32]] |
-
----
-
-## Totals
-
-| Sprint | Story SP | Spike SP | Total |
-| :----- | :------: | :------: | :---: |
-| Sprint 1 | 52 | 10 | **62** |
-| Sprint 2 | 53 | 20 | **73** |
-| Sprint 3 | 45 | — | **45** |
-| **Grand total** | **150** | **30** | **180** |
+| ID | Nombre | Categoría | SP | Página |
+| :- | :----- | :-------- | :-: | :----- |
+| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, documentos e integraciones externas | Spike | 13 | — |
+| HU 12 | Sistema de derivación e integración comercial | Importante | 8 | [[UserStories/HU12-derivacion-comercial\|HU 12]] |
+| HU 13 | Seguimiento mensual del plan de mejora | Importante | 8 | [[UserStories/HU13-seguimiento-mensual\|HU 13]] ⚠️ |
+| HU 14 | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | [[UserStories/HU14-mapa-accesibilidad\|HU 14]] |
+| HU 15 | Evolución financiera del lead | Deseable | 5 | [[UserStories/HU15-evolucion-financiera-lead\|HU 15]] |
+| HU 16 | Dashboard de tasas de conversión de ventas | Deseable | 5 | [[UserStories/HU16-dashboard-conversion\|HU 16]] |
+| HU 17 | Reportar leads inconsistentes o fraudulentos | Deseable | 5 | [[UserStories/HU17-reporte-leads-inconsistentes\|HU 17]] |
+| HU 18 | Simulador de escenarios hipotecarios referenciales | Importante | 5 | [[UserStories/HU18-simulador-escenarios-hipotecarios\|HU 18]] |
+| HU 19 | Ranking de proyectos por brecha mínima | Importante | 5 | [[UserStories/HU19-ranking-proyectos-brecha\|HU 19]] |
+| HU 20 | Por definir | — | *(8 reservados)* | [[UserStories/HU20-TBD\|HU 20]] 📌 |
 
 ---
 
-Source: [[informes_entregas/E4 - GPI Plan de Proyecto 2026\|E4 — Plan de Proyecto 2026]], §6–§7.
+## Sprint 3 — 46 SP
+
+| ID | Nombre | Categoría | SP | Página |
+| :- | :----- | :-------- | :-: | :----- |
+| HU 21 | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | [[UserStories/HU21-mapa-accesibilidad\|HU 21]] |
+| HU 22 | Actualización dinámica del mapa de accesibilidad | Opcional | 5 | [[UserStories/HU22-actualizacion-mapa-accesibilidad\|HU 22]] |
+| HU 23 | Configuración de parámetros de scoring | Opcional | 5 | [[UserStories/HU23-parametros-scoring\|HU 23]] |
+| HU 24 | Carga de documentos respaldatorios | Deseable | 5 | [[UserStories/HU24-carga-documentos\|HU 24]] |
+| HU 25 | Exportación de dossier para evaluación bancaria | Opcional | 3 | [[UserStories/HU25-exportacion-dossier\|HU 25]] |
+| HU 26 | Simulación avanzada de subsidios habitacionales | Deseable | 5 | [[UserStories/HU26-simulacion-subsidios\|HU 26]] |
+| HU 27 | Revisión referencial de antecedentes declarados | Deseable | 5 | [[UserStories/HU27-revision-antecedentes\|HU 27]] |
+| HU 28 | Estimador de gastos iniciales de compra | Importante | 5 | [[UserStories/HU28-gastos-iniciales\|HU 28]] |
+| HU 29 | Comparador de costo total referencial del crédito | Importante | 5 | [[UserStories/HU29-comparador-costo-credito\|HU 29]] |
+| HU 30 | Por definir | — | *(4 reservados)* | [[UserStories/HU30-TBD\|HU 30]] 📌 |
+
+---
+
+## Totales
+
+| Sprint | SP de historias | SP de spike | Total | SP reservados sin definir |
+| :----- | :-------------: | :---------: | :---: | :-----------------------: |
+| Sprint 1 | 47 | 13 | **60** | — |
+| Sprint 2 | 49 | 13 | **62** | 8 (HU 20) |
+| Sprint 3 | 46 | — | **46** | 4 (HU 30) |
+| **Total** | **142** | **26** | **168** | **12** |
+
+Los SP reservados de HU 20 y HU 30 **no** están incluidos en los totales de su sprint, tal como
+aparece en el documento fuente. Con ellos, los totales serían 60 / 70 / 50 = 180.
+
+---
+
+## Fuera de los sprints
+
+El PMV ya entregado ([[UserStories/HU1-ingreso-datos-financieros\|HU 1]],
+[[UserStories/HU2-priorizacion-leads\|HU 2]], [[UserStories/HU3-scoring-hibrido\|HU 3]], 18 SP) no
+se cuenta en la distribución.
+
+Los diez requisitos no funcionales viven en [[AtributosDeCalidad|Atributos de calidad]] y en la
+carpeta `RNF/`; no consumen SP de sprint en el documento fuente.
+
+---
+
+## Advertencia
+
+**HU 14 y HU 21 son la misma historia** con texto idéntico en el documento fuente, una en Sprint 2
+y otra en Sprint 3. Ambas se documentan tal como están y ninguna suma o resta SP a su sprint.
+Pendiente de confirmación del equipo.

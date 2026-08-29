@@ -1,6 +1,6 @@
-# DevOps — ScoreLeads Plataforma Profesional
+# DevOps — RutaHogar Plataforma Profesional
 
-ScoreLeads ya no es MVP. Operar como plataforma profesional de precalificación
+RutaHogar ya no es MVP. Operar como plataforma profesional de precalificación
 financiera inmobiliaria, cuidando secretos, deploy reproducible, trazabilidad,
 privacidad y auditoría de scoring.
 

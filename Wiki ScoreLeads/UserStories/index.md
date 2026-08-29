@@ -1,94 +1,133 @@
-# User Stories — ScoreLeads
+# Historias de usuario — RutaHogar
 
-All user stories for the ScoreLeads platform, following the **E4 Plan de Proyecto 2026** numbering (`HU 1–33`).
+Backlog aprobado para los Sprints 1 a 3. Cada historia tiene su propia página con la descripción y
+los criterios de aceptación transcritos del documento fuente del backlog.
 
-> **Numbering note:** the E4 plan renumbered the backlog. The E1/E2 informes used `HdU 1–6`; this folder now uses `HU`. Mapping of the previously documented stories: `HdU1→HU1`, `HdU2→HU2`, `HdU3→HU3`, `HdU4→HU7` (Improvement Plan), `HdU5→HU4` (CRM), `HdU6→HU20` (UF/rate simulation).
+**Estado:** ✅ Implementada · ⚠️ Parcial o pendiente de merge · 🗓 Planificada · 📌 Reservada
 
-**Status legend:** ✅ Implemented (PMV) · 🔜 Sprint 1 · 🗓 Sprint 2 · 🗓 Sprint 3
-Every story below has its own page. ✅/🔜 stories carry the full implemented/near-term detail; 🗓 stories are documented for planning.
+> El estado refleja lo que el código hace hoy en `develop`, verificado criterio por criterio con citas a
+> `archivo:línea` en la sección **Estado frente al código** de cada página. Un criterio sin
+> evidencia citable es un criterio no verificado. Cuando una historia está construida pero su PR
+> sigue abierto, su página lo dice y cita la rama.
 
 ---
 
-## Backlog summary
+## Sprint 1 — 60 SP
 
-| ID | Title | Category | SP | Actor | Sprint | Status |
-| :- | :---- | :------- | :-: | :---- | :----- | :----- |
-| [[HU1-FinancialDataEntry\|HU 1]] | Financial Data Entry | Complex | 5 | Lead | PMV | ✅ |
-| [[HU2-LeadPrioritization\|HU 2]] | Lead Prioritization | Complex | 5 | Sales Executive | PMV | ✅ |
-| [[HU3-HybridScoring\|HU 3]] | Hybrid Scoring with Intelligent Explanation | Very complex | 8 | Lead | PMV | ✅ |
-| [[HU4-CommercialDerivation\|HU 4]] | Commercial Derivation & CRM Integration | Desirable | 8 | Real Estate Staff | Sprint 2 | 🗓 |
-| [[HU5-BasicSecurity\|HU 5]] | Basic System Security | Important | 8 | Admin Dev | Sprint 1 | 🔜 |
-| [[HU6-PrivacyPanel\|HU 6]] | Privacy & Personal Data Management Panel | Desirable | 3 | Lead (registered) | Sprint 2 | 🗓 |
-| [[HU7-ImprovementPlan\|HU 7]] | Personalized Improvement Plan Generator | Important | 8 | Lead | Sprint 1 | ✅ |
-| [[HU8-MonthlyPlanTracking\|HU 8]] | Monthly Improvement-Plan Tracking | Important | 5 | Lead | Sprint 2 | 🗓 |
-| [[HU9-CompatibilitySimulation\|HU 9]] | Compatibility Simulation & Accessible Alternatives | Essential | 5 | Lead | Sprint 2 | 🗓 |
-| [[HU10-AccessibilityMap\|HU 10]] | Real Estate Accessibility Map Visualization | Optional | 8 | Lead | Sprint 3 | 🗓 |
-| [[HU11-AccessibilityMapUpdate\|HU 11]] | Dynamic Accessibility-Map Update | Optional | 5 | Lead | Sprint 3 | 🗓 |
-| [[HU12-FinancialAcademy\|HU 12]] | Contextual Financial Academy | Essential | 8 | Lead | Sprint 1 | 🔜 |
-| [[HU13-LeadProjectMatching\|HU 13]] | Lead–Project Matching for Executives | Important | 5 | Sales Executive | Sprint 1 | 🔜 |
-| [[HU14-RolesAndPermissions\|HU 14]] | Roles & Permissions Management | Desirable | 3 | Admin Dev | Sprint 2 | 🗓 |
-| [[HU15-ScoringParameters\|HU 15]] | Scoring Parameter Configuration | Optional | 5 | Real Estate Admin | Sprint 3 | 🗓 |
-| [[HU16-EvaluationAudit\|HU 16]] | Evaluation Auditing | Desirable | 3 | Real Estate Admin / Dev | Sprint 2 | 🗓 |
-| [[HU17-ProjectCatalog\|HU 17]] | Real Estate Project Catalog Management | Essential | 5 | Real Estate Admin | Sprint 1 | 🔜 |
-| [[HU18-LeadFinancialEvolution\|HU 18]] | Lead Financial Evolution | Desirable | 5 | Sales Executive | Sprint 2 | 🗓 |
-| [[HU19-SupportingDocuments\|HU 19]] | Supporting Document Upload | Desirable | 5 | Sales Executive | Sprint 2 | 🗓 |
-| [[HU20-EconomicSimulation\|HU 20]] | Economic Simulation with UF & Rates | Optional | 3 | Lead | Sprint 3 | 🗓 |
-| [[HU21-DossierExport\|HU 21]] | Dossier Export for Bank Assessment | Optional | 3 | Sales Executive | Sprint 2 | 🗓 |
-| [[HU22-CommercialReport\|HU 22]] | Commercial Report & Metrics | Optional | 3 | Sales Executive | Sprint 2 | 🗓 |
-| [[HU23-EventLogAnalytics\|HU 23]] | Event-Log Metrics Visualization & Analysis | Important | 8 | Real Estate Admin | Sprint 1 | 🔜 |
-| [[HU24-FraudulentLeadReporting\|HU 24]] | Report Fraudulent Users/Leads | Desirable | 5 | Sales Executive | Sprint 3 | 🗓 |
-| [[HU25-SubsidySimulation\|HU 25]] | Housing Subsidy Simulation | Desirable | 5 | Lead | Sprint 3 | 🗓 |
-| [[HU26-CreditTermSimulation\|HU 26]] | Credit-Term Variation Simulation | Optional | 3 | Lead | Sprint 3 | 🗓 |
-| [[HU27-ConversionDashboard\|HU 27]] | Sales Conversion-Rate Dashboard | Desirable | 5 | Real Estate Admin / Executive | Sprint 3 | 🗓 |
-| [[HU28-DemographicVisualization\|HU 28]] | Demographic & Socioeconomic Visualization | Optional | 1 | Sales Executive / Admin | Sprint 3 | 🗓 |
-| [[HU29-MobileLeadExperience\|HU 29]] | Mobile Experience for the Lead | Essential | 5 | Lead | Sprint 1 | 🔜 |
-| [[HU30-MobileExecutiveDashboard\|HU 30]] | Mobile-Adaptable Executive Dashboard | Essential | 5 | Sales Executive | Sprint 1 | 🔜 |
-| [[HU31-SimulatedCMFQuery\|HU 31]] | Simulated CMF Query | Optional | 5 | Sales Executive | Sprint 2 | 🗓 |
-| [[HU32-SystemAvailability\|HU 32]] | System Availability & Scalability | Desirable | 5 | Dev / DevOps | Sprint 3 | 🗓 |
-| [[HU33-ImmutableEvaluationHistory\|HU 33]] | Immutable, Versioned Evaluation History | Desirable | 5 | Real Estate Admin | Sprint 2 | 🗓 |
+| ID | Historia | Categoría | SP | Actor | Estado |
+| :- | :------- | :-------- | :-: | :---- | :----- |
+| Spike 1 | Investigación financiera, scoring, educación financiera y criterios de priorización comercial | Spike | 13 | Equipo | 🗓 |
+| [[HU4-plan-de-mejora\|HU 4]] | Generación de plan de mejora personalizado | Importante | 8 | Lead | ⚠️ |
+| [[HU5-academia-financiera\|HU 5]] | Academia financiera contextual | Esencial | 8 | Lead | ✅ |
+| [[HU6-simulacion-compatibilidad\|HU 6]] | Simulación de compatibilidad y alternativas accesibles | Esencial | 8 | Lead | ⚠️ |
+| [[HU7-catalogo-de-proyectos\|HU 7]] | Gestión del catálogo de proyectos inmobiliarios | Esencial | 5 | Administrador inmobiliario | ⚠️ |
+| [[HU8-beneficios-habitacionales\|HU 8]] | Detector de beneficios habitacionales aplicables | Importante | 5 | Lead | 🗓 |
+| [[HU9-cotizacion-orientativa\|HU 9]] | Cotización orientativa por proyecto | Esencial | 5 | Lead | ⚠️ |
+| [[HU10-matching-lead-proyecto\|HU 10]] | Matching lead-proyecto para ejecutivos comerciales | Importante | 5 | Ejecutivo comercial | ⚠️ |
+| [[HU11-checklist-preparacion-bancaria\|HU 11]] | Checklist de preparación bancaria | Importante | 3 | Lead | ⚠️ |
 
-**Implemented (PMV):** HU 1, 2, 3, 7 &nbsp;·&nbsp; **26 SP**
-See the full sprint breakdown and the two research spikes in [[Distribucion\|Distribución / Sprints]].
+---
+
+## Sprint 2 — 62 SP
+
+| ID | Historia | Categoría | SP | Actor | Estado |
+| :- | :------- | :-------- | :-: | :---- | :----- |
+| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, documentos e integraciones externas | Spike | 13 | Equipo | 🗓 |
+| [[HU12-derivacion-comercial\|HU 12]] | Sistema de derivación e integración comercial | Importante | 8 | Funcionario de inmobiliaria | 🗓 |
+| [[HU13-seguimiento-mensual\|HU 13]] | Seguimiento mensual del plan de mejora | Importante | 8 | Lead | ⚠️ |
+| [[HU14-mapa-accesibilidad\|HU 14]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | Lead | 🗓 |
+| [[HU15-evolucion-financiera-lead\|HU 15]] | Evolución financiera del lead | Deseable | 5 | Ejecutivo comercial | 🗓 |
+| [[HU16-dashboard-conversion\|HU 16]] | Dashboard de tasas de conversión de ventas | Deseable | 5 | Administrador / Ejecutivo | 🗓 |
+| [[HU17-reporte-leads-inconsistentes\|HU 17]] | Reportar leads inconsistentes o fraudulentos | Deseable | 5 | Ejecutivo comercial | 🗓 |
+| [[HU18-simulador-escenarios-hipotecarios\|HU 18]] | Simulador de escenarios hipotecarios referenciales | Importante | 5 | Lead | 🗓 |
+| [[HU19-ranking-proyectos-brecha\|HU 19]] | Ranking de proyectos por brecha mínima | Importante | 5 | Lead | 🗓 |
+| [[HU20-TBD\|HU 20]] | Por definir | — | *(8 reservados)* | — | 📌 |
+
+> **HU 20** está reservada en el documento fuente sin contenido definido. Sus 8 SP **no** están
+> incluidos en los 62 SP del sprint; con ella, el sprint sumaría 70 SP.
+
+---
+
+## Sprint 3 — 46 SP
+
+| ID | Historia | Categoría | SP | Actor | Estado |
+| :- | :------- | :-------- | :-: | :---- | :----- |
+| [[HU21-mapa-accesibilidad\|HU 21]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | Lead | 🗓 |
+| [[HU22-actualizacion-mapa-accesibilidad\|HU 22]] | Actualización dinámica del mapa de accesibilidad | Opcional | 5 | Lead | 🗓 |
+| [[HU23-parametros-scoring\|HU 23]] | Configuración de parámetros de scoring | Opcional | 5 | Administrador inmobiliario | 🗓 |
+| [[HU24-carga-documentos\|HU 24]] | Carga de documentos respaldatorios | Deseable | 5 | Ejecutivo comercial | 🗓 |
+| [[HU25-exportacion-dossier\|HU 25]] | Exportación de dossier para evaluación bancaria | Opcional | 3 | Ejecutivo comercial | 🗓 |
+| [[HU26-simulacion-subsidios\|HU 26]] | Simulación avanzada de subsidios habitacionales | Deseable | 5 | Lead | 🗓 |
+| [[HU27-revision-antecedentes\|HU 27]] | Revisión referencial de antecedentes declarados | Deseable | 5 | Ejecutivo comercial | 🗓 |
+| [[HU28-gastos-iniciales\|HU 28]] | Estimador de gastos iniciales de compra | Importante | 5 | Lead | 🗓 |
+| [[HU29-comparador-costo-credito\|HU 29]] | Comparador de costo total referencial del crédito | Importante | 5 | Lead | 🗓 |
+| [[HU30-TBD\|HU 30]] | Por definir | — | *(4 reservados)* | — | 📌 |
+
+> **HU 30** está reservada en el documento fuente sin contenido definido. Sus 4 SP **no** están
+> incluidos en los 46 SP del sprint; con ella, el sprint sumaría 50 SP.
+
+---
+
+## PMV — ya entregado
+
+| ID | Historia | Categoría | SP | Actor | Estado |
+| :- | :------- | :-------- | :-: | :---- | :----- |
+| [[HU1-ingreso-datos-financieros\|HU 1]] | Ingreso de datos financieros | Compleja | 5 | Lead | ✅ |
+| [[HU2-priorizacion-leads\|HU 2]] | Priorización de leads calificados | Compleja | 5 | Ejecutivo comercial | ⚠️ |
+| [[HU3-scoring-hibrido\|HU 3]] | Scoring híbrido con explicación inteligente | Muy compleja | 8 | Lead | ✅ |
+
+El documento fuente del backlog no lista HU 1 a HU 3 porque corresponden al PMV ya construido. Sus
+números y criterios se mantienen sin cambios.
+
+---
+
+## Advertencias del backlog
+
+- **HU 14 y HU 21 son la misma historia.** Aparecen con texto idéntico en el documento fuente, una
+  en Sprint 2 y otra en Sprint 3. Ambas se documentan tal como están y ninguna suma o resta SP.
+  Pendiente de confirmación del equipo.
+- **HU 20 y HU 30 están reservadas** sin contenido definido. Sus páginas existen para que los
+  totales sigan siendo legibles, no para implementarse.
+
+---
+
+## Requisitos no funcionales
+
+Diez requisitos que antes eran historias viven ahora en [[../RNF/RNF1-seguridad-basica|RNF/]],
+indexados por [[../AtributosDeCalidad|Atributos de calidad]]: seguridad básica, privacidad mínima,
+roles y permisos, auditoría técnica, historial inmutable, experiencia móvil del lead, dashboard
+móvil del ejecutivo, disponibilidad y escalabilidad, manejo seguro de errores y validación de
+entradas.
 
 ---
 
 ## Spikes
 
-| Spike | Name | SP | Sprint |
-| :---- | :--- | :-: | :----- |
-| Spike 1 | Financial research: scoring, financial education, commercial prioritization criteria | 10 | Sprint 1 |
-| Spike 2 | Technical validation: privacy, roles, traceability, documents, external integrations | 20 | Sprint 2 |
+| Spike | Nombre | SP | Sprint |
+| :---- | :----- | :-: | :----- |
+| Spike 1 | Investigación financiera, scoring, educación financiera y criterios de priorización comercial | 13 | Sprint 1 |
+| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, documentos e integraciones externas | 13 | Sprint 2 |
+
+**Entregable de Spike 1:** [E4 — Criterios de matching lead-proyecto](../../docs/research/spike1-e4-lead-project-matching-criteria.md) — modelo de capacidad y contrato congelado para [[HU10-matching-lead-proyecto|HU 10]].
 
 ---
 
-## Actors
+## Actores
 
-| Actor | Description | Tech / Context |
-| :---- | :---------- | :------------- |
-| **Lead** | Person interested in buying their first home. Completes the form, receives their score, and follows a personalized improvement plan. | Tech 3 / Context 1 |
-| **Sales Executive** | Real estate sales professional. Manages the prioritized lead dashboard and closes deals. | Tech 4 / Context 5 |
-| **Real Estate Admin** | Representative of the contracting real estate company. Assigns executive roles, manages the project catalog and scoring parameters. | Tech 3 / Context 5 |
-| **Admin Dev** | Member of the development team. Handles traceability, logs, security, and manual score adjustments. | Tech 5 / Context 3 |
+| Actor | Descripción |
+| :---- | :---------- |
+| **Lead** | Persona interesada en comprar su primera vivienda. Completa el formulario, recibe su score y sigue un plan de mejora personalizado. |
+| **Ejecutivo comercial** | Profesional de venta inmobiliaria. Gestiona el dashboard priorizado de leads y cierra negocios. |
+| **Administrador inmobiliario** | Representante de la inmobiliaria contratante. Asigna roles de ejecutivo, gestiona el catálogo de proyectos y los parámetros de scoring. |
+| **Administrador desarrollador** | Miembro del equipo de desarrollo. Se hace cargo de trazabilidad, logs, seguridad y ajustes manuales de score. |
 
-Full actor detail (proficiency levels and justifications) is in [[Actores\|Actores / Roles]].
-
----
-
-## Key functionalities
-
-1. **Guided financial pre-assessment flow** ([[HU1-FinancialDataEntry\|HU 1]]) — step-by-step web form, no document upload at this stage.
-2. **Real-time predictive scoring engine** ([[HU3-HybridScoring\|HU 3]]) — returns a viability score within 60 seconds with an AI-assisted explanation.
-3. **Personalized improvement plan generator** ([[HU7-ImprovementPlan\|HU 7]]) — step-by-step action guide with debt/savings goals for leads that don't qualify yet.
-4. **Prioritized executive dashboard** ([[HU2-LeadPrioritization\|HU 2]]) — AI-assisted, self-contained lead prioritization without CRM integration.
-5. **Lead–project matching & catalog** ([[HU13-LeadProjectMatching\|HU 13]], [[HU17-ProjectCatalog\|HU 17]]) — recommends leads against actually-available projects.
-6. **Mobile-first delivery** ([[HU29-MobileLeadExperience\|HU 29]], [[HU30-MobileExecutiveDashboard\|HU 30]]) — full lead and executive flows on a phone.
+Detalle completo en [[../Actores\|Actores / Roles]].
 
 ---
 
-## Related pages
+## Páginas relacionadas
 
-- [[Distribucion\|Distribución / Sprints]] — sprint plan, SP totals, spikes.
-- [[Riesgos\|Riesgos técnicos]] — 9 technical risks with the priority formula.
-- [[AtributosDeCalidad\|Atributos de calidad (RNF)]] — 8 quality attributes with SMART goals.
-- [[Actores\|Actores / Roles]] — the 4 system actors in detail.
-- [[../informes_entregas/E4 - GPI Plan de Proyecto 2026\|E4 — Plan de Proyecto 2026]] — the source entregable.
+- [[../Distribucion\|Distribución / Sprints]] — plan de sprints y totales de SP.
+- [[../Riesgos\|Riesgos técnicos]] — riesgos con su fórmula de prioridad.
+- [[../AtributosDeCalidad\|Atributos de calidad (RNF)]] — índice de la carpeta `RNF/`.
+- [[../Actores\|Actores / Roles]] — los actores del sistema en detalle.

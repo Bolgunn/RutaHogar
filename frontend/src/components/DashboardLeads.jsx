@@ -575,7 +575,7 @@ export default function DashboardLeads({ evaluations }) {
                   <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#334155" }}>Acciones Rápidas</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <a
-                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto ScoreLeads - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en ScoreLeads.\n\nSaludos.`)}`}
+                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
                       className="secondary-button compact-button"
                       style={{ textDecoration: "none", textAlign: "center", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem" }}
                       target="_blank"
@@ -588,7 +588,7 @@ export default function DashboardLeads({ evaluations }) {
                       Correo
                     </a>
                     <a
-                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por ScoreLeads.`)}`}
+                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por RutaHogar.`)}`}
                       style={{ textDecoration: "none", textAlign: "center", backgroundColor: "#25D366", color: "white", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem", fontWeight: "500", fontSize: "0.9rem", border: "none", cursor: "pointer" }}
                       target="_blank"
                       rel="noopener noreferrer"

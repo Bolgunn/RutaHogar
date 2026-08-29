@@ -1,0 +1,45 @@
+{
+  "algorithm": "ALG-N",
+  "version": "1.1.0-prep",
+  "note": "Asserted by the backend test suite. A number changed in code but not here turns the build red. Keep 5-10 cases: one per branch of the rules table, plus the edge cases the document names.",
+  "cases": [
+    {
+      "name": "perfil_solido_sin_bloqueadores",
+      "why": "Happy path: every component scores well and no blocker fires.",
+      "input": {
+        "ingreso_mensual": 2500000,
+        "deuda_mensual": 200000,
+        "ahorro_disponible": 25000000,
+        "dividendo_estimado": 550000,
+        "tipo_contrato": "indefinido",
+        "continuidad_laboral": "mas_3_anios",
+        "morosidad_actual": "no",
+        "consentimiento": true
+      },
+      "expect": {
+        "classification": "Alto",
+        "score_min": 75,
+        "blockers": []
+      }
+    },
+    {
+      "name": "morosidad_vigente_degrada_clasificacion",
+      "why": "A blocker must lower the classification, never raise it (invariant).",
+      "input": {
+        "ingreso_mensual": 2500000,
+        "deuda_mensual": 200000,
+        "ahorro_disponible": 25000000,
+        "dividendo_estimado": 550000,
+        "tipo_contrato": "indefinido",
+        "continuidad_laboral": "mas_3_anios",
+        "morosidad_actual": "si",
+        "consentimiento": true
+      },
+      "expect": {
+        "classification": "Medio",
+        "original_classification": "Alto",
+        "blockers_include": ["morosidad_vigente"]
+      }
+    }
+  ]
+}

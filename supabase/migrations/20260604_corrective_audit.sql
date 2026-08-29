@@ -1,5 +1,5 @@
 -- =============================================================
--- ScoreLeads — Corrective migration (audit 2026-06-04)
+-- RutaHogar — Corrective migration (audit 2026-06-04)
 -- Fixes items: 1, 2, 3, 5, 6, 7, 8, 9, 13
 -- Item 4 (profile role self-escalation) skipped intentionally.
 -- =============================================================

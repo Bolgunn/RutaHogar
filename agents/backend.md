@@ -1,8 +1,8 @@
-# Backend — ScoreLeads Plataforma Profesional
+# Backend — RutaHogar Plataforma Profesional
 
 FastAPI + Pydantic v2. Dependencias: `fastapi`, `uvicorn[standard]`, `pydantic`, `groq`.
 
-ScoreLeads ya no es MVP. El backend sostiene una plataforma profesional de
+RutaHogar ya no es MVP. El backend sostiene una plataforma profesional de
 precalificación financiera inmobiliaria: scoring orientativo y explicable,
 reglas auditables/versionadas, trazabilidad, privacidad, priorización comercial
 y plan de mejora financiero.

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
+import BankingChecklist from "./BankingChecklist";
 import { buildRecommendations } from "../services/recommendationService";
+
 import {
   formatBooleanText,
   formatClp,
@@ -9,6 +11,7 @@ import {
   getUserResultFactors,
 } from "../utils/helpers";
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
+import AiExplanationBlock from "./AiExplanationBlock";
 
 function hasObjectData(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
@@ -24,7 +27,7 @@ function LinkedText({ text, onOpenArticle }) {
   );
 }
 
-export default function Recommendations({ evaluation, onStartEvaluation, onNavigate }) {
+export default function Recommendations({ evaluation, onStartEvaluation, onNavigate, onRetryExplanation }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
@@ -80,12 +83,19 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         </section>
       ) : null}
 
-      {evaluation?.result?.ai_explanation ? (
-        <section className="recommendation-ai" style={{ marginBottom: "1.5rem" }}>
-          <strong>Explicación mejorada con IA</strong>
-          <p>{evaluation.result.ai_explanation}</p>
-        </section>
-      ) : null}
+      <section className="recommendation-ai" style={{ marginBottom: "1.5rem" }}>
+        <strong>Explicación mejorada con IA</strong>
+
+        <AiExplanationBlock
+          text={evaluation?.result?.ai_explanation}
+          renderText={(t) => (
+            <p>
+              <LinkedText text={t} onOpenArticle={openInAcademy} />
+            </p>
+          )}
+          onRetry={onRetryExplanation}
+        />
+      </section>
 
       {(factors.length || hasObjectData(data.project_fit)) && (
         <div className="recommendation-grid">
@@ -181,6 +191,8 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
           </div>
         </div>
       )}
+
+      {evaluation && <BankingChecklist evaluation={evaluation} />}
 
       <div className="warning-note">
         Esta orientación no reemplaza una evaluación bancaria formal.

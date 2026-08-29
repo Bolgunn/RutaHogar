@@ -1,4 +1,7 @@
 # E4 – Plan de Proyecto 2026
+
+> **Documento entregado — congelado.** Este informe usa la numeración vigente a su fecha de entrega y se conserva tal como fue presentado. No se actualiza con cambios posteriores del backlog.
+
 ## ScoreLeads – Campus San Joaquín
 
 > **Descripción breve del proyecto:** Convertimos interesados en compradores potenciales mediante scoring financiero, IA explicable y recomendación inmobiliaria personalizada.

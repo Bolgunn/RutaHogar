@@ -120,7 +120,7 @@ async function insertFeedback(feedback: ReturnType<typeof normalizePayload>) {
 async function sendFeedbackEmail(feedback: ReturnType<typeof normalizePayload>, createdAt: string) {
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
   const toEmail = Deno.env.get("FEEDBACK_TO_EMAIL");
-  const fromEmail = Deno.env.get("FEEDBACK_FROM_EMAIL") || "ScoreLeads <onboarding@resend.dev>";
+  const fromEmail = Deno.env.get("FEEDBACK_FROM_EMAIL") || "RutaHogar <onboarding@resend.dev>";
 
   if (!resendApiKey || !toEmail) {
     throw new Error("Faltan RESEND_API_KEY o FEEDBACK_TO_EMAIL.");
@@ -129,7 +129,7 @@ async function sendFeedbackEmail(feedback: ReturnType<typeof normalizePayload>, 
   const fallback = "No informado";
   const testerType = feedback.tester_type || fallback;
   const clarityRating = feedback.clarity_rating || fallback;
-  const subject = `Nuevo feedback ScoreLeads · ${testerType} · Nota ${clarityRating}/5`;
+  const subject = `Nuevo feedback RutaHogar · ${testerType} · Nota ${clarityRating}/5`;
   const displayName = feedback.name || fallback;
   const contactEmail = feedback.email || fallback;
   const contactPhone = feedback.phone || fallback;
@@ -158,14 +158,14 @@ async function sendFeedbackEmail(feedback: ReturnType<typeof normalizePayload>, 
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;border-collapse:collapse;background-color:#ffffff;border:1px solid #d7e0ea;border-radius:12px;">
               <tr>
                 <td style="padding:28px 32px;background-color:#246354;border-radius:12px 12px 0 0;">
-                  <img src="https://score-leads-one.vercel.app/Logo%20ScoreLeads.png" alt="ScoreLeads" width="160" style="display:block;width:100%;max-width:160px;height:auto;border:0;margin:0 0 16px;">
-                  <div style="font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.4px;color:#ffffff;">ScoreLeads</div>
+                  <img src="https://score-leads-one.vercel.app/Logo%20RutaHogar.png" alt="RutaHogar" width="160" style="display:block;width:100%;max-width:160px;height:auto;border:0;margin:0 0 16px;">
+                  <div style="font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.4px;color:#ffffff;">RutaHogar</div>
                 </td>
               </tr>
               <tr>
                 <td style="padding:32px;">
                   <h1 style="margin:0 0 8px;font-size:26px;line-height:34px;color:#172033;">Nuevo feedback recibido</h1>
-                  <p style="margin:0 0 28px;font-size:15px;line-height:23px;color:#526174;">Respuesta enviada desde la landing de ScoreLeads</p>
+                  <p style="margin:0 0 28px;font-size:15px;line-height:23px;color:#526174;">Respuesta enviada desde la landing de RutaHogar</p>
 
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background-color:#f4fbf7;border:1px solid #a7dbc2;border-radius:8px;">
                     <tr><td style="padding:13px 16px;border-bottom:1px solid #d7e0ea;font-size:14px;font-weight:700;color:#246354;width:42%;">Nombre</td><td style="padding:13px 16px;border-bottom:1px solid #d7e0ea;font-size:14px;line-height:20px;color:#172033;">${safe.displayName}</td></tr>
@@ -190,8 +190,8 @@ async function sendFeedbackEmail(feedback: ReturnType<typeof normalizePayload>, 
               </tr>
               <tr>
                 <td align="center" style="padding:22px 32px;background-color:#f8fafc;border-top:1px solid #d7e0ea;border-radius:0 0 12px 12px;">
-                  <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:#64748b;">Este correo fue generado automáticamente por ScoreLeads.</p>
-                  <a href="https://score-leads-one.vercel.app/" style="font-size:13px;line-height:20px;font-weight:700;color:#246354;text-decoration:underline;">Visitar ScoreLeads</a>
+                  <p style="margin:0 0 8px;font-size:12px;line-height:18px;color:#64748b;">Este correo fue generado automáticamente por RutaHogar.</p>
+                  <a href="https://score-leads-one.vercel.app/" style="font-size:13px;line-height:20px;font-weight:700;color:#246354;text-decoration:underline;">Visitar RutaHogar</a>
                 </td>
               </tr>
             </table>

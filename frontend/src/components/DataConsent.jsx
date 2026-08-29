@@ -150,7 +150,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
         <div className="consent-section">
           <h3>1. ¿Quién recopila tus datos?</h3>
           <p>
-            <strong>ScoreLeads</strong> es la plataforma responsable del
+            <strong>RutaHogar</strong> es la plataforma responsable del
             tratamiento de tus datos personales. Actuamos como encargados del
             tratamiento para la evaluación de factibilidad de compra de
             vivienda.

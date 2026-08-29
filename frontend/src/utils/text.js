@@ -86,3 +86,20 @@ export function normalizeImprovementPlan(items) {
     return null;
   }).filter(Boolean);
 }
+
+// Prefijos con los que el backend marcaba errores de IA en versiones
+// anteriores. Se tratan como "sin contenido" para que nunca se muestren.
+const AI_ERROR_PREFIXES = ["error ia:", "error:", "resumen ia no disponible"];
+
+export function hasUsableAiText(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+  return !AI_ERROR_PREFIXES.some((prefix) =>
+    text.toLowerCase().startsWith(prefix)
+  );
+}
+
+// Devuelve el texto si es utilizable; de lo contrario, cadena vacía.
+export function sanitizeAiText(value) {
+  return hasUsableAiText(value) ? String(value) : "";
+}

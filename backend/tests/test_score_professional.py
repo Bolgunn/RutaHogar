@@ -144,3 +144,19 @@ def test_score_does_not_require_groq_api_key(monkeypatch):
     assert result["classification"] in {"Alto", "Medio", "Bajo", "Requiere antecedentes"}
     assert "ai_explanation" in result
     assert "user_explanation_deterministic" in result
+
+
+if __name__ == "__main__":
+    test_high_profile_without_blockers_is_high_and_project_compatible()
+    test_current_delinquency_caps_high_profile_to_medium()
+    test_insufficient_down_payment_creates_blocker_and_savings_plan()
+    test_high_debt_creates_debt_blocker_and_reduction_plan()
+    test_incomplete_income_complement_requires_validation_or_more_information()
+    test_weak_income_complement_relation_creates_blocker()
+    test_age_and_long_term_creates_risky_term_blocker()
+    class DummyMonkeypatch:
+        def setenv(self, key, val):
+            os.environ[key] = val
+    test_score_does_not_require_groq_api_key(DummyMonkeypatch())
+    print("All professional score tests PASSED successfully!")
+

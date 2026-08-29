@@ -1,6 +1,6 @@
-# Diagrama de Contexto — ScoreLeads
+# Diagrama de Contexto — RutaHogar
 
-> Muestra cómo cada actor externo se relaciona con la plataforma ScoreLeads. Las líneas sólidas corresponden al alcance activo; las líneas punteadas corresponden a integraciones planificadas para fases futuras.
+> Muestra cómo cada actor externo se relaciona con la plataforma RutaHogar. Las líneas sólidas corresponden al alcance activo; las líneas punteadas corresponden a integraciones planificadas para fases futuras.
 
 ---
 
@@ -14,24 +14,24 @@ graph TB
     CRM["📋 CRM Inmobiliaria<br/>Gestión comercial interna"]
     CMF["🏦 API CMF / Dicom<br/>Historial crediticio externo"]
 
-    ScoreLeads["⚡ ScoreLeads<br/>Plataforma de precalificación<br/>y acompañamiento financiero"]
+    RutaHogar["⚡ RutaHogar<br/>Plataforma de precalificación<br/>y acompañamiento financiero"]
 
-    Lead -->|"Ingresa datos financieros<br/>vía formulario guiado"| ScoreLeads
-    ScoreLeads -->|"Entrega score 0–100, clasificación,<br/>explicación IA y plan de mejora"| Lead
+    Lead -->|"Ingresa datos financieros<br/>vía formulario guiado"| RutaHogar
+    RutaHogar -->|"Entrega score 0–100, clasificación,<br/>explicación IA y plan de mejora"| Lead
 
-    Ejecutivo -->|"Accede al dashboard<br/>de leads priorizados"| ScoreLeads
-    ScoreLeads -->|"Cartera filtrada score Alto<br/>con sugerencia de acción comercial"| Ejecutivo
+    Ejecutivo -->|"Accede al dashboard<br/>de leads priorizados"| RutaHogar
+    RutaHogar -->|"Cartera filtrada score Alto<br/>con sugerencia de acción comercial"| Ejecutivo
 
-    Inmobiliaria -->|"Contrata la plataforma<br/>y define parámetros del proyecto"| ScoreLeads
-    ScoreLeads -->|"Reportes de viabilidad<br/>y leads calificados"| Inmobiliaria
+    Inmobiliaria -->|"Contrata la plataforma<br/>y define parámetros del proyecto"| RutaHogar
+    RutaHogar -->|"Reportes de viabilidad<br/>y leads calificados"| Inmobiliaria
 
-    ScoreLeads -->|"Envía perfil del lead<br/>para generar explicación"| LLM
-    LLM -->|"Devuelve explicación personalizada<br/>y plan de mejora en lenguaje natural"| ScoreLeads
+    RutaHogar -->|"Envía perfil del lead<br/>para generar explicación"| LLM
+    LLM -->|"Devuelve explicación personalizada<br/>y plan de mejora en lenguaje natural"| RutaHogar
 
-    ScoreLeads -->|"Almacena fecha, score,<br/>clasificación y explicación"| Supabase
+    RutaHogar -->|"Almacena fecha, score,<br/>clasificación y explicación"| Supabase
 
-    ScoreLeads -.->|"Fase 2 — Replica leads<br/>con score Alto"| CRM
-    ScoreLeads -.->|"Fase 2 — Consulta<br/>historial crediticio"| CMF
+    RutaHogar -.->|"Fase 2 — Replica leads<br/>con score Alto"| CRM
+    RutaHogar -.->|"Fase 2 — Consulta<br/>historial crediticio"| CMF
 ```
 
 ---
@@ -40,7 +40,7 @@ graph TB
 
 ### Actores del alcance activo
 
-| Actor | Tipo | Relación con ScoreLeads |
+| Actor | Tipo | Relación con RutaHogar |
 | :---- | :--- | :---------------------- |
 | **Lead** | Usuario final | Ingresa sus datos financieros básicos mediante un formulario guiado. Recibe su score (0–100), clasificación (Alto / Medio / Bajo), explicación de factores y plan de mejora personalizado. |
 | **Ejecutivo Comercial** | Usuario operador | Accede al dashboard de leads precalificados. Visualiza la cartera filtrada por score Alto, indicadores financieros de cada lead y sugerencias de acción comercial ("contactar pronto" / "mantener en seguimiento"). |

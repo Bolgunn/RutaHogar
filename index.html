@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RutaHogar — Descubre si estás listo para comprar tu primera vivienda</title>
+<meta name="description" content="Responde unas preguntas y obtén tu score financiero orientativo en segundos. Sin documentos, sin claves bancarias.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+.sl * { box-sizing: border-box; margin: 0; padding: 0; }
+
+.sl {
+  --sl-navy:  #1B2F5E;
+  --sl-navy2: #142348;
+  --sl-teal:  #2AACAD;
+  --sl-teal2: #1D9E75;
+  --sl-teal-light: #E1F5EE;
+  --sl-teal-mid:   #9FE1CB;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: #fff;
+  color: #1B2F5E;
+}
+html{scroll-behavior:smooth;}
+body{margin:0;}
+.sl button, .sl a { font: inherit; }
+.sl a { text-decoration: none; color: inherit; }
+.sl a:focus-visible, .sl button:focus-visible { outline: 2px solid var(--sl-teal); outline-offset: 2px; }
+.sl a.sl-nav-cta, .sl a.sl-btn-primary, .sl a.sl-btn-ghost { color: #fff; }
+.sl a.sl-btn-white { color: var(--sl-navy); }
+.sl a.sl-footer-link { color: rgba(255,255,255,.6); }
+.sl a.sl-footer-link:hover { color: #fff; }
+.sl a.sl-logo { color: var(--sl-navy); }
+
+/* ── Nav ── */
+.sl-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: #fff;
+  border-bottom: 1px solid #e8edf5;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.sl-logo { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 19px; color: var(--sl-navy); letter-spacing: -.02em; }
+.sl-logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sl-teal); box-shadow: 0 0 0 4px rgba(42,172,173,.15); }
+.sl-nav-cta {
+  background: #1B2F5E; color: #fff;
+  padding: 9px 20px; border-radius: 8px;
+  font-size: 14px; font-weight: 600; border: none; cursor: pointer; min-height: unset;
+  transition: background .15s;
+  font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.sl-nav-cta:hover { background: #142348; }
+
+/* ── Hero ── */
+.sl-hero {
+  background: #1B2F5E;
+  padding: 4.5rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.sl-hero::before {
+  content: '';
+  position: absolute; top: -60px; right: -80px;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: rgba(42,172,173,.13);
+}
+.sl-hero::after {
+  content: '';
+  position: absolute; bottom: -80px; left: -60px;
+  width: 240px; height: 240px; border-radius: 50%;
+  background: rgba(42,172,173,.08);
+}
+.sl-hero-inner { position: relative; z-index: 1; max-width: 600px; margin: 0 auto; }
+.sl-hero-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(42,172,173,.18); color: #9FE1CB;
+  font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 999px; margin-bottom: 1.5rem;
+  border: 1px solid rgba(42,172,173,.3);
+}
+.sl-hero h1 {
+  font-size: 40px; font-weight: 800; line-height: 1.15;
+  color: #fff; margin-bottom: 1rem; letter-spacing: -1px;
+}
+.sl-hero h1 span { color: #2AACAD; }
+.sl-hero-sub {
+  font-size: 17px; color: rgba(255,255,255,.72); line-height: 1.7;
+  margin-bottom: 2.5rem; max-width: 480px; margin-left: auto; margin-right: auto;
+}
+.sl-hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.sl-btn-primary {
+  background: #2AACAD; color: #fff;
+  padding: 14px 28px; border-radius: 8px;
+  font-size: 15px; font-weight: 700; border: none; cursor: pointer; min-height: unset;
+  transition: background .15s; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: inherit;
+}
+.sl-btn-primary:hover { background: #1D9E75; }
+.sl-btn-ghost {
+  background: transparent; color: #fff;
+  padding: 14px 28px; border-radius: 8px;
+  font-size: 15px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,.3); cursor: pointer; min-height: unset;
+  transition: all .15s; text-decoration: none;
+  font-family: inherit;
+}
+.sl-btn-ghost:hover { background: rgba(255,255,255,.08); }
+.sl-hero-trust {
+  font-size: 13px; color: rgba(255,255,255,.45);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.sl-hero-trust svg { color: #2AACAD; flex-shrink: 0; }
+
+/* ── Stats ── */
+.sl-stats { background: #2AACAD; padding: 1.5rem 2rem; }
+.sl-stats-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
+  gap: 1px; max-width: 640px; margin: 0 auto;
+}
+.sl-stat      { text-align: center; padding: .75rem 1rem; }
+.sl-stat-num  { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+.sl-stat-label{ font-size: 12px; color: rgba(255,255,255,.85); margin-top: 3px; font-weight: 500; }
+
+/* ── Score preview / Para quién es ── */
+.sl-score-section { background: #EEF3F8; padding: 3.5rem 2rem; }
+.sl-score-inner {
+  max-width: 760px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center;
+}
+.sl-section-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: #2AACAD; margin-bottom: .5rem;
+}
+.sl-score-copy h2 { font-size: 26px; font-weight: 800; color: #1B2F5E; line-height: 1.2; margin-bottom: .75rem; }
+.sl-score-copy p  { font-size: 14px; color: #4a5568; line-height: 1.7; margin-bottom: 1.25rem; }
+.sl-score-list { list-style: none; margin: 0 0 1.5rem; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sl-score-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: #2d3748; line-height: 1.5; }
+.sl-score-list svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; color: #2AACAD; }
+.sl-score-card {
+  background: #fff; border-radius: 16px;
+  padding: 1.5rem; border: 1px solid #dde5f0;
+  box-shadow: 0 12px 40px rgba(27,47,94,.08);
+}
+.sl-score-preview-label {
+  font-size: 11px; color: #a0aec0; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: .75rem; font-weight: 600;
+}
+.sl-score-top { display: flex; align-items: center; gap: 14px; margin-bottom: 1rem; }
+.sl-score-ring {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: #1B2F5E; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.sl-score-ring-num { font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
+.sl-score-ring-den { font-size: 11px; color: rgba(255,255,255,.5); }
+.sl-score-badge-alto {
+  background: #E1F5EE; color: #0F6E56;
+  font-size: 12px; font-weight: 700;
+  padding: 3px 10px; border-radius: 999px;
+  display: inline-block; margin-bottom: 5px;
+}
+.sl-score-msg  { font-size: 13px; color: #4a5568; line-height: 1.5; }
+.sl-score-bar-wrap { margin-top: .75rem; }
+.sl-score-bar-track {
+  height: 8px; border-radius: 999px;
+  background: #EEF3F8; overflow: hidden; position: relative;
+}
+.sl-score-bar-fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: #2AACAD; border-radius: 999px;
+}
+.sl-score-bar-labels {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: #a0aec0; margin-top: 4px;
+}
+.sl-score-factors { display: flex; flex-direction: column; gap: 7px; margin-top: 1rem; }
+.sl-factor        { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.sl-factor-dot    { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sl-factor-dot.ok   { background: #2AACAD; }
+.sl-factor-dot.warn { background: #f6ad55; }
+.sl-factor-label  { color: #4a5568; }
+
+/* ── Steps ── */
+.sl-steps-section { padding: 3.5rem 2rem; background: #fff; }
+.sl-steps-inner   { max-width: 760px; margin: 0 auto; }
+.sl-section-title { font-size: 28px; font-weight: 800; color: #1B2F5E; margin-bottom: .5rem; }
+.sl-section-sub   { font-size: 15px; color: #718096; line-height: 1.7; margin-bottom: 2rem; }
+.sl-steps-grid    { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+.sl-step-card {
+  background: #F7FAFC; border-radius: 12px;
+  padding: 1.25rem; border: 1px solid #e2e8f0;
+}
+.sl-step-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #1B2F5E; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; margin-bottom: .75rem;
+}
+.sl-step-title { font-size: 14px; font-weight: 700; color: #1B2F5E; margin-bottom: 4px; }
+.sl-step-desc  { font-size: 13px; color: #718096; line-height: 1.55; }
+.sl-step-time  { font-size: 11px; color: #2AACAD; font-weight: 600; margin-top: 6px; }
+
+/* ── Visión y Misión ── */
+.sl-vm-section { background: #F7FAFC; padding: 3.5rem 2rem; }
+.sl-vm-inner   { max-width: 760px; margin: 0 auto; }
+.sl-vm-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 1.75rem; }
+.sl-vm-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 1.75rem; position: relative;
+}
+.sl-vm-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(42,172,173,.14); color: #2AACAD;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1rem;
+}
+.sl-vm-icon svg { width: 20px; height: 20px; }
+.sl-vm-card h3 { font-size: 17px; font-weight: 800; color: #1B2F5E; margin-bottom: .5rem; }
+.sl-vm-card p  { font-size: 14px; color: #4a5568; line-height: 1.7; }
+
+/* ── Equipo ── */
+.sl-team-section { background: #fff; padding: 3.5rem 2rem; }
+.sl-team-inner   { max-width: 760px; margin: 0 auto; }
+.sl-team-grid    { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 16px; margin-top: 1.75rem; }
+.sl-team-card {
+  background: #F7FAFC; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 1.5rem 1.1rem; text-align: center;
+}
+.sl-team-avatar {
+  width: 52px; height: 52px; border-radius: 50%; margin: 0 auto .9rem;
+  background: #1B2F5E; color: #9FE1CB;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; letter-spacing: .02em;
+}
+.sl-team-name { font-size: 14px; font-weight: 700; color: #1B2F5E; margin-bottom: 4px; }
+.sl-team-role { font-size: 12px; color: #2AACAD; font-weight: 600; }
+
+/* ── Benefits ── */
+.sl-benefits-section { background: #1B2F5E; padding: 3.5rem 2rem; }
+.sl-benefits-inner   { max-width: 760px; margin: 0 auto; }
+.sl-benefits-title   { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: .5rem; }
+.sl-benefits-sub     { font-size: 15px; color: rgba(255,255,255,.6); line-height: 1.7; margin-bottom: 2rem; }
+.sl-benefits-grid    { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 12px; }
+.sl-benefit {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px; padding: 1.25rem;
+  transition: transform .2s, background .2s;
+}
+.sl-benefit:hover { transform: translateY(-3px); background: rgba(255,255,255,.09); }
+.sl-benefit-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(42,172,173,.2);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: .75rem; color: #2AACAD;
+}
+.sl-benefit-icon svg { width: 20px; height: 20px; }
+.sl-benefit-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+.sl-benefit-desc  { font-size: 13px; color: rgba(255,255,255,.55); line-height: 1.55; }
+
+/* ── FAQ ── */
+.sl-faq-section { background: #F7FAFC; padding: 3.5rem 2rem; }
+.sl-faq-inner   { max-width: 680px; margin: 0 auto; }
+.sl-faq-list    { display: flex; flex-direction: column; margin-top: 1.5rem; }
+.sl-faq-item    { border-bottom: 1px solid #e2e8f0; }
+.sl-faq-item:first-child { border-top: 1px solid #e2e8f0; }
+.sl-faq-item > summary {
+  list-style: none; width: 100%; background: none; border: none; padding: 1rem 0; min-height: unset;
+  cursor: pointer; text-align: left; font-family: inherit;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 14px; font-weight: 700; color: #1B2F5E;
+  transition: color .15s;
+}
+.sl-faq-item > summary::-webkit-details-marker { display: none; }
+.sl-faq-item > summary:hover { color: #2AACAD; }
+.sl-faq-chevron {
+  width: 16px; height: 16px; flex-shrink: 0; color: #2AACAD;
+  transition: transform .25s ease;
+}
+.sl-faq-item[open] .sl-faq-chevron { transform: rotate(180deg); }
+.sl-faq-a { font-size: 14px; color: #718096; line-height: 1.65; padding: 0 0 1rem; }
+
+/* ── Feedback ── */
+.sl-feedback-section { background: #fff; padding: 3.5rem 2rem; }
+.sl-feedback-inner {
+  max-width: 920px; margin: 0 auto;
+  display: grid; grid-template-columns: minmax(220px, .85fr) minmax(0, 1.35fr);
+  gap: 1.75rem; align-items: start;
+}
+.sl-feedback-copy p { font-size: 14px; color: #4a5568; line-height: 1.7; margin-top: .75rem; }
+.sl-feedback-points { list-style: none; padding: 0; margin: 1.25rem 0 0; display: grid; gap: 9px; }
+.sl-feedback-points li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4a5568; margin: 0; }
+.sl-feedback-points span {
+  width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #E1F5EE; color: #0F6E56; font-size: 12px; font-weight: 800;
+  flex-shrink: 0;
+}
+.sl-feedback-form {
+  background: #F7FAFC; border: 1px solid #dde5f0; border-radius: 12px;
+  padding: 1.15rem; display: grid; gap: 10px;
+}
+.sl-feedback-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sl-feedback-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: #1B2F5E; }
+.sl-feedback-form input,
+.sl-feedback-form select,
+.sl-feedback-form textarea {
+  width: 100%; min-height: 42px; margin: 0; padding: 10px 11px;
+  border: 1px solid #bfccd8; border-radius: 8px; background: #fff;
+  color: #172033; font: inherit; font-size: 14px; resize: vertical;
+}
+.sl-feedback-form textarea { min-height: 62px; line-height: 1.45; }
+.sl-feedback-form input:focus,
+.sl-feedback-form select:focus,
+.sl-feedback-form textarea:focus {
+  border-color: #2AACAD; outline: 3px solid rgba(42,172,173,.16);
+}
+.sl-feedback-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+.sl-feedback-status { font-size: 13px; color: #4a5568; line-height: 1.5; }
+.sl-feedback-status.ok { color: #0F6E56; }
+.sl-feedback-status.error { color: #b83232; }
+.sl-btn-primary[disabled] { opacity: .6; cursor: not-allowed; }
+
+/* ── Final CTA ── */
+.sl-cta-section { background: #2AACAD; padding: 4.5rem 2rem; text-align: center; }
+.sl-cta-inner   { max-width: 520px; margin: 0 auto; }
+.sl-cta-section h2 { font-size: 30px; font-weight: 800; color: #fff; margin-bottom: .75rem; line-height: 1.2; }
+.sl-cta-section p  { font-size: 16px; color: rgba(255,255,255,.85); margin-bottom: 2rem; line-height: 1.6; }
+.sl-btn-white {
+  background: #fff; color: #1B2F5E;
+  padding: 14px 32px; border-radius: 8px;
+  font-size: 15px; font-weight: 700; border: none; cursor: pointer; min-height: unset;
+  transition: background .15s;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: inherit;
+}
+.sl-btn-white:hover { background: #EEF3F8; }
+
+/* ── Respaldo ── */
+.sl-ei-section { background: #142348; padding: 3.5rem 2rem; text-align: center; }
+.sl-ei-label { font-size: 12px; color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 1.75rem; }
+.sl-ei-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem; max-width: 420px; margin: 0 auto;
+}
+.sl-ei-item {
+  padding: 1.25rem 1rem; border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+  background: rgba(255,255,255,.03); transition: background .2s, border-color .2s;
+}
+.sl-ei-item:hover { background: rgba(255,255,255,.06); border-color: rgba(42,172,173,.4); }
+.sl-ei-name  { font-size: clamp(18px, 2.4vw, 24px); font-weight: 800; color: #fff; letter-spacing: -.5px; line-height: 1.15; margin-bottom: 4px; }
+.sl-ei-type  { font-size: 12px; color: rgba(255,255,255,.45); letter-spacing: .1em; text-transform: uppercase; }
+
+/* ── Footer ── */
+.sl-footer {
+  background: #142348; padding: 1.5rem 2rem;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.sl-footer-note { font-size: 12px; color: rgba(255,255,255,.4); line-height: 1.5; max-width: 70%; }
+.sl-footer-link {
+  font-size: 13px; color: rgba(255,255,255,.6); background: none; border: none;
+  min-height: unset; padding: 0; cursor: pointer; font-family: inherit; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 3px; transition: color .15s;
+}
+.sl-footer-link:hover { color: #fff; }
+
+@media (max-width: 560px) {
+  .sl-hero h1        { font-size: 28px; }
+  .sl-score-inner    { grid-template-columns: 1fr; }
+  .sl-nav            { padding: .875rem 1.25rem; }
+  .sl-hero           { padding: 3rem 1.25rem; }
+  .sl-steps-section,
+  .sl-benefits-section,
+  .sl-faq-section,
+  .sl-feedback-section,
+  .sl-cta-section,
+  .sl-ei-section,
+  .sl-score-section  { padding: 2.5rem 1.25rem; }
+  .sl-feedback-inner  { grid-template-columns: 1fr; }
+  .sl-feedback-row    { grid-template-columns: 1fr; }
+  .sl-footer         { flex-direction: column; align-items: flex-start; }
+  .sl-footer-note    { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .sl-benefit, .sl-faq-chevron { transition: none; }
+  .sl-benefit:hover { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="sl">
+
+  <!-- Nav -->
+  <nav class="sl-nav">
+    <a href="#top" class="sl-logo"><span class="sl-logo-dot"></span>RutaHogar</a>
+    <a href="#app" class="sl-nav-cta" data-app-link>
+      Evalúa tu perfil gratis
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+  </nav>
+
+  <!-- 1. Hero -->
+  <section class="sl-hero" id="top">
+    <div class="sl-hero-inner">
+      <span class="sl-hero-pill">Precalificación inmobiliaria</span>
+      <h1>Descubre si estás listo para <span>comprar tu primera vivienda</span></h1>
+      <p class="sl-hero-sub">
+        Responde unas preguntas y obtén tu score financiero en segundos.
+        Sin documentos, sin claves bancarias.
+      </p>
+      <div class="sl-hero-btns">
+        <a href="#app" class="sl-btn-primary" data-app-link>
+          Evalúa tu perfil gratis
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <a href="#como-funciona" class="sl-btn-ghost">Cómo funciona</a>
+      </div>
+      <div class="sl-hero-trust">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 2l6 2v5c0 4-3 6-6 7-3-1-6-3-6-7V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        Orientativo · No consultamos DICOM ni CMF
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="sl-stats">
+    <div class="sl-stats-grid">
+      <div class="sl-stat">
+        <div class="sl-stat-num">En Segundos</div>
+        <div class="sl-stat-label">Tenemos tu resultado</div>
+      </div>
+      <div class="sl-stat">
+        <div class="sl-stat-num">0</div>
+        <div class="sl-stat-label">Documentos requeridos</div>
+      </div>
+      <div class="sl-stat">
+        <div class="sl-stat-num">0–100</div>
+        <div class="sl-stat-label">Score orientativo</div>
+      </div>
+      <div class="sl-stat">
+        <div class="sl-stat-num">Gratis</div>
+        <div class="sl-stat-label">Sin costo, siempre</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Para quién es + score preview -->
+  <section class="sl-score-section">
+    <div class="sl-score-inner">
+      <div class="sl-score-copy">
+        <div class="sl-section-eyebrow">Para quién es</div>
+        <h2>Diseñado para el comprador de primera vivienda</h2>
+        <p>
+          Si estás dando los primeros pasos hacia tu hogar, RutaHogar te ayuda a
+          entender tu posición financiera antes de hablar con el banco.
+        </p>
+        <ul class="sl-score-list">
+          <li>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 10 8 14 16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Quieres saber si puedes comprar ahora
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 10 8 14 16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Estás ahorrando para el pie de tu primera propiedad
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 10 8 14 16 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Quieres entender tu situación antes de ir al banco
+          </li>
+        </ul>
+      </div>
+
+      <div class="sl-score-card">
+        <div class="sl-score-preview-label">Tu score orientativo</div>
+        <div class="sl-score-top">
+          <div class="sl-score-ring">
+            <span class="sl-score-ring-num">74</span>
+            <span class="sl-score-ring-den">/100</span>
+          </div>
+          <div>
+            <span class="sl-score-badge-alto">Alto</span>
+            <p class="sl-score-msg">Tu perfil está bien posicionado para iniciar el proceso de compra.</p>
+          </div>
+        </div>
+        <div class="sl-score-bar-wrap">
+          <div class="sl-score-bar-track">
+            <span class="sl-score-bar-fill" style="width:74%"></span>
+          </div>
+          <div class="sl-score-bar-labels">
+            <span>Bajo</span><span>Medio</span><span>Alto</span>
+          </div>
+        </div>
+        <div class="sl-score-factors">
+          <div class="sl-factor"><span class="sl-factor-dot ok"></span><span class="sl-factor-label">Relación ingreso / dividendo saludable</span></div>
+          <div class="sl-factor"><span class="sl-factor-dot ok"></span><span class="sl-factor-label">Ahorro suficiente para el pie</span></div>
+          <div class="sl-factor"><span class="sl-factor-dot warn"></span><span class="sl-factor-label">Continuidad laboral por consolidar</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Cómo funciona -->
+  <section class="sl-steps-section" id="como-funciona">
+    <div class="sl-steps-inner">
+      <div class="sl-section-eyebrow">Cómo funciona</div>
+      <h2 class="sl-section-title">Tres pasos, resultado inmediato</h2>
+      <p class="sl-section-sub">Sin trámites ni esperas. Completa el flujo en pocos minutos.</p>
+      <div class="sl-steps-grid">
+        <div class="sl-step-card">
+          <div class="sl-step-num">1</div>
+          <h3 class="sl-step-title">Cuéntanos tu objetivo</h3>
+          <p class="sl-step-desc">Qué tipo de propiedad buscas, en qué comuna y en qué plazo planeas comprar.</p>
+        </div>
+        <div class="sl-step-card">
+          <div class="sl-step-num">2</div>
+          <h3 class="sl-step-title">Ingresa tus datos financieros</h3>
+          <p class="sl-step-desc">Ingresos, deudas, ahorro y situación laboral. Datos aproximados, sin documentos.</p>
+        </div>
+        <div class="sl-step-card">
+          <div class="sl-step-num">3</div>
+          <h3 class="sl-step-title">Recibe tu score</h3>
+          <p class="sl-step-desc">Score de 0 a 100, clasificación y recomendaciones personalizadas.</p>
+          <div class="sl-step-time">~30 segundos</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Por qué RutaHogar -->
+  <section class="sl-benefits-section">
+    <div class="sl-benefits-inner">
+      <div class="sl-section-eyebrow">Ventajas</div>
+      <h2 class="sl-benefits-title">¿Por qué usar RutaHogar?</h2>
+      <p class="sl-benefits-sub">Una forma simple y transparente de conocer tu posición financiera.</p>
+      <div class="sl-benefits-grid">
+        <div class="sl-benefit">
+          <div class="sl-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><polyline points="12 7 12 12 16 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3 class="sl-benefit-title">Resultado en segundos</h3>
+          <p class="sl-benefit-desc">Sin esperas, sin trámites, sin turnos. Tu score cuando lo necesitas.</p>
+        </div>
+        <div class="sl-benefit">
+          <div class="sl-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><polyline points="14 3 14 8 19 8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <h3 class="sl-benefit-title">Sin documentos</h3>
+          <p class="sl-benefit-desc">Solo datos que ya conoces de memoria. Sin liquidaciones ni claves bancarias.</p>
+        </div>
+        <div class="sl-benefit">
+          <div class="sl-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 2.5V11c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V5.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <h3 class="sl-benefit-title">Orientativo, no vinculante</h3>
+          <p class="sl-benefit-desc">No reemplaza una evaluación bancaria. Es una guía para entender tu posición.</p>
+        </div>
+        <div class="sl-benefit">
+          <div class="sl-benefit-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 10l9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><polyline points="9 21 9 13 15 13 15 21" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <h3 class="sl-benefit-title">Respaldado por el sector</h3>
+          <p class="sl-benefit-desc">Desarrollado junto al sector inmobiliario chileno.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Visión y Misión -->
+  <section class="sl-vm-section">
+    <div class="sl-vm-inner">
+      <div class="sl-section-eyebrow">Quiénes somos</div>
+      <h2 class="sl-section-title">Nuestra visión y misión</h2>
+      <div class="sl-vm-grid">
+        <div class="sl-vm-card">
+          <div class="sl-vm-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Visión</h3>
+          <p>Ser la plataforma de referencia en Chile para que cualquier persona sepa, en segundos, qué tan cerca está de comprar su primera vivienda, y para que las inmobiliarias dediquen su tiempo comercial a quienes realmente pueden avanzar.</p>
+        </div>
+        <div class="sl-vm-card">
+          <div class="sl-vm-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 2.5V11c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V5.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Misión</h3>
+          <p>Precalificar financieramente a cada interesado antes de la evaluación bancaria formal, entregando resultados claros y sin fricción, y transformando a quienes aún no califican en compradores preparados a futuro.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Equipo -->
+  <section class="sl-team-section" id="equipo">
+    <div class="sl-team-inner">
+      <div class="sl-section-eyebrow">Nuestro equipo</div>
+      <h2 class="sl-section-title">Quiénes hacen RutaHogar</h2>
+      <div class="sl-team-grid">
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">IC</div>
+          <div class="sl-team-name">Isaías Carte</div>
+          <div class="sl-team-role">Scrum Master</div>
+        </div>
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">BO</div>
+          <div class="sl-team-name">Benjamín Olguín</div>
+          <div class="sl-team-role">Product Owner</div>
+        </div>
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">AJ</div>
+          <div class="sl-team-name">Andrés Jablonca</div>
+          <div class="sl-team-role">UX/UI Design</div>
+        </div>
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">CJ</div>
+          <div class="sl-team-name">Claudio Jiménez</div>
+          <div class="sl-team-role">Tech Leader</div>
+        </div>
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">RR</div>
+          <div class="sl-team-name">Rodrigo Ramírez</div>
+          <div class="sl-team-role">Comunicaciones y Marketing</div>
+        </div>
+        <div class="sl-team-card">
+          <div class="sl-team-avatar">MC</div>
+          <div class="sl-team-name">Mauro Castillo</div>
+          <div class="sl-team-role">Testing</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQs -->
+  <section class="sl-faq-section">
+    <div class="sl-faq-inner">
+      <div class="sl-section-eyebrow">Preguntas frecuentes</div>
+      <h2 class="sl-section-title">¿Tienes dudas?</h2>
+      <div class="sl-faq-list">
+        <details class="sl-faq-item">
+          <summary>¿Qué es un score de precalificación?
+            <svg class="sl-faq-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 7 10 13 16 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="sl-faq-a">Es una evaluación orientativa que estima qué tan preparado estás financieramente para solicitar un crédito hipotecario, en base a tus ingresos, deudas, ahorro y situación laboral.</p>
+        </details>
+        <details class="sl-faq-item">
+          <summary>¿Guardan mis datos?
+            <svg class="sl-faq-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 7 10 13 16 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="sl-faq-a">No. Si no creas una cuenta, tus datos se usan únicamente para calcular tu score en ese momento y no se almacenan permanentemente.</p>
+        </details>
+        <details class="sl-faq-item">
+          <summary>¿Reemplaza una evaluación bancaria?
+            <svg class="sl-faq-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 7 10 13 16 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="sl-faq-a">No. Es una herramienta orientativa de precalificación temprana. El resultado no equivale a una aprobación bancaria formal.</p>
+        </details>
+        <details class="sl-faq-item">
+          <summary>¿Necesito documentos?
+            <svg class="sl-faq-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 7 10 13 16 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="sl-faq-a">No. Solo necesitas datos que ya conoces de memoria: tu ingreso aproximado, tus deudas, tu ahorro disponible y tu situación laboral.</p>
+        </details>
+        <details class="sl-faq-item">
+          <summary>¿Es gratis?
+            <svg class="sl-faq-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><polyline points="4 7 10 13 16 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <p class="sl-faq-a">Sí. La pre-evaluación es completamente gratuita y toma solo unos minutos.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feedback -->
+  <section class="sl-feedback-section">
+    <div class="sl-feedback-inner">
+      <div class="sl-feedback-copy">
+        <div class="sl-section-eyebrow">Feedback de testers</div>
+        <h2 class="sl-section-title">Ayúdanos a afinar RutaHogar</h2>
+        <p>
+          Tus comentarios nos ayudan a detectar si la propuesta se entiende,
+          qué parte del flujo genera dudas y qué deberíamos mejorar antes de
+          una versión final.
+        </p>
+        <ul class="sl-feedback-points">
+          <li><span>1</span> Claridad de la propuesta</li>
+          <li><span>2</span> Fricciones del primer recorrido</li>
+          <li><span>3</span> Mejoras para usuarios y equipos comerciales</li>
+        </ul>
+      </div>
+
+      <form class="sl-feedback-form" id="feedbackForm" novalidate>
+        <div class="sl-feedback-row">
+          <label>Nombre opcional
+            <input type="text" name="name" autocomplete="name" placeholder="No informado">
+          </label>
+          <label>Correo opcional
+            <input type="email" name="email" autocomplete="email" placeholder="No informado">
+          </label>
+        </div>
+        <div class="sl-feedback-row">
+          <label>Teléfono opcional
+            <input type="tel" name="phone" autocomplete="tel" placeholder="No informado">
+          </label>
+          <label>Perfil del tester
+            <select name="tester_type">
+              <option>Usuario</option>
+              <option>Ejecutivo</option>
+              <option>Banco</option>
+              <option>Inmobiliaria</option>
+              <option>Otro</option>
+            </select>
+          </label>
+        </div>
+        <label>Nota de claridad
+          <select name="clarity_rating">
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </label>
+        <label>Primera impresión: ¿qué entendiste que hace RutaHogar?
+          <textarea name="first_impression"></textarea>
+        </label>
+        <label>Parte confusa o difícil
+          <textarea name="confusing_part"></textarea>
+        </label>
+        <label>Sugerencia de mejora
+          <textarea name="improvement_suggestion"></textarea>
+        </label>
+        <div class="sl-feedback-actions">
+          <button type="submit" class="sl-btn-primary" id="feedbackSubmit">Enviar feedback</button>
+          <span class="sl-feedback-status" id="feedbackStatus" role="status" aria-live="polite"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="sl-cta-section" id="app">
+    <div class="sl-cta-inner">
+      <h2>¿Listo para conocer tu score?</h2>
+      <p>Es gratis, toma unos minutos y no necesitas crear una cuenta para empezar.</p>
+      <a href="#" class="sl-btn-white" data-app-link>
+        Evalúa tu perfil gratis
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- Respaldo -->
+  <section class="sl-ei-section">
+    <div class="sl-ei-label">Afiliados con</div>
+    <div class="sl-ei-grid">
+      <div class="sl-ei-item">
+        <div class="sl-ei-name">Echeverría Izquierdo</div>
+        <div class="sl-ei-type">Inmobiliaria</div>
+      </div>
+      <div class="sl-ei-item">
+        <div class="sl-ei-name">Icafal</div>
+        <div class="sl-ei-type">Inmobiliaria</div>
+      </div>
+      <div class="sl-ei-item">
+        <div class="sl-ei-name">Best Place to Live</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="sl-footer">
+    <p class="sl-footer-note">© 2026 RutaHogar · Herramienta orientativa, no constituye evaluación crediticia formal.</p>
+    <a href="https://www.feriadesoftware.cl/" class="sl-footer-link">Feria de Software 2026</a>
+  </footer>
+
+</div>
+
+<script>
+  // ── Reemplaza esta URL por la de tu app real (Vercel/Netlify) ──
+  var APP_URL = "https://score-leads-one.vercel.app/";
+  document.querySelectorAll('[data-app-link]').forEach(function (el) {
+    el.setAttribute('href', APP_URL);
+  });
+
+  // ── Feedback → Supabase Edge Function (submit-feedback) ──
+  var SUPABASE_URL = "https://adgnxtjkqedtvkwcizzn.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_Y8HX31lHegX7d37_uIngrQ_Osu7p3Cj";
+  var FUNCTION_URL = SUPABASE_URL + "/functions/v1/submit-feedback";
+
+  var form = document.getElementById('feedbackForm');
+  var statusEl = document.getElementById('feedbackStatus');
+  var submitBtn = document.getElementById('feedbackSubmit');
+
+  function setStatus(message, type) {
+    statusEl.textContent = message;
+    statusEl.className = 'sl-feedback-status' + (type ? ' ' + type : '');
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var data = new FormData(form);
+    var payload = {
+      name: (data.get('name') || '').trim() || null,
+      email: (data.get('email') || '').trim() || null,
+      phone: (data.get('phone') || '').trim() || null,
+      tester_type: data.get('tester_type') || 'Otro',
+      first_impression: (data.get('first_impression') || '').trim() || null,
+      confusing_part: (data.get('confusing_part') || '').trim() || null,
+      improvement_suggestion: (data.get('improvement_suggestion') || '').trim() || null,
+      clarity_rating: parseInt(data.get('clarity_rating'), 10) || null
+    };
+
+    if (!payload.first_impression && !payload.confusing_part && !payload.improvement_suggestion) {
+      setStatus('Cuéntanos al menos una impresión, dificultad o sugerencia.', 'error');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Enviando...';
+    setStatus('', '');
+
+    fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('request_failed');
+        return res.json().catch(function () { return {}; });
+      })
+      .then(function () {
+        form.reset();
+        setStatus('Gracias, recibimos tu feedback.', 'ok');
+      })
+      .catch(function () {
+        setStatus('No pudimos registrar el feedback. Intenta nuevamente.', 'error');
+      })
+      .finally(function () {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Enviar feedback';
+      });
+  });
+</script>
+</body>
+</html>

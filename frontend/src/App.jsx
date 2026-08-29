@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import axios from "axios";
 import AcademiaFinanciera from "./components/AcademiaFinanciera";
 import AdminPanel from "./components/AdminPanel";
+import AdminProjectCatalog from "./components/AdminProjectCatalog";
 import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
 import DashboardLeads from "./components/DashboardLeads";
@@ -17,11 +20,13 @@ import ProfilePage from "./components/ProfilePage";
 import Recommendations from "./components/Recommendations";
 import Result from "./components/Result";
 import ScoreForm from "./components/ScoreForm";
+import SetPassword from "./components/SetPassword";
+import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
-import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress } from "./services/evaluationService";
+import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import { useLeads } from "./hooks/useLeads";
-import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan } from "./utils/text";
+import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
 import { buildHousingNotViableRecommendation, buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
@@ -41,6 +46,13 @@ const ONBOARDING_KEY = "scoreleads_onboarding";
 const ANON_ONBOARDING_KEY = "scoreleads_anon_onboarding";
 const ANON_RESULT_KEY = "scoreleads_anon_result";
 const ANON_INPUT_KEY = "scoreleads_anon_input";
+
+function resolveApiBase() {
+  const configuredUrl =
+    import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
+  const fallbackUrl = import.meta.env.DEV ? "http://127.0.0.1:8000" : "";
+  return String(configuredUrl || fallbackUrl).replace(/\/$/, "");
+}
 
 function readSessionJson(key) {
   try {
@@ -228,11 +240,13 @@ const getPrivatePathForPage = (page) => {
   if (page === "home") return "/inicio";
   if (page === "evaluate" || page === "onboarding" || page === "dataconsent") return "/precalificacion";
   if (page === "recommendations") return "/recomendaciones";
+  if (page === "simulation") return "/simulacion";
   if (page === "academia") return "/academia";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "profile") return "/perfil";
   if (page === "leads") return "/dashboard";
   if (page === "admin") return "/admin";
+  if (page === "admin-projects") return "/admin/proyectos";
   return "/inicio";
 };
 
@@ -246,6 +260,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/precalificacion",
     "/pre-evaluacion",
     "/recomendaciones",
+    "/simulacion",
     "/academia",
     "/plan-mejora",
     "/perfil",
@@ -253,7 +268,12 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/dashboard",
     "/ejecutivo/leads",
     "/admin",
+    "/admin/proyectos",
+    "/definir-password",
   ].includes(path);
+
+  // Enlace de recuperación / invitación: vale con o sin sesión previa.
+  if (path === "/definir-password") return { page: "set-password" };
 
   if (!profile) {
     if (unknownRoute) return { page: "landing", path: "/" };
@@ -261,7 +281,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/simulacion", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "landing", path: path === "/inicio" ? "/" : undefined };
@@ -278,6 +298,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
       };
     }
     if (path === "/recomendaciones") return { page: "recommendations" };
+    if (path === "/simulacion") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
     if (path === "/plan-mejora") return { page: "tracking" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
@@ -298,6 +319,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
   if (profile.role === roles.admin) {
     if (path === "/") return { page: "landing" };
     if (path === "/admin") return { page: "admin" };
+    if (path === "/admin/proyectos") return { page: "admin-projects" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
     return { page: "admin", path: "/admin" };
@@ -308,6 +330,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
 
 const getRouteForPage = (page, profile, options = {}) => {
   if (page === "landing") return "/";
+  if (page === "set-password") return "/definir-password";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
   if (!profile) return "/";
@@ -370,6 +393,9 @@ export default function App() {
   );
   const [result, setResult] = useState(null);
   const [resultSaved, setResultSaved] = useState(null);
+  // Permite saber, al resolverse un guardado lento, si el resultado visible
+  // sigue siendo el que originó ese guardado.
+  const resultRef = useRef(null);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
   const [milestoneSuccess, setMilestoneSuccess] = useState("");
@@ -433,6 +459,11 @@ export default function App() {
         }
       : null;
 
+  useEffect(() => {
+    document.body.classList.toggle("simulation-layout-mode", page === "simulation");
+    return () => document.body.classList.remove("simulation-layout-mode");
+  }, [page]);
+
   const updateBrowserPath = (nextPath, options = {}) => {
     const currentPath = window.location.href.includes("#")
       ? window.location.href.slice(window.location.origin.length)
@@ -461,6 +492,9 @@ export default function App() {
   useEffect(() => {
     const route = resolveRouteForPath(pathname, profile, Boolean(anonOnboarding));
     setPage(route.page);
+    // En /definir-password el hash trae los tokens de Supabase: limpiarlo aquí
+    // dejaría al usuario sin sesión de recuperación.
+    if (route.page === "set-password") return;
     if ((route.path && route.path !== pathname) || window.location.href.includes("#")) {
       updateBrowserPath(route.path || pathname, { replace: true });
     }
@@ -498,6 +532,56 @@ export default function App() {
       active = false;
     };
   }, [userId]);
+
+  // Regenera la explicación IA de la preevaluación actual vía /score/explain.
+  // Devuelve true si se generó y persistió una explicación utilizable.
+  async function handleRetryAiExplanation() {
+    const evaluation = currentEvaluation;
+    if (!evaluation?.id || !evaluation?.input) return false;
+
+    try {
+      const response = await axios.post(
+        `${resolveApiBase()}/score/explain`,
+        { ...evaluation.input, scope: "user" },
+        { timeout: 45000 },
+      );
+
+      const explanation = sanitizeAiText(response.data?.ai_explanation);
+      if (!explanation) return false;
+
+      const updated = await updateEvaluationAiContent(evaluation.id, {
+        ai_explanation: explanation,
+      });
+
+      // `result` es estado propio del panel de resultado y no deriva de
+      // `evaluations`: sin esto el reintento persiste la explicación pero la
+      // vista sigue mostrando la anterior. Solo se refresca si el snapshot
+      // visible es el de la evaluación reintentada.
+      setResult((prev) =>
+        prev && prev.evaluation_id === evaluation.id
+          ? { ...prev, ai_explanation: explanation }
+          : prev,
+      );
+
+      if (updated?.id) {
+        setEvaluations((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+      } else {
+        setEvaluations((prev) =>
+          prev.map((item) =>
+            item.id === evaluation.id
+              ? { ...item, result: { ...item.result, ai_explanation: explanation } }
+              : item,
+          ),
+        );
+      }
+      return true;
+    } catch (error) {
+      console.error("ScoreLeads /score/explain error", error);
+      return false;
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -846,11 +930,19 @@ export default function App() {
     navigateToPage("evaluate");
   };
 
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
+
   const handleResult = async (scoreResult, input) => {
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const financialInput = buildFinancialInput(input);
 
     try {
+      // Se siembra la ref en el mismo tick: el efecto corre después del
+      // render y un fallo síncrono (sesión ausente) llegaría antes, con la
+      // ref todavía apuntando al resultado anterior.
+      resultRef.current = resultSnapshot;
       setResult(resultSnapshot);
       setResultSaved(null);
 
@@ -873,7 +965,17 @@ export default function App() {
         channel: getChannel(),
       });
 
-      setResultSaved(true);
+      // Si el usuario ya evaluó de nuevo, este guardado quedó obsoleto y no
+      // debe tocar el resultado visible, que pertenece a otra evaluación.
+      if (resultRef.current === resultSnapshot) {
+        setResultSaved(true);
+        // El snapshot visible queda ligado a la evaluación guardada: sin esto
+        // no hay forma de saber si `result` y `currentEvaluation` son lo mismo.
+        setResult((prev) =>
+          prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
+        );
+      }
+
       setEvaluations((prev) => {
         const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
         return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
@@ -881,6 +983,7 @@ export default function App() {
       prependEvaluation(savedEvaluation);
     } catch (err) {
       console.error(err);
+      if (resultRef.current !== resultSnapshot) return;
       setResultSaved(false);
       setDataError(
         "El score se calculó, pero no pudimos guardar la preevaluación. Revisa que tu sesión siga activa y que Supabase permita insertar evaluaciones.",
@@ -1119,6 +1222,14 @@ export default function App() {
 
   const handleDismissNotification = () => markLeadsSeen();
 
+  if (page === "set-password") {
+    return (
+      <div className="app-shell auth-shell">
+        <SetPassword onGoToLogin={() => navigateToPage("auth")} />
+      </div>
+    );
+  }
+
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
 
@@ -1247,7 +1358,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${page === "simulation" ? "simulation-shell" : ""}`}>
       <Navbar
         profile={profile}
         page={page}
@@ -1294,7 +1405,7 @@ export default function App() {
           <section className="hero">
             <div className="hero-copy">
               <span className="eyebrow">Solución inmobiliaria</span>
-              <h1>ScoreLeads</h1>
+              <h1>RutaHogar</h1>
               {result && (
                 <div
                   className={
@@ -1318,21 +1429,30 @@ export default function App() {
               </p>
             </div>
 
-            <aside className="score-preview" aria-label="Resumen de ScoreLeads">
+            <aside className="score-preview" aria-label="Resumen de RutaHogar">
               <span className="preview-label">Flujo activo</span>
               <strong>Formulario - Score - Recomendaciones</strong>
               <p>Resultado orientativo: Alto, Medio o Bajo.</p>
             </aside>
           </section>
 
-          {result && <Result data={result} />}
+          {result && (
+        <Result
+          data={result}
+          onRetryExplanation={
+            currentEvaluation && result?.evaluation_id === currentEvaluation.id
+              ? handleRetryAiExplanation
+              : undefined
+          }
+        />
+      )}
 
           <section className="section-block">
             <div className="section-heading">
               <span className="eyebrow">Mapa del producto</span>
               <h2>Implementaciones planificadas</h2>
               <p>
-                Estas tarjetas muestran la visión completa de ScoreLeads.
+                Estas tarjetas muestran la visión completa de RutaHogar.
                 Actualmente están habilitados el objetivo inmobiliario y la
                 pre-evaluación financiera.
               </p>
@@ -1450,12 +1570,22 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
         />
+      ) : page === "simulation" && profile.role === roles.user ? (
+        <SimulationPage
+          evaluation={currentEvaluation}
+          onboarding={userOnboarding}
+          onStartEvaluation={startEvaluation}
+          onNavigate={navigateToPage}
+          onRetryExplanation={handleRetryAiExplanation}
+        />
       ) : page === "academia" && profile.role === roles.user ? (
-        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} />
+        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} onRetryExplanation={handleRetryAiExplanation} />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads evaluations={evaluations} />
       ) : page === "admin" && profile.role === roles.admin ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
+      ) : page === "admin-projects" && profile.role === roles.admin ? (
+        <AdminProjectCatalog />
       ) : (
         <section className="section-block">
           <div className="section-heading">

@@ -1,8 +1,8 @@
-# ScoreLeads — Plataforma Profesional
+# RutaHogar — Plataforma Profesional
 
 Referencia detallada: `.claude/CLAUDE.md` (fuente más completa del repo).
 
-ScoreLeads ya no debe tratarse como MVP. Documentar y construir como plataforma
+RutaHogar ya no debe tratarse como MVP. Documentar y construir como plataforma
 profesional de precalificación financiera inmobiliaria, con scoring explicable,
 reglas versionadas, trazabilidad, privacidad, priorización comercial y plan de
 mejora financiero.

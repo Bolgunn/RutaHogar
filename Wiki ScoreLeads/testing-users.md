@@ -1,6 +1,6 @@
 # Usuarios de prueba — Supabase
 
-Proyecto: **adgnxtjkqedtvkwcizzn** (ScoreLeads — East US Ohio)  
+Proyecto: **adgnxtjkqedtvkwcizzn** (RutaHogar — East US Ohio)  
 Creados: 2026-06-04 vía Admin API (`email_confirm: true`)
 
 ---

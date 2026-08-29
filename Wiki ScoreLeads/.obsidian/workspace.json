@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "ScoreLeads Shared/hu_gaps.md",
+                "file": "AtributosDeCalidad.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "hu_gaps"
+              "title": "AtributosDeCalidad"
             }
           }
         ],
@@ -70,7 +70,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -215,8 +217,13 @@
   },
   "active": "cdf5923bbbba188e",
   "lastOpenFiles": [
-    "ScoreLeads Shared/ScoreLeads Blueprint.md",
+    "research/spike1-e4-lead-project-matching-criteria.md.tmp.11512.a6829c9515cb",
+    "UserStories/HU9-CompatibilitySimulation.md.tmp.812.99135eef9323",
+    "research/spike1-e4-lead-project-matching-criteria.md",
+    "Actores.md",
+    "deuda-tecnica.md",
     "ScoreLeads Shared/hu_gaps.md",
+    "ScoreLeads Shared/ScoreLeads Blueprint.md",
     "ScoreLeads Shared/hu_gaps.md.tmp.34744.f15263fd74a1",
     "ScoreLeads Shared/hu_gaps.md.tmp.34744.657abb64381f",
     "ScoreLeads Shared/Survey Cobertura Requisitos.md",
@@ -232,10 +239,8 @@
     "research/scoring_improvement_recommendations.md",
     "research/competitor_prequalification_audit.md",
     "Wiki Score Leads.md",
-    "research/inmobiliaria_field_matrix.csv",
     "Tech Stack.md",
     "diagramaDeContexto.md",
-    "deuda-tecnica.md",
     "UserStories/index.md",
     "UserStories/HdU2-LeadPrioritization.md",
     "UserStories/HdU1-FinancialDataEntry.md",
@@ -247,8 +252,6 @@
     "implementation_plans/plan-C-leads-hook.md",
     "implementation_plans/plan-B-service-layer.md",
     "implementation_plans/plan-A-surgical.md",
-    "implementation_plans/fix-rls-infinite-recursion.md",
-    "informes_entregas/E2 - GPI 2026 - ScoreLeads.md",
-    "UserStories/HdU5-CRMIntegration.md"
+    "implementation_plans/fix-rls-infinite-recursion.md"
   ]
 }
