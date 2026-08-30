@@ -79,13 +79,15 @@ function isShortTimelineUnrealistic({ classification, input, months }) {
   return months <= 3 && (classification === "Bajo" || hasLowSavings || hasHighDebt || hasMorosity);
 }
 
-function buildGoal(title, description, months, status = "pendiente") {
+function buildGoal(title, description, months, status = "pendiente", category = null, impact_level = null) {
   return {
     id: goalIdFromTitle(title),
     title,
     description,
     timeline: months === 1 ? "1 mes" : `${months} meses`,
     status,
+    category,
+    impact_level
   };
 }
 
@@ -198,15 +200,15 @@ function goalsFromEvaluation(evaluation, months) {
 }
 
 function goalsFromStructuredPlan(result, fallbackMonths) {
-  const plan = Array.isArray(result?.structured_improvement_plan)
-    ? result.structured_improvement_plan
+  const plan = Array.isArray(result?.improvement_plan)
+    ? result.improvement_plan
     : [];
 
   return plan
     .map((action, index) => {
       if (!action || typeof action !== "object") return null;
 
-      const title = action.title || `Acción sugerida ${index + 1}`;
+      const title = action.title || action.category || `Acción sugerida ${index + 1}`;
       const estimatedMonths = Number(action.estimated_months);
       const months = Number.isFinite(estimatedMonths) && estimatedMonths > 0
         ? Math.round(estimatedMonths)
@@ -214,13 +216,15 @@ function goalsFromStructuredPlan(result, fallbackMonths) {
       const details = [];
 
       if (action.description) details.push(action.description);
-      if (isMonetaryPlanAction(action.type) && Number(action.gap) > 0) {
-        details.push(`Brecha estimada: ${formatClp(action.gap)}.`);
-      }
+      if (action.expected_benefit) details.push(`Beneficio esperado: ${action.expected_benefit}`);
+
       return buildGoal(
         title,
         details.join(" ") || "Acción sugerida desde tu última preevaluación.",
         months,
+        "pendiente",
+        action.category,
+        action.impact_level
       );
     })
     .filter(Boolean);
