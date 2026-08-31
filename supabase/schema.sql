@@ -382,6 +382,25 @@ as $$
   select inmobiliaria_id from public.proyectos where id = p_project_id;
 $$;
 
+-- SECURITY DEFINER para no recursar sobre las policies de proyecto_ejecutivos.
+create or replace function public.is_ejecutivo_asignado(p_project_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.proyecto_ejecutivos pe
+    where pe.proyecto_id = p_project_id
+      and (
+        pe.ejecutivo_id = auth.uid()
+        or pe.ejecutivo_email = lower((select u.email from auth.users u where u.id = auth.uid()))
+      )
+  );
+$$;
+
 create or replace function public.can_admin_inmobiliaria(p_inmobiliaria_id uuid)
 returns boolean
 language sql
@@ -603,14 +622,23 @@ create policy "Inmobiliarias update global admin"
   with check (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null);
 
 drop policy if exists "Proyectos select tenant" on public.proyectos;
+-- El ejecutivo solo ve los proyectos donde esta asignado (HU 10, migracion
+-- 20260831090000). El admin conserva el catalogo completo de su tenant.
 create policy "Proyectos select tenant"
   on public.proyectos
   for select
   using (
-    public.get_my_role() = any (array['admin'::text, 'ejecutivo'::text])
-    and (
-      public.get_my_inmobiliaria() is null
-      or public.get_my_inmobiliaria() = inmobiliaria_id
+    (
+      public.get_my_role() = 'admin'
+      and (
+        public.get_my_inmobiliaria() is null
+        or public.get_my_inmobiliaria() = inmobiliaria_id
+      )
+    )
+    or (
+      public.get_my_role() = 'ejecutivo'
+      and public.get_my_inmobiliaria() = inmobiliaria_id
+      and public.is_ejecutivo_asignado(id)
     )
   );
 
@@ -634,14 +662,27 @@ create policy "Proyectos delete admin tenant"
   using (public.can_admin_inmobiliaria(inmobiliaria_id));
 
 drop policy if exists "Proyecto ejecutivos select tenant" on public.proyecto_ejecutivos;
+-- El ejecutivo ve sus propias asignaciones y nada mas, siempre dentro de su
+-- tenant: sin ese gate, una asignacion 'pendiente' creada por el admin de otra
+-- inmobiliaria tecleando un correo seria legible por el dueno de ese correo.
 create policy "Proyecto ejecutivos select tenant"
   on public.proyecto_ejecutivos
   for select
   using (
-    public.get_my_role() = any (array['admin'::text, 'ejecutivo'::text])
-    and (
-      public.get_my_inmobiliaria() is null
-      or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
+    (
+      public.get_my_role() = 'admin'
+      and (
+        public.get_my_inmobiliaria() is null
+        or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
+      )
+    )
+    or (
+      public.get_my_role() = 'ejecutivo'
+      and public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
+      and (
+        ejecutivo_id = auth.uid()
+        or ejecutivo_email = lower((select u.email from auth.users u where u.id = auth.uid()))
+      )
     )
   );
 
