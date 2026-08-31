@@ -89,10 +89,51 @@ def test_calcula_la_forma_legada_plana():
     assert indicadores["capacidad_supuestos"]["age_term_verified"] is False
 
 
+def test_la_forma_legada_escribe_indicadores_completos():
+    # ALG-10 lee ingreso_total para la brecha de renta. Escribir solo las nueve
+    # claves de capacidad haria que la tarjeta pidiera el ingreso entero en vez
+    # de lo que falta.
+    _, nuevo = procesar_fila(FILA_LEGADA)
+    indicadores = nuevo["result"]["financial_indicators"]
+
+    assert indicadores["ingreso_total"] == 1500000
+    assert indicadores["uf_value_clp"] > 0
+    assert indicadores["property_value_clp"] > 0, "Macul resuelve precio referencial"
+    assert indicadores["pie_ratio"] > 0
+
+
+def test_una_fila_moderna_no_recalcula_sus_indicadores_guardados():
+    guardados = {"ingreso_total": 999, "property_value_clp": 1, "algo_propio": "intacto"}
+    _, nuevo = procesar_fila(_fila(indicadores=guardados))
+    indicadores = nuevo["result"]["financial_indicators"]
+
+    for clave, valor in guardados.items():
+        assert indicadores[clave] == valor
+    assert set(indicadores) == set(guardados) | set(CLAVES_CAPACIDAD)
+
+
 def test_la_forma_legada_conserva_su_input_plano():
     _, nuevo = procesar_fila(FILA_LEGADA)
     for clave, valor in FILA_LEGADA.items():
         assert nuevo[clave] == valor
+
+
+def test_repara_una_fila_escrita_con_solo_las_claves_de_capacidad():
+    # Lo que dejo una corrida temprana del script: capacidad sin indicadores
+    # base, asi que ALG-10 leia ingreso_total ausente y calculaba mal la brecha.
+    _, incompleta = procesar_fila(FILA_LEGADA)
+    solo_capacidad = incompleta["result"]["financial_indicators"]
+    incompleta["result"]["financial_indicators"] = {
+        clave: solo_capacidad[clave] for clave in CLAVES_CAPACIDAD
+    }
+
+    estado, reparada = procesar_fila(incompleta)
+    indicadores = reparada["result"]["financial_indicators"]
+
+    assert estado == "reparado"
+    assert indicadores["ingreso_total"] == 1500000
+    assert indicadores["capacidad_compra_estimada_uf"] == solo_capacidad["capacidad_compra_estimada_uf"]
+    assert procesar_fila(reparada) == ("ya_presente", None)
 
 
 def test_la_forma_legada_tambien_es_idempotente():

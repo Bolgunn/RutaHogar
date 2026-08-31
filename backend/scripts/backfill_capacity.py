@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.scoring_engine.indicators import calculate_financial_indicators
+from app.scoring_engine.property_value import resolve_property_value_clp
 from app.scoring_engine.purchase_capacity import calculate_purchase_capacity
 
 TABLA = "evaluations"
@@ -152,17 +153,37 @@ def _destino(nuevo: dict) -> dict:
 
 def procesar_fila(financial_data: dict) -> tuple[str, dict | None]:
     indicadores = _indicadores(financial_data)
-    if all(clave in indicadores for clave in CLAVES_CAPACIDAD):
+    # Una corrida temprana escribió filas legadas con SOLO las nueve claves de
+    # capacidad, sin los indicadores base. ALG-10 lee ingreso_total para la
+    # brecha de renta, así que esas filas muestran evidencia equivocada. Se
+    # consideran incompletas y se reparan; ingreso_total siempre existe en una
+    # fila bien escrita, venga de indicators.py o reconstruida aquí.
+    tiene_base = "ingreso_total" in indicadores
+    if tiene_base and all(clave in indicadores for clave in CLAVES_CAPACIDAD):
         return "ya_presente", None
 
     entrada = _snapshot(financial_data)
-    calculados = calculate_financial_indicators(entrada, indicadores.get("property_value_clp", 0))
+    property_value_clp = (
+        indicadores["property_value_clp"]
+        if "property_value_clp" in indicadores
+        else resolve_property_value_clp(entrada).get("property_value_clp", 0)
+    )
+    calculados = calculate_financial_indicators(entrada, property_value_clp)
     capacidad = calculate_purchase_capacity(entrada, calculados)
 
-    nuevo = json.loads(json.dumps(financial_data))
-    _destino(nuevo)["financial_indicators"] = {**indicadores, **capacidad}
+    # Sin indicadores base guardados se reconstruyen como los calcularía el
+    # motor hoy; con ellos, mandan los guardados y solo se les suma la capacidad.
+    base = indicadores if tiene_base else calculados
 
-    estado = "requires_info" if capacidad["capacidad_status"] == "requires_info" else "calculado"
+    nuevo = json.loads(json.dumps(financial_data))
+    _destino(nuevo)["financial_indicators"] = {**base, **capacidad}
+
+    if capacidad["capacidad_status"] == "requires_info":
+        estado = "requires_info"
+    elif indicadores and not tiene_base:
+        estado = "reparado"
+    else:
+        estado = "calculado"
     return estado, nuevo
 
 
@@ -172,7 +193,7 @@ def main():
     args = parser.parse_args()
 
     url, key = _config()
-    conteos = {"calculado": 0, "requires_info": 0, "ya_presente": 0}
+    conteos = {"calculado": 0, "reparado": 0, "requires_info": 0, "ya_presente": 0}
     incomprensibles = []
     desde = 0
 
@@ -198,6 +219,7 @@ def main():
     modo = "APLICADO" if args.apply else "DRY-RUN (nada escrito)"
     print(f"Backfill de capacidad — {modo}")
     print(f"  calculados      : {conteos['calculado']}")
+    print(f"  reparados       : {conteos['reparado']}")
     print(f"  requires_info   : {conteos['requires_info']}")
     print(f"  ya presentes    : {conteos['ya_presente']}")
     print(f"  incomprensibles : {len(incomprensibles)}")
