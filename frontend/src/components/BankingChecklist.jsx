@@ -60,19 +60,31 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
   const completedCount = currentList.filter((i) => checked[i.id]).length;
   const progressPercent = Math.round((completedCount / (currentList.length || 1)) * 100);
 
-  const handleOpenAcademia = (item) => (e) => {
+  // NOTA DE DOCUMENTACIÓN: 
+  // Actualmente un solo botón en el encabezado redirige a la Academia de forma general.
+  // Si en el futuro se desea que cada antecedente apunte a un artículo específico diferente, 
+  // se deben crear esos artículos detallados en `academyContent.js` y restaurar la lógica
+  // que pasaba `item.academyArticleId` a `onNavigate("academia", { articleId: ... })`.
+  const handleOpenAcademia = (e) => {
     e.preventDefault();
     if (onNavigate) {
-      onNavigate("academia", { articleId: item?.academyArticleId, topicId: item?.academyTopicId });
+      onNavigate("academia");
     }
   };
 
   return (
     <section className="section-block banking-checklist-minimal">
-      <div className="section-heading compact">
-        <span className="eyebrow">Preparación Bancaria</span>
-        <h2>Checklist Referencial de Antecedentes</h2>
-        <p>Antecedentes referenciales para tu evaluación formal en la banca chilena.</p>
+      <div className="section-heading compact" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+        <div>
+          <span className="eyebrow">Preparación Bancaria</span>
+          <h2>Checklist Referencial de Antecedentes</h2>
+          <p>Antecedentes referenciales para tu evaluación formal en la banca chilena.</p>
+        </div>
+        {onNavigate && (
+          <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
+            <i className="ti ti-books" /> Ir a la Academia
+          </button>
+        )}
       </div>
 
       {/* Criterio E3: Safeguards S1, S5, S7 Banner */}
@@ -129,17 +141,6 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
                       <span className="prio-reason"> — {item.priorityReason}</span>
                     </div>
                   </label>
-                  {/* Criterio E4: Direct link to Academia */}
-                  {onNavigate && (
-                    <button
-                      type="button"
-                      className="checklist-academy-link"
-                      onClick={handleOpenAcademia(item)}
-                      title="Aprender más sobre este tema en Academia"
-                    >
-                      <i className="ti ti-books" /> Academia
-                    </button>
-                  )}
                 </div>
               </li>
             ))}
@@ -176,17 +177,6 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
                       <span className="row-desc">{item.subtitle}</span>
                     </div>
                   </label>
-                  {/* Criterio E4: Direct link to Academia */}
-                  {onNavigate && (
-                    <button
-                      type="button"
-                      className="checklist-academy-link"
-                      onClick={handleOpenAcademia(item)}
-                      title="Aprender más sobre este antecedente en Academia"
-                    >
-                      <i className="ti ti-books" /> Academia
-                    </button>
-                  )}
                 </div>
               </li>
             );
