@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
+import { displayItemBenefit, displayItemText } from "../utils/text";
 import {
   formatScore,
   getBaseClassification,
@@ -373,7 +374,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       ) : (
         <td>
           {item.result?.risks?.length
-            ? item.result.risks.slice(0, 2).join(" ")
+            ? item.result.risks.slice(0, 2).map(displayItemText).join(" ")
             : "Sin riesgos relevantes"}
         </td>
       )}
@@ -688,7 +689,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     </h3>
                     <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedPositiveIndicators.map((ind, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{ind}</li>
+                        <li key={i} style={{ marginBottom: "0.25rem" }}>{displayItemText(ind)}</li>
                       ))}
                     </ul>
                   </div>
@@ -702,7 +703,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     </h3>
                     <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedRisks.map((r, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{r}</li>
+                        <li key={i} style={{ marginBottom: "0.25rem" }}>{displayItemText(r)}</li>
                       ))}
                     </ul>
                   </div>
@@ -760,7 +761,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Recomendaciones</h3>
                     <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedRecommendations.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
+                        <li key={index} style={{ marginBottom: "0.35rem" }}>
+                          {displayItemText(item)}
+                          {displayItemBenefit(item) ? (
+                            <small style={{ display: "block", color: "#5A6A7E" }}>
+                              Beneficio esperado: {displayItemBenefit(item)}
+                            </small>
+                          ) : null}
+                        </li>
                       ))}
                     </ul>
                   </div>
