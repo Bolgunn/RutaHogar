@@ -2,7 +2,11 @@
 
 Reviewed: 2026-08-16
 Scope: definition of the criteria, variables, thresholds and frozen contract for matching a lead against the real estate project catalog. Chilean mortgage underwriting norms as of August 2026.
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+Deliverable status: **criteria definition + frozen contract. No production code written.** Implementation is owned by [[UserStories/HU10-LeadProjectMatching|HU 10]].
+========
 Deliverable status: **criteria definition + frozen contract. No production code written.** Implementation is owned by [[UserStories/HU10-matching-lead-proyecto\|HU 10]].
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, bank published terms) plus a parallel agent review of the existing `scoring_engine` against those norms. Where the two tracks disagreed, the divergence and its resolution are recorded in §11.
 
@@ -28,6 +32,15 @@ Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, ba
 - **Scoring engine changes.** The financial score, its weights, and `classification` are untouched. E4 consumes them.
 - **The `/score` contract.** Capacity is added as *new keys inside the existing* `financial_indicators` dict — additive only. No field removed, no type changed, no endpoint added (guardrail #5).
 - **`PRECIOS_REFERENCIA_UF`.** Untouched (guardrail #7). The capacity model is preference-independent and does not read it.
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+- **Rate / UF / term scenarios.** Owned by [[UserStories/HU18-MortgageScenarioSimulator|HU 18]] and [[UserStories/HU29-CreditTotalCostComparator|HU 29]]. Matching uses one base scenario (§8.2).
+- **Subsidy eligibility rules.** Owned by Spike 1 E2 / [[UserStories/HU26-SubsidySimulation|HU 26]]. E4 only emits a flag (§4.4).
+- **UI.** The lead card layout is HU 10's.
+
+### What this document claims for reuse
+
+`capacidad_compra_estimada_uf` is defined here but is **also the primitive Spike 1 E2 needs** for [[UserStories/HU6-CompatibilitySimulation|HU 6]] ("comparar capacidad de compra, valor de vivienda, ahorro, deuda y ajustes mínimos"). Whoever writes E2 must consume this definition rather than introduce a second capacity formula.
+========
 - **Rate / UF / term scenarios.** Owned by [[UserStories/HU18-simulador-escenarios-hipotecarios\|HU 18]] and [[UserStories/HU29-comparador-costo-credito\|HU 29]]. Matching uses one base scenario (§8.2).
 - **Subsidy eligibility rules.** Owned by Spike 1 E2 / [[UserStories/HU26-simulacion-subsidios\|HU 26]]. E4 only emits a flag (§4.4).
 - **UI.** The lead card layout is HU 13's.
@@ -35,6 +48,7 @@ Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, ba
 ### What this document claims for reuse
 
 `capacidad_compra_estimada_uf` is defined here but is **also the primitive Spike 1 E2 needs** for [[UserStories/HU6-simulacion-compatibilidad\|HU 6]] ("comparar capacidad de compra, valor de vivienda, ahorro, deuda y ajustes mínimos"). Whoever writes E2 must consume this definition rather than introduce a second capacity formula.
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 ---
 
@@ -49,7 +63,7 @@ preference-anchored (today):   lead + declared objective  ->  fit verdict
 preference-independent (E4):   lead                       ->  capacity ceiling  ->  ranked against N projects
 ```
 
-**Consequence:** comuna and tipo are demoted from *inputs to the target* to *soft affinity signals*. A lead is matched on what they can afford first, and on what they said they wanted second. This is also what makes HU 13 E4 (re-orientable lead) computable at all — you cannot detect "they can buy something other than what they asked for" from a model that only evaluates what they asked for.
+**Consequence:** comuna and tipo are demoted from *inputs to the target* to *soft affinity signals*. A lead is matched on what they can afford first, and on what they said they wanted second. This is also what makes HU 10 E4 (re-orientable lead) computable at all — you cannot detect "they can buy something other than what they asked for" from a model that only evaluates what they asked for.
 
 Both models coexist. `project_fit.py` keeps answering "does their own plan work", and its verdict is reused as an input to the re-orientable rule (§7).
 
@@ -68,7 +82,7 @@ Every constant carries provenance. Rows are split by **kind**, because market va
 | `PIE_RATIO_ASISTIDO` | `0.10` | [FOGAES — requisitos](https://fogaes.cl/sitio/requisitos/): 90% LTV, primera vivienda, tope UF 4.500. Bill approved ago-2026 raises the cap to UF 6.000, +30.000 cupos, validity extended to 31-may-2028 | 2026-08-16 | On legal change |
 | `VALOR_UF_CLP` | repo: `40695` · actual 2026-08-16: `40854` | SII / Banco Central | 2026-08-16 | See §3.3 |
 
-### 3.2 ScoreLeads policy (changes only by team decision)
+### 3.2 RutaHogar policy (changes only by team decision)
 
 | Constant | v1 value | Basis | Consulted | Review |
 | :------- | :------- | :---- | :-------- | :----- |
@@ -76,7 +90,11 @@ Every constant carries provenance. Rows are split by **kind**, because market va
 | `RATIO_CARGA_TOTAL_MAX` | `0.45` | [CMF Educa](https://www.cmfchile.cl/educa/621/w3-article-27502.html) + `blockers.py:106` (`carga_total_alta`) | 2026-08-16 | Only with the blocker |
 | `RATIO_DIVIDENDO_SALUDABLE` | `0.25` | CMF Educa; BancoEstado/Enlace Inmobiliario; Scotiabank. **Copy only — never used in calculation** | 2026-08-16 | — |
 | `PLAZO_REFERENCIA_ANIOS` | `30` | Most commonly offered term (Bci, Scotiabank, BancoEstado 8–30). Overridable by a declared `plazo_credito_hipotecario` | 2026-08-16 | — |
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+| `EDAD_MAX_FIN_CREDITO` | `70` | RutaHogar policy: `blockers.py:173` + [[UserStories/HU29-CreditTotalCostComparator|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
+========
 | `EDAD_MAX_FIN_CREDITO` | `70` | ScoreLeads policy: `blockers.py:173` + [[UserStories/HU29-comparador-costo-credito\|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 | `PLAZO_MINIMO_VIABLE_ANIOS` | `5` | Below this the quote is not meaningful → `requires_info` | 2026-08-16 | — |
 
 ### 3.3 Canonical unit: UF
@@ -100,7 +118,7 @@ A capacity ceiling built at 25% would declare leads unable to afford projects th
 | :--- | :---------- |
 | ≤ 25% | Holgado |
 | 25–30% | Viable pero exigente |
-| > 30% | Fuera de política ScoreLeads |
+| > 30% | Fuera de política RutaHogar |
 | deuda + dividendo > 45% | No avanzar sin revisión |
 
 ---
@@ -217,9 +235,13 @@ afinidad >= 45 -> "Cercano"
 afinidad <  45 -> "Marginal"
 ```
 
-**The 45-vs-15 asymmetry is the point.** Capacity carries three times the weight of classification, and that *is* HU 13 E2 ("capacity beats classification") expressed numerically: a `Medio` lead sitting comfortably above `precio_max` scores ~92 and outranks an `Alto` lead scraping `precio_min` at ~55. Weighted equally, E2 would be unimplementable and the panel would merely re-sort the existing HU 2 dashboard.
+**The 45-vs-15 asymmetry is the point.** Capacity carries three times the weight of classification, and that *is* HU 10 E2 ("capacity beats classification") expressed numerically: a `Medio` lead sitting comfortably above `precio_max` scores ~92 and outranks an `Alto` lead scraping `precio_min` at ~55. Weighted equally, E2 would be unimplementable and the panel would merely re-sort the existing HU 2 dashboard.
 
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+**Calibration status: v1, asserted from domain reasoning, not fitted.** There is no conversion history to calibrate against. Revisit once [[UserStories/HU16-ConversionDashboard|HU 16]] produces real outcome data.
+========
 **Calibration status: v1, asserted from domain reasoning, not fitted.** There is no conversion history to calibrate against. Revisit once [[UserStories/HU16-dashboard-conversion\|HU 16]] produces real outcome data.
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 ---
 
@@ -271,7 +293,11 @@ Steps 2–3 reuse the `main_gap` vocabulary (`"income"` / `"down_payment"`) alre
 
 ## 7. Re-orientable opportunity
 
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+[[UserStories/HU10-LeadProjectMatching|HU 10]] E4: *a user who can buy a project different from their declared objective must show as a re-orientable opportunity.*
+========
 [[UserStories/HU10-matching-lead-proyecto\|HU 10]] E4: *a user who can buy a project different from their declared objective must show as a re-orientable opportunity.*
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 `commercial_priority.py` already emits a `reorient` action (`score >= 70 AND project_fit = "Fuera de alcance"`), but it is **lead-global and cannot name an alternative**. It says "reorient this person" and stops. Matching closes that gap. **`commercial_priority.py` is left untouched** — the HU 2 dashboard's behavior does not change and no shipped `/score` path needs re-verification.
 
@@ -291,7 +317,7 @@ Condition 3's second branch reuses `project_fit`'s already-computed verdict as t
 
 ## 8. Frozen contract
 
-HU 13 codes against this verbatim.
+HU 10 codes against this verbatim.
 
 ### 8.1 Backend — additive keys inside `financial_indicators`
 
@@ -318,9 +344,13 @@ Computed by a new `backend/app/scoring_engine/purchase_capacity.py`. Purely addi
 }
 ```
 
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+**`capacidad_supuestos` travels with the number, by design.** Without it, a capacity persisted in June and read in December is uninterpretable — you cannot tell whether it is low because the lead is weak or because the rate moved. This is what makes [[UserStories/NFR-EvaluationAudit|Evaluation Audit (NFR)]] / [[UserStories/NFR-ImmutableEvaluationHistory|Immutable Evaluation History (NFR)]] auditability real, and it costs one dict.
+========
 **`capacidad_supuestos` travels with the number, by design.** Without it, a capacity persisted in June and read in December is uninterpretable — you cannot tell whether it is low because the lead is weak or because the rate moved. This is what makes [[RNF/RNF4-auditoria-tecnica\|RNF 4]] / [[RNF/RNF5-historial-inmutable\|RNF 5]] auditability real, and it costs one dict.
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
-**`version` is separate from `ALGORITHM_VERSION`**, so matching criteria can be revised (once HU 27 supplies conversion data) without forcing a scoring-engine version bump.
+**`version` is separate from `ALGORITHM_VERSION`**, so matching criteria can be revised (once HU 16 supplies conversion data) without forcing a scoring-engine version bump.
 
 ### 8.2 Frontend — `services/leadProjectMatching.js`
 
@@ -345,7 +375,7 @@ matchLeadToProjects(evaluacion, proyectos) -> {
     brecha_recurso_clp,         // savings (pie) or monthly income (renta) to add
     brecha_recurso_tipo         // 'ahorro' | 'ingreso' | null (steps 1 & 4)
   } | null,
-  evidencia: {                  // HU 13 E3 lead card
+  evidencia: {                  // HU 10 E3 lead card
     capacidad_uf, pie_disponible_uf, clasificacion_financiera,
     restriccion_vinculante, plazo_anios, plazo_origen,
     desbloqueable_con_fogaes
@@ -353,27 +383,26 @@ matchLeadToProjects(evaluacion, proyectos) -> {
 }
 ```
 
-Two separate arrays rather than one array with an `excluido` flag — a single array returns rows the UI must remember to filter, which is easy to get wrong. `excluidos` is still returned so HU 13 can offer a "ver descartados" toggle and so exclusions stay debuggable.
+Two separate arrays rather than one array with an `excluido` flag — a single array returns rows the UI must remember to filter, which is easy to get wrong. `excluidos` is still returned so HU 10 can offer a "ver descartados" toggle and so exclusions stay debuggable.
 
-`matchLeadToProjects` takes a project array rather than fetching, keeping it pure and letting HU 13 decide whether to feed it `getAvailableProjects()` or a filtered subset.
+`matchLeadToProjects` takes a project array rather than fetching, keeping it pure and letting HU 10 decide whether to feed it `getAvailableProjects()` or a filtered subset.
 
 ### 8.3 Architecture seam
 
 | Layer | Owns | Why |
 | :---- | :--- | :-- |
 | **Backend** `scoring_engine/purchase_capacity.py` | Capacity math | Pure financial computation belonging beside `indicators.py`; versioned under `ALGORITHM_VERSION`; persisted per evaluation → auditable (HU 16 / HU 33) |
+<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
+| **Frontend** `services/leadProjectMatching.js` | Affinity join | The catalog lives in the frontend + Supabase ([[UserStories/HU7-ProjectCatalog|HU 7]]); guardrail #5 forbids new FastAPI endpoints, so the backend cannot see `proyectos` |
+========
 | **Frontend** `services/leadProjectMatching.js` | Affinity join | The catalog lives in the frontend + Supabase ([[UserStories/HU7-catalogo-de-proyectos\|HU 7]]); guardrail #5 forbids new FastAPI endpoints, so the backend cannot see `proyectos` |
+>>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 **Known cost — two sources of truth.** Constants would be defined in Python and could drift if re-declared in JS. Mitigation: this document is **normative**; both constant blocks must carry a comment naming it; and the frontend re-declares **only the affinity weights** (§5.2), never the capacity constants — capacity arrives pre-computed from the backend. Duplication is therefore confined to a table the backend never uses.
 
 ### 8.4 Dependency status
 
-HU 17 is **implemented but not merged** (branch `HU17`). `matchLeadToProjects` consumes its frozen contract (`precio_min_uf`, `precio_max_uf`, `comuna`, `tipo`, `estado`, `ejecutivos`), documented in `docs/project-catalog-contract.md` and mirrored in the header of `frontend/src/services/projectService.js`. HU 13 cannot ship before HU 17.
-
-Two consumer notes from that contract are load-bearing here:
-
-- **`getAvailableProjects()` excludes only `agotado`.** `en_construccion` stays in the feed — venta en verde is a real part of the market — and `estado` travels through so HU 13 can display or weight it. This is consistent with §5.1: `estado` is not a third gate.
-- **`precio_min_uf == precio_max_uf` is valid** (single-price project). The holgura scorer in §5.2 must evaluate the "at/above `precio_max` → 0" branch *before* interpolating; a naive `(capacidad − min) / (max − min)` divides by zero and a `NaN` corrupts the ranking.
+HU 7 is **planned but not merged** (`story-work/HU17/PLAN.md` — folder name from the E4 numbering). `matchLeadToProjects` consumes its frozen contract (`precio_min_uf`, `precio_max_uf`, `comuna`, `tipo`, `estado`, `ejecutivos`). HU 10 cannot ship before HU 7.
 
 ---
 
@@ -469,7 +498,7 @@ The lead clears this project's entire price range, so no pair-scoped shortfall i
 
 `capacidad_por_pie_uf` = **3.060 UF** in every cell. Since capacity is the `min()`, **Perfil 2's capacity is 3.060 UF regardless of rate or term.** For Perfil 3 (income-bound) the same grid moves capacity 8.636–9.791 UF, about ±6%.
 
-So the rate assumption is worth ~0–6% while the pie ratio choice (10% vs 20%) is worth **2×**. A displayed band would imply precision the self-declared inputs do not support, and ranking needs a total order anyway — collapsing a band back to one number just relocates the decision into HU 13 undocumented. Scenarios belong to HU 20; matching uses one base case.
+So the rate assumption is worth ~0–6% while the pie ratio choice (10% vs 20%) is worth **2×**. A displayed band would imply precision the self-declared inputs do not support, and ranking needs a total order anyway — collapsing a band back to one number just relocates the decision into HU 10 undocumented. Scenarios belong to HU 18; matching uses one base case.
 
 ---
 
@@ -481,7 +510,7 @@ Raised by this research, **outside E4's scope to fix**. Recorded so they are dec
 
 `indicators.py` adds validated complementary *income* to `ingreso_total`, but `deuda` remains `deuda_mensual` alone. `_valid_complement_income()` **requires** `deuda_mensual_complementario` to be declared, then discards it.
 
-Every ratio and every capacity figure for a lead with a complemento is therefore **overstated**. §4.1 specifies `deuda_total` including the complementary side; if `indicators.py` is not corrected, the capacity model inherits the inflation. **Recommend routing to HU 3 / HU 15 as a defect.**
+Every ratio and every capacity figure for a lead with a complemento is therefore **overstated**. §4.1 specifies `deuda_total` including the complementary side; if `indicators.py` is not corrected, the capacity model inherits the inflation. **Recommend routing to HU 3 / HU 23 as a defect.**
 
 ### 10.2 `project_fit.py` vs `blockers.py` — 25% vs 30%
 
@@ -489,7 +518,7 @@ Not a bug; two policies. Resolved in §3.4 (30% calculates, 25% speaks). If `pro
 
 ### 10.3 `edad_fin_credito > 70` is conservative — intentionally
 
-The market allows 76–79 with insurance. HU 26 E2 independently specifies 70. **Keep it**, but the commercial copy should read *"requiere revisión de plazo/seguro"* rather than *"no viable"*.
+The market allows 76–79 with insurance. HU 29 E2 independently specifies 70. **Keep it**, but the commercial copy should read *"requiere revisión de plazo/seguro"* rather than *"no viable"*.
 
 ### 10.4 `VALOR_UF_CLP` hardcoded
 
@@ -506,9 +535,9 @@ FOGAES eligibility cannot be verified from current intake, which is why §4.4 em
 | # | Item | Owner | Blocking? |
 | - | :--- | :---- | :-------- |
 | 1 | UF price range of the client's real projects (Echeverría Izquierdo) — decides whether FOGAES is edge case or norm (§10.5) | Commercial | No — changes a default, not the model |
-| 2 | Complementary-debt defect (§10.1) | HU 3 / HU 15 | No — capacity spec already accounts for it |
-| 3 | Affinity weights are uncalibrated (§5.2) | HU 27 | No — v1 ships, revisit with data |
-| 4 | HU 17 implemented on branch `HU17`, not merged (§8.4) | HU 17 | **Yes for HU 13** |
+| 2 | Complementary-debt defect (§10.1) | HU 3 / HU 23 | No — capacity spec already accounts for it |
+| 3 | Affinity weights are uncalibrated (§5.2) | HU 16 | No — v1 ships, revisit with data |
+| 4 | HU 7 not merged (§8.4) | HU 7 | **Yes for HU 10** |
 | 5 | Spike 1 E5 consolidation must reference this document rather than restate it | Spike 1 | No |
 
 ---
@@ -531,4 +560,4 @@ FOGAES eligibility cannot be verified from current intake, which is why §4.4 em
 **Internal**
 - `backend/app/scoring_engine/` — `indicators.py`, `project_fit.py`, `blockers.py`, `commercial_priority.py`, `constants.py`
 - [[research/scoring_improvement_recommendations|Scoring Improvement Recommendations]] · [[research/competitor_prequalification_audit|Competitor Prequalification Audit]]
-- `docs/project-catalog-contract.md` — project catalog frozen contract (HU 17)
+- `story-work/HU17/PLAN.md` — project catalog frozen contract (folder name from the E4 numbering; the story is now HU 7)

@@ -1,4 +1,4 @@
-# ScoreLeads Scoring Improvement Recommendations
+# RutaHogar Scoring Improvement Recommendations
 
 Reviewed: 2026-06-17  
 Input evidence: `competitor_prequalification_audit.md`, `competitor_field_matrix.csv`, `inmobiliaria_field_matrix.csv`  
@@ -6,7 +6,7 @@ Constraint: no production code modified.
 
 ## Recommendation Summary
 
-ScoreLeads already captures the industry core: income, debt, savings/pie, estimated dividend, employment type, continuity, morosidad, comuna, consent, and income complement.
+RutaHogar already captures the industry core: income, debt, savings/pie, estimated dividend, employment type, continuity, morosidad, comuna, consent, and income complement.
 
 The biggest improvement is to make the current score more mortgage-realistic without turning the form into a bank application:
 
@@ -20,7 +20,7 @@ The biggest improvement is to make the current score more mortgage-realistic wit
 
 ## Common Qualification Signals
 
-Signals common across public flows and safe for ScoreLeads:
+Signals common across public flows and safe for RutaHogar:
 
 - `ingreso_mensual` / renta líquida.
 - `dividendo_estimado`.
@@ -48,7 +48,7 @@ Signals mostly useful for sales prioritization:
 - Existing property as part payment.
 - Interest in pie en cuotas.
 
-Signals seen in full bank/advisory applications but too invasive for ScoreLeads pre-score:
+Signals seen in full bank/advisory applications but too invasive for RutaHogar pre-score:
 
 - RUT.
 - Phone/email before value.
@@ -223,7 +223,7 @@ Recommended refinement:
 
 - Keep scoring rules stable for now.
 - Improve explanation for independent workers and short tenure.
-- Mention that public bank requirements vary widely, so ScoreLeads is a guide.
+- Mention that public bank requirements vary widely, so RutaHogar is a guide.
 - Consider `continuidad_laboral` thresholds differently for independent workers later if evidence from bank partners supports it.
 
 Actionability: `add_to_recommendations`
@@ -443,4 +443,4 @@ purchase timing/property selected:
 
 ## Final Product Principle
 
-ScoreLeads should feel closer to TOCTOC/ComparaOnline/RVC in the first experience: low-friction inputs, immediate value, transparent assumptions, and delayed contact. It should not feel like Buydepa's full application or bank simulators that ask RUT first.
+RutaHogar should feel closer to TOCTOC/ComparaOnline/RVC in the first experience: low-friction inputs, immediate value, transparent assumptions, and delayed contact. It should not feel like Buydepa's full application or bank simulators that ask RUT first.

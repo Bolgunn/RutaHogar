@@ -1,4 +1,4 @@
-# Technical Risks — ScoreLeads
+# Technical Risks — RutaHogar
 
 The main technical risks identified in the **E4 Plan de Proyecto 2026**, with their mitigation plans. Priority is computed to rank where mitigation effort should go first.
 
@@ -46,7 +46,7 @@ Sorted by priority (most critical first):
 
 ## Related pages
 
-- [[RNF/RNF1-seguridad-basica\|RNF 1]] mitigates risks 1 and 2.
+- [[UserStories/NFR-BasicSecurity\|Basic Security (NFR)]] mitigates risks 1 and 2.
 - [[AtributosDeCalidad\|Atributos de calidad (RNF)]] — the quality attributes that formalize several mitigations.
 - [[deuda-tecnica\|Deuda técnica]] — the project's technical-debt tracking (risk 5).
 - Source: [[informes_entregas/E4 - GPI Plan de Proyecto 2026\|E4 — Plan de Proyecto 2026]], §5.

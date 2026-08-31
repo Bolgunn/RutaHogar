@@ -1334,19 +1334,14 @@ const TABS = [
   { id: "casos", label: "Casos prácticos", icon: "ti-list-details" },
 ];
 
-
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
-
-export default function AcademiaFinanciera({
-  evaluation,
-  onStartEvaluation,
-  onRetryExplanation,
-}) {
+export default function AcademiaFinanciera({ evaluation, onStartEvaluation, initialArticleId, onRetryExplanation }) {
   const [activeTab, setActiveTab] = useState("conceptos");
-  const [openArticleId, setOpenArticleId] = useState(null);
+  const [openArticleId, setOpenArticleId] = useState(initialArticleId || null);
   const [openCapsuleId, setOpenCapsuleId] = useState(null);
+
+  useEffect(() => {
+    if (initialArticleId) setOpenArticleId(initialArticleId);
+  }, [initialArticleId]);
 
   const openArticle = useCallback((id) => setOpenArticleId(id), []);
   const openCapsule = useCallback((id) => setOpenCapsuleId(id), []);

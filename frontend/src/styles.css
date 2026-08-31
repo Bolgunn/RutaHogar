@@ -9845,3 +9845,277 @@ th {
     flex: 1 1 100%;
   }
 }
+
+/* ── Simulation Panel ─────────────────────────────────── */
+
+.simulation-panel {
+  padding: 28px;
+}
+
+.simulation-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  background: #f4fbf7;
+  border: 1px solid rgba(36, 99, 84, 0.18);
+  margin-bottom: 24px;
+}
+
+.simulation-summary-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.simulation-summary-stat strong {
+  font-size: 1.6rem;
+  color: #246354;
+  line-height: 1;
+}
+
+.simulation-summary-stat span {
+  font-size: 0.82rem;
+  color: #526174;
+  margin-top: 2px;
+}
+
+.simulation-summary-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.simulation-benefits-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Benefit Card ─────────────────────────────────────── */
+
+.benefit-card {
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(31, 47, 70, 0.06);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.benefit-card:hover {
+  border-color: rgba(36, 99, 84, 0.35);
+}
+
+.benefit-card--eligible {
+  border-color: rgba(36, 99, 84, 0.3);
+  background: #f9fdfb;
+}
+
+.benefit-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.benefit-card-title {
+  margin: 0;
+  font-size: 1.08rem;
+  color: #172033;
+}
+
+.benefit-card-notes {
+  margin: 0 0 12px;
+  line-height: 1.55;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+/* ── Benefit Badge ────────────────────────────────────── */
+
+.benefit-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.benefit-badge--eligible {
+  background: #246354;
+  color: #ffffff;
+}
+
+.benefit-badge--ineligible {
+  background: #cbd5e1;
+  color: #475569;
+}
+
+/* ── Benefit Conditions ───────────────────────────────── */
+
+.benefit-card-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.benefit-card-detail-section {
+  min-width: 0;
+}
+
+.benefit-detail-label {
+  display: block;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.benefit-detail-label--met {
+  color: #16a34a;
+}
+
+.benefit-detail-label--pending {
+  color: #dc2626;
+}
+
+.benefit-conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.benefit-condition {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  padding: 2px 0;
+  color: #334155;
+}
+
+.benefit-condition-icon {
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.benefit-condition--met .benefit-condition-icon {
+  color: #16a34a;
+}
+
+.benefit-condition--pending .benefit-condition-icon {
+  color: #dc2626;
+}
+
+/* ── Benefit Actions ──────────────────────────────────── */
+
+.benefit-card-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e6ebf1;
+}
+
+/* ── Academy Link (non-eligible benefits) ────────────── */
+
+.benefit-card-academy-link {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e6ebf1;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: #246354;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.text-button:hover {
+  color: #1a4a3e;
+}
+
+/* ── Disclaimer ───────────────────────────────────────── */
+
+.simulation-disclaimer {
+  margin-top: 20px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.simulation-disclaimer p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+/* ── Teaser (in Recommendations) ──────────────────────── */
+
+.simulation-teaser {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.2rem;
+  border-radius: 8px;
+  border: 1px solid #d7e0ea;
+  background: #f9fafb;
+  transition: border-color 0.2s;
+}
+
+.simulation-teaser p {
+  margin: 0.4rem 0 0.8rem 0;
+  color: #526174;
+  font-size: 0.95rem;
+}
+
+.simulation-teaser-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.simulation-teaser:hover {
+  border-color: rgba(36, 99, 84, 0.35);
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  .simulation-summary-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .simulation-summary-stat {
+    flex-direction: row;
+    gap: 6px;
+    min-width: auto;
+  }
+
+  .benefit-card-details {
+    grid-template-columns: 1fr;
+  }
+
+  .benefit-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}

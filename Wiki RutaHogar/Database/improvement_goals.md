@@ -77,7 +77,7 @@ All functions fall back to `localStorage` when Supabase is not configured (`isSu
 
 ## `progress_data` shape
 
-Stored in `localStorage` only (key: `scoreleads_goal_progress`). Shape is free-form but typically:
+Stored in `localStorage` only (key: `RutaHogar_goal_progress`). Shape is free-form but typically:
 
 ```json
 {

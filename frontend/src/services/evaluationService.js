@@ -3,7 +3,7 @@ import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, s
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 import { buildScoringHistoryRow, readLocalScoringHistory, writeLocalScoringHistory } from "./getScoringHistory";
 
-const EVALUATIONS_KEY = "scoreleads_evaluations";
+const EVALUATIONS_KEY = "RutaHogar_evaluations";
 const SUPABASE_CLASSIFICATIONS = new Set(["Alto", "Medio", "Bajo"]);
 
 function readLocalEvaluations() {

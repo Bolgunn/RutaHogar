@@ -192,7 +192,7 @@ RutaHogar/
 │   ├── devops.md          # Instrucciones agente DevOps
 │   └── qa.md              # Instrucciones agente QA
 ├── Wiki RutaHogar/
-│   ├── Wiki RutaHogar.md        # ← este archivo
+│   ├── Wiki Score Leads.md        # ← este archivo
 │   ├── Tech Stack.md              # Stack tecnológico detallado
 │   └── informes_entregas/
 │       ├── Informe RutaHogar.md  # E1 – Justificación de propuesta
@@ -309,10 +309,10 @@ Recibe los datos financieros del usuario y retorna el resultado de la evaluació
 | Documento | Descripción |
 | :-------- | :---------- |
 | [[Tech Stack]] | Stack tecnológico completo con justificaciones, integraciones futuras y decisiones de diseño |
-| [[informes_entregas/Informe ScoreLeads]] | E1 — Justificación de propuesta: problema, cliente, solución, riesgos e hipótesis |
-| [[informes_entregas/E2 - GPI 2026 - ScoreLeads]] | E2 — Historias de usuario corregidas, criterios de aceptación y rúbrica |
+| [[informes_entregas/Informe RutaHogar]] | E1 — Justificación de propuesta: problema, cliente, solución, riesgos e hipótesis |
+| [[informes_entregas/E2 - GPI 2026 - RutaHogar]] | E2 — Historias de usuario corregidas, criterios de aceptación y rúbrica |
 | [[informes_entregas/E4 - GPI Plan de Proyecto 2026]] | E4 — Plan de proyecto 2026: actores, atributos de calidad, riesgos, distribución en 3 sprints y detalle de 2 spikes + 33 HUs |
-| [[UserStories/index\|User Stories]] | Backlog completo con estado, sprint y páginas por historia |
+| [[UserStories/index\|User Stories]] | Backlog actualizado (HU 1–29 + RNF `NFR-*` y `OutOfBacklog-*`) con estado, sprint, mapeo E4→nuevo y páginas por historia |
 | [[Distribucion\|Distribución / Sprints]] | Plan de 3 sprints + 2 spikes con totales de SP |
 | [[Riesgos\|Riesgos técnicos]] | 9 riesgos técnicos con fórmula de prioridad y mitigaciones |
 | [[AtributosDeCalidad\|Atributos de calidad (RNF)]] | 8 atributos de calidad con metas SMART y verificación |

@@ -22,6 +22,7 @@ alongside.
 | ALG-5 | project fit | `project_fit.py` |
 | ALG-6 | property value / UF resolution | `property_value.py` |
 | ALG-7 | improvement plan generation | `improvement_plan.py` |
+| ALG-8 | housing benefits detector (FOGAES, DS49, PADHI, DS1, Leasing, Ley 21.748) | `housing_benefits.py`, `constants.py` |
 
 ## Writing one
 

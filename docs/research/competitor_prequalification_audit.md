@@ -1,4 +1,4 @@
-# ScoreLeads Competitor Prequalification Audit
+# RutaHogar Competitor Prequalification Audit
 
 Reviewed: 2026-06-17  
 Scope: public-facing Chilean real estate, mortgage, proptech, banking, portal, and inmobiliaria flows.  
@@ -580,7 +580,7 @@ Better acquisition patterns:
 - Explain that the result is preliminary, not bank approval.
 - Separate calculator from commercial handoff.
 
-Patterns to avoid for ScoreLeads:
+Patterns to avoid for RutaHogar:
 
 - Asking RUT/contact before showing any value.
 - Asking full bank application data in a pre-score flow.

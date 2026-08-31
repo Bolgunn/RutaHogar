@@ -9,8 +9,8 @@ Creados: 2026-06-04 vía Admin API (`email_confirm: true`)
 
 | Email | Contraseña | Rol | UUID |
 | :---- | :--------- | :-- | :--- |
-| `test.usuario@scoreleads.dev` | `TestUser123!` | `usuario` | `3092fc95-e5b7-4068-bf3e-eb5a9686a429` |
-| `test.ejecutivo@scoreleads.dev` | `TestExec123!` | `ejecutivo` | `e557f592-759b-405b-8bb1-e0f19647dbf1` |
+| `test.usuario@RutaHogar.dev` | `TestUser123!` | `usuario` | `3092fc95-e5b7-4068-bf3e-eb5a9686a429` |
+| `test.ejecutivo@RutaHogar.dev` | `TestExec123!` | `ejecutivo` | `e557f592-759b-405b-8bb1-e0f19647dbf1` |
 
 ---
 

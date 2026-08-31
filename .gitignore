@@ -46,3 +46,5 @@ backend/vercel.json
 
 # Obsidian config in docs/
 docs/.obsidian/
+
+Makefile

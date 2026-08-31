@@ -1,8 +1,5 @@
 # E4 – Plan de Proyecto 2026
-
-> **Documento entregado — congelado.** Este informe usa la numeración vigente a su fecha de entrega y se conserva tal como fue presentado. No se actualiza con cambios posteriores del backlog.
-
-## ScoreLeads – Campus San Joaquín
+## RutaHogar – Campus San Joaquín
 
 > **Descripción breve del proyecto:** Convertimos interesados en compradores potenciales mediante scoring financiero, IA explicable y recomendación inmobiliaria personalizada.
 
@@ -47,21 +44,21 @@ Actualmente las inmobiliarias reciben un gran volumen de prospectos interesados 
 
 El cliente directo son las empresas inmobiliarias del sector medio (Región Metropolitana) inicialmente, y los usuarios finales del sistema estarán divididos en dos grupos: por un lado, están los ejecutivos comerciales, quienes necesitan optimizar su tiempo contactando perfiles viables, y los leads (potenciales compradores), personas que buscan su primera vivienda y necesitan orientación financiera sin fricciones.
 
-Frente a esta problemática nace ScoreLeads, una plataforma de precalificación y priorización inteligente de leads inmobiliarios, además de incluir un plan de mejora, para aquellos que no son aptos a crédito hipotecario, o aspiren a un proyecto inmobiliario de mayor valor.
+Frente a esta problemática nace RutaHogar, una plataforma de precalificación y priorización inteligente de leads inmobiliarios, además de incluir un plan de mejora, para aquellos que no son aptos a crédito hipotecario, o aspiren a un proyecto inmobiliario de mayor valor.
 
 - **Valor para la inmobiliaria:** optimiza la rentabilidad operativa entregando al ejecutivo comercial un panel (dashboard) con una cartera priorizada de leads precalificados mediante un motor de scoring y análisis hechos mediante IA, permitiéndoles concentrar sus esfuerzos solo en prospectos con alta viabilidad.
 
 - **Valor para el lead:** ofrece un diagnóstico sobre el estado financiero en el que se encuentra, mediante un score cualitativo (alto si está listo para su crédito, medio si está cerca de su meta y bajo si está construyendo su perfil), junto con un análisis generado por inteligencia artificial sobre los puntos fuertes y débiles que tiene actualmente, sin la necesidad de subir documentos sensibles en primera instancia, y además, a los usuarios no aptos, se les genera un plan de mejora personalizado paso a paso para ayudarlos a ser sujetos de crédito hipotecario en el futuro.
 
-A diferencia de los CRMs tradicionales o formularios genéricos que solo capturan datos para ser contactados constantemente por los gerentes/as de venta, ScoreLeads introduce un motor de scoring predictivo en tiempo real y una evaluación híbrida: por una parte, el score generado a partir de un algoritmo con la lógica actual de negocio de las inmobiliarias, y por otra parte, un análisis generado a partir de la inteligencia artificial para que los usuarios tengan resultados cualitativos y personalizados a partir del score generado y los datos ingresados, indicando los factores que influyen en su resultado y educándolo financieramente, además de automatizar el flujo de plan de mejora o "nutrición" del lead.
+A diferencia de los CRMs tradicionales o formularios genéricos que solo capturan datos para ser contactados constantemente por los gerentes/as de venta, RutaHogar introduce un motor de scoring predictivo en tiempo real y una evaluación híbrida: por una parte, el score generado a partir de un algoritmo con la lógica actual de negocio de las inmobiliarias, y por otra parte, un análisis generado a partir de la inteligencia artificial para que los usuarios tengan resultados cualitativos y personalizados a partir del score generado y los datos ingresados, indicando los factores que influyen en su resultado y educándolo financieramente, además de automatizar el flujo de plan de mejora o "nutrición" del lead.
 
-Este desafío califica como un Problema Complejo de Ingeniería porque involucra a diversos grupos de interesados con necesidades diametralmente opuestas: por un lado las inmobiliarias que buscan rentabilidad y cierre rápido, y por el otro los usuarios sin educación financiera que requieren guía y no quieren ser dejados atrás porque no cumplen los requisitos necesarios para efectuar la compra inmediatamente. Además, su solución no es evidente, ya que los factores económicos y legislativos del país van cambiando constantemente y requieren validación constante con diferentes inmobiliarias, sobre todo al buscar implementar un flujo directo desde la base de datos de ScoreLeads a los distintos CRM de las inmobiliarias asociadas.
+Este desafío califica como un Problema Complejo de Ingeniería porque involucra a diversos grupos de interesados con necesidades diametralmente opuestas: por un lado las inmobiliarias que buscan rentabilidad y cierre rápido, y por el otro los usuarios sin educación financiera que requieren guía y no quieren ser dejados atrás porque no cumplen los requisitos necesarios para efectuar la compra inmediatamente. Además, su solución no es evidente, ya que los factores económicos y legislativos del país van cambiando constantemente y requieren validación constante con diferentes inmobiliarias, sobre todo al buscar implementar un flujo directo desde la base de datos de RutaHogar a los distintos CRM de las inmobiliarias asociadas.
 
 ---
 
 ## 2. Descripción – Cliente y actores del sistema
 
-Para el correcto desarrollo de ScoreLeads, se han identificado claramente tanto al cliente estratégico como a los usuarios finales que interactúan con el software.
+Para el correcto desarrollo de RutaHogar, se han identificado claramente tanto al cliente estratégico como a los usuarios finales que interactúan con el software.
 
 ### Cliente estratégico
 
@@ -109,7 +106,7 @@ Para el correcto desarrollo de ScoreLeads, se han identificado claramente tanto 
 
 ## 3. Herramientas y tecnologías a usar
 
-Para el desarrollo del MVP de ScoreLeads se propone una arquitectura web simple, junto con una versión móvil, ya que los ejecutivos comerciales trabajan en su mayoría con celulares, según una reunión llevada a cabo con la inmobiliaria ICAFAL, separando el frontend, backend y la persistencia de datos.
+Para el desarrollo del MVP de RutaHogar se propone una arquitectura web simple, junto con una versión móvil, ya que los ejecutivos comerciales trabajan en su mayoría con celulares, según una reunión llevada a cabo con la inmobiliaria ICAFAL, separando el frontend, backend y la persistencia de datos.
 
 - **Frontend:** React / Angular. Para realizar el formulario del usuario, visualización del score y recomendaciones.
 - **Backend:** FastAPI + Python. Para recibir datos del formulario, calcular scoring, generar clasificación y recomendaciones.
@@ -133,13 +130,13 @@ Para el desarrollo del MVP de ScoreLeads se propone una arquitectura web simple,
 
 ## 4. Compromiso ético
 
-De acuerdo con las directrices del [Anexo A](#anexo-a--compromiso-ético) del plan de proyecto, el equipo de ScoreLeads asume los siguientes compromisos éticos en el desarrollo del software:
+De acuerdo con las directrices del [Anexo A](#anexo-a--compromiso-ético) del plan de proyecto, el equipo de RutaHogar asume los siguientes compromisos éticos en el desarrollo del software:
 
 1. **Consideraciones éticas y privacidad de datos:** al tratarse de una plataforma que maneja datos financieros, el equipo se compromete a asegurar la privacidad de la información de los usuarios (terceros). Se adoptarán medidas de anonimización de datos y se recolectará estrictamente la información mínima necesaria (ingresos, deudas, ahorros, RUT), sin utilizarla para fines distintos a los autorizados para su recopilación. El sistema no solicitará credenciales bancarias y operará bajo un modelo de consentimiento explícito e informado.
 
 2. **Integridad técnica y uso de inteligencia artificial:** el equipo declara que el proyecto se desarrollará evitando la invención, manipulación o falsificación de datos de prueba. Además, se declara de manera explícita el uso de herramientas de Inteligencia Artificial Generativa (como Claude Code, opencode, OpenAI) exclusivamente como apoyo en el desarrollo de código y generación de componentes, sin que éstas reemplacen la auditoría intelectual de la arquitectura ni incurran en plagio de código ajeno.
 
-3. **Equidad y prevención de sesgos:** dado que ScoreLeads categoriza a los usuarios financieramente, el modelo de scoring se diseñará cuidando el derecho de igualdad, con reglas paramétricas objetivas para evitar sesgos algorítmicos o discriminaciones arbitrarias hacia los usuarios.
+3. **Equidad y prevención de sesgos:** dado que RutaHogar categoriza a los usuarios financieramente, el modelo de scoring se diseñará cuidando el derecho de igualdad, con reglas paramétricas objetivas para evitar sesgos algorítmicos o discriminaciones arbitrarias hacia los usuarios.
 
 > Posibles trabajos de título derivados: ver [Anexo B](#anexo-b--posibles-trabajos-de-título-derivados).
 
@@ -228,9 +225,9 @@ De acuerdo con las directrices del [Anexo A](#anexo-a--compromiso-ético) del pl
 **Justificación:** este spike busca reducir la incertidumbre funcional asociada a las historias esenciales e importantes planificadas para el Sprint 1. La investigación permitirá fortalecer los criterios del motor de scoring, definir reglas para el plan de mejora, orientar las simulaciones de compatibilidad, seleccionar contenidos de educación financiera y establecer criterios base para el matching entre leads y proyectos inmobiliarios. Se estima en 10 SP porque su alcance está acotado a generar insumos funcionales para las HU del primer sprint, sin incluir todavía integraciones externas complejas ni validaciones técnicas profundas con servicios externos.
 
 **Criterios de aceptación:**
-- **E1 – Investigación de parámetros financieros para scoring y plan de mejora.** Dado que ScoreLeads debe entregar una evaluación financiera coherente y útil, cuando el equipo investigue criterios financieros aplicables al proceso hipotecario, entonces debe identificar variables relevantes como ingresos, deudas, ahorro, pie disponible, carga financiera, continuidad laboral, plazo estimado y comportamiento de pago declarado.
+- **E1 – Investigación de parámetros financieros para scoring y plan de mejora.** Dado que RutaHogar debe entregar una evaluación financiera coherente y útil, cuando el equipo investigue criterios financieros aplicables al proceso hipotecario, entonces debe identificar variables relevantes como ingresos, deudas, ahorro, pie disponible, carga financiera, continuidad laboral, plazo estimado y comportamiento de pago declarado.
 - **E2 – Definición de criterios para simulaciones de compatibilidad.** Dado que el usuario podrá simular distintos objetivos inmobiliarios, cuando el equipo analice las reglas necesarias para la simulación, entonces debe definir criterios que permitan comparar capacidad de compra, valor de vivienda, ahorro disponible, deuda y ajustes mínimos para acceder a una alternativa compatible.
-- **E3 – Investigación de material para educación financiera contextual.** Dado que ScoreLeads incluye una academia financiera contextual, cuando el equipo investigue contenidos educativos relevantes para leads interesados en comprar vivienda, entonces debe recopilar y organizar temas como crédito hipotecario, pie, ahorro, carga financiera, endeudamiento, tasas, plazos y preparación para una evaluación bancaria formal.
+- **E3 – Investigación de material para educación financiera contextual.** Dado que RutaHogar incluye una academia financiera contextual, cuando el equipo investigue contenidos educativos relevantes para leads interesados en comprar vivienda, entonces debe recopilar y organizar temas como crédito hipotecario, pie, ahorro, carga financiera, endeudamiento, tasas, plazos y preparación para una evaluación bancaria formal.
 - **E4 – Definición de criterios para matching lead-proyecto.** Dado que el sistema debe recomendar leads compatibles con proyectos inmobiliarios, cuando el equipo investigue los criterios de compatibilidad comercial, entonces debe definir variables como capacidad estimada, comuna de interés, rango de precio, pie disponible, clasificación del lead y bloqueador principal.
 - **E5 – Documentación de insumos para las HU del Sprint 1.** Dado que finaliza la investigación del spike, cuando el equipo consolide los resultados, entonces debe documentar una matriz de reglas, supuestos financieros, criterios de compatibilidad, fuentes revisadas y decisiones que serán utilizadas en las historias de plan de mejora, simulación, academia financiera, matching y dashboard ejecutivo.
 
@@ -257,7 +254,7 @@ De acuerdo con las directrices del [Anexo A](#anexo-a--compromiso-ético) del pl
 **Como** lead (interesado en comprar una vivienda), **quiero** completar un formulario web guiado, con mis datos financieros y una alta facilidad de uso, **para** iniciar mi evaluación de viabilidad crediticia, sin tener que hablar con un ejecutivo.
 
 **Criterios de aceptación:**
-- **E1** — Dado que el usuario ingresa a la plataforma ScoreLeads por primera vez, cuando completa todos los campos requeridos (ingresos, deudas, tipo de contrato, edad) y acepta el consentimiento de datos, entonces el sistema registra su perfil y lo redirige automáticamente al resultado de su evaluación.
+- **E1** — Dado que el usuario ingresa a la plataforma RutaHogar por primera vez, cuando completa todos los campos requeridos (ingresos, deudas, tipo de contrato, edad) y acepta el consentimiento de datos, entonces el sistema registra su perfil y lo redirige automáticamente al resultado de su evaluación.
 - **E2** — Dado que el usuario está completando el formulario, cuando declara un monto de deudas mensual mayor a sus ingresos declarados, entonces el sistema muestra una advertencia visual en el campo correspondiente antes de permitir continuar al siguiente paso.
 - **E3** — Dado que se recibe una postulación donde el usuario no ha aceptado el consentimiento de datos, cuando el sistema valida los requisitos de la solicitud, entonces la evaluación y los datos no deben ser guardados, para proteger la privacidad de la información.
 - **E4** — Dado que la evaluación de viabilidad crediticia del lead se configura bajo la modalidad de evaluación conjunta (renta complementada), cuando el sistema estructure la petición de precalificación, entonces debe instanciar un requerimiento de datos asociado, exigiendo obligatoriamente los ingresos y deudas del co-deudor para poder ejecutar el cálculo del scoring consolidado.
@@ -280,7 +277,7 @@ De acuerdo con las directrices del [Anexo A](#anexo-a--compromiso-ético) del pl
 
 **Criterios de aceptación:**
 - **E1** — Dado que el usuario completó el formulario correspondiente, cuando este envía sus datos para ser procesados, entonces el sistema debe mostrar el resultado del scoring en un tiempo máximo de 60 segundos tras finalizar el formulario.
-- **E2** — Dado que el sistema de ScoreLeads recibió los datos del usuario, cuando se realiza la calificación, entonces el resultado debe clasificar al usuario en niveles de prioridad claros (ej.: Alto, Medio, Bajo).
+- **E2** — Dado que el sistema de RutaHogar recibió los datos del usuario, cuando se realiza la calificación, entonces el resultado debe clasificar al usuario en niveles de prioridad claros (ej.: Alto, Medio, Bajo).
 - **E3** — Dado que el sistema presenta el resultado de la evaluación, cuando el usuario visualiza su clasificación crediticia, entonces el sistema, por medio de un agente IA, debe mostrar una explicación detallada de los factores principales que influyeron en el score.
 - **E4** — Dado que el usuario visualiza su resultado, cuando se muestra la explicación del scoring, entonces el sistema debe indicar explícitamente que el scoring es orientativo y no reemplaza una evaluación bancaria formal.
 - **E5** — Dado que el cálculo del scoring es exitoso, cuando el sistema guarda la evaluación, entonces debe generar un registro inmutable que contenga el timestamp, score numérico, clasificación, snapshot de entrada, versión del algoritmo y desglose de componentes.

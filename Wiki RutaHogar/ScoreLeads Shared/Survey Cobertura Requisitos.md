@@ -1,7 +1,7 @@
-# Survey de Cobertura de Requisitos — ScoreLeads
+# Survey de Cobertura de Requisitos — RutaHogar
 
 > Fecha: 2026-06-24 (actualizado con `hus_24-06-26_v2.md`)
-> Insumos: `ScoreLeads Blueprint.md` (requisitos funcionales y no funcionales) y el set de historias acordado por el equipo `hus_24-06-26_v2.md` (HU4–HU33 + 2 HU móviles) + las historias base HU1–HU3 (= HdU 1–3 originales: formulario, priorización, scoring híbrido con explicación IA).
+> Insumos: `RutaHogar Blueprint.md` (requisitos funcionales y no funcionales) y el set de historias acordado por el equipo `hus_24-06-26_v2.md` (HU4–HU33 + 2 HU móviles) + las historias base HU1–HU3 (= HdU 1–3 originales: formulario, priorización, scoring híbrido con explicación IA).
 > Objetivo: medir qué requisitos del blueprint estamos cubriendo como grupo, cuáles no, y qué requisitos nuevos crearon o insinuaron las HU acordadas. **No** crea historias nuevas.
 >
 > **Escala de cobertura:** 3 = Cubierto · 2 = Parcial (falta algo, se detalla) · 1 = No cubierto.

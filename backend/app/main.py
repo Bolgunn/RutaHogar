@@ -45,14 +45,23 @@ LOCAL_FRONTEND_ORIGINS = [
 ]
 EXTRA_FRONTEND_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get("SCORELEADS_ALLOWED_ORIGINS", "").split(",")
+    for origin in os.environ.get("RUTAHOGAR_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+
+# En entornos de despliegue real (Vercel production/preview) no exponer el regex
+# de IP LAN usado para desarrollo; solo en ejecución local o Vercel development.
+_is_deployed = os.environ.get("VERCEL_ENV") in {"production", "preview"}
+_ALLOW_ORIGIN_REGEX = (
+    r"https://.*\.vercel\.app"
+    if _is_deployed
+    else r"https://.*\.vercel\.app|http://\d+\.\d+\.\d+\.\d+:517[3-6]"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=LOCAL_FRONTEND_ORIGINS + EXTRA_FRONTEND_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

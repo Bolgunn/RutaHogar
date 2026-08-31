@@ -1,6 +1,6 @@
-# System Actors — ScoreLeads
+# System Actors — RutaHogar
 
-The four actors of the ScoreLeads system, from the **E4 Plan de Proyecto 2026**. Proficiency is rated on a 1–5 scale for both **technology handling** and **domain/context knowledge**.
+The four actors of the RutaHogar system, from the **E4 Plan de Proyecto 2026**. Proficiency is rated on a 1–5 scale for both **technology handling** and **domain/context knowledge**.
 
 ---
 
@@ -54,10 +54,10 @@ The four actors of the ScoreLeads system, from the **E4 Plan de Proyecto 2026**.
 
 | Actor | Tech (1–5) | Context (1–5) | Primary stories |
 | :---- | :--------: | :-----------: | :-------------- |
-| Lead | 3 | 1 | [[UserStories/HU1-ingreso-datos-financieros\|HU 1]], [[UserStories/HU3-scoring-hibrido\|HU 3]], [[UserStories/HU4-plan-de-mejora\|HU 4]], [[RNF/RNF6-experiencia-movil-lead\|RNF 6]] |
-| Sales Executive | 4 | 5 | [[UserStories/HU2-priorizacion-leads\|HU 2]], [[UserStories/HU10-matching-lead-proyecto\|HU 10]], [[RNF/RNF7-dashboard-movil-ejecutivo\|RNF 7]] |
-| Real Estate Admin | 3 | 5 | [[UserStories/HU7-catalogo-de-proyectos\|HU 7]], [[RNF/RNF4-auditoria-tecnica\|RNF 4]] |
-| Admin Dev | 5 | 3 | [[RNF/RNF1-seguridad-basica\|RNF 1]] |
+| Lead | 3 | 1 | [[UserStories/HU1-FinancialDataEntry\|HU 1]], [[UserStories/HU3-HybridScoring\|HU 3]], [[UserStories/HU4-ImprovementPlan\|HU 4]], [[UserStories/NFR-MobileLeadExperience\|Mobile Lead Experience (NFR)]] |
+| Sales Executive | 4 | 5 | [[UserStories/HU2-LeadPrioritization\|HU 2]], [[UserStories/HU10-LeadProjectMatching\|HU 10]], [[UserStories/NFR-MobileExecutiveDashboard\|Mobile Executive Dashboard (NFR)]] |
+| Real Estate Admin | 3 | 5 | [[UserStories/HU7-ProjectCatalog\|HU 7]], [[UserStories/OutOfBacklog-EventLogAnalytics\|Event-Log Analytics (out of backlog)]] |
+| Admin Dev | 5 | 3 | [[UserStories/NFR-BasicSecurity\|Basic Security (NFR)]] |
 
 ---
 

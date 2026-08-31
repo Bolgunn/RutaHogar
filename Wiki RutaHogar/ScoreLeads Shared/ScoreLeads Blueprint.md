@@ -1,5 +1,5 @@
 
-> Documento maestro del proyecto ScoreLeads con el propósito de guiar y documentar los procedimientos antes de implementar.
+> Documento maestro del proyecto RutaHogar con el propósito de guiar y documentar los procedimientos antes de implementar.
 >
 > **Última actualización:** 2026-06-21 — Sesión de blueprint completo (post-MVP). Decisiones tomadas en conjunto con el equipo.
 
@@ -7,7 +7,7 @@
 
 # Resumen ejecutivo
 
-ScoreLeads es una plataforma web (y próximamente móvil) de **precalificación y acompañamiento financiero** para el sector inmobiliario. Permite a un interesado en comprar vivienda ingresar sus datos financieros y recibir en segundos un score 0–100, una clasificación (Alto / Medio / Bajo), una explicación asistida por IA, un plan de mejora personalizado y un **mapa de la Región Metropolitana** que muestra a qué barrios puede acceder con su perfil actual. Los leads Alto quedan priorizados en un panel comercial.
+RutaHogar es una plataforma web (y próximamente móvil) de **precalificación y acompañamiento financiero** para el sector inmobiliario. Permite a un interesado en comprar vivienda ingresar sus datos financieros y recibir en segundos un score 0–100, una clasificación (Alto / Medio / Bajo), una explicación asistida por IA, un plan de mejora personalizado y un **mapa de la Región Metropolitana** que muestra a qué barrios puede acceder con su perfil actual. Los leads Alto quedan priorizados en un panel comercial.
 
 El MVP (HdU 1–4) ya está construido. Este blueprint define la evolución del producto hacia un sistema completo: scoring más realista, mapa por barrios, app móvil, integración con CRM, simulador hipotecario, notificaciones (WhatsApp/email/push), scoring de compromiso del usuario, y un módulo educativo.
 
@@ -557,7 +557,7 @@ Construir, validar y desplegar la solución.
 
 # Mejora Continua (Continuous Improvement)
 
-Este documento debe mantenerse actualizado durante todo el proyecto y ser la fuente principal de decisiones, arquitectura, planificación y evolución de ScoreLeads. Secciones pendientes de completar: **UX/UI Design** (Fase 2 §6) y los **ADRs individuales** (Fase 2 §7).
+Este documento debe mantenerse actualizado durante todo el proyecto y ser la fuente principal de decisiones, arquitectura, planificación y evolución de RutaHogar. Secciones pendientes de completar: **UX/UI Design** (Fase 2 §6) y los **ADRs individuales** (Fase 2 §7).
 
 ## Consideraciones futuras
 

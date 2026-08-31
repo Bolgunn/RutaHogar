@@ -13,6 +13,7 @@ from .scoring_engine.indicators import calculate_financial_indicators
 from .scoring_engine.improvement_plan import build_structured_improvement_plan
 from .scoring_engine.project_fit import calculate_project_fit
 from .scoring_engine.property_value import resolve_property_value_clp
+from .scoring_engine.housing_benefits import detect_housing_benefits
 
 
 SCORING_VERSION = "1.1.0"
@@ -926,6 +927,8 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
         data
     )
 
+
+    result["housing_benefits"] = detect_housing_benefits(data, financial_indicators)
 
     return result
 

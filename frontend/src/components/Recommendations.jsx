@@ -11,6 +11,8 @@ import {
   getUserResultFactors,
 } from "../utils/helpers";
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
+import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
+
 import AiExplanationBlock from "./AiExplanationBlock";
 
 function PlanCarousel({ children }) {
@@ -261,6 +263,36 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
               );
             })}
           </PlanCarousel>
+        </div>
+      )}
+
+      {data.housing_benefits?.applicable_benefits?.some((b) => b.eligible) && (
+        <div className="simulation-teaser">
+          <strong>Subsidios habitacionales</strong>
+          <p>
+            Descubre qu&#233; beneficios como FOGAES, DS49, DS1 o Ley 21.748 podr&#237;an ser compatibles con tu perfil.
+          </p>
+          <div className="simulation-teaser-actions">
+            <button type="button" className="secondary-button" onClick={() => onNavigate?.("subsidios")}>
+              Ver subsidios en detalle
+            </button>
+            {data.housing_benefits.applicable_benefits
+              .filter((b) => b.eligible)
+              .slice(0, 1)
+              .map((b) => {
+                const capsuleId = ACADEMY_BENEFIT_CAPSULES[b.academy_module];
+                return capsuleId ? (
+                  <button
+                    key={b.type}
+                    type="button"
+                    className="text-button"
+                    onClick={() => onNavigate?.("academia", { articleId: capsuleId })}
+                  >
+                    Explorar c&#225;psula: {b.name}
+                  </button>
+                ) : null;
+              })}
+          </div>
         </div>
       )}
 

@@ -18,6 +18,8 @@ import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
 import Recommendations from "./components/Recommendations";
+import Subsidios from "./components/Subsidios";
+import Result from "./components/Result";
 import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
@@ -41,10 +43,10 @@ import {
 import { formatScore } from "./utils/helpers";
 import { plazoLabels } from "./constants";
 
-const ONBOARDING_KEY = "scoreleads_onboarding";
-const ANON_ONBOARDING_KEY = "scoreleads_anon_onboarding";
-const ANON_RESULT_KEY = "scoreleads_anon_result";
-const ANON_INPUT_KEY = "scoreleads_anon_input";
+const ONBOARDING_KEY = "RutaHogar_onboarding";
+const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
+const ANON_RESULT_KEY = "RutaHogar_anon_result";
+const ANON_INPUT_KEY = "RutaHogar_anon_input";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -239,7 +241,8 @@ const getPrivatePathForPage = (page) => {
   if (page === "home") return "/inicio";
   if (page === "evaluate" || page === "onboarding" || page === "dataconsent") return "/precalificacion";
   if (page === "recommendations") return "/recomendaciones";
-  if (page === "simulation") return "/simulacion";
+  if (page === "subsidios") return "/subsidios";
+  if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "profile") return "/perfil";
@@ -250,6 +253,11 @@ const getPrivatePathForPage = (page) => {
 };
 
 const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
+  // La sección de beneficios habitacionales antes vivía en /simulacion; hoy
+  // es /subsidios. Redirigir para no romper bookmarks/URLs previas.
+  if (pathname && normalizePathname(pathname) === "/simulacion") {
+    return { page: "subsidios", path: "/subsidios" };
+  }
   const path = normalizePathname(pathname);
   const unknownRoute = ![
     "/",
@@ -259,7 +267,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/precalificacion",
     "/pre-evaluacion",
     "/recomendaciones",
-    "/simulacion",
+    "/subsidios",
+    "/comparar-proyectos",
     "/academia",
     "/plan-mejora",
     "/perfil",
@@ -280,7 +289,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/simulacion", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -297,7 +306,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
       };
     }
     if (path === "/recomendaciones") return { page: "recommendations" };
-    if (path === "/simulacion") return { page: "simulation" };
+    if (path === "/subsidios") return { page: "subsidios" };
+    if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
     if (path === "/plan-mejora") return { page: "tracking" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
@@ -360,6 +370,7 @@ export default function App() {
   const [dismissedError, setDismissedError] = useState("");
   const [milestoneSuccess, setMilestoneSuccess] = useState("");
   const [trackingGoals, setTrackingGoals] = useState([]);
+  const [academyArticleId, setAcademyArticleId] = useState(null);
   const [activeGoal, setActiveGoal] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
@@ -440,6 +451,8 @@ export default function App() {
   };
 
   const navigateToPage = (nextPage, options = {}) => {
+    if (options.articleId) setAcademyArticleId(options.articleId);
+    else if (nextPage !== "academia") setAcademyArticleId(null);
     navigateToPageForProfile(nextPage, profile, options);
   };
 
@@ -1647,6 +1660,11 @@ export default function App() {
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
         />
+      ) : page === "subsidios" && profile.role === roles.user ? (
+        <Subsidios
+          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+          onNavigate={navigateToPage}
+        />
       ) : page === "simulation" && profile.role === roles.user ? (
         <SimulationPage
           evaluation={currentEvaluation}
@@ -1656,7 +1674,7 @@ export default function App() {
           onRetryExplanation={handleRetryAiExplanation}
         />
       ) : page === "academia" && profile.role === roles.user ? (
-        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} onRetryExplanation={handleRetryAiExplanation} />
+        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads evaluations={evaluations} />
       ) : page === "admin" && profile.role === roles.admin ? (
