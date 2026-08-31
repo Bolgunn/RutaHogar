@@ -156,8 +156,21 @@ export default function FinancialTracking({
   onOpenHousingPlan,
   onLogScoringEvent,
   onOpenMilestoneRegistration,
+  onNavigate,
   successMessage,
 }) {
+  const [planType, setPlanType] = useState(() => {
+    return sessionStorage.getItem("scoreleads_selected_plan_type") || null;
+  });
+
+  useEffect(() => {
+    if (planType) {
+      sessionStorage.setItem("scoreleads_selected_plan_type", planType);
+    } else {
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+    }
+  }, [planType]);
+
   const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
   const [housingPieType, setHousingPieType] = useState("minimo");
 
@@ -214,7 +227,6 @@ export default function FinancialTracking({
     [evaluation?.result],
   );
 
-  const [planType, setPlanType] = useState(null); // null = mostrar seleccion inicial
   const [filterPriority, setFilterPriority] = useState("Todos");
   const [filterCategory, setFilterCategory] = useState("Todos");
   const [showRciTooltip, setShowRciTooltip] = useState(false);
@@ -405,13 +417,24 @@ export default function FinancialTracking({
           <h1 style={{ margin: "0.25rem 0" }}>Progreso Plan Financiero</h1>
           <p style={{ margin: 0 }}>Métricas financieras proyectadas para alcanzar tu pre-aprobación bancaria.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPlanType(null)}
-          style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", borderRadius: "6px", backgroundColor: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: "600" }}
-        >
-          Cambiar de Plan
-        </button>
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate("projects")}
+              style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", borderRadius: "6px", backgroundColor: "#3b82f6", color: "#fff", border: "none", cursor: "pointer", fontWeight: "600", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" }}
+            >
+              Explorar Proyectos y Cotizar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setPlanType(null)}
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", borderRadius: "6px", backgroundColor: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: "600" }}
+          >
+            Cambiar de Plan
+          </button>
+        </div>
       </div>
 
       {successMessage && (

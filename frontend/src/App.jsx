@@ -26,6 +26,8 @@ import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
+import ProjectsCatalog from "./components/ProjectsCatalog";
+import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations } from "./services/evaluationService";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
@@ -244,6 +246,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "subsidios") return "/subsidios";
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
+  if (page === "projects") return "/proyectos";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "profile") return "/perfil";
   if (page === "leads") return "/dashboard";
@@ -278,6 +281,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/definir-password",
+    "/proyectos",
   ].includes(path);
 
   // Enlace de recuperación / invitación: vale con o sin sesión previa.
@@ -290,6 +294,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
     if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -309,6 +314,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/subsidios") return { page: "subsidios" };
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
+    if (path === "/proyectos") return { page: "projects" };
     if (path === "/plan-mejora") return { page: "tracking" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
     if (path === "/dashboard" || path === "/admin" || path === "/ejecutivo/leads" || path === "/login" || path === "/registro") {
@@ -926,14 +932,12 @@ export default function App() {
       navigateToPage("recommendations");
 
       setDataError("");
-      // Corrección: se usaban variables 'rt' y 't' no definidas.
       if (isSupabaseDataConfigured && !auth.session) {
         throw new Error(
           "No hay una sesión activa. Por favor, inicia sesión nuevamente.",
         );
       }
 
-      // Solo enviamos el userId si es un UUID válido, de lo contrario pasamos null para que el servicio use el usuario autenticado
       const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
         email: profile?.email || "sin-email",
         onboarding: userOnboarding ? { ...userOnboarding } : null,
@@ -1131,7 +1135,6 @@ export default function App() {
       setDataError("No pudimos guardar el avance mensual.");
     }
   };
-  // Esta funcion es la que permite registrar un nuevo hito y recalcular el score.
   const handleRegisterMilestone = async (milestoneData) => {
     if (!currentEvaluation) return;
     try {
@@ -1141,13 +1144,11 @@ export default function App() {
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
       const scoreUrl = `${apiBase.replace(/\/$/, "")}/score`;
 
-      // 1. SANITIZAR DATOS: Mapear "renta_mensual" a "ingreso_mensual" si es necesario
-      // y forzar que los valores financieros sean números para evitar que la API crashee.
       const parsedMilestoneData = { ...milestoneData };
 
       if (parsedMilestoneData.renta_mensual !== undefined) {
         parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.renta_mensual);
-        delete parsedMilestoneData.renta_mensual; // Limpiamos el campo incorrecto
+        delete parsedMilestoneData.renta_mensual;
       } else if (parsedMilestoneData.ingreso_mensual !== undefined) {
         parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.ingreso_mensual);
       }
@@ -1158,7 +1159,6 @@ export default function App() {
 
       console.log('RegisterMilestone: parsedMilestoneData', parsedMilestoneData);
 
-      // 2. Construir el input mezclando la evaluación anterior con los datos sanitizados
       const newFinancialInput = buildFinancialInput({
         ...currentEvaluation.input,
         ...parsedMilestoneData,
@@ -1190,7 +1190,7 @@ export default function App() {
       const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
         email: profile?.email || "sin-email",
         onboarding: userOnboarding ? { ...userOnboarding } : null,
-        input: newFinancialInput, // Guardamos el nuevo input en Supabase
+        input: newFinancialInput,
         result: resultSnapshot,
         channel: getChannel(),
       });
@@ -1681,6 +1681,7 @@ export default function App() {
           onLogScoringEvent={handleLogScoringEvent}
           onOpenMilestoneRegistration={() => setPage("register-milestone")}
           successMessage={milestoneSuccess}
+          onNavigate={navigateToPage}
         />
       ) : page === "housing-plan" && profile.role === roles.user ? (
         <HousingSavingsPlan
@@ -1730,6 +1731,32 @@ export default function App() {
         />
       ) : page === "academia" && profile.role === roles.user ? (
         <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
+        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} />
+      ) : page === "projects" && profile.role === roles.user ? (
+        <ProjectsCatalog 
+          evaluationBase={currentEvaluation} 
+          onBack={() => navigateToPage("tracking")}
+          onSetGoal={async (project, projectResult) => {
+            try {
+              const payload = { ...currentEvaluation.input, property_value: project.precio_min_uf, property_value_unit: "uf" };
+              const newEval = await createEvaluation(profile.id, {
+                email: profile.email || "sin-email",
+                onboarding: userOnboarding || null,
+                input: payload,
+                result: projectResult,
+                channel: "project_selection"
+              });
+              
+              setEvaluations([newEval, ...evaluations.filter(e => e.id !== newEval.id)]);
+              sessionStorage.removeItem("scoreleads_selected_plan_type");
+              navigateToPage("tracking");
+              alert("¡Meta financiera actualizada al nuevo proyecto! Revisa cómo se ajustaron tus proyecciones.");
+            } catch (err) {
+              console.error(err);
+              alert("Error al fijar el proyecto como meta.");
+            }
+          }}
+        />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads evaluations={evaluations} />
       ) : page === "admin" && profile.role === roles.admin ? (
