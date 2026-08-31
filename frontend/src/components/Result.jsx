@@ -35,7 +35,7 @@ function MetricItem({ label, value }) {
   );
 }
 
-export default function Result({ data }) {
+export default function Result({ data, onNavigate }) {
   const {
     score,
     classification,
@@ -154,7 +154,7 @@ export default function Result({ data }) {
         </section>
       </div>
 
-      <BankingChecklist result={data} />
+      <BankingChecklist result={data} onNavigate={onNavigate} />
     </div>
   );
 }

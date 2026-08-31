@@ -184,7 +184,7 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         </div>
       )}
 
-      {evaluation && <BankingChecklist evaluation={evaluation} />}
+      {evaluation && <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />}
 
       <div className="warning-note">
         Esta orientación no reemplaza una evaluación bancaria formal.

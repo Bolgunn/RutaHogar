@@ -2,10 +2,12 @@
   "name": "scoreleads-frontend",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test src/lib/test_checklist_pure.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
