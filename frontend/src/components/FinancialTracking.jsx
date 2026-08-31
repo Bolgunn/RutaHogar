@@ -160,8 +160,14 @@ export default function FinancialTracking({
   successMessage,
 }) {
   const [planType, setPlanType] = useState(() => {
-    return sessionStorage.getItem("scoreleads_selected_plan_type") || null;
+    return evaluation?.plan_type || sessionStorage.getItem("scoreleads_selected_plan_type") || null;
   });
+
+  useEffect(() => {
+    if (evaluation?.plan_type && evaluation.plan_type !== planType) {
+      setPlanType(evaluation.plan_type);
+    }
+  }, [evaluation?.plan_type]);
 
   useEffect(() => {
     if (planType) {
@@ -234,7 +240,7 @@ export default function FinancialTracking({
   // Plazo de compra del contexto inicial (limite superior)
   const baseDesiredMonths = useMemo(() => {
     const p = evaluation?.input?.plazo_compra;
-    if (p === "0_a_3_meses") return 3;
+    if (p === "inmediato" || p === "0_a_3_meses") return 3;
     if (p === "3_a_6_meses") return 6;
     if (p === "6_a_12_meses") return 12;
     if (p === "mas_12_meses") return 24;
@@ -258,6 +264,23 @@ export default function FinancialTracking({
   }
 
   const indicators = evaluation?.result?.financial_indicators || {};
+  
+  if (indicators.ahorro_mensual_acelerado === undefined) {
+    return (
+      <section className="section-block tracking-panel">
+        <div className="section-heading">
+          <span className="eyebrow">Plan de Mejora</span>
+          <h1>Mi plan de mejora</h1>
+        </div>
+        <div className="empty-state">
+          <strong>Vuelve a precalificar para ver tu plan actualizado.</strong>
+          <p>Hemos mejorado nuestro sistema de planes. Necesitamos que vuelvas a evaluar tu perfil para generar tus nuevas metas financieras.</p>
+          <button type="button" className="primary-button" onClick={onStartEvaluation}>Precalificar nuevamente</button>
+        </div>
+      </section>
+    );
+  }
+
   const {
     dividendo_estimado = 0,
     dividendo_viable = 0,
@@ -270,7 +293,7 @@ export default function FinancialTracking({
   // Calculo de ahorro y pie
   const currentAhorro = evaluation?.input?.ahorro_disponible || 0;
   const pie_necesario = brecha_pie_minimo + currentAhorro;
-  const pieProgressPercent = pie_necesario > 0 ? (currentAhorro / pie_necesario) * 100 : (brecha_pie_minimo === 0 ? 100 : 0);
+  const pieProgressPercent = pie_necesario > 0 ? (currentAhorro / pie_necesario) * 100 : (brecha_pie_minimo === 0 && pie_minimo_clp > 0 ? 100 : 0);
 
   // Computed times
   const computedMesesAcelerado = indicators.meses_acelerado !== undefined
@@ -292,25 +315,25 @@ export default function FinancialTracking({
   // Limite del 25% para un RCI bancario sano
   const limiteDeudaSana = ingresoMensual * 0.25;
   const excedenteDeuda = Math.max(0, currentDeudaMensual - limiteDeudaSana);
-  const totalSaneamientoRequerido = excedenteDeuda + currentMorosidad;
 
-  // Porcentaje de salud de deuda (100% si no requiere saneamiento)
-  const deudaHealthPercent = totalSaneamientoRequerido === 0
-    ? 100
-    : Math.max(0, Math.min(100, Math.round((1 - (totalSaneamientoRequerido / (limiteDeudaSana + totalSaneamientoRequerido))) * 100)));
+  // Porcentaje de salud de deuda
+  const rciHealthPercent = excedenteDeuda === 0 
+    ? 100 
+    : Math.max(0, Math.min(100, Math.round((limiteDeudaSana / currentDeudaMensual) * 100)));
+  const morosidadHealthPercent = currentMorosidad === 0 ? 100 : 0;
 
-  // Proyeccion de pago de deuda/morosidad con perfiles conservador y acelerado
+  // Proyeccion de pago con perfiles conservador y acelerado
   const amortizacionAcelerada = ahorro_mensual_acelerado > 0 ? ahorro_mensual_acelerado : Math.round(ingresoMensual * 0.15);
   const amortizacionConservadora = ahorro_mensual_conservador > 0 ? ahorro_mensual_conservador : Math.round(ingresoMensual * 0.08);
   const currentAmortizacion = planType === "acelerado" ? amortizacionAcelerada : amortizacionConservadora;
 
-  const mesesDeudaAcelerado = totalSaneamientoRequerido > 0
-    ? (amortizacionAcelerada > 0 ? Math.ceil(totalSaneamientoRequerido / amortizacionAcelerada) : 999)
+  const mesesMorosidadAcelerado = currentMorosidad > 0
+    ? (amortizacionAcelerada > 0 ? Math.ceil(currentMorosidad / amortizacionAcelerada) : 999)
     : 0;
-  const mesesDeudaConservador = totalSaneamientoRequerido > 0
-    ? (amortizacionConservadora > 0 ? Math.ceil(totalSaneamientoRequerido / amortizacionConservadora) : 999)
+  const mesesMorosidadConservador = currentMorosidad > 0
+    ? (amortizacionConservadora > 0 ? Math.ceil(currentMorosidad / amortizacionConservadora) : 999)
     : 0;
-  const currentPlanDeudaMonths = planType === "acelerado" ? mesesDeudaAcelerado : mesesDeudaConservador;
+  const currentPlanMorosidadMonths = planType === "acelerado" ? mesesMorosidadAcelerado : mesesMorosidadConservador;
 
   // Formato monetario
   const formatCurrency = (val) => `$${Math.round(val || 0).toLocaleString("es-CL")}`;
@@ -366,7 +389,10 @@ export default function FinancialTracking({
               type="button"
               className="primary-button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
-              onClick={() => setPlanType("acelerado")}
+              onClick={() => {
+                setPlanType("acelerado");
+                if (onAcceptPlan) onAcceptPlan("acelerado");
+              }}
             >
               Elegir Plan Acelerado
             </button>
@@ -387,9 +413,12 @@ export default function FinancialTracking({
             <button
               type="button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", backgroundColor: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", borderRadius: "6px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
-              onMouseOver={(e) => e.target.style.backgroundColor = "#e2e8f0"}
-              onMouseOut={(e) => e.target.style.backgroundColor = "#f1f5f9"}
-              onClick={() => setPlanType("conservador")}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+              onClick={() => {
+                setPlanType("conservador");
+                if (onAcceptPlan) onAcceptPlan("conservador");
+              }}
             >
               Elegir Plan Conservador
             </button>
@@ -619,7 +648,56 @@ export default function FinancialTracking({
             </div>
           </div>
 
-          {/* Tarjeta 3: Pago de Deuda (E3) */}
+          {/* Tarjeta 3.1: Morosidad */}
+          {currentMorosidad > 0 && (
+            <div
+              style={{
+                padding: "1.25rem",
+                backgroundColor: "#fff",
+                borderRadius: "12px",
+                border: "1px solid var(--border-light)",
+                boxShadow: "0 4px 6px rgba(0,0,0,0.02)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
+                <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
+                  Morosidad
+                </h3>
+                <div style={{ marginTop: "-0.2rem", marginRight: "-0.2rem" }}>
+                  <CircularProgress
+                    percentage={morosidadHealthPercent}
+                    color={currentMorosidad === 0 ? "var(--color-success)" : "#f59e0b"}
+                    size={40}
+                    stroke={4}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>
+                  Monto a regularizar:
+                </span>
+                <strong style={{ fontSize: "1.05rem", color: "var(--color-danger)" }}>
+                  {formatCurrency(currentMorosidad)}
+                </strong>
+              </div>
+
+              <div style={{ marginTop: "auto", fontSize: "0.8rem", color: "var(--color-neutral-600)", borderTop: "1px dotted #e2e8f0", paddingTop: "0.4rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Pago sugerido:</span>
+                  <strong>{formatCurrency(currentAmortizacion)}/m</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Tiempo estimado pago:</span>
+                  <strong style={{ color: "var(--color-primary)" }}>{formatMonthsToYears(currentPlanMorosidadMonths)}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tarjeta 3.2: Carga Financiera (RCI) */}
           <div
             style={{
               padding: "1.25rem",
@@ -632,13 +710,52 @@ export default function FinancialTracking({
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
-              <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
-                Pago de Deuda
+              <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0, display: "flex", alignItems: "center", gap: "0.4rem", position: "relative" }}>
+                Carga Financiera
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "16px",
+                    height: "16px",
+                    borderRadius: "50%",
+                    backgroundColor: "#cbd5e1",
+                    color: "#fff",
+                    fontSize: "10px",
+                    cursor: "help",
+                  }}
+                  onMouseEnter={() => setShowRciTooltip(true)}
+                  onMouseLeave={() => setShowRciTooltip(false)}
+                >
+                  ?
+                  {showRciTooltip && (
+                    <div style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      marginTop: "0.5rem",
+                      padding: "0.5rem",
+                      backgroundColor: "#1e293b",
+                      color: "#fff",
+                      fontSize: "0.75rem",
+                      borderRadius: "6px",
+                      width: "200px",
+                      zIndex: 10,
+                      fontWeight: "normal",
+                      textAlign: "center",
+                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+                    }}>
+                      Monto de deuda mensual que excede el 25% de tu ingreso. Los bancos te pedirán reducirlo para darte un crédito.
+                    </div>
+                  )}
+                </span>
               </h3>
               <div style={{ marginTop: "-0.2rem", marginRight: "-0.2rem" }}>
                 <CircularProgress
-                  percentage={deudaHealthPercent}
-                  color={totalSaneamientoRequerido === 0 ? "var(--color-success)" : "#f59e0b"}
+                  percentage={rciHealthPercent}
+                  color={excedenteDeuda === 0 ? "var(--color-success)" : "#f59e0b"}
                   size={40}
                   stroke={4}
                 />
@@ -647,48 +764,32 @@ export default function FinancialTracking({
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
               <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>
-                {currentMorosidad > 0 ? "Morosidad activa:" : "Deuda mensual:"}
+                Deuda mensual (RCI):
               </span>
-              <strong style={{ fontSize: "1.05rem", color: currentMorosidad > 0 ? "var(--color-danger)" : "var(--color-neutral-900)" }}>
-                {formatCurrency(currentMorosidad > 0 ? currentMorosidad : currentDeudaMensual)}
+              <strong style={{ fontSize: "1.05rem", color: "var(--color-neutral-900)" }}>
+                {formatCurrency(currentDeudaMensual)}
               </strong>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderTop: "1px dashed var(--border-light)",
-                paddingTop: "0.5rem",
-                marginTop: "0.25rem",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Monto a pagar:</span>
-              <strong
+            {excedenteDeuda > 0 ? (
+              <div
                 style={{
-                  fontSize: "1.05rem",
-                  color: totalSaneamientoRequerido === 0 ? "var(--color-success)" : "var(--color-danger)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderTop: "1px dashed var(--border-light)",
+                  paddingTop: "0.5rem",
+                  marginTop: "0.25rem",
+                  marginBottom: "0.75rem",
                 }}
               >
-                {formatCurrency(totalSaneamientoRequerido)}
-              </strong>
-            </div>
-
-            {totalSaneamientoRequerido > 0 ? (
-              <div style={{ marginTop: "auto", fontSize: "0.8rem", color: "var(--color-neutral-600)", borderTop: "1px dotted #e2e8f0", paddingTop: "0.4rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Pago sugerido:</span>
-                  <strong>{formatCurrency(currentAmortizacion)}/m</strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Tiempo estimado pago:</span>
-                  <strong style={{ color: "var(--color-primary)" }}>{formatMonthsToYears(currentPlanDeudaMonths)}</strong>
-                </div>
+                <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Exceso sobre 25%:</span>
+                <strong style={{ fontSize: "1.05rem", color: "var(--color-danger)" }}>
+                  {formatCurrency(excedenteDeuda)}
+                </strong>
               </div>
             ) : (
-              <div style={{ marginTop: "auto", color: "var(--color-success)", fontSize: "0.8rem", fontWeight: "600", textAlign: "center" }}>
+              <div style={{ marginTop: "auto", color: "var(--color-success)", fontSize: "0.8rem", fontWeight: "600", textAlign: "center", paddingTop: "0.4rem" }}>
                 ✓ Nivel de deuda compatible.
               </div>
             )}
@@ -1089,15 +1190,25 @@ export default function FinancialTracking({
                 </p>
               )}
 
-              <div className="goal-actions" style={{ marginTop: "auto", paddingTop: "0.75rem" }}>
+              <div className="goal-actions" style={{ marginTop: "auto", paddingTop: "0.75rem", display: "flex", gap: "0.5rem" }}>
                 <button
                   className="secondary-button compact-button"
                   type="button"
                   onClick={() => onOpenMilestoneRegistration?.(goal)}
-                  style={{ fontWeight: "600", width: "100%" }}
+                  style={{ fontWeight: "600", flex: 1 }}
                 >
                   Registrar Avance
                 </button>
+                {onOpenGoalPlan && (
+                  <button
+                    className="tertiary-button compact-button"
+                    type="button"
+                    onClick={() => onOpenGoalPlan?.(goal)}
+                    style={{ fontWeight: "600", flex: 1, backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", color: "#334155" }}
+                  >
+                    Ver plan mensual
+                  </button>
+                )}
               </div>
             </article>
           );

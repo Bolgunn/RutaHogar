@@ -295,13 +295,6 @@ def _apply_final_classification(score: float, blockers: List[Dict]) -> tuple[str
             "Requiere antecedentes",
             "La clasificación requiere antecedentes adicionales por complemento de renta incompleto.",
         )
-    # Si tiene bloqueadores críticos (Morosidad o Falta de Pie)
-    critical_blockers = {"morosidad_vigente", "pie_insuficiente"}
-    if blocker_codes.intersection(critical_blockers):
-        return (
-            "No Admisible (En Preparación)",
-            "El perfil no es admisible para evaluación bancaria inmediata. Se asigna score restringido y plan de regularización."
-        )
 
     return (
         _classify_weighted_score(score),

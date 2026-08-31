@@ -1007,6 +1007,7 @@ export default function App() {
   };
 
   const handleAcceptPlan = async (housingPieType) => {
+  const handleAcceptPlan = async (planType) => {
     if (!currentEvaluation) return;
 
     try {
@@ -1084,11 +1085,12 @@ export default function App() {
         currentEvaluation.id,
         userId || profile?.email || "local-user",
         housingPlan,
+        planType
       );
       if (updatedEvaluation) {
-        setEvaluations((prev) =>
-          prev.map((item) =>
-            item.id === updatedEvaluation.id ? updatedEvaluation : item,
+        setEvaluations(
+          evaluations.map((item) =>
+            item.id === currentEvaluation.id ? updatedEvaluation : item,
           ),
         );
       }
@@ -1157,14 +1159,10 @@ export default function App() {
         parsedMilestoneData.ahorro_disponible = Number(parsedMilestoneData.ahorro_disponible);
       }
 
-      console.log('RegisterMilestone: parsedMilestoneData', parsedMilestoneData);
-
       const newFinancialInput = buildFinancialInput({
         ...currentEvaluation.input,
         ...parsedMilestoneData,
       });
-
-      console.log('Payload enviado a la API:', newFinancialInput);
 
       let res;
       try {
@@ -1194,8 +1192,6 @@ export default function App() {
         result: resultSnapshot,
         channel: getChannel(),
       });
-
-      console.log('Milestone savedEvaluation', savedEvaluation);
 
       prependEvaluation(savedEvaluation);
 
@@ -1680,6 +1676,10 @@ export default function App() {
           onOpenHousingPlan={handleOpenHousingPlan}
           onLogScoringEvent={handleLogScoringEvent}
           onOpenMilestoneRegistration={() => setPage("register-milestone")}
+          onOpenMilestoneRegistration={(goal) => {
+            setActiveGoal(goal || null);
+            setPage("register-milestone");
+          }}
           successMessage={milestoneSuccess}
           onNavigate={navigateToPage}
         />
