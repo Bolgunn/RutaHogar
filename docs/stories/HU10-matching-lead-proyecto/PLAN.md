@@ -1,8 +1,11 @@
 # PLAN — HU 10: Matching lead-proyecto para ejecutivos comerciales
 
 - **Story:** `Wiki RutaHogar/UserStories/HU10-matching-lead-proyecto.md` · **Actor:** Ejecutivo comercial
-- **Status:** ⚠️ Parcial · Sprint 1 · 5 SP · **Depends on:** HU 7 (`feature/sprint1/HU7`, PR #69, **open**), [CATALOGO-UNICO](../CATALOGO-UNICO/PLAN.md) (**not started**) and **HU 8 (PR #80, merged)** for the FOGAES constants · **Required by:** —
-- **Branch:** `feature/sprint1/HU10`, off `feature/catalogo-unico-simulacion`
+- **Status:** ✅ Built · Sprint 1 · 5 SP · **Depends on:** HU 7 (PR #69, **merged**),
+  [CATALOGO-UNICO](../CATALOGO-UNICO/PLAN.md) (**in this branch's lineage** — `mockProjects` is gone
+  from `frontend/src`) and **HU 8 (PR #80, merged)** for the FOGAES constants · **Required by:** —
+- **Branch:** `feature/sprint1/HU10`, cut off `feature/catalogo-unico-simulacion`; after step 0 its
+  **merge base is `origin/develop`'s tip**, so every ancestor's work is in the branch
 
 > **This plan has been built.** Steps 0–13 are done and the branch is up at `c50358b`. The sections
 > below are kept as written so the reasoning stays auditable; where the build diverged from them, the
@@ -14,8 +17,9 @@
 > to keep `feature/sprint1/HU10` for consistency with the other in-flight branches. Recorded rather
 > than silently ignored.
 
-> **Stack depth.** `develop` → HU 7 (#69) → CATALOGO-UNICO → HU 10. Every ancestor is unmerged. If
-> #69 changes in review, both descendants rebase.
+> **Stack depth — resolved.** `develop` → HU 7 (#69) → CATALOGO-UNICO → HU 10. ~~Every ancestor is
+> unmerged.~~ **#69 is merged to `develop`**, and step 0 brought `develop` in, so the catalog contract
+> step 6 was written against is the shipped one. The last Assumption below is answered by this.
 >
 > ~~**And the branch is now 21 commits behind `develop`**~~ — **done in step 0** (`7d1a577`). The
 > branch carries the redesign (#74), its follow-ups (#79) and **HU 8 (#80)**, so the three FOGAES
@@ -313,8 +317,11 @@ person names what was done and seen. Nothing here is a checkmark.
   (`main.py:65,72`), so §4.2's "edad missing → `age_term_verified = false`" branch is unreachable
   through the API. Implement it anyway for the backfill script, which reads stored snapshots that may
   predate those fields.
-- **Both ancestor branches are unmerged.** If PR #69 or CATALOGO-UNICO changes the catalog contract,
-  step 6 must be re-checked against the revised shape.
+- ~~**Both ancestor branches are unmerged.**~~ **Answered.** PR #69 is merged and step 0 brought
+  `develop` in, so step 6 was written against the shipped catalog contract, not a moving one. The
+  contract did move once afterwards and inside this story: `getProjects` / `getAvailableProjects`
+  gained the `ejecutivo` argument (V1), which is additive — every existing caller passing only
+  `inmobiliariaId` keeps its behaviour.
 
 ## Deviations recorded during the build
 

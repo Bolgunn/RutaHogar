@@ -44,7 +44,7 @@
 
 ## Notas
 
-- Los criterios de matching (capacidad estimada, comuna, rango de precio, pie, clasificación, bloqueador principal) están definidos en [Spike 1 - E4](../../docs/research/spike1-e4-lead-project-matching-criteria.md), que lleva el contrato congelado contra el que se debe programar.
+- Los criterios de matching (capacidad estimada, comuna, rango de precio, pie, clasificación, bloqueador principal) los gobiernan **[ALG-9](../../docs/algorithms/ALG-9-purchase-capacity.md)** (capacidad) y **[ALG-10](../../docs/algorithms/ALG-10-lead-project-affinity.md)** (afinidad), que llevan cada número con su procedencia y sus casos versionados. El [Spike 1 - E4](../../docs/research/spike1-e4-lead-project-matching-criteria.md) explica **por qué** los criterios son los que son y vale leerlo para eso, pero HU 10 lo enmendó en nueve secciones: **donde el spike y un ALG discrepen, manda el ALG** — lo dice el propio spike.
 - Requiere el catálogo de [[HU7-catalogo-de-proyectos|HU 7]] para saber qué proyectos están disponibles.
 - Complementa el dashboard priorizado [[HU2-priorizacion-leads|HU 2]] agregando una vista centrada en proyecto.
 
@@ -69,7 +69,7 @@ nueve claves nuevas son aditivas dentro de `financial_indicators` y no cambian n
 contra el Supabase hosteado — ver "Still open" en
 [el plan](../../docs/stories/HU10-matching-lead-proyecto/PLAN.md).
 
-**Nota de dependencia.** El catálogo del que depende esta historia ya está construido en `feature/sprint1/HU7` ([PR #69](https://github.com/nonmeeeeeeeeeeeeeee/RutaHogar/pull/69)); las citas de arriba describen `develop`, donde todavía no está.
+**Nota de dependencia.** El catálogo del que depende esta historia está en `develop` desde que se mergeó [PR #69](https://github.com/nonmeeeeeeeeeeeeeee/RutaHogar/pull/69), y esta rama lo trae. Las citas de arriba describen el código de la rama `feature/sprint1/HU10`, no `develop`: la historia todavía no está mergeada.
 
 > Esta tabla se revisa cuando cambia el código de la historia. Un criterio sin evidencia citable
 > es un criterio no verificado, no un criterio cumplido.

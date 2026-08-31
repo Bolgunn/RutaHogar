@@ -1,7 +1,7 @@
 # PLAN — CATALOGO-UNICO: one project source
 
 - **Story:** none — a data-source consolidation, run through the pipeline as its own work · **Actor:** the team
-- **Status:** 🔜 Sprint 1 · not sized · **Depends on / Required by:** depends on HU 7 (`feature/sprint1/HU7`, PR #69, **open and unreviewed**) · required by [HU 10](../HU10-matching-lead-proyecto/PLAN.md) · superseded in part by [UNIDADES-PROYECTO](../UNIDADES-PROYECTO/PLAN.md)
+- **Status:** 🔜 Sprint 1 · not sized · **Depends on / Required by:** depends on HU 7 (PR #69, **merged to `develop`**) · required by [HU 10](../HU10-matching-lead-proyecto/PLAN.md) · superseded in part by [UNIDADES-PROYECTO](../UNIDADES-PROYECTO/PLAN.md)
 - **Branch:** `feature/catalogo-unico-simulacion`, off `feature/sprint1/HU7`
 
 > **Branch-name deviation.** The handbook norm is `feat/<slug>`. This repository's in-flight
