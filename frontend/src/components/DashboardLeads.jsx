@@ -271,15 +271,25 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     });
   }, [evaluations, filter, filterCommune, filterAge, filterDate, search]);
 
+  // El objeto `ejecutivo` se recrea en cada render de App, así que la identidad
+  // no sirve como dependencia: memorizarlo por sus dos campos es lo que evita
+  // que el efecto vuelva a pedir el catálogo en cada render.
+  const ejecutivoId = ejecutivo?.id ?? null;
+  const ejecutivoEmail = ejecutivo?.email ?? null;
+  const ejecutivoScope = useMemo(
+    () => (ejecutivoId || ejecutivoEmail ? { id: ejecutivoId, email: ejecutivoEmail } : null),
+    [ejecutivoId, ejecutivoEmail],
+  );
+
   useEffect(() => {
     let active = true;
     setProjectsLoaded(false);
-    getAvailableProjects({ inmobiliariaId, ejecutivo })
+    getAvailableProjects({ inmobiliariaId, ejecutivo: ejecutivoScope })
       .then((data) => { if (active) setProjects(data); })
       .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); })
       .finally(() => { if (active) setProjectsLoaded(true); });
     return () => { active = false; };
-  }, [inmobiliariaId, ejecutivo?.id, ejecutivo?.email]);
+  }, [inmobiliariaId, ejecutivoScope]);
 
   const selectedProject = useMemo(
     () => projects.find((p) => String(p.id) === selectedProjectId) || null,
@@ -307,7 +317,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       <>
         <td>
           {match.afinidad === null ? emptyValue : `${match.afinidad}`}
-          {match.clasificacion ? <small style={{ display: "block", color: "#5A6A7E" }}>{match.clasificacion}</small> : null}
+          {match.clasificacion ? <small className="lead-cell-sub">{match.clasificacion}</small> : null}
         </td>
         <td>
           {e.capacidad_uf === null ? "Sin dato" : `${e.capacidad_uf} UF`}
@@ -315,13 +325,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
               columna: los leads se rankean bajo supuestos de plazo distintos y
               el ejecutivo no puede comparar numeros invisiblemente distintos
               (ALG-9 R2). La restriccion vinculante viene al lado por lo mismo. */}
-          <small style={{ display: "block", color: "#5A6A7E" }}>
+          <small className="lead-cell-sub">
             {e.plazo_anios === null ? emptyValue : `${e.plazo_anios} años`}
             {e.plazo_origen ? ` · ${e.plazo_origen}` : ""}
             {e.restriccion_vinculante ? ` · limita ${e.restriccion_vinculante}` : ""}
           </small>
           {e.capacidad_uf !== null && !e.alcanza_precio_min ? (
-            <small style={{ display: "block", color: "#B4232A" }}>No alcanza el precio mínimo</small>
+            <small className="lead-cell-sub is-alert">No alcanza el precio mínimo</small>
           ) : null}
         </td>
         <td>{e.pie_disponible_uf} UF</td>
@@ -330,7 +340,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
             <>
               {match.bloqueador_principal.titulo}
               {match.bloqueador_principal.brecha_recurso_clp !== null ? (
-                <small style={{ display: "block", color: "#5A6A7E" }}>
+                <small className="lead-cell-sub">
                   Falta {money(match.bloqueador_principal.brecha_recurso_clp)} de{" "}
                   {match.bloqueador_principal.brecha_recurso_tipo}
                 </small>
@@ -412,13 +422,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
           <span className="visually-hidden"> — ver detalles del lead</span>
         </button>
         {selectedProject ? (
-          <small style={{ display: "block", color: "#5A6A7E" }}>{formatFecha(item.created_at)}</small>
+          <small className="lead-cell-sub">{formatFecha(item.created_at)}</small>
         ) : null}
         {match?.reorientable ? (
-          <small style={{ display: "block", color: "#1F6F4A" }}>Reorientable a este proyecto</small>
+          <small className="lead-cell-sub is-positive">Reorientable a este proyecto</small>
         ) : null}
         {match?.evidencia?.desbloqueable_con_fogaes && !match.motivo_exclusion ? (
-          <small style={{ display: "block", color: "#5A6A7E" }}>Se desbloquea con FOGAES</small>
+          <small className="lead-cell-sub">Se desbloquea con FOGAES</small>
         ) : null}
       </td>
       <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
@@ -470,11 +480,11 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       </div>
 
       {projectsError && (
-        <p style={{ fontSize: "0.88rem", color: "#B4232A", marginBottom: "12px" }}>{projectsError}</p>
+        <p className="leads-hint is-error">{projectsError}</p>
       )}
 
-      {!projectsError && ejecutivo && projectsLoaded && !projects.length && (
-        <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
+      {!projectsError && ejecutivoScope && projectsLoaded && !projects.length && (
+        <p className="leads-hint">
           Todavía no tienes proyectos asignados. Pídele al administrador de tu inmobiliaria que
           te asigne al menos uno para priorizar leads por proyecto.
         </p>
@@ -498,7 +508,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
           <select
             value={selectedProjectId}
             onChange={(e) => selectProject(e.target.value)}
-            disabled={Boolean(ejecutivo) && projectsLoaded && !projects.length}
+            disabled={Boolean(ejecutivoScope) && projectsLoaded && !projects.length}
           >
             <option value="">Sin proyecto — vista general de leads</option>
             {projects.map((p) => (
@@ -572,7 +582,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       </div>
 
       {/* Contador de resultados */}
-      <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
+      <p className="leads-hint">
         {selectedProject
           ? `${ranked.length} de ${filtered.length} leads alcanzan ${selectedProject.nombre}, ordenados por ${sortBy === "capacidad" ? "capacidad de compra" : "afinidad"}`
           : filtered.length === evaluations.length
@@ -602,11 +612,11 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
       {/* Requieren antecedentes: no son leads sin capacidad, son leads sin evaluación vigente. */}
       {selectedProject && requiereAntecedentes.length > 0 && (
-        <div style={{ marginTop: "1.5rem" }}>
-          <h3 style={{ marginBottom: "0.25rem" }}>
+        <div className="leads-group">
+          <h3>
             Requieren antecedentes ({requiereAntecedentes.length})
           </h3>
-          <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
+          <p className="leads-hint">
             No se les pudo calcular capacidad de compra. Necesitan una evaluación nueva, no son
             leads que no puedan comprar.
           </p>
@@ -620,7 +630,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       )}
 
       {selectedProject && descartados.length > 0 && (
-        <div style={{ marginTop: "1.5rem" }}>
+        <div className="leads-group">
           <button
             type="button"
             className="secondary-button compact-button"
@@ -637,7 +647,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     <React.Fragment key={`${fila.lead.id}-descartado`}>
                       {leadRow(fila)}
                       <tr>
-                        <td colSpan={columnCount} style={{ fontSize: "0.85rem", color: "#5A6A7E" }}>
+                        <td colSpan={columnCount} className="lead-descartado-motivo">
                           Motivo: {fila.match.motivo_exclusion}
                         </td>
                       </tr>
@@ -920,7 +930,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                         <li key={index} style={{ marginBottom: "0.35rem" }}>
                           {displayItemText(item)}
                           {displayItemBenefit(item) ? (
-                            <small style={{ display: "block", color: "#5A6A7E" }}>
+                            <small className="lead-cell-sub">
                               Beneficio esperado: {displayItemBenefit(item)}
                             </small>
                           ) : null}

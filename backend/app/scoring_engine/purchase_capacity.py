@@ -39,10 +39,6 @@ def _get_first(data: dict, *keys):
     return None
 
 
-def _uf(value: float, uf_value_clp: float) -> float:
-    return round(value / uf_value_clp, 1) if uf_value_clp > 0 else 0.0
-
-
 def _deuda_total(data: dict) -> float:
     # A3: incluye la deuda del complemento, a diferencia de indicators.py.
     deuda_complementaria = _get_first(data, "deuda_mensual_complementario", "complemento_deuda_mensual")

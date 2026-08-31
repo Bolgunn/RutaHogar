@@ -748,6 +748,45 @@ a {
   }
 }
 
+/* Panel del ejecutivo (HU 10). Los mismos valores que estaban inline en
+   DashboardLeads: se centralizan para que el color de "sin dato", el de alerta
+   y el de oportunidad se definan una vez y no en cuarenta atributos style. */
+.leads-hint {
+  font-size: 0.88rem;
+  color: var(--rh-text-sec, #5A6A7E);
+  margin-bottom: 12px;
+}
+
+.leads-hint.is-error {
+  color: #B4232A;
+}
+
+.leads-group {
+  margin-top: 1.5rem;
+}
+
+.leads-group > h3 {
+  margin-bottom: 0.25rem;
+}
+
+.lead-cell-sub {
+  display: block;
+  color: var(--rh-text-sec, #5A6A7E);
+}
+
+.lead-cell-sub.is-alert {
+  color: #B4232A;
+}
+
+.lead-cell-sub.is-positive {
+  color: #1F6F4A;
+}
+
+.lead-descartado-motivo {
+  font-size: 0.85rem;
+  color: var(--rh-text-sec, #5A6A7E);
+}
+
 /* Override for full-width panels */
 .recommendations-panel,
 .tracking-panel,
