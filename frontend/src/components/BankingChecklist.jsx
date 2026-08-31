@@ -60,10 +60,10 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
   const completedCount = currentList.filter((i) => checked[i.id]).length;
   const progressPercent = Math.round((completedCount / (currentList.length || 1)) * 100);
 
-  const handleOpenAcademia = (e) => {
+  const handleOpenAcademia = (item) => (e) => {
     e.preventDefault();
     if (onNavigate) {
-      onNavigate("academia");
+      onNavigate("academia", { articleId: item?.academyArticleId, topicId: item?.academyTopicId });
     }
   };
 
@@ -134,7 +134,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
                     <button
                       type="button"
                       className="checklist-academy-link"
-                      onClick={handleOpenAcademia}
+                      onClick={handleOpenAcademia(item)}
                       title="Aprender más sobre este tema en Academia"
                     >
                       <i className="ti ti-books" /> Academia
@@ -181,7 +181,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
                     <button
                       type="button"
                       className="checklist-academy-link"
-                      onClick={handleOpenAcademia}
+                      onClick={handleOpenAcademia(item)}
                       title="Aprender más sobre este antecedente en Academia"
                     >
                       <i className="ti ti-books" /> Academia

@@ -452,7 +452,12 @@ export default function App() {
     setPathname(nextPath);
   };
 
+  const [selectedAcademyArticleId, setSelectedAcademyArticleId] = useState(null);
+
   const navigateToPageForProfile = (nextPage, nextProfile = profile, options = {}) => {
+    if (nextPage === "academia" && options?.articleId) {
+      setSelectedAcademyArticleId(options.articleId);
+    }
     setPage(nextPage);
     updateBrowserPath(getRouteForPage(nextPage, nextProfile, options), options);
   };
@@ -1467,7 +1472,12 @@ export default function App() {
           onNavigate={navigateToPage}
         />
       ) : page === "academia" && profile.role === roles.user ? (
-        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} />
+        <AcademiaFinanciera
+          evaluation={currentEvaluation}
+          onStartEvaluation={startEvaluation}
+          onNavigate={navigateToPage}
+          initialArticleId={selectedAcademyArticleId}
+        />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads evaluations={evaluations} />
       ) : page === "admin" && profile.role === roles.admin ? (
