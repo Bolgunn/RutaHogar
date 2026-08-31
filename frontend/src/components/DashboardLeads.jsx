@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
+import { getAvailableProjects } from "../services/projectService";
+import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import {
   formatScore,
   getBaseClassification,
@@ -143,8 +145,13 @@ function getDateThreshold(value) {
   }
 }
 
-export default function DashboardLeads({ evaluations }) {
+export default function DashboardLeads({ evaluations, inmobiliariaId }) {
   const [filter, setFilter] = useState(DEFAULT_CLASSIFICATION_FILTER);
+  const [projects, setProjects] = useState([]);
+  const [projectsError, setProjectsError] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [sortBy, setSortBy] = useState("afinidad");
+  const [showDescartados, setShowDescartados] = useState(false);
   const [filterCommune, setFilterCommune] = useState("todas");
   const [filterAge, setFilterAge] = useState(0);
   const [filterDate, setFilterDate] = useState("todos");
@@ -247,6 +254,123 @@ export default function DashboardLeads({ evaluations }) {
     });
   }, [evaluations, filter, filterCommune, filterAge, filterDate, search]);
 
+  useEffect(() => {
+    let active = true;
+    getAvailableProjects({ inmobiliariaId })
+      .then((data) => { if (active) setProjects(data); })
+      .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); });
+    return () => { active = false; };
+  }, [inmobiliariaId]);
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => String(p.id) === selectedProjectId) || null,
+    [projects, selectedProjectId],
+  );
+
+  const { ranked, descartados, requiereAntecedentes } = useMemo(
+    () => rankLeadsForProject(filtered, selectedProject, sortBy),
+    [filtered, selectedProject, sortBy],
+  );
+
+  const evidenceCells = (match) => {
+    const e = match.evidencia;
+    return (
+      <>
+        <td>
+          {match.afinidad === null ? emptyValue : `${match.afinidad}`}
+          {match.clasificacion ? <small style={{ display: "block", color: "#5A6A7E" }}>{match.clasificacion}</small> : null}
+        </td>
+        <td>
+          {e.capacidad_uf === null ? "Sin dato" : `${e.capacidad_uf} UF`}
+          {e.capacidad_uf !== null && !e.alcanza_precio_min ? (
+            <small style={{ display: "block", color: "#B4232A" }}>No alcanza el precio mínimo</small>
+          ) : null}
+        </td>
+        <td>{e.pie_disponible_uf} UF</td>
+        <td>{e.restriccion_vinculante || emptyValue}</td>
+        <td>
+          {e.plazo_anios === null ? emptyValue : `${e.plazo_anios} años`}
+          <small style={{ display: "block", color: "#5A6A7E" }}>{e.plazo_origen || emptyValue}</small>
+        </td>
+        <td>
+          {match.bloqueador_principal ? (
+            <>
+              {match.bloqueador_principal.titulo}
+              {match.bloqueador_principal.brecha_recurso_clp !== null ? (
+                <small style={{ display: "block", color: "#5A6A7E" }}>
+                  Falta {money(match.bloqueador_principal.brecha_recurso_clp)} de{" "}
+                  {match.bloqueador_principal.brecha_recurso_tipo}
+                </small>
+              ) : null}
+            </>
+          ) : (
+            "Sin bloqueador para este proyecto"
+          )}
+        </td>
+      </>
+    );
+  };
+
+  const leadRow = ({ lead: item, match }) => (
+    <tr key={item.id}>
+      <td>{formatFecha(item.created_at)}</td>
+      <td>
+        {item.full_name || item.email || emptyValue}
+        {match?.reorientable ? (
+          <small style={{ display: "block", color: "#1F6F4A" }}>Reorientable a este proyecto</small>
+        ) : null}
+        {match?.evidencia?.desbloqueable_con_fogaes && !match.motivo_exclusion ? (
+          <small style={{ display: "block", color: "#5A6A7E" }}>Se desbloquea con FOGAES</small>
+        ) : null}
+      </td>
+      <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
+      <td>
+        <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
+          {item.result?.classification || emptyValue}
+        </span>
+      </td>
+      {match ? (
+        evidenceCells(match)
+      ) : (
+        <td>
+          {item.result?.risks?.length
+            ? item.result.risks.slice(0, 2).join(" ")
+            : "Sin riesgos relevantes"}
+        </td>
+      )}
+      <td>
+        <button className="secondary-button compact-button" onClick={() => setSelectedLead(item)}>
+          Ver detalles
+        </button>
+      </td>
+    </tr>
+  );
+
+  const tableHead = (
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Nombre</th>
+        <th>Comuna</th>
+        <th>Clasificación</th>
+        {selectedProject ? (
+          <>
+            <th>Afinidad</th>
+            <th>Capacidad</th>
+            <th>Pie disponible</th>
+            <th>Restricción</th>
+            <th>Plazo</th>
+            <th>Bloqueador principal</th>
+          </>
+        ) : (
+          <th>Riesgos</th>
+        )}
+        <th></th>
+      </tr>
+    </thead>
+  );
+  const columnCount = selectedProject ? 11 : 6;
+
   return (
     <section className="section-block">
       <div className="section-heading">
@@ -254,6 +378,34 @@ export default function DashboardLeads({ evaluations }) {
         <h1>Dashboard Leads</h1>
         <p>Vista para revisar leads evaluados y priorizar acciones comerciales.</p>
       </div>
+
+      <div className="toolbar-filters">
+        <label style={{ flexBasis: "100%" }}>
+          Proyecto
+          <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
+            <option value="">Sin proyecto — vista general de leads</option>
+            {projects.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.nombre} · {p.comuna} · {p.precio_min_uf}–{p.precio_max_uf} UF
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {selectedProject && (
+          <label>
+            Ordenar por
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="afinidad">Afinidad con el proyecto</option>
+              <option value="capacidad">Capacidad de compra</option>
+            </select>
+          </label>
+        )}
+      </div>
+
+      {projectsError && (
+        <p style={{ fontSize: "0.88rem", color: "#B4232A", marginBottom: "12px" }}>{projectsError}</p>
+      )}
 
       <div className="toolbar-filters">
         {/* Búsqueda por nombre/correo */}
@@ -322,61 +474,82 @@ export default function DashboardLeads({ evaluations }) {
 
       {/* Contador de resultados */}
       <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
-        {filtered.length === evaluations.length
-          ? `${evaluations.length} leads en total`
-          : `${filtered.length} de ${evaluations.length} leads`}
+        {selectedProject
+          ? `${ranked.length} de ${filtered.length} leads alcanzan ${selectedProject.nombre}, ordenados por ${sortBy === "capacidad" ? "capacidad de compra" : "afinidad"}`
+          : filtered.length === evaluations.length
+            ? `${evaluations.length} leads en total`
+            : `${filtered.length} de ${evaluations.length} leads`}
       </p>
 
       <div className="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Nombre</th>
-              <th>Comuna</th>
-              <th>Clasificación</th>
-              <th>Riesgos</th>
-              <th></th>
-            </tr>
-          </thead>
+          {tableHead}
           <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id}>
-                <td>{formatFecha(item.created_at)}</td>
-                <td>{item.full_name || item.email || emptyValue}</td>
-                <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
-                <td>
-                  <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
-                    {item.result?.classification || emptyValue}
-                  </span>
-                </td>
-                <td>
-                  {item.result?.risks?.length
-                    ? item.result.risks.slice(0, 2).join(" ")
-                    : "Sin riesgos relevantes"}
-                </td>
-                <td>
-                  <button
-                    className="secondary-button compact-button"
-                    onClick={() => setSelectedLead(item)}
-                  >
-                    Ver detalles
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && (
+            {ranked.map((fila) => leadRow(fila))}
+            {!ranked.length && (
               <tr>
-                <td colSpan="6">
-                  {hasActiveFilters
-                    ? "No hay leads que coincidan con los filtros aplicados."
-                    : "Aún no existen leads para esta clasificación."}
+                <td colSpan={columnCount}>
+                  {selectedProject
+                    ? "Ningún lead alcanza este proyecto con los filtros aplicados."
+                    : hasActiveFilters
+                      ? "No hay leads que coincidan con los filtros aplicados."
+                      : "Aún no existen leads para esta clasificación."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Requieren antecedentes: no son leads sin capacidad, son leads sin evaluación vigente. */}
+      {selectedProject && requiereAntecedentes.length > 0 && (
+        <div style={{ marginTop: "1.5rem" }}>
+          <h3 style={{ marginBottom: "0.25rem" }}>
+            Requieren antecedentes ({requiereAntecedentes.length})
+          </h3>
+          <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
+            No se les pudo calcular capacidad de compra. Necesitan una evaluación nueva, no son
+            leads que no puedan comprar.
+          </p>
+          <div className="table-wrap">
+            <table>
+              {tableHead}
+              <tbody>{requiereAntecedentes.map((fila) => leadRow(fila))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selectedProject && descartados.length > 0 && (
+        <div style={{ marginTop: "1.5rem" }}>
+          <button
+            type="button"
+            className="secondary-button compact-button"
+            onClick={() => setShowDescartados((v) => !v)}
+          >
+            {showDescartados ? "Ocultar descartados" : `Ver descartados (${descartados.length})`}
+          </button>
+          {showDescartados && (
+            <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
+              <table>
+                {tableHead}
+                <tbody>
+                  {descartados.map((fila) => (
+                    <React.Fragment key={`${fila.lead.id}-descartado`}>
+                      {leadRow(fila)}
+                      <tr>
+                        <td colSpan={columnCount} style={{ fontSize: "0.85rem", color: "#5A6A7E" }}>
+                          Motivo: {fila.match.motivo_exclusion}
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal de detalles */}
       {selectedLead && (
