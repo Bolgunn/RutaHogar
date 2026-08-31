@@ -215,30 +215,6 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </div>
       </div>
 
-      {/* Criterio E2: Compact Dynamic Priority Documents Block */}
-      {priorityItems.length > 0 && (
-        <div className="compact-priority-block">
-          <div className="priority-header-tag">Antecedentes Prioritarios para tu Perfil</div>
-          <ul className="priority-minimal-list">
-            {priorityItems.map((item) => (
-              <li key={`prio-${item.id}`} className={checked[item.id] ? "is-done" : ""}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(checked[item.id])}
-                    onChange={() => toggleCheck(item.id)}
-                  />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <span className="prio-reason"> — {item.priorityReason}</span>
-                  </div>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Clean Full List */}
       <div className="minimal-checklist-group">
         <h4 className="group-title">Antecedentes Generales y Laborales</h4>

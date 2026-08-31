@@ -42,8 +42,8 @@ export default function AdminPanel({ evaluations, profile }) {
 
   const profiles = [
     profile,
-    { id: "template-sales", email: "ejecutivo@scoreleads.cl", role: "ejecutivo" },
-    { id: "template-user", email: "usuario@scoreleads.cl", role: "usuario" },
+    { id: "template-sales", email: "ejecutivo@RutaHogar.cl", role: "ejecutivo" },
+    { id: "template-user", email: "usuario@RutaHogar.cl", role: "usuario" },
   ].filter(Boolean);
 
   return (

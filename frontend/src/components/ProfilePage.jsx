@@ -293,7 +293,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
       {projectFit ? (
         <>
-          <h4 style={{ marginTop: "1rem" }}>Compatibilidad con objetivo</h4>
+          <h4 className="evaluation-detail-heading">Compatibilidad con objetivo</h4>
           <dl className="detail-grid">
             <div>
               <dt>Clasificación</dt>
@@ -321,7 +321,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
       {commercialPriority ? (
         <>
-          <h4 style={{ marginTop: "1rem" }}>Prioridad comercial</h4>
+          <h4 className="evaluation-detail-heading">Prioridad comercial</h4>
           <dl className="detail-grid">
             <div>
               <dt>Acción sugerida</dt>
@@ -343,7 +343,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
       {componentScores ? (
         <>
-          <h4 style={{ marginTop: "1rem" }}>Desglose de componentes</h4>
+          <h4 className="evaluation-detail-heading">Desglose de componentes</h4>
           <dl className="detail-grid">
             {Object.entries(componentScoreLabels).map(([key, label]) =>
               componentScores[key] !== undefined ? (
@@ -359,7 +359,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
       {financialIndicators ? (
         <>
-          <h4 style={{ marginTop: "1rem" }}>Indicadores financieros</h4>
+          <h4 className="evaluation-detail-heading">Indicadores financieros</h4>
           <dl className="detail-grid">
             <div>
               <dt>Dividendo / ingreso</dt>
@@ -411,6 +411,13 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
     () => Object.keys(savedOnboarding).some((key) => form[key] !== savedOnboarding[key]),
     [form, savedOnboarding],
   );
+
+  const userInitials = useMemo(() => {
+    const name = profile?.full_name || "";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }, [profile?.full_name]);
 
   useEffect(() => {
     setForm(savedOnboarding);
@@ -565,15 +572,30 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
 
   return (
     <section className="section-block profile-page">
-      <div className="section-heading">
-        <span className="eyebrow">Mi perfil</span>
-        <h1>Datos y actividad</h1>
-        <p>Administra tus respuestas preliminares y revisa el historial de scorings guardados.</p>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Mi perfil</span>
+          <h1>Datos y actividad</h1>
+          <p>Administra tus respuestas preliminares y revisa el historial de scorings guardados.</p>
+        </div>
       </div>
 
       <div className="profile-grid">
         <section className="profile-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <div className="profile-avatar">{userInitials}</div>
+          <div className="profile-stats">
+            <div className="profile-stat">
+              <div className="profile-stat__num">{evaluations.length}</div>
+              <div className="profile-stat__label">Evaluaciones</div>
+            </div>
+            <div className="profile-stat">
+              <div className="profile-stat__num">
+                {evaluations.length > 0 ? formatScore(evaluations[evaluations.length - 1]?.result?.score, "—") : "—"}
+              </div>
+              <div className="profile-stat__label">Último score</div>
+            </div>
+          </div>
+          <div className="profile-card-header-row" style={{ marginTop: "var(--rh-space-4)" }}>
             <strong>Datos del usuario</strong>
             {!contactEditing && (
               <button type="button" className="secondary-button compact-button" onClick={openContactEdit}>
@@ -649,7 +671,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
               </div>
             </dl>
           )}
-          {contactSuccess && <div className="success-message" style={{ marginTop: "0.75rem" }}>{contactSuccess}</div>}
+          {contactSuccess && <div className="success-message" style={{ marginTop: 12 }}>{contactSuccess}</div>}
         </section>
 
         <section className="profile-card">
@@ -772,7 +794,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                   <dd>{booleanText(savedOnboarding.tiene_propiedad_vista)}</dd>
                 </div>
               </dl>
-              {success && <div className="success-message" style={{ marginTop: "0.75rem" }}>{success}</div>}
+              {success && <div className="success-message" style={{ marginTop: 12 }}>{success}</div>}
             </>
           )}
         </section>

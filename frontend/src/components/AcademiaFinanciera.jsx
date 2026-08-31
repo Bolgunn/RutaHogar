@@ -669,33 +669,8 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
   };
 
   return (
-    <div>
-      {/* INTRODUCCIÓN */}
-
-      <div className="academy-intro">
-        <div>
-          <span className="eyebrow">Educación financiera</span>
-
-          <h2>Aprende antes de tomar una decisión</h2>
-
-          <p>
-            Comprende los conceptos financieros y habitacionales más
-            importantes para evaluar una compra de vivienda en Chile.
-          </p>
-        </div>
-
-        <div className="academy-disclaimer">
-          <i className="ti ti-info-circle" aria-hidden="true" />
-
-          <p>
-            Este contenido tiene fines educativos. No constituye una
-            aprobación de crédito, asesoría financiera ni confirmación de
-            elegibilidad para un subsidio.
-          </p>
-        </div>
-      </div>
-
-      {/* BÚSQUEDA */}
+    <div className="conceptos-tab">
+      {/* BÚSQUEDA + DISCLAIMER EN UNA FILA */}
 
       <div className="academy-toolbar academy-toolbar-simple">
         <div className="academy-search academy-search-wide">
@@ -712,55 +687,77 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
 
         {isSearching && (
           <span className="academy-search-count">
-            {plural(filteredArticles.length, "resultado", "resultados")} para “
-            {query.trim()}”
+            {plural(filteredArticles.length, "resultado", "resultados")} para "
+            {query.trim()}"
           </span>
+        )}
+
+        {!isSearching && (
+          <div className="academy-disclaimer academy-disclaimer--inline">
+            <i className="ti ti-info-circle" aria-hidden="true" />
+            <p>
+              Contenido educativo. No constituye aprobación de crédito ni
+              asesoría financiera.
+            </p>
+          </div>
         )}
       </div>
 
       {showDirectory ? (
         <>
-          {/* CÁPSULAS DESTACADAS */}
+          {/* CÁPSULAS DESTACADAS — CARRUSEL */}
 
-          <h3 className="academy-directory-heading">
-            Cápsulas rápidas
-          </h3>
+          <div className="academy-capsules-section">
+            <div className="academy-capsules-header">
+              <div>
+                <h3 className="academy-directory-heading">
+                  <i className="ti ti-player-play" aria-hidden="true" />
+                  Cápsulas rápidas
+                </h3>
+                <p className="academy-directory-sub">
+                  Ideas clave en 2 o 3 minutos, antes de entrar en detalle.
+                </p>
+              </div>
+            </div>
 
-          <p className="academy-directory-sub">
-            Ideas clave en 2 o 3 minutos, antes de entrar en detalle.
-          </p>
-
-          <CapsuleCarousel>
-            {ACADEMY_CAPSULES.map((capsule) => (
-              <CapsuleCard
-                key={capsule.id}
-                capsule={capsule}
-                variant="strip"
-                onOpen={onOpenCapsule}
-              />
-            ))}
-          </CapsuleCarousel>
+            <CapsuleCarousel>
+              {ACADEMY_CAPSULES.map((capsule) => (
+                <CapsuleCard
+                  key={capsule.id}
+                  capsule={capsule}
+                  variant="strip"
+                  onOpen={onOpenCapsule}
+                />
+              ))}
+            </CapsuleCarousel>
+          </div>
 
           {/* LA RUTA: temas en el orden en que conviene aprenderlos */}
 
-          <h3 className="academy-directory-heading academy-directory-heading--route">
-            Tu ruta financiera
-          </h3>
+          <div className="academy-route-section">
+            <div className="academy-route-header">
+              <div>
+                <h3 className="academy-directory-heading academy-directory-heading--route">
+                  <i className="ti ti-route" aria-hidden="true" />
+                  Tu ruta financiera
+                </h3>
+                <p className="academy-directory-sub">
+                  10 paradas, del crédito a la compra. Elige por dónde partir.
+                </p>
+              </div>
+            </div>
 
-          <p className="academy-directory-sub">
-            10 paradas, del crédito a la compra. Elige por dónde partir.
-          </p>
-
-          <ol className="route-path">
-            {ACADEMY_TOPICS.map((topic, i) => (
-              <RouteStop
-                key={topic.id}
-                topic={topic}
-                index={i + 1}
-                onOpen={setActiveTopic}
-              />
-            ))}
-          </ol>
+            <ol className="route-path">
+              {ACADEMY_TOPICS.map((topic, i) => (
+                <RouteStop
+                  key={topic.id}
+                  topic={topic}
+                  index={i + 1}
+                  onOpen={setActiveTopic}
+                />
+              ))}
+            </ol>
+          </div>
         </>
       ) : (
         <>
@@ -777,15 +774,16 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
             </button>
           )}
 
-          {!isSearching && activeTopicMeta && (
-            <div className="academy-section-heading academy-topic-heading">
-              <TopicIcon topicId={activeTopicMeta.id} />
+          {/* ENCABEZADO DEL TEMA */}
 
-              <div>
+          {!isSearching && activeTopicMeta && (
+            <div className="academy-topic-hero">
+              <TopicIcon topicId={activeTopicMeta.id} size="lg" />
+
+              <div className="academy-topic-hero-text">
                 <h2 style={{ color: activeTopicMeta.accent }}>
                   {activeTopicMeta.label}
                 </h2>
-
                 <p>{activeTopicMeta.description}</p>
               </div>
             </div>
@@ -812,17 +810,81 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
             </section>
           )}
 
-          {/* ARTÍCULOS */}
+          {/* ARTÍCULOS — DISEÑO CREATIVO */}
 
           {filteredArticles.length ? (
-            <div className="academy-grid">
-              {filteredArticles.map((article) => (
-                <ArticleCard
-                  key={article.id}
-                  article={article}
-                  onOpen={onOpenArticle}
-                />
-              ))}
+            <div className="academy-articles-section">
+              <h3 className="academy-directory-heading">
+                <i className="ti ti-books" aria-hidden="true" />
+                {isSearching
+                  ? `Resultados para "${query.trim()}"`
+                  : `Artículos de ${activeTopicMeta?.label}`}
+              </h3>
+
+              <div className="academy-articles-layout">
+                {/* PRIMER ARTÍCULO: DESTACADO */}
+                {filteredArticles[0] && (
+                  <button
+                    type="button"
+                    className="academy-article-featured"
+                    style={{
+                      "--card-accent":
+                        ACADEMY_TOPICS.find(
+                          (t) => t.id === filteredArticles[0].topic
+                        )?.accent,
+                    }}
+                    onClick={() => onOpenArticle(filteredArticles[0].id)}
+                  >
+                    <div className="academy-article-featured-badge">
+                      <i className="ti ti-star" aria-hidden="true" />
+                      Destacado
+                    </div>
+
+                    <TopicIcon
+                      topicId={filteredArticles[0].topic}
+                      size="md"
+                    />
+
+                    <h4>{filteredArticles[0].title}</h4>
+
+                    <p>{filteredArticles[0].summary}</p>
+
+                    <div className="academy-article-featured-meta">
+                      <span className="academy-meta-pill">
+                        <i className="ti ti-clock" aria-hidden="true" />
+                        {filteredArticles[0].minutes} min
+                      </span>
+
+                      <span className="academy-level-chip">
+                        {filteredArticles[0].level}
+                      </span>
+
+                      {filteredArticles[0].sources?.length > 0 && (
+                        <span className="academy-meta-pill academy-meta-pill--soft">
+                          <i className="ti ti-shield-check" aria-hidden="true" />
+                          {filteredArticles[0].sources.length} fuentes
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="academy-article-featured-cta">
+                      Leer artículo
+                      <i className="ti ti-arrow-right" aria-hidden="true" />
+                    </span>
+                  </button>
+                )}
+
+                {/* RESTO: GRILLA */}
+                <div className="academy-articles-grid">
+                  {filteredArticles.slice(1).map((article) => (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      onOpen={onOpenArticle}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="empty-state">
@@ -1272,19 +1334,14 @@ const TABS = [
   { id: "casos", label: "Casos prácticos", icon: "ti-list-details" },
 ];
 
-
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
-
-export default function AcademiaFinanciera({
-  evaluation,
-  onStartEvaluation,
-  onRetryExplanation,
-}) {
+export default function AcademiaFinanciera({ evaluation, onStartEvaluation, initialArticleId, onRetryExplanation }) {
   const [activeTab, setActiveTab] = useState("conceptos");
-  const [openArticleId, setOpenArticleId] = useState(null);
+  const [openArticleId, setOpenArticleId] = useState(initialArticleId || null);
   const [openCapsuleId, setOpenCapsuleId] = useState(null);
+
+  useEffect(() => {
+    if (initialArticleId) setOpenArticleId(initialArticleId);
+  }, [initialArticleId]);
 
   const openArticle = useCallback((id) => setOpenArticleId(id), []);
   const openCapsule = useCallback((id) => setOpenCapsuleId(id), []);

@@ -112,7 +112,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
             <li key={item} className="signup-offer-benefit-item">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                 <circle cx="9" cy="9" r="9" fill="rgba(36,99,84,0.12)" />
-                <polyline points="5 9 7.5 11.5 13 6.5" stroke="#246354" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="5 9 7.5 11.5 13 6.5" stroke="#2D8A4E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               {item}
             </li>

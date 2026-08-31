@@ -104,7 +104,7 @@ Every constant carries provenance. Rows are split by **kind**, because market va
 | `PIE_RATIO_ASISTIDO` | `0.10` | [FOGAES — requisitos](https://fogaes.cl/sitio/requisitos/): 90% LTV, primera vivienda, tope UF 4.500. Bill approved ago-2026 raises the cap to UF 6.000, +30.000 cupos, validity extended to 31-may-2028 | 2026-08-16 | On legal change |
 | `VALOR_UF_CLP` | repo: `40695` · actual 2026-08-16: `40854` | SII / Banco Central | 2026-08-16 | See §3.3 |
 
-### 3.2 ScoreLeads policy (changes only by team decision)
+### 3.2 RutaHogar policy (changes only by team decision)
 
 | Constant | v1 value | Basis | Consulted | Review |
 | :------- | :------- | :---- | :-------- | :----- |
@@ -112,7 +112,7 @@ Every constant carries provenance. Rows are split by **kind**, because market va
 | `RATIO_CARGA_TOTAL_MAX` | `0.45` | [CMF Educa](https://www.cmfchile.cl/educa/621/w3-article-27502.html) + `blockers.py:106` (`carga_total_alta`) | 2026-08-16 | Only with the blocker |
 | `RATIO_DIVIDENDO_SALUDABLE` | `0.25` | CMF Educa; BancoEstado/Enlace Inmobiliario; Scotiabank. **Copy only — never used in calculation** | 2026-08-16 | — |
 | `PLAZO_REFERENCIA_ANIOS` | `30` | Most commonly offered term (Bci, Scotiabank, BancoEstado 8–30). Overridable by a declared `plazo_credito_hipotecario` | 2026-08-16 | — |
-| `EDAD_MAX_FIN_CREDITO` | `70` | ScoreLeads policy: `blockers.py:173` + [[UserStories/HU29-comparador-costo-credito\|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
+| `EDAD_MAX_FIN_CREDITO` | `70` | RutaHogar policy: `blockers.py:173` + [[UserStories/HU29-comparador-costo-credito\|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
 | `PLAZO_MINIMO_VIABLE_ANIOS` | `5` | Below this the quote is not meaningful → `requires_info` | 2026-08-16 | — |
 
 ### 3.3 Canonical unit: UF
@@ -136,7 +136,7 @@ A capacity ceiling built at 25% would declare leads unable to afford projects th
 | :--- | :---------- |
 | ≤ 25% | Holgado |
 | 25–30% | Viable pero exigente |
-| > 30% | Fuera de política ScoreLeads |
+| > 30% | Fuera de política RutaHogar |
 | deuda + dividendo > 45% | No avanzar sin revisión |
 
 ---

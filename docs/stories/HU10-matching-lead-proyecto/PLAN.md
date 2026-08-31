@@ -1,6 +1,6 @@
 # PLAN — HU 10: Matching lead-proyecto para ejecutivos comerciales
 
-- **Story:** `Wiki ScoreLeads/UserStories/HU10-matching-lead-proyecto.md` · **Actor:** Ejecutivo comercial
+- **Story:** `Wiki RutaHogar/UserStories/HU10-matching-lead-proyecto.md` · **Actor:** Ejecutivo comercial
 - **Status:** ⚠️ Parcial · Sprint 1 · 5 SP · **Depends on:** HU 7 (`feature/sprint1/HU7`, PR #69, **open**), [CATALOGO-UNICO](../CATALOGO-UNICO/PLAN.md) (**not started**) and **HU 8 (PR #80, merged)** for the FOGAES constants · **Required by:** —
 - **Branch:** `feature/sprint1/HU10`, off `feature/catalogo-unico-simulacion`
 

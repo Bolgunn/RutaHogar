@@ -182,6 +182,67 @@ function ComparisonViewToggle({ value, onChange }) {
   );
 }
 
+function AlternativesCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  const updateArrows = () => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`simulation-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Anterior"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="simulation-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Siguiente"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 function ComparisonBars({ metrics, currentName, alternativeName }) {
   return (
     <div className="comparison-bars" aria-label="Visualización comparativa de escenarios">
@@ -546,15 +607,18 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
 
   return (
     <section className="section-block simulation-page">
-      <div className="section-heading">
-        <span className="eyebrow">Simulación</span>
-        <h1>Compatibilidad y alternativas</h1>
-        <p>
-          Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última preevaluación.
-        </p>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Simulación</span>
+          <h1>Compatibilidad y alternativas</h1>
+          <p>
+            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última preevaluación.
+          </p>
+        </div>
       </div>
 
       <div className="simulation-disclaimer">
+        <i className="ti ti-info-circle"></i>
         Esta simulación es referencial y se basa en datos declarados. No corresponde a aprobación bancaria, preaprobación, tasación ni cotización formal.
       </div>
 
@@ -562,11 +626,11 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         <div className="simulator-panel">
           <div className="simulation-panel-heading">
             <span className="eyebrow">Escenario base</span>
-            <h2>Elige qué quieres evaluar</h2>
+            <h2 className="recommendation-section-title"><i className="ti ti-settings"></i> Elige qué quieres evaluar</h2>
           </div>
 
           <div className="simulation-actions">
-            <div className="segmented-control simulation-mode">
+            <div className="regime-segmented-toggle simulation-mode">
               <button className={mode === "project" ? "is-active" : ""} type="button" onClick={() => setMode("project")}>
                 Proyecto referencial
               </button>
@@ -670,7 +734,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         </div>
 
         <div className="simulator-panel simulation-range-panel">
-          <h2>Rango referencial por ahorro</h2>
+          <h2 className="recommendation-section-title"><i className="ti ti-chart-line"></i> Rango referencial por ahorro</h2>
           <p>
             Este rango estima valores de vivienda según tu ahorro disponible. No es el pie requerido del proyecto ni representa financiamiento aprobado.
           </p>
@@ -695,7 +759,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       <div className="simulation-comparison comparison-summary-panel" ref={comparisonRef}>
         <div className="section-heading compact">
           <span className="eyebrow">Comparación</span>
-          <h2>Comparación de escenarios</h2>
+          <h2 className="recommendation-section-title"><i className="ti ti-arrows-left-right"></i> Comparación de escenarios</h2>
           <p>
             {comparison?.current && comparison?.alternative
               ? comparisonInsights.summary
@@ -704,7 +768,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         </div>
 
         {comparison?.error || !currentComparable ? (
-          <div className="warning-box">
+          <div className="warning-note">
+            <i className="ti ti-alert-triangle"></i>
             Primero selecciona un proyecto o ingresa un valor manual para comparar.
           </div>
         ) : null}
@@ -801,11 +866,11 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <div className="result-header">
             <div>
               <span className="eyebrow">Escenario evaluado</span>
-              <h2>{scenario.label}</h2>
-              <p>{scenario.comuna || "Valor ingresado manualmente"} · {scenario.tipo_vivienda || "Tipo no especificado"}</p>
+              <h2 className="tracking-goal-title">{scenario.label}</h2>
+              <p className="tracking-goal-desc">{scenario.comuna || "Valor ingresado manualmente"} · {scenario.tipo_vivienda || "Tipo no especificado"}</p>
               {scenario.project ? (
                 <>
-                  <p>
+                  <p className="tracking-goal-desc">
                     {formatProjectPrice(scenario.project)}
                     {scenario.project.entrega_estimada
                       ? ` · Entrega estimada: ${formatDeliveryMonth(scenario.project.entrega_estimada)}`
@@ -831,7 +896,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           ) : null}
           <p className="simulation-horizon">{scenarioResult.horizonMessage}</p>
 
-          <div className="sim-metrics">
+          <div className="housing-metrics">
             <div className="metric metric-highlight">
               <span>Valor escenario</span>
               <strong>{formatUfClp(scenarioResult.valueUf, scenarioResult.valueClp)}</strong>
@@ -859,7 +924,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           </div>
         </div>
       ) : (
-        <div className="warning-box">
+        <div className="warning-note">
+          <i className="ti ti-alert-triangle"></i>
           {mode === "project"
             ? catalogNotice || "Selecciona un proyecto para calcular el escenario."
             : "Ingresa un valor de vivienda en UF para calcular el escenario manual."}
@@ -869,7 +935,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       <div className="alternatives-block">
         <div className="section-heading compact">
           <span className="eyebrow">Alternativas referenciales</span>
-          <h2>Opciones más accesibles</h2>
+          <h2 className="recommendation-section-title"><i className="ti ti-home-search"></i> Opciones más accesibles</h2>
           <p>
             Ordenadas por compatibilidad, menor brecha, comuna y tipo de vivienda preferidos. El horizonte ajusta mensajes, no cambia el score.
           </p>
@@ -891,12 +957,13 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         ) : null}
 
         {hasProjects ? null : (
-          <div className="warning-box">
+          <div className="warning-note">
+            <i className="ti ti-alert-triangle"></i>
             {catalogNotice}
           </div>
         )}
 
-        <div className="alternative-grid">
+        <AlternativesCarousel>
           {alternatives.map((item) => (
             <article className="alternative-card simulation-alternative" key={item.project.id}>
               <ProjectImagePlaceholder result={item} compact />
@@ -932,7 +999,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               </div>
             </article>
           ))}
-        </div>
+        </AlternativesCarousel>
       </div>
 
       <ConceptHelpCta onNavigate={onNavigate} />

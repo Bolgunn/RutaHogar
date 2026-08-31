@@ -1,8 +1,8 @@
 import { supabase } from "../utils/supabase";
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
-const GOALS_KEY = "scoreleads_improvement_goals";
-const GOAL_PROGRESS_KEY = "scoreleads_goal_progress";
+const GOALS_KEY = "RutaHogar_improvement_goals";
+const GOAL_PROGRESS_KEY = "RutaHogar_goal_progress";
 
 function readLocalGoals() {
   try {

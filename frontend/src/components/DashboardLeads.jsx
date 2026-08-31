@@ -321,7 +321,7 @@ export default function DashboardLeads({ evaluations }) {
       </div>
 
       {/* Contador de resultados */}
-      <p style={{ fontSize: "0.88rem", color: "#526174", marginBottom: "12px" }}>
+      <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
         {filtered.length === evaluations.length
           ? `${evaluations.length} leads en total`
           : `${filtered.length} de ${evaluations.length} leads`}
@@ -441,9 +441,9 @@ export default function DashboardLeads({ evaluations }) {
               {/* Columna Izquierda */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                 {/* Datos del lead */}
-                <div style={{ background: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#334155" }}>Información del Cliente</h3>
-                  <div style={{ display: "grid", gap: "0.6rem", fontSize: "0.95rem", color: "#475569" }}>
+                <div style={{ background: "#FAF8F5", padding: "1.25rem", borderRadius: "12px", border: "1px solid #E8E5DF" }}>
+                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#3D4B5E" }}>Información del Cliente</h3>
+                  <div style={{ display: "grid", gap: "0.6rem", fontSize: "0.95rem", color: "#5A6A7E" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Nombre:</strong> <span style={{ textAlign: "right" }}>{selectedLead.full_name || emptyValue}</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Email:</strong> <span style={{ textAlign: "right" }}>{selectedLead.email || emptyValue}</span></div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Teléfono:</strong> <span style={{ textAlign: "right" }}>{selectedPhone || emptyValue}</span></div>
@@ -458,8 +458,8 @@ export default function DashboardLeads({ evaluations }) {
 
                 {selectedMainBlocker && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Bloqueador principal</h3>
-                    <div style={{ background: "#fff7ed", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #fb923c", color: "#475569", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Bloqueador principal</h3>
+                    <div style={{ background: "#fff7ed", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #C4841D", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       <strong>{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</strong>
                       {selectedMainBlocker.description ? <p style={{ margin: "0.5rem 0" }}>{selectedMainBlocker.description}</p> : null}
                       <span>Severidad: {translateSeverity(selectedMainBlocker.severity)}</span>
@@ -470,10 +470,10 @@ export default function DashboardLeads({ evaluations }) {
                 {/* Indicadores positivos */}
                 {selectedPositiveIndicators.length > 0 && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
                        <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Indicadores positivos
                     </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#475569", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedPositiveIndicators.map((ind, i) => (
                         <li key={i} style={{ marginBottom: "0.25rem" }}>{ind}</li>
                       ))}
@@ -484,10 +484,10 @@ export default function DashboardLeads({ evaluations }) {
                 {/* Riesgos detectados */}
                 {selectedRisks.length > 0 && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
                        <span style={{ color: "#ef4444", fontWeight: "bold" }}>⚠</span> Riesgos detectados
                     </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#475569", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedRisks.map((r, i) => (
                         <li key={i} style={{ marginBottom: "0.25rem" }}>{r}</li>
                       ))}
@@ -500,8 +500,8 @@ export default function DashboardLeads({ evaluations }) {
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                 {selectedProjectFit && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Compatibilidad con objetivo</h3>
-                    <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#475569", fontSize: "0.95rem" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Compatibilidad con objetivo</h3>
+                    <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Clasificación</dt><dd style={{ margin: 0 }}>{selectedProjectFit.classification || selectedProjectFit.status || emptyValue}</dd></div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Score</dt><dd style={{ margin: 0 }}>{formatScore(selectedProjectFit.score) ?? emptyValue}</dd></div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Brecha ingreso</dt><dd style={{ margin: 0 }}>{money(selectedProjectFit.income_gap)}</dd></div>
@@ -512,8 +512,8 @@ export default function DashboardLeads({ evaluations }) {
                 )}
 
                 <div>
-                  <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Señales comerciales declaradas</h3>
-                  <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#475569", fontSize: "0.95rem", background: "#f8fafc", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #93c5fd" }}>
+                  <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Señales comerciales declaradas</h3>
+                  <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #E8EDF5" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
                       <dt>Plazo de compra</dt>
                       <dd style={{ margin: 0, textAlign: "right" }}>{purchaseTermLabel(selectedInput.plazo_compra)}</dd>
@@ -531,8 +531,8 @@ export default function DashboardLeads({ evaluations }) {
 
                 {selectedCommercialPriority && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Prioridad comercial</h3>
-                    <p style={{ margin: 0, color: "#475569", fontSize: "0.95rem", lineHeight: "1.6", background: "#f0fdf4", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Prioridad comercial</h3>
+                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
                       <strong>Acción:</strong> {selectedCommercialPriority.action || selectedCommercialPriority.level || emptyValue}
                       <br />
                       <strong>Motivo:</strong> {selectedCommercialPriority.reason || "Sin motivo registrado."}
@@ -544,8 +544,8 @@ export default function DashboardLeads({ evaluations }) {
 
                 {selectedRecommendations.length > 0 && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Recomendaciones</h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#475569", fontSize: "0.95rem", lineHeight: "1.5" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Recomendaciones</h3>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
                       {selectedRecommendations.map((item, index) => (
                         <li key={`${item}-${index}`}>{item}</li>
                       ))}
@@ -555,8 +555,8 @@ export default function DashboardLeads({ evaluations }) {
 
                 {selectedResult.executive_summary && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Resumen Ejecutivo</h3>
-                    <p style={{ margin: 0, color: "#475569", fontSize: "0.95rem", lineHeight: "1.6", background: "#f8fafc", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #cbd5e1" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Resumen Ejecutivo</h3>
+                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #D1CCC4" }}>
                        {selectedResult.executive_summary}
                     </p>
                   </div>
@@ -564,15 +564,15 @@ export default function DashboardLeads({ evaluations }) {
                 
                 {!selectedCommercialPriority && selectedResult.commercial_guidance && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#334155" }}>Orientación Comercial</h3>
-                    <p style={{ margin: 0, color: "#475569", fontSize: "0.95rem", lineHeight: "1.6", background: "#f0fdf4", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Orientación Comercial</h3>
+                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
                       {selectedResult.commercial_guidance}
                     </p>
                   </div>
                 )}
 
                 <div style={{ marginTop: "auto" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#334155" }}>Acciones Rápidas</h3>
+                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Acciones Rápidas</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <a
                       href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
@@ -647,7 +647,7 @@ export default function DashboardLeads({ evaluations }) {
                                 {Object.entries(item.component_scores).map(([key, value]) => (
                                   <li key={key}>
                                     <span>{key.replace(/_/g, " ")} </span>
-                                    <span style={{ color: value >= 0 ? "var(--color-positive, #16a34a)" : "var(--color-negative, #dc2626)" }}>
+                                    <span style={{ color: value >= 0 ? "var(--color-positive, #2D8A4E)" : "var(--color-negative, #B83232)" }}>
                                       {value >= 0 ? `+${value}` : value}
                                     </span>
                                   </li>
@@ -670,7 +670,7 @@ export default function DashboardLeads({ evaluations }) {
                                 <strong style={{ whiteSpace: "nowrap" }}>
                                   {eventLabels[event.type] || event.type}
                                 </strong>
-                                <span style={{ color: "#475569" }}>{renderEventDetail(event)}</span>
+                                <span style={{ color: "#5A6A7E" }}>{renderEventDetail(event)}</span>
                               </li>
                             ))}
                           </ul>

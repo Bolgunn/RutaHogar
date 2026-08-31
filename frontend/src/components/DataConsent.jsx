@@ -258,7 +258,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
             </div>
           ) : (
             <>
-              <label className="check-row" style={{ marginTop: "12px" }}>
+              <label className="check-row consent-check-row">
                 <input
                   type="checkbox"
                   checked={arcoOpen}
@@ -273,8 +273,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
               {arcoOpen && (
                 <form
                   onSubmit={handleArcoSubmit}
-                  className="arco-form"
-                  style={{ marginTop: "16px" }}
+                  className="arco-form consent-form-margin"
                 >
                   <label>
                     Tipo de solicitud
@@ -346,7 +345,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
               <button className="secondary-button" onClick={onBack}>
                 Volver
               </button>
-              <button disabled={!accepted} onClick={handleAccept}>
+              <button className="consent-accept-btn" disabled={!accepted} onClick={handleAccept}>
                 Aceptar y continuar
               </button>
             </div>

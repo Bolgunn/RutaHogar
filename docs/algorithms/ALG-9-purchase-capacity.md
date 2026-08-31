@@ -131,7 +131,7 @@ a function.
 | :-------- | :----- | :----- |
 | always | `deuda_total = deuda_mensual + deuda_mensual_complementario` | spike §4.1 |
 | always | `dividendo_maximo_sostenible_clp = max(0, min(RATIO_DIVIDENDO_MAX × ingreso_total, RATIO_CARGA_TOTAL_MAX × ingreso_total − deuda_total))` | spike §4.1 |
-| `RATIO_DIVIDENDO_MAX` | `0.30` | **ScoreLeads policy.** Internal consistency with `blockers.py:95` (`dividendo_exigente` fires *above* 0.30) + Bci published FAQ |
+| `RATIO_DIVIDENDO_MAX` | `0.30` | **RutaHogar policy.** Internal consistency with `blockers.py:95` (`dividendo_exigente` fires *above* 0.30) + Bci published FAQ |
 | `RATIO_CARGA_TOTAL_MAX` | `0.45` | **Regulator.** [CMF Educa](https://www.cmfchile.cl/educa/621/w3-article-27502.html) + `blockers.py:106` (`carga_total_alta`) |
 | `RATIO_DIVIDENDO_SALUDABLE` | `0.25` | **Regulator / bank published criteria.** CMF Educa, BancoEstado, Scotiabank. **UX copy only — never used in calculation** (see the band table below) |
 
@@ -149,7 +149,7 @@ ratio. **Resolution: `0.30` calculates, `0.25` speaks.**
 | :---------------------------------- | :---------- |
 | ≤ 0.25 | Holgado |
 | 0.25 – 0.30 | Viable pero exigente |
-| > 0.30 | Fuera de política ScoreLeads |
+| > 0.30 | Fuera de política RutaHogar |
 | `(deuda + dividendo) / ingreso_total` > 0.45 | No avanzar sin revisión |
 
 ### R2 — Effective term
@@ -159,7 +159,7 @@ ratio. **Resolution: `0.30` calculates, `0.25` speaks.**
 | `plazo_credito_hipotecario` declared | `base = plazo_credito_hipotecario` | `"declarado"` | spike §4.2 |
 | not declared | `base = PLAZO_REFERENCIA_ANIOS` = `30` | `"default"` | **Bank published criteria.** Most commonly offered term (Bci, Scotiabank, BancoEstado 8–30) |
 | `EDAD_MAX_FIN_CREDITO − edad < base` | `base = EDAD_MAX_FIN_CREDITO − edad` | `"capado_por_edad"` | spike §4.2 |
-| `EDAD_MAX_FIN_CREDITO` | `70` | — | **ScoreLeads policy.** `blockers.py:173` + HU 29 E2. More conservative than the market (Scotiabank up to 79 with insurance) — deliberately kept (spike §10.3) |
+| `EDAD_MAX_FIN_CREDITO` | `70` | — | **RutaHogar policy.** `blockers.py:173` + HU 29 E2. More conservative than the market (Scotiabank up to 79 with insurance) — deliberately kept (spike §10.3) |
 | `0 < plazo_efectivo < PLAZO_MINIMO_VIABLE_ANIOS` = `5` | compute normally at that term; set `plazo_bajo_minimo = true` | unchanged | **Developer judgment.** A warning threshold, **not a gate** — see below |
 | `plazo_efectivo <= 0` (edad ≥ `EDAD_MAX_FIN_CREDITO`) | `capacidad_por_renta_uf = 0`, so capacity is `0` and status is `sin_capacidad` | `"capado_por_edad"` | You cannot hold a zero-year mortgage. The pie side is still reported |
 | `edad` absent | term is not capped; `age_term_verified = false` | unchanged | spike §4.2 — degrade data quality, do not block |

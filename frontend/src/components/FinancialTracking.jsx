@@ -9,6 +9,67 @@ import {
   getHousingPropertyPrice,
 } from "../services/housingSavingsPlanService";
 
+function GoalsCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  const updateArrows = () => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`tracking-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="tracking-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Anterior"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="tracking-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="tracking-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Siguiente"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 const planStatusClass = (status) => {
   if (status === "alcanzado") return "status-alcanzado";
   if (status === "en_curso") return "status-en-curso";
@@ -114,43 +175,48 @@ export default function FinancialTracking({
 
   return (
     <section className="section-block tracking-panel">
-      <div className="section-heading">
-        <span className="eyebrow">Plan de Mejora</span>
-        <h1>Mi plan de mejora</h1>
-        <p>Metas accionables para preparar mejor tu situación financiera a partir de tu última preevaluación.</p>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Plan de Mejora</span>
+          <h1>Mi plan de mejora</h1>
+          <p>Metas accionables para preparar mejor tu situación financiera a partir de tu última preevaluación.</p>
+        </div>
       </div>
 
       {successMessage && (
-        <div className="success-message" style={{ marginBottom: "2rem" }}>
+        <div className="success-message">
           {successMessage}
         </div>
       )}
 
-      <div className="tracking-summary">
+      <div className="recommendation-hero-row">
         <div className={`score-badge-wrap ${getScoreBadgeClass(tracking.classification)}`}>
           <span>Score financiero</span>
           <strong>{formatScore(tracking.score, "Sin score")}</strong>
           <small>Clasificación final: {tracking.classification || "Sin clasificación"}</small>
         </div>
-        <div>
-          <p>{tracking.message}</p>
-          {adjustment ? (
-            <div className="score-adjustment-note">
-              <strong>{adjustment.message}</strong>
-              {adjustment.detail ? <p>{adjustment.detail}</p> : null}
-            </div>
-          ) : null}
+
+        <div className="recommendation-hero-explanations">
+          <div className="recommendation-summary">
+            <p>{tracking.message}</p>
+            {adjustment ? (
+              <div className="score-adjustment-note">
+                <strong>{adjustment.message}</strong>
+                {adjustment.detail ? <p>{adjustment.detail}</p> : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {tracking.warning && <div className="warning-note">{tracking.warning}</div>}
+      {tracking.warning && <div className="warning-note"><i className="ti ti-alert-triangle"></i>{tracking.warning}</div>}
 
       {shouldShowHousingPlan && (
         <div className="housing-plan-block">
-          <div className="section-heading compact">
+          <div className="housing-plan-header">
             <span className="eyebrow">Plan de ahorro vivienda</span>
-            <h2>Plan de ahorro para tu vivienda</h2>
-            <p>
+            <h2 className="recommendation-section-title"><i className="ti ti-home-heart"></i> Plan de ahorro para tu vivienda</h2>
+            <p className="housing-plan-desc">
               Tu vivienda de <strong>{formatClp(housingInfo.price)}</strong> requiere un PIE
               mínimo de <strong>{formatClp(housingInfo.pieMinimo)}</strong> (10%) y recomendado
               de <strong>{formatClp(housingInfo.pieRecomendado)}</strong> (20%).
@@ -165,15 +231,17 @@ export default function FinancialTracking({
             </div>
             <div className="housing-pie-toggle">
               <span className="eyebrow">Escenario</span>
-              <div className="btn-group" role="group">
+              <div className="regime-segmented-toggle">
                 <button
-                  className={housingPieType === "minimo" ? "btn-group-selected" : ""}
+                  type="button"
+                  className={housingPieType === "minimo" ? "is-active" : ""}
                   onClick={() => setHousingPieType("minimo")}
                 >
                   PIE mínimo (10%)
                 </button>
                 <button
-                  className={housingPieType === "recomendado" ? "btn-group-selected" : ""}
+                  type="button"
+                  className={housingPieType === "recomendado" ? "is-active" : ""}
                   onClick={() => setHousingPieType("recomendado")}
                 >
                   PIE recomendado (20%)
@@ -211,20 +279,13 @@ export default function FinancialTracking({
 
           {!housingInfo.isViable && (
             <div className="warning-note">
+              <i className="ti ti-alert-triangle"></i>
               {notViableRecommendation?.message ||
                 "Con tu ingreso menos las deudas no alcanzas para cubrir el costo de vida base."}
             </div>
           )}
 
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => onOpenHousingPlan?.(housingPieType)}
-          >
-            Ir al plan detallado
-          </button>
-
-          <div className="tracking-actions">
+          <div className="housing-plan-actions">
             {evaluation?.housing_plan ? (
               <div className="success-message">
                 Plan de ahorro confirmado. Registra tu ahorro mes a mes en el plan detallado.
@@ -233,6 +294,7 @@ export default function FinancialTracking({
               <>
                 <button
                   type="button"
+                  className="secondary-button"
                   disabled={!housingInfo.isViable}
                   onClick={() => onAcceptPlan?.(housingPieType)}
                 >
@@ -246,23 +308,27 @@ export default function FinancialTracking({
                 )}
               </>
             )}
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onOpenHousingPlan?.(housingPieType)}
+            >
+              Ir al plan detallado
+            </button>
           </div>
         </div>
       )}
 
-      <div className="tracking-actions" style={{ marginBottom: "1rem" }}>
+      <div className="tracking-actions">
         <button type="button" className="primary-button" onClick={onOpenMilestoneRegistration}>
           Registrar Avance / Hito Financiero
         </button>
+        {evaluation?.plan_accepted_at ? (
+          <span className="success-inline">Plan activado. Podrás volver a precalificar después de avanzar en tus metas.</span>
+        ) : displayedGoals.length > 0 ? (
+          <button type="button" className="secondary-button" onClick={onAcceptPlan}>Aceptar plan</button>
+        ) : null}
       </div>
-
-      {evaluation?.plan_accepted_at ? (
-        <div className="success-message">Plan activado. Podrás volver a precalificar después de avanzar en tus metas.</div>
-      ) : displayedGoals.length > 0 ? (
-        <div className="tracking-actions">
-          <button type="button" onClick={onAcceptPlan}>Aceptar plan</button>
-        </div>
-      ) : null}
 
       {displayedGoals.length === 0 ? (
         <div className="empty-state">
@@ -270,42 +336,46 @@ export default function FinancialTracking({
           <p>Puedes usar el plan sugerido de tu última preevaluación como guía inicial.</p>
           <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
         </div>
-      ) : null}
-
-      <div className="tracking-goals">
-        {displayedGoals.map((goal) => (
-          <article className="tracking-goal" key={goal.id}>
-            <div>
-              <span className="eyebrow">Meta recomendada</span>
-              <h3>{goal.title}</h3>
-              {goal.description && <p>{goal.description}</p>}
-              {goal.timeline && <strong className="goal-timeline">Plazo sugerido: {goal.timeline}</strong>}
-              <div className="goal-actions">
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  onClick={() => onOpenGoalPlan?.(goal)}
-                >
-                  {goal.title === "Revisar objetivo inmobiliario" ? "Revisar alternativas" : "Ver plan mensual"}
-                </button>
+      ) : (
+        <GoalsCarousel>
+          {displayedGoals.map((goal) => (
+            <article className="tracking-goal" key={goal.id}>
+              <div className="tracking-goal-body">
+                <span className="eyebrow">Meta recomendada</span>
+                <h3 className="tracking-goal-title">{goal.title}</h3>
+                {goal.description && <p className="tracking-goal-desc">{goal.description}</p>}
+                {goal.timeline && (
+                  <span className="goal-timeline"><i className="ti ti-clock"></i> Plazo sugerido: {goal.timeline}</span>
+                )}
+                <div className="goal-actions">
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    onClick={() => onOpenGoalPlan?.(goal)}
+                  >
+                    {goal.title === "Revisar objetivo inmobiliario" ? "Revisar alternativas" : "Ver plan mensual"}
+                  </button>
+                </div>
               </div>
-            </div>
-            <label>
-              Estado
-              <select
-                value={goal.status || "pendiente"}
-                onChange={(event) => onGoalStatusChange?.(goal.id, event.target.value)}
-              >
-                {Object.entries(goalStatuses).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-          </article>
-        ))}
+              <div className="tracking-goal-status">
+                <label className="goal-status-label">
+                  Estado
+                  <select
+                    value={goal.status || "pendiente"}
+                    onChange={(event) => onGoalStatusChange?.(goal.id, event.target.value)}
+                  >
+                    {Object.entries(goalStatuses).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </article>
+          ))}
+        </GoalsCarousel>
+      )}
 
-        {tracking.ufNote && <p className="field-help">{tracking.ufNote}</p>}
-      </div>
+      {tracking.ufNote && <p className="field-help tracking-uf-note">{tracking.ufNote}</p>}
     </section>
   );
 }

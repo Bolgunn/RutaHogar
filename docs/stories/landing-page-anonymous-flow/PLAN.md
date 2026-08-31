@@ -28,14 +28,14 @@ Feedback recibido: la plataforma orientada al "Usuario" no explica su propósito
 | Viewport | Mobile-first, escala a desktop |
 | Paleta | `#172033` hero bg, `#246354` acento primario, `#eef3f8` secciones claras, tarjetas blancas |
 | Tipografía | Inter (ya cargada) |
-| Logo | `frontend/public/Logo ScoreLeads.png` en navbar |
+| Logo | `frontend/public/Logo RutaHogar.png` en navbar |
 | Sección EI | Solo tratamiento tipográfico, sin logo |
 
 ### 7 secciones a diseñar
 
 1. **Hero** — fondo oscuro (`#172033`), logo arriba izquierda, "Iniciar sesión" arriba derecha, titular grande, subtítulo, CTA primario "Evalúa tu perfil gratis", ilustración de score/gauge
 2. **Cómo funciona** — fondo claro, flujo horizontal de 3 pasos con íconos
-3. **Por qué ScoreLeads** — grilla de value props (rápido, sin documentos, orientativo, respaldado)
+3. **Por qué RutaHogar** — grilla de value props (rápido, sin documentos, orientativo, respaldado)
 4. **Para quién es** — layout dividido, dirigido al comprador de primera vivienda
 5. **FAQs** — acordeón, ~5 preguntas
 6. **Respaldo EI** — trust badge tipográfico, centrado
