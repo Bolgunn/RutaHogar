@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
-import { matchLeadToProjects } from "../lib/matching/leadProjectMatching";
+import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import {
@@ -348,6 +348,18 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
   const selectedComunaDeclarada =
     selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "";
+
+  // ALG-10 R4 tiene dos ramas de divergencia y sólo emite el booleano. Cuál
+  // disparó se deriva del mismo conjunto que usa la regla: si el proyecto está
+  // fuera de las comunas declaradas es 3a; si no, la reorientación viene de que
+  // su propio objetivo no le cierra (3b). Son dos hallazgos distintos y el
+  // ejecutivo los lee en voz alta frente al cliente, así que no comparten copy.
+  const selectedComunasDeclaradas = selectedLead
+    ? comunasDeclaradas(selectedLead).declaradas
+    : [];
+  const reorientablePorComuna =
+    selectedComunasDeclaradas.length > 0 &&
+    !selectedComunasDeclaradas.includes(selectedProject?.comuna);
 
   const accionesRapidas = selectedLead ? (
     <div className="lead-profile-actions">
@@ -749,8 +761,9 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
                 {selectedMatch.reorientable ? (
                   <p className="lead-profile-note">
-                    Oportunidad reorientable: puede comprar en {selectedProject.comuna}
-                    {selectedComunaDeclarada ? " aunque declaró " + selectedComunaDeclarada : ""}.
+                    {reorientablePorComuna
+                      ? `Oportunidad reorientable: puede comprar en ${selectedProject.comuna}, fuera de ${selectedComunasDeclaradas.join(" y ")}.`
+                      : "Oportunidad reorientable: su objetivo declarado no le cierra, pero este proyecto sí."}
                   </p>
                 ) : null}
 

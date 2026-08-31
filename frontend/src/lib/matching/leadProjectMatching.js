@@ -62,7 +62,11 @@ function penalidadHolgura(capacidadUf, proyecto, peakRatio) {
   return interpolar(capacidadUf, anchors);
 }
 
-function comunasDeclaradas(evaluacion) {
+// Exportada porque el panel necesita el MISMO conjunto para decir por qué un
+// lead es reorientable (R4 tiene dos ramas y cada una se lee distinto). Si el
+// componente lo recalculara por su cuenta, se le escaparía comuna_alternativa
+// y etiquetaría como "fuera de lo declarado" un proyecto que el lead sí pidió.
+export function comunasDeclaradas(evaluacion) {
   const input = evaluacion.input || {};
   const onboarding = evaluacion.onboarding || {};
   const principal = input.comuna_objetivo || onboarding.comuna_interes || null;

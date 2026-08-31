@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { matchLeadToProjects } from "../leadProjectMatching";
+import { comunasDeclaradas, matchLeadToProjects } from "../leadProjectMatching";
 
 const casesUrl = new URL("../../../../../docs/algorithms/ALG-10-cases.json", import.meta.url);
 const { cases } = JSON.parse(readFileSync(fileURLToPath(casesUrl), "utf-8"));
@@ -128,5 +128,47 @@ describe("ALG-10 — bordes que corrompen la lista", () => {
   it("un lead que supera precio_ref no recibe un bloqueador fabricado", () => {
     const { matches } = matchLeadToProjects(evaluacion({ capacidad: 3600 }), [proyecto()]);
     expect(matches[0].bloqueador_principal).toBeNull();
+  });
+});
+
+// El panel deriva de acá cuál de las dos ramas de R4 disparó, para no decirle
+// al ejecutivo "puede comprar en Ñuñoa aunque declaró Ñuñoa".
+describe("comunasDeclaradas — el conjunto que R4 usa para distinguir sus ramas", () => {
+  it("junta la comuna principal y la alternativa", () => {
+    const lead = {
+      input: { comuna_objetivo: "Ñuñoa" },
+      onboarding: { comuna_alternativa: "Macul" },
+    };
+    expect(comunasDeclaradas(lead)).toEqual({
+      principal: "Ñuñoa",
+      declaradas: ["Ñuñoa", "Macul"],
+    });
+  });
+
+  it("cae a la comuna del onboarding cuando el input no trae objetivo", () => {
+    const lead = { input: {}, onboarding: { comuna_interes: "Maipú" } };
+    expect(comunasDeclaradas(lead).declaradas).toEqual(["Maipú"]);
+  });
+
+  it("sin nada declarado devuelve el conjunto vacío, no un null suelto", () => {
+    expect(comunasDeclaradas({ input: {}, onboarding: {} })).toEqual({
+      principal: null,
+      declaradas: [],
+    });
+  });
+
+  // La rama 3b: el lead es reorientable con el proyecto EN su comuna declarada,
+  // porque lo que no le cierra es su objetivo, no su ubicación.
+  it("un reorientable de rama 3b tiene el proyecto dentro de lo declarado", () => {
+    const lead = evaluacion({
+      capacidad: 3000,
+      clasificacion: "Alto",
+      input: { comuna_objetivo: "Ñuñoa" },
+    });
+    lead.result.project_fit = { status: "near" };
+    const { matches } = matchLeadToProjects(lead, [proyecto({ comuna: "Ñuñoa" })]);
+
+    expect(matches[0].reorientable).toBe(true);
+    expect(comunasDeclaradas(lead).declaradas).toContain(matches[0].comuna);
   });
 });

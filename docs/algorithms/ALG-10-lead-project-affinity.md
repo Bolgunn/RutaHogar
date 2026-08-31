@@ -342,6 +342,14 @@ signal, so E4 costs no new computation and no new intake field. `commercial_prio
 Branch 3a reads the **same set** as the penalty, deliberately: a project in a comuna the lead
 explicitly named is not a re-orientation by any reading — they already pointed there.
 
+**Consequence the UI must carry.** `reorientable` is one boolean over two different findings, and they
+do not read alike. Branch 3a is *"they can buy somewhere they did not name"*; branch 3b is *"their own
+objective does not close, this project does"*. A panel that renders one sentence for both writes
+nonsense on 3b whenever the project sits in the lead's declared comuna — literally *"can buy in Ñuñoa
+although they declared Ñuñoa"*. Consumers distinguish the branches by re-testing 3a against
+`comunasDeclaradas()`, which this module **exports for that purpose**; recomputing the set locally is
+not equivalent, because it silently drops `comuna_alternativa`.
+
 **Stated consequence, intended, not a bug.** A lead with no declared comuna cannot trigger branch
 3a; if `property_value` is unresolvable their `project_fit.status` is `"requires_info"` — not
 `"out_of_reach"` — so branch 3b cannot fire either. Such a lead is **never** re-orientable, only

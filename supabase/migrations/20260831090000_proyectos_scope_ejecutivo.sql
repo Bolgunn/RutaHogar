@@ -1,5 +1,5 @@
 -- =============================================================
--- ScoreLeads — El ejecutivo comercial solo ve sus proyectos asignados
+-- RutaHogar — El ejecutivo comercial solo ve sus proyectos asignados
 -- =============================================================
 -- HU 7 dejó al ejecutivo con lectura de TODO el catálogo de su inmobiliaria
 -- ("Proyectos select tenant"). El vínculo real de trabajo ya existía en
