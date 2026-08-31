@@ -39,6 +39,7 @@ discrepen, **gobierna el ALG**. Este spike es el registro de por qué se decidi�
 | 2026-08-31 | HU 10 | §8.1 | Seis claves nuevas en `capacidad_supuestos`; `alcanza_precio_min` en `evidencia`; se registran dos inconsistencias del bloque de ejemplo original |
 | 2026-08-31 | HU 10 | §8.2 · §8.3 | Ruta del módulo: `services/` → `lib/matching/`. Renumeración de historias: HU 13 → HU 10, HU 17 → HU 7 |
 | 2026-08-31 | HU 10 | §8.4 | Se suma HU 8 como dependencia real |
+| 2026-08-31 | HU 10 · build | — | Implementación de `ALG-9` y `ALG-10`: los 13 casos de `ALG-9-cases.json` y los 17 de `ALG-10-cases.json` pasan **sin cambiar ninguna regla**. No hubo enmienda adicional que registrar; las secciones §4–§8 siguen siendo válidas tal como quedaron arriba |
 
 ---
 
