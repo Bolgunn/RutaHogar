@@ -11,8 +11,9 @@ Supabase hosteado y pega los conteos del dry-run en el hilo del PR.
     python backend/scripts/backfill_capacity.py             # dry-run (por defecto)
     python backend/scripts/backfill_capacity.py --apply     # escribe
 
-Necesita SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en el entorno. Usa la API REST
-por urllib para no sumar una dependencia al backend.
+Necesita SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY, en el entorno o en
+backend/.env (la misma convención que GROQ_API_KEY). Usa la API REST por urllib
+para no sumar una dependencia al backend.
 """
 
 import argparse
@@ -49,11 +50,25 @@ class FilaIncomprensible(Exception):
     """La fila no tiene la forma que este script sabe leer. No se escribe nada."""
 
 
+def _desde_env_file(nombre: str) -> str:
+    archivo = Path(__file__).resolve().parents[1] / ".env"
+    if not archivo.exists():
+        return ""
+    for linea in archivo.read_text(encoding="utf-8").splitlines():
+        clave, sep, valor = linea.partition("=")
+        if sep and clave.strip() == nombre:
+            return valor.strip().strip('"').strip("'")
+    return ""
+
+
 def _config():
-    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    url = (os.environ.get("SUPABASE_URL") or _desde_env_file("SUPABASE_URL")).rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or _desde_env_file("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
-        sys.exit("Faltan SUPABASE_URL y/o SUPABASE_SERVICE_ROLE_KEY en el entorno.")
+        sys.exit(
+            "Faltan SUPABASE_URL y/o SUPABASE_SERVICE_ROLE_KEY. Ponlas en el entorno "
+            "o en backend/.env. La service role key salta RLS: no la subas al repo."
+        )
     return url, key
 
 
