@@ -74,6 +74,14 @@ create policy "Proyecto ejecutivos select tenant"
     )
     or (
       public.get_my_role() = 'ejecutivo'
+      -- El gate de tenant va PRIMERO y no es redundante con el predicado de
+      -- abajo. Sin él, la rama del correo lee hacia afuera del tenant: un admin
+      -- de otra inmobiliaria crea una asignación 'pendiente' tecleando un correo
+      -- —no necesita que la cuenta exista— y el dueño de ese correo pasaría a
+      -- leer esa fila, con el proyecto_id de un tenant que no es el suyo.
+      -- HU 7 acotaba por tenant a los dos roles; esta migración sólo debe
+      -- ESTRECHAR lecturas, nunca abrirlas.
+      and public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
       and (
         ejecutivo_id = auth.uid()
         or ejecutivo_email = lower((select u.email from auth.users u where u.id = auth.uid()))
