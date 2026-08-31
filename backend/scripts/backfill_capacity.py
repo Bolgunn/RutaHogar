@@ -55,6 +55,10 @@ class FilaIncomprensible(Exception):
     """La fila no tiene la forma que este script sabe leer. No se escribe nada."""
 
 
+class ErrorDeRed(Exception):
+    """Supabase respondió con un error. Se corta, pero informando lo ya hecho."""
+
+
 def _desde_env_file(nombre: str) -> str:
     archivo = Path(__file__).resolve().parents[1] / ".env"
     if not archivo.exists():
@@ -100,7 +104,7 @@ def _request(method: str, ruta: str, key: str, body=None, extra_headers=None):
             cuerpo = respuesta.read().decode("utf-8")
             return json.loads(cuerpo) if cuerpo else None
     except urllib.error.HTTPError as error:
-        sys.exit(f"{method} {ruta} devolvió {error.code}: {error.read().decode('utf-8')}")
+        raise ErrorDeRed(f"{method} {ruta} devolvió {error.code}: {error.read().decode('utf-8')}")
 
 
 def _leer_pagina(url: str, key: str, desde: int):
@@ -187,6 +191,23 @@ def procesar_fila(financial_data: dict) -> tuple[str, dict | None]:
     return estado, nuevo
 
 
+def _informe(conteos: dict, incomprensibles: list, aplicado: bool, escritas: int) -> None:
+    modo = "APLICADO" if aplicado else "DRY-RUN (nada escrito)"
+    print(f"Backfill de capacidad — {modo}")
+    print(f"  calculados      : {conteos['calculado']}")
+    print(f"  reparados       : {conteos['reparado']}")
+    print(f"  requires_info   : {conteos['requires_info']}")
+    print(f"  ya presentes    : {conteos['ya_presente']}")
+    print(f"  incomprensibles : {len(incomprensibles)}")
+    if aplicado:
+        print(f"  filas escritas  : {escritas}")
+
+    if incomprensibles:
+        print("\nFilas que este script no entiende. No se les escribió nada:")
+        for fila_id, motivo in incomprensibles:
+            print(f"  {fila_id}: {motivo}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Backfill de capacidad de compra (ALG-9).")
     parser.add_argument("--apply", action="store_true", help="Escribe. Sin este flag es dry-run.")
@@ -195,39 +216,40 @@ def main():
     url, key = _config()
     conteos = {"calculado": 0, "reparado": 0, "requires_info": 0, "ya_presente": 0}
     incomprensibles = []
+    escritas = 0
     desde = 0
 
-    while True:
-        filas = _leer_pagina(url, key, desde)
-        if not filas:
-            break
-        for fila in filas:
-            financial_data = fila.get("financial_data")
-            if not isinstance(financial_data, dict):
-                incomprensibles.append((fila["id"], "financial_data vacío o no es un objeto"))
-                continue
-            try:
-                estado, nuevo = procesar_fila(financial_data)
-            except FilaIncomprensible as error:
-                incomprensibles.append((fila["id"], str(error)))
-                continue
-            conteos[estado] += 1
-            if nuevo is not None and args.apply:
-                _escribir(url, key, fila["id"], nuevo)
-        desde += PAGINA
+    try:
+        while True:
+            filas = _leer_pagina(url, key, desde)
+            if not filas:
+                break
+            for fila in filas:
+                financial_data = fila.get("financial_data")
+                if not isinstance(financial_data, dict):
+                    incomprensibles.append((fila["id"], "financial_data vacío o no es un objeto"))
+                    continue
+                try:
+                    estado, nuevo = procesar_fila(financial_data)
+                except FilaIncomprensible as error:
+                    incomprensibles.append((fila["id"], str(error)))
+                    continue
+                conteos[estado] += 1
+                if nuevo is not None and args.apply:
+                    _escribir(url, key, fila["id"], nuevo)
+                    escritas += 1
+            # Avanza por lo efectivamente leído, no por el tamaño pedido: si
+            # PostgREST recorta la página (db-max-rows), sumar PAGINA se saltaría
+            # filas en silencio y el dry-run informaría un total falso.
+            desde += len(filas)
+    except ErrorDeRed as error:
+        # Es idempotente, así que se puede repetir — pero el operador tiene que
+        # ver dónde quedó antes de repetirlo.
+        _informe(conteos, incomprensibles, args.apply, escritas)
+        sys.exit(f"\nInterrumpido: {error}")
 
-    modo = "APLICADO" if args.apply else "DRY-RUN (nada escrito)"
-    print(f"Backfill de capacidad — {modo}")
-    print(f"  calculados      : {conteos['calculado']}")
-    print(f"  reparados       : {conteos['reparado']}")
-    print(f"  requires_info   : {conteos['requires_info']}")
-    print(f"  ya presentes    : {conteos['ya_presente']}")
-    print(f"  incomprensibles : {len(incomprensibles)}")
-
+    _informe(conteos, incomprensibles, args.apply, escritas)
     if incomprensibles:
-        print("\nFilas que este script no entiende. No se les escribió nada:")
-        for fila_id, motivo in incomprensibles:
-            print(f"  {fila_id}: {motivo}")
         sys.exit(1)
 
 

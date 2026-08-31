@@ -152,3 +152,49 @@ def test_la_forma_legada_tambien_es_idempotente():
 def test_falla_fuerte_en_filas_que_no_entiende(fila):
     with pytest.raises(FilaIncomprensible):
         procesar_fila(fila)
+
+
+# El dry-run es la evidencia que el equipo pega en el hilo del PR, así que su
+# conteo tiene que cubrir todas las filas. Con `desde += PAGINA` una página
+# recortada por db-max-rows dejaba filas fuera del recorrido, en silencio.
+def test_la_paginacion_no_salta_filas_cuando_la_pagina_viene_recortada(monkeypatch, capsys):
+    import backfill_capacity as script
+
+    total = 7
+    filas = [{"id": f"row-{i}", "financial_data": _fila()} for i in range(total)]
+    recortada = 3  # el servidor devuelve menos de PAGINA aunque queden filas
+
+    def leer_pagina(_url, _key, desde):
+        return filas[desde : desde + recortada]
+
+    monkeypatch.setattr(script, "_config", lambda: ("https://x", "sb_secret_x"))
+    monkeypatch.setattr(script, "_leer_pagina", leer_pagina)
+    monkeypatch.setattr(sys, "argv", ["backfill_capacity.py"])
+
+    script.main()
+
+    salida = capsys.readouterr().out
+    assert f"calculados      : {total}" in salida
+
+
+def test_un_error_de_red_informa_lo_ya_procesado_antes_de_cortar(monkeypatch, capsys):
+    import backfill_capacity as script
+
+    filas = [{"id": f"row-{i}", "financial_data": _fila()} for i in range(2)]
+    paginas = iter([filas])
+
+    def leer_pagina(_url, _key, _desde):
+        try:
+            return next(paginas)
+        except StopIteration:
+            raise script.ErrorDeRed("GET devolvió 503")
+
+    monkeypatch.setattr(script, "_config", lambda: ("https://x", "sb_secret_x"))
+    monkeypatch.setattr(script, "_leer_pagina", leer_pagina)
+    monkeypatch.setattr(sys, "argv", ["backfill_capacity.py"])
+
+    with pytest.raises(SystemExit):
+        script.main()
+
+    salida = capsys.readouterr().out
+    assert "calculados      : 2" in salida
