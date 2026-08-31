@@ -145,10 +145,11 @@ function getDateThreshold(value) {
   }
 }
 
-export default function DashboardLeads({ evaluations, inmobiliariaId }) {
+export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo }) {
   const [filter, setFilter] = useState(DEFAULT_CLASSIFICATION_FILTER);
   const [projects, setProjects] = useState([]);
   const [projectsError, setProjectsError] = useState("");
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [sortBy, setSortBy] = useState("afinidad");
   const [showDescartados, setShowDescartados] = useState(false);
@@ -176,19 +177,33 @@ export default function DashboardLeads({ evaluations, inmobiliariaId }) {
   const selectedPhone = selectedLead?.phone || selectedLead?.profile?.phone || "";
   const selectedBaseScore = selectedResult.base_score ?? selectedResult.score;
   const selectedFinalScore = selectedResult.adjusted_score ?? selectedResult.score;
+  // Con un proyecto seleccionado, la afinidad ya pondera la clasificación
+  // (ALG-10 R2: Medio -8, Bajo -15, contra un máximo de -60 por holgura).
+  // Filtrar además por "Alto" aplicaría la misma señal dos veces y escondería
+  // justo a los leads que E2 existe para mostrar: los que pueden pagar el
+  // proyecto aunque su clasificación general no sea Alta.
+  const defaultClassificationFilter = selectedProjectId ? "todos" : DEFAULT_CLASSIFICATION_FILTER;
+
   const hasActiveFilters =
-    filter !== DEFAULT_CLASSIFICATION_FILTER ||
+    filter !== defaultClassificationFilter ||
     filterCommune !== "todas" ||
     filterAge !== 0 ||
     filterDate !== "todos" ||
     search !== "";
 
   const clearFilters = () => {
-    setFilter(DEFAULT_CLASSIFICATION_FILTER);
+    setFilter(defaultClassificationFilter);
     setFilterCommune("todas");
     setFilterAge(0);
     setFilterDate("todos");
     setSearch("");
+  };
+
+  // Cambiar de proyecto cambia el contexto, así que la clasificación vuelve al
+  // default de ese contexto. El ejecutivo puede volver a filtrarla a mano.
+  const selectProject = (projectId) => {
+    setSelectedProjectId(projectId);
+    setFilter(projectId ? "todos" : DEFAULT_CLASSIFICATION_FILTER);
   };
 
   useEffect(() => {
@@ -256,11 +271,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId }) {
 
   useEffect(() => {
     let active = true;
-    getAvailableProjects({ inmobiliariaId })
+    setProjectsLoaded(false);
+    getAvailableProjects({ inmobiliariaId, ejecutivo })
       .then((data) => { if (active) setProjects(data); })
-      .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); });
+      .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); })
+      .finally(() => { if (active) setProjectsLoaded(true); });
     return () => { active = false; };
-  }, [inmobiliariaId]);
+  }, [inmobiliariaId, ejecutivo?.id, ejecutivo?.email]);
 
   const selectedProject = useMemo(
     () => projects.find((p) => String(p.id) === selectedProjectId) || null,
@@ -379,10 +396,37 @@ export default function DashboardLeads({ evaluations, inmobiliariaId }) {
         <p>Vista para revisar leads evaluados y priorizar acciones comerciales.</p>
       </div>
 
+      {projectsError && (
+        <p style={{ fontSize: "0.88rem", color: "#B4232A", marginBottom: "12px" }}>{projectsError}</p>
+      )}
+
+      {!projectsError && ejecutivo && projectsLoaded && !projects.length && (
+        <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
+          Todavía no tienes proyectos asignados. Pídele al administrador de tu inmobiliaria que
+          te asigne al menos uno para priorizar leads por proyecto.
+        </p>
+      )}
+
       <div className="toolbar-filters">
+        {/* Búsqueda por nombre/correo */}
         <label style={{ flexBasis: "100%" }}>
+          Buscar por nombre o correo
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Ej: Juan Pérez o juan@correo.cl"
+            style={{ marginTop: "0.5rem" }}
+          />
+        </label>
+
+        <label style={{ flexBasis: "320px" }}>
           Proyecto
-          <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => selectProject(e.target.value)}
+            disabled={Boolean(ejecutivo) && projectsLoaded && !projects.length}
+          >
             <option value="">Sin proyecto — vista general de leads</option>
             {projects.map((p) => (
               <option key={p.id} value={String(p.id)}>
@@ -401,24 +445,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId }) {
             </select>
           </label>
         )}
-      </div>
-
-      {projectsError && (
-        <p style={{ fontSize: "0.88rem", color: "#B4232A", marginBottom: "12px" }}>{projectsError}</p>
-      )}
-
-      <div className="toolbar-filters">
-        {/* Búsqueda por nombre/correo */}
-        <label style={{ flexBasis: "100%" }}>
-          Buscar por nombre o correo
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ej: Juan Pérez o juan@correo.cl"
-            style={{ marginTop: "0.5rem" }}
-          />
-        </label>
 
         <label>
           Clasificación

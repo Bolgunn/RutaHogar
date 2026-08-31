@@ -87,6 +87,21 @@ describe("panel del ejecutivo — con proyecto seleccionado", () => {
     expect(porCapacidad.map((f) => f.lead.id)).toEqual(["sobrecalzado", "holgado", "justo"]);
   });
 
+  it("no descarta leads por su clasificacion: E2 en el panel", () => {
+    // El panel ya no filtra por "Alto" cuando hay proyecto seleccionado, porque
+    // la afinidad pondera la clasificacion (ALG-10 R2). Estos tres alcanzan el
+    // proyecto y los tres tienen que llegar a la lista.
+    const leads = [
+      lead("alto", 3000, { classification: "Alto" }),
+      lead("medio", 3000, { classification: "Medio" }),
+      lead("bajo", 3000, { classification: "Bajo" }),
+    ];
+    const { ranked } = rankLeadsForProject(leads, proyecto);
+
+    expect(ranked.map((f) => f.lead.id).sort()).toEqual(["alto", "bajo", "medio"]);
+    expect(ranked.map((f) => f.lead.id)).toEqual(["alto", "medio", "bajo"]);
+  });
+
   it("es determinista ante empates", () => {
     const leads = [lead("b", 3000), lead("a", 3000)];
     expect(rankLeadsForProject(leads, proyecto).ranked.map((f) => f.lead.id)).toEqual(["a", "b"]);
