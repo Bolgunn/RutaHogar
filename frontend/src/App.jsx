@@ -1692,7 +1692,11 @@ export default function App() {
       ) : page === "academia" && profile.role === roles.user ? (
         <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
-        <DashboardLeads evaluations={evaluations} inmobiliariaId={inmobiliariaId} />
+        <DashboardLeads
+          evaluations={evaluations}
+          inmobiliariaId={inmobiliariaId}
+          ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+        />
       ) : page === "admin" && profile.role === roles.admin ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && profile.role === roles.admin ? (

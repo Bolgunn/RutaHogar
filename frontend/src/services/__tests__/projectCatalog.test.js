@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decideExecutiveBinding,
   derivedTestPassword,
+  filterAssignedTo,
   filterAvailable,
   validateExecutive,
   validateProject,
@@ -219,5 +220,50 @@ describe("derivedTestPassword", () => {
 
   it("tolera entradas vacías", () => {
     expect(derivedTestPassword("")).toBe("000000");
+  });
+});
+
+// El ejecutivo comercial solo accede a sus proyectos asignados.
+describe("filterAssignedTo", () => {
+  const ana = { id: "ana-uuid", email: "ana@ei.cl" };
+  const projects = [
+    { id: "1", ejecutivos: [{ ejecutivo_id: "ana-uuid", email: "ana@ei.cl", estado: "vinculado" }] },
+    { id: "2", ejecutivos: [{ ejecutivo_id: "bruno-uuid", email: "bruno@ei.cl", estado: "vinculado" }] },
+    { id: "3", ejecutivos: [] },
+    { id: "4", ejecutivos: [{ ejecutivo_id: null, email: "ana@ei.cl", estado: "pendiente" }] },
+  ];
+
+  it("deja solo los proyectos donde el ejecutivo está asignado", () => {
+    expect(filterAssignedTo(projects, ana).map((p) => p.id)).toEqual(["1", "4"]);
+  });
+
+  it("acepta el vínculo pendiente: el proyecto es suyo desde la asignación", () => {
+    expect(filterAssignedTo(projects, ana).map((p) => p.id)).toContain("4");
+  });
+
+  it("normaliza mayúsculas y espacios del correo", () => {
+    expect(filterAssignedTo(projects, { email: "  Ana@EI.cl " }).map((p) => p.id)).toEqual(["1", "4"]);
+  });
+
+  // Mismo predicado que la policy: no puede esconder lo que la base autoriza.
+  it("reconoce el vínculo por id aunque el correo de la asignación sea otro", () => {
+    const renombrada = [
+      { id: "5", ejecutivos: [{ ejecutivo_id: "ana-uuid", email: "ana.antigua@ei.cl", estado: "vinculado" }] },
+    ];
+    expect(filterAssignedTo(renombrada, ana).map((p) => p.id)).toEqual(["5"]);
+  });
+
+  it("reconoce el vínculo por correo aunque todavía no haya id", () => {
+    expect(filterAssignedTo(projects, { email: "ana@ei.cl" }).map((p) => p.id)).toEqual(["1", "4"]);
+  });
+
+  it("devuelve el catálogo completo cuando no hay ejecutivo (admin)", () => {
+    expect(filterAssignedTo(projects, null)).toEqual(projects);
+    expect(filterAssignedTo(projects, {})).toEqual(projects);
+    expect(filterAssignedTo(projects)).toEqual(projects);
+  });
+
+  it("devuelve vacío para un ejecutivo sin asignaciones", () => {
+    expect(filterAssignedTo(projects, { id: "carla-uuid", email: "carla@ei.cl" })).toEqual([]);
   });
 });
