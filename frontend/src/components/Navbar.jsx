@@ -23,27 +23,50 @@ const navByRole = {
   ],
   [roles.admin]: [
     { group: "Administración", items: [
-      { id: "home", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> },
-      { id: "admin", label: "Panel Admin", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+      //{ id: "home", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> },
+      { id: "admin", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> },
       { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M10 21v-5h4v5"/></svg> },
       { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
     ]},
   ],
 };
 
+const sidebarSupportByRole = {
+  [roles.user]: {
+    title: "Acompanamiento",
+    description: "Revisa la Academia o contacta a tu ejecutivo para resolver dudas del proceso.",
+    actionLabel: "Ir a Academia",
+    actionTarget: "academia",
+  },
+  [roles.sales]: {
+    title: "Gestión comercial",
+    description: "Entra a leads para revisar prioridad, contexto y próximos seguimientos.",
+    actionLabel: "Abrir leads",
+    actionTarget: "leads",
+  },
+  [roles.admin]: {
+    title: "Operación interna",
+    description: "Coordina catálogo, cuentas y seguimiento desde una navegación más clara y consistente.",
+    actionLabel: "Abrir panel",
+    actionTarget: "admin",
+  },
+};
+
 export default function Navbar({ profile, page, currentScore, onNavigate, onLogout }) {
   const role = profile?.role || roles.user;
   const groups = navByRole[role] || navByRole[roles.user];
+  const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[roles.user];
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Usuario";
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email = profile?.email || "";
+  const accountTarget = role === roles.user ? "profile" : role === roles.admin ? "home" : "leads";
 
   const handleNavigate = (id) => {
     onNavigate(id);
   };
 
   return (
-    <aside className="sidebar" role="navigation" aria-label="Navegación principal">
+    <aside className={`sidebar ${role === roles.admin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
       <a className="sidebar-brand" href="/" onClick={(e) => { e.preventDefault(); handleNavigate("landing"); }}>
         <span className="sidebar-brand__pill">
           <img className="sidebar-brand__logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
@@ -71,14 +94,18 @@ export default function Navbar({ profile, page, currentScore, onNavigate, onLogo
       <div className="sidebar-spacer"></div>
 
       <div className="sidebar-help">
-        <strong><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ¿Dudas?</strong>
-        <p>Revisa la Academia o contacta a tu ejecutivo.</p>
-        <a href="#" onClick={(e) => e.preventDefault()}>Contactar <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        <strong><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> {supportCard.title}</strong>
+        <p>{supportCard.description}</p>
+        <button type="button" className="sidebar-link-button" onClick={() => handleNavigate(supportCard.actionTarget)}>
+          {supportCard.actionLabel}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
       </div>
 
-      <button className="sidebar-user" type="button" onClick={() => handleNavigate("profile")}>
+      <button className="sidebar-user" type="button" onClick={() => handleNavigate(accountTarget)}>
         <span className="avatar">{initials}</span>
         <span className="sidebar-user__meta">
+          <span className="sidebar-user__role">{roleLabels[role] || "Cuenta"}</span>
           <strong>{displayName}</strong>
           <span>{email}</span>
         </span>

@@ -8,15 +8,28 @@ import {
   getScoreBadgeClassByScore,
   translateSeverity,
 } from "../utils/helpers";
- 
-function formatFecha(created_at) {
-  if (!created_at) return "-";
-  const d = new Date(created_at);
-  if (isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("es-CL", {
+
+function formatFecha(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("es-CL", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  });
+}
+
+function formatFechaHora(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("es-CL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -39,41 +52,41 @@ function formatEventMoney(value) {
 }
 
 function renderEventDetail(event) {
-  const d = event.details || {};
+  const details = event.details || {};
   switch (event.type) {
     case "no_viable_shown":
-      return d.message || "Se presentó la condición No viable";
+      return details.message || "Se presentó la condición No viable";
     case "apply_alternative":
-      return `${d.title || d.alternative_id || "Alternativa"} → ${d.result_viable ? "viable" : "no viable"}`;
+      return `${details.title || details.alternative_id || "Alternativa"} -> ${details.result_viable ? "viable" : "no viable"}`;
     case "simulate_success":
-      return d.months ? `Viable ahorrando en ${d.months} meses` : "Escenario simulado viable";
+      return details.months ? `Viable ahorrando en ${details.months} meses` : "Escenario simulado viable";
     case "accept_plan":
-      return `Meta ${formatEventMoney(d.monthly_target)} / ${d.months ?? "-"} meses`;
+      return `Meta ${formatEventMoney(details.monthly_target)} / ${details.months ?? "-"} meses`;
     case "register_savings":
-      return `${formatEventMoney(d.total_registered) || "$0"} acumulado (${d.progress_percent ?? 0}%)`;
+      return `${formatEventMoney(details.total_registered) || "$0"} acumulado (${details.progress_percent ?? 0}%)`;
     default:
       return "";
   }
 }
 
-function formatEventAt(at) {
-  const d = new Date(at);
-  if (isNaN(d.getTime())) return "";
-  const fecha = d.toLocaleDateString("es-CL");
-  const hora = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function formatEventAt(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const fecha = date.toLocaleDateString("es-CL");
+  const hora = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   return `${fecha} ${hora}`;
 }
 
 const AGE_RANGES = [
   { label: "Todas las edades", min: 0, max: Infinity },
-  { label: "18 – 25 años", min: 18, max: 25 },
-  { label: "25 – 35 años", min: 25, max: 35 },
-  { label: "35 – 45 años", min: 35, max: 45 },
-  { label: "45 – 55 años", min: 45, max: 55 },
-  { label: "55 – 65 años", min: 55, max: 65 },
+  { label: "18 - 25 años", min: 18, max: 25 },
+  { label: "25 - 35 años", min: 25, max: 35 },
+  { label: "35 - 45 años", min: 35, max: 45 },
+  { label: "45 - 55 años", min: 45, max: 55 },
+  { label: "55 - 65 años", min: 55, max: 65 },
   { label: "65+ años", min: 65, max: Infinity },
 ];
- 
+
 const channelLabels = {
   web: "Web",
   chatbot: "Chatbot",
@@ -88,6 +101,7 @@ const DATE_RANGES = [
   { label: "Último mes", value: "mes" },
   { label: "Último año", value: "anio" },
 ];
+
 const DEFAULT_CLASSIFICATION_FILTER = "Alto";
 const emptyValue = "-";
 const CLP_FORMATTER = new Intl.NumberFormat("es-CL", {
@@ -135,12 +149,42 @@ function purchaseTermLabel(value) {
 function getDateThreshold(value) {
   const now = new Date();
   switch (value) {
-    case "24h":   return new Date(now - 24 * 60 * 60 * 1000);
-    case "semana": return new Date(now - 7 * 24 * 60 * 60 * 1000);
-    case "mes":   return new Date(now - 30 * 24 * 60 * 60 * 1000);
-    case "anio":  return new Date(now - 365 * 24 * 60 * 60 * 1000);
-    default:      return null;
+    case "24h":
+      return new Date(now - 24 * 60 * 60 * 1000);
+    case "semana":
+      return new Date(now - 7 * 24 * 60 * 60 * 1000);
+    case "mes":
+      return new Date(now - 30 * 24 * 60 * 60 * 1000);
+    case "anio":
+      return new Date(now - 365 * 24 * 60 * 60 * 1000);
+    default:
+      return null;
   }
+}
+
+function DataRow({ label, value }) {
+  return (
+    <div className="admin-definition-row">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function ListCard({ title, items, tone = "default" }) {
+  if (!items.length) return null;
+  return (
+    <article className={`admin-panel-card ${tone !== "default" ? `admin-panel-card--${tone}` : ""}`}>
+      <div className="admin-panel-card__header">
+        <h3>{title}</h3>
+      </div>
+      <ul className="admin-bullet-list">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`}>{item}</li>
+        ))}
+      </ul>
+    </article>
+  );
 }
 
 export default function DashboardLeads({ evaluations }) {
@@ -151,6 +195,9 @@ export default function DashboardLeads({ evaluations }) {
   const [search, setSearch] = useState("");
   const [selectedLead, setSelectedLead] = useState(null);
   const [leadHistory, setLeadHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
   const selectedOnboarding = selectedLead?.onboarding || {};
@@ -169,6 +216,13 @@ export default function DashboardLeads({ evaluations }) {
   const selectedPhone = selectedLead?.phone || selectedLead?.profile?.phone || "";
   const selectedBaseScore = selectedResult.base_score ?? selectedResult.score;
   const selectedFinalScore = selectedResult.adjusted_score ?? selectedResult.score;
+  const selectedLeadName = selectedLead?.full_name?.split(" ")[0] || "Cliente";
+  const selectedEmailHref = selectedLead
+    ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLeadName},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`
+    : "#";
+  const selectedWhatsappHref = selectedPhone
+    ? `https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLeadName}. Te escribo por RutaHogar.`)}`
+    : "";
   const hasActiveFilters =
     filter !== DEFAULT_CLASSIFICATION_FILTER ||
     filterCommune !== "todas" ||
@@ -185,32 +239,54 @@ export default function DashboardLeads({ evaluations }) {
   };
 
   useEffect(() => {
-    if (!selectedLead) { setLeadHistory([]); return; }
+    if (!selectedLead) {
+      setLeadHistory([]);
+      setHistoryLoading(false);
+      setHistoryError("");
+      return;
+    }
+
     let active = true;
+    setHistoryLoading(true);
+    setHistoryError("");
+
     getScoringHistoryByEvaluation(selectedLead.id)
-      .then((data) => { if (active) setLeadHistory(data); })
-      .catch((err) => console.error(err));
-    return () => { active = false; };
+      .then((data) => {
+        if (!active) return;
+        setLeadHistory(data);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error(err);
+        setHistoryError("No se pudo cargar el historial de auditoría.");
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [selectedLead]);
 
   const allCommunes = useMemo(() => {
-    const set = new Set();
+    const communes = new Set();
     evaluations.forEach((item) => {
       const main = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
       const alt = item.onboarding?.comuna_alternativa;
-      if (main) set.add(main);
-      if (alt) set.add(alt);
+      if (main) communes.add(main);
+      if (alt) communes.add(alt);
     });
-    return [...set].sort();
+    return [...communes].sort();
   }, [evaluations]);
 
   const counts = useMemo(() => {
-    const c = { Alto: 0, Medio: 0, Bajo: 0 };
+    const result = { Alto: 0, Medio: 0, Bajo: 0 };
     evaluations.forEach((item) => {
       const classification = item.result?.classification;
-      if (c[classification] !== undefined) c[classification]++;
+      if (result[classification] !== undefined) result[classification] += 1;
     });
-    return c;
+    return result;
   }, [evaluations]);
 
   const filtered = useMemo(() => {
@@ -247,168 +323,238 @@ export default function DashboardLeads({ evaluations }) {
     });
   }, [evaluations, filter, filterCommune, filterAge, filterDate, search]);
 
+  const latestLead = useMemo(() => {
+    return [...evaluations].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+  }, [evaluations]);
+
+  const latestHighLead = useMemo(() => {
+    return [...evaluations]
+      .filter((item) => item.result?.classification === "Alto")
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+  }, [evaluations]);
+
   return (
-    <section className="section-block">
+    <section className="section-block admin-leads-page">
       <div className="section-heading">
         <span className="eyebrow">Gestión comercial</span>
-        <h1>Dashboard Leads</h1>
-        <p>Vista para revisar leads evaluados y priorizar acciones comerciales.</p>
+        <h1>Leads</h1>
+        <p>
+          Revisa el flujo evaluado, prioriza seguimientos y entra al detalle financiero-comercial con una lectura más clara.
+        </p>
       </div>
 
-      <div className="toolbar-filters">
-        {/* Búsqueda por nombre/correo */}
-        <label style={{ flexBasis: "100%" }}>
-          Buscar por nombre o correo
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ej: Juan Pérez o juan@correo.cl"
-            style={{ marginTop: "0.5rem" }}
-          />
-        </label>
+      <div className="admin-hero admin-hero--compact admin-section-gap">
+        <div className="admin-hero__content">
+          <div className="admin-hero__meta">
+            <span className="admin-tag">Seguimiento activo</span>
+            <span className="admin-hero__subtle">
+              {filtered.length === evaluations.length
+                ? `${evaluations.length} leads visibles`
+                : `${filtered.length} leads filtrados de ${evaluations.length}`}
+            </span>
+          </div>
+          <h2>Una bandeja de trabajo orientada a prioridad, contexto y acción.</h2>
+          <p>
+            Filtra por clasificación, comuna, edad o fecha para que el equipo comercial no pierda foco entre registros de distinto valor.
+          </p>
+        </div>
 
-        <label>
-          Clasificación
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="todos">Todos ({evaluations.length})</option>
-            <option value="Alto">Alto ({counts.Alto})</option>
-            <option value="Medio">Medio ({counts.Medio})</option>
-            <option value="Bajo">Bajo ({counts.Bajo})</option>
-          </select>
-        </label>
+        <div className="admin-hero__aside admin-hero__aside--stacked">
+          <div className="mini-stat">
+            <span>Último lead</span>
+            <strong>{latestLead ? formatFecha(latestLead.created_at) : "Sin datos"}</strong>
+          </div>
+          <div className="mini-stat">
+            <span>Último alto potencial</span>
+            <strong>{latestHighLead ? formatFecha(latestHighLead.created_at) : "Sin datos"}</strong>
+          </div>
+          <div className="mini-stat">
+            <span>Comunas activas</span>
+            <strong>{allCommunes.length}</strong>
+          </div>
+        </div>
+      </div>
 
-        <label>
-          Comuna
-          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}>
-            <option value="todas">Todas las comunas</option>
-            {allCommunes.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </label>
+      <div className="admin-kpi-grid">
+        <article className="admin-kpi-card admin-kpi-card--navy">
+          <span className="admin-kpi-card__label">Total evaluado</span>
+          <strong className="admin-kpi-card__value">{evaluations.length}</strong>
+          <p className="admin-kpi-card__hint">Volumen consolidado de leads listos para revisión.</p>
+        </article>
+        <article className="admin-kpi-card admin-kpi-card--success">
+          <span className="admin-kpi-card__label">Alta prioridad</span>
+          <strong className="admin-kpi-card__value">{counts.Alto}</strong>
+          <p className="admin-kpi-card__hint">Compatibilidad más alta para activación comercial inmediata.</p>
+        </article>
+        <article className="admin-kpi-card admin-kpi-card--gold">
+          <span className="admin-kpi-card__label">Prioridad media</span>
+          <strong className="admin-kpi-card__value">{counts.Medio}</strong>
+          <p className="admin-kpi-card__hint">Casos cercanos que pueden avanzar con orientación adicional.</p>
+        </article>
+        <article className="admin-kpi-card admin-kpi-card--danger">
+          <span className="admin-kpi-card__label">Prioridad baja</span>
+          <strong className="admin-kpi-card__value">{counts.Bajo}</strong>
+          <p className="admin-kpi-card__hint">Leads que requieren más preparación antes del siguiente paso.</p>
+        </article>
+      </div>
 
-        <label>
-          Rango de edad
-          <select value={filterAge} onChange={(e) => setFilterAge(Number(e.target.value))}>
-            {AGE_RANGES.map((range, i) => (
-              <option key={i} value={i}>{range.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Fecha
-          <select value={filterDate} onChange={(e) => setFilterDate(e.target.value)}>
-            {DATE_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </label>
-
-        {/* Botón limpiar filtros — solo visible si hay algún filtro activo */}
-        {hasActiveFilters && (
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              onClick={clearFilters}
-            >
+      <div className="admin-surface admin-section-gap">
+        <div className="admin-surface__header">
+          <div className="admin-surface__title">
+            <h2>Filtros de búsqueda</h2>
+            <p>Ajusta la bandeja para centrar el trabajo diario en los casos más relevantes.</p>
+          </div>
+          {hasActiveFilters && (
+            <button type="button" className="secondary-button compact-button" onClick={clearFilters}>
               Limpiar filtros
             </button>
+          )}
+        </div>
+
+        <div className="toolbar-filters admin-toolbar-filters">
+          <label style={{ flexBasis: "100%" }}>
+            Buscar por nombre o correo
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Ej: Camila Retamal o camila@correo.cl"
+              style={{ marginTop: "0.5rem" }}
+            />
+          </label>
+
+          <label>
+            Clasificación
+            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+              <option value="todos">Todos ({evaluations.length})</option>
+              <option value="Alto">Alto ({counts.Alto})</option>
+              <option value="Medio">Medio ({counts.Medio})</option>
+              <option value="Bajo">Bajo ({counts.Bajo})</option>
+            </select>
+          </label>
+
+          <label>
+            Comuna
+            <select value={filterCommune} onChange={(event) => setFilterCommune(event.target.value)}>
+              <option value="todas">Todas las comunas</option>
+              {allCommunes.map((commune) => (
+                <option key={commune} value={commune}>
+                  {commune}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Rango de edad
+            <select value={filterAge} onChange={(event) => setFilterAge(Number(event.target.value))}>
+              {AGE_RANGES.map((range, index) => (
+                <option key={index} value={index}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Fecha
+            <select value={filterDate} onChange={(event) => setFilterDate(event.target.value)}>
+              {DATE_RANGES.map((range) => (
+                <option key={range.value} value={range.value}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="admin-surface">
+        <div className="admin-surface__header">
+          <div className="admin-surface__title">
+            <h2>Bandeja de leads</h2>
+            <p>
+              {filtered.length === evaluations.length
+                ? `${evaluations.length} leads listos para revisión.`
+                : `${filtered.length} leads coinciden con los filtros aplicados.`}
+            </p>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Contador de resultados */}
-      <p style={{ fontSize: "0.88rem", color: "#5A6A7E", marginBottom: "12px" }}>
-        {filtered.length === evaluations.length
-          ? `${evaluations.length} leads en total`
-          : `${filtered.length} de ${evaluations.length} leads`}
-      </p>
-
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Nombre</th>
-              <th>Comuna</th>
-              <th>Clasificación</th>
-              <th>Riesgos</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((item) => (
-              <tr key={item.id}>
-                <td>{formatFecha(item.created_at)}</td>
-                <td>{item.full_name || item.email || emptyValue}</td>
-                <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
-                <td>
-                  <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
-                    {item.result?.classification || emptyValue}
-                  </span>
-                </td>
-                <td>
-                  {item.result?.risks?.length
-                    ? item.result.risks.slice(0, 2).join(" ")
-                    : "Sin riesgos relevantes"}
-                </td>
-                <td>
-                  <button
-                    className="secondary-button compact-button"
-                    onClick={() => setSelectedLead(item)}
-                  >
-                    Ver detalles
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && (
+        <div className="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <td colSpan="6">
-                  {hasActiveFilters
-                    ? "No hay leads que coincidan con los filtros aplicados."
-                    : "Aún no existen leads para esta clasificación."}
-                </td>
+                <th>Fecha</th>
+                <th>Nombre</th>
+                <th>Comuna</th>
+                <th>Clasificación</th>
+                <th>Riesgos</th>
+                <th></th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((item) => (
+                <tr key={item.id}>
+                  <td>{formatFecha(item.created_at)}</td>
+                  <td>
+                    <strong>{item.full_name || item.email || emptyValue}</strong>
+                    <br />
+                    <span className="admin-table-meta">{item.email || "Sin correo"}</span>
+                  </td>
+                  <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
+                  <td>
+                    <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
+                      {item.result?.classification || emptyValue}
+                    </span>
+                  </td>
+                  <td>
+                    {item.result?.risks?.length
+                      ? item.result.risks.slice(0, 2).join(" · ")
+                      : "Sin riesgos relevantes"}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary-button compact-button"
+                      onClick={() => setSelectedLead(item)}
+                    >
+                      Ver detalle
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length && (
+                <tr>
+                  <td colSpan="6">
+                    <div className="empty-state">
+                      <strong>{hasActiveFilters ? "No hay coincidencias" : "Aún no hay leads en esta vista"}</strong>
+                      <p>
+                        {hasActiveFilters
+                          ? "Ajusta los filtros para ampliar la búsqueda y recuperar más resultados."
+                          : "Cuando existan evaluaciones aparecerán aquí con su prioridad comercial."}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Modal de detalles */}
       {selectedLead && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setSelectedLead(null)}
-        >
-          <div
-            className="lead-detail-card"
-            style={{
-              background: "var(--color-surface, #fff)",
-              borderRadius: "14px",
-              padding: "2rem",
-              maxWidth: "80%",
-              width: "90%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid #eaeaea", paddingBottom: "1rem" }}>
-              <h2 style={{ margin: 0 }}>Perfil del Lead</h2>
-              <button className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>
+        <div className="admin-modal" onClick={() => setSelectedLead(null)}>
+          <div className="admin-modal-card admin-modal-card--xl" onClick={(event) => event.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div className="admin-modal-heading">
+                <span className="eyebrow">Lead seleccionado</span>
+                <h2>{selectedLead.full_name || selectedLead.email || "Lead sin nombre"}</h2>
+                <p>
+                  {selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Comuna sin dato"} · {formatFechaHora(selectedLead.created_at)}
+                </p>
+              </div>
+              <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>
                 Cerrar
               </button>
             </div>
@@ -422,255 +568,205 @@ export default function DashboardLeads({ evaluations }) {
               <div className={getClassificationClass(selectedResult.classification)}>
                 <span>Score final</span>
                 <strong>{formatScore(selectedFinalScore) ?? emptyValue}</strong>
-                {selectedResult.score_adjustment_reason ? <small>Ajustado por bloqueadores</small> : null}
+                <small>{selectedResult.score_adjustment_reason ? "Ajustado por bloqueadores" : "Sin ajuste adicional"}</small>
               </div>
               <div className={getClassificationClass(selectedResult.classification)}>
                 <span>Clasificación final</span>
                 <strong>{selectedResult.classification || emptyValue}</strong>
               </div>
             </div>
-            {selectedAdjustment ? (
-              <div className="score-adjustment-note">
+
+            {selectedAdjustment && (
+              <div className="admin-callout admin-callout--warning admin-section-gap">
                 <strong>{selectedAdjustment.message}</strong>
                 {selectedAdjustment.detail ? <p>{selectedAdjustment.detail}</p> : null}
                 {selectedResult.score_adjustment_reason ? <p>{selectedResult.score_adjustment_reason}</p> : null}
               </div>
-            ) : null}
+            )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
-              {/* Columna Izquierda */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {/* Datos del lead */}
-                <div style={{ background: "#FAF8F5", padding: "1.25rem", borderRadius: "12px", border: "1px solid #E8E5DF" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#3D4B5E" }}>Información del Cliente</h3>
-                  <div style={{ display: "grid", gap: "0.6rem", fontSize: "0.95rem", color: "#5A6A7E" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Nombre:</strong> <span style={{ textAlign: "right" }}>{selectedLead.full_name || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Email:</strong> <span style={{ textAlign: "right" }}>{selectedLead.email || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Teléfono:</strong> <span style={{ textAlign: "right" }}>{selectedPhone || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Edad:</strong> <span style={{ textAlign: "right" }}>{selectedInput.edad != null ? `${selectedInput.edad} años` : emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Comuna principal:</strong> <span style={{ textAlign: "right" }}>{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || emptyValue}</span></div>
-                    {selectedOnboarding.comuna_alternativa && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Comuna alternativa:</strong> <span style={{ textAlign: "right" }}>{selectedOnboarding.comuna_alternativa}</span></div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Fecha evaluación:</strong> <span style={{ textAlign: "right" }}>{formatFecha(selectedLead.created_at)}</span></div>
+            <div className="admin-detail-grid">
+              <div className="admin-stack">
+                <article className="admin-panel-card">
+                  <div className="admin-panel-card__header">
+                    <h3>Información del cliente</h3>
                   </div>
-                </div>
+                  <dl className="admin-definition-list">
+                    <DataRow label="Nombre" value={selectedLead.full_name || emptyValue} />
+                    <DataRow label="Correo" value={selectedLead.email || emptyValue} />
+                    <DataRow label="Teléfono" value={selectedPhone || emptyValue} />
+                    <DataRow label="Edad" value={selectedInput.edad != null ? `${selectedInput.edad} años` : emptyValue} />
+                    <DataRow label="Comuna principal" value={selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || emptyValue} />
+                    {selectedOnboarding.comuna_alternativa ? (
+                      <DataRow label="Comuna alternativa" value={selectedOnboarding.comuna_alternativa} />
+                    ) : null}
+                    <DataRow label="Fecha evaluación" value={formatFechaHora(selectedLead.created_at)} />
+                  </dl>
+                </article>
 
                 {selectedMainBlocker && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Bloqueador principal</h3>
-                    <div style={{ background: "#fff7ed", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #C4841D", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      <strong>{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</strong>
-                      {selectedMainBlocker.description ? <p style={{ margin: "0.5rem 0" }}>{selectedMainBlocker.description}</p> : null}
-                      <span>Severidad: {translateSeverity(selectedMainBlocker.severity)}</span>
+                  <article className="admin-panel-card admin-panel-card--warning">
+                    <div className="admin-panel-card__header">
+                      <h3>Bloqueador principal</h3>
                     </div>
-                  </div>
+                    <p className="admin-panel-card__body-strong">
+                      {selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}
+                    </p>
+                    {selectedMainBlocker.description ? <p>{selectedMainBlocker.description}</p> : null}
+                    <span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span>
+                  </article>
                 )}
 
-                {/* Indicadores positivos */}
-                {selectedPositiveIndicators.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
-                       <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Indicadores positivos
-                    </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedPositiveIndicators.map((ind, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{ind}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Riesgos detectados */}
-                {selectedRisks.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
-                       <span style={{ color: "#ef4444", fontWeight: "bold" }}>⚠</span> Riesgos detectados
-                    </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedRisks.map((r, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{r}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <ListCard title="Indicadores positivos" items={selectedPositiveIndicators} tone="success" />
+                <ListCard title="Riesgos detectados" items={selectedRisks} tone="danger" />
               </div>
 
-              {/* Columna Derecha */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              <div className="admin-stack">
                 {selectedProjectFit && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Compatibilidad con objetivo</h3>
-                    <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Clasificación</dt><dd style={{ margin: 0 }}>{selectedProjectFit.classification || selectedProjectFit.status || emptyValue}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Score</dt><dd style={{ margin: 0 }}>{formatScore(selectedProjectFit.score) ?? emptyValue}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Brecha ingreso</dt><dd style={{ margin: 0 }}>{money(selectedProjectFit.income_gap)}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Brecha pie</dt><dd style={{ margin: 0 }}>{money(selectedProjectFit.down_payment_gap)}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Compatible</dt><dd style={{ margin: 0 }}>{booleanText(selectedProjectFit.compatible)}</dd></div>
+                  <article className="admin-panel-card">
+                    <div className="admin-panel-card__header">
+                      <h3>Compatibilidad con objetivo</h3>
+                    </div>
+                    <dl className="admin-definition-list">
+                      <DataRow label="Clasificación" value={selectedProjectFit.classification || selectedProjectFit.status || emptyValue} />
+                      <DataRow label="Score" value={formatScore(selectedProjectFit.score) ?? emptyValue} />
+                      <DataRow label="Brecha ingreso" value={money(selectedProjectFit.income_gap)} />
+                      <DataRow label="Brecha pie" value={money(selectedProjectFit.down_payment_gap)} />
+                      <DataRow label="Compatible" value={booleanText(selectedProjectFit.compatible)} />
                     </dl>
-                  </div>
+                  </article>
                 )}
 
-                <div>
-                  <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Señales comerciales declaradas</h3>
-                  <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #E8EDF5" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Plazo de compra</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{purchaseTermLabel(selectedInput.plazo_compra)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Propiedad o proyecto visto</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{booleanText(selectedInput.tiene_propiedad_vista)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Pie estimado</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{formatPercent(selectedFinancialIndicators.pie_ratio)}</dd>
-                    </div>
+                <article className="admin-panel-card">
+                  <div className="admin-panel-card__header">
+                    <h3>Señales comerciales declaradas</h3>
+                  </div>
+                  <dl className="admin-definition-list">
+                    <DataRow label="Plazo de compra" value={purchaseTermLabel(selectedInput.plazo_compra)} />
+                    <DataRow label="Proyecto visto" value={booleanText(selectedInput.tiene_propiedad_vista)} />
+                    <DataRow label="Pie estimado" value={formatPercent(selectedFinancialIndicators.pie_ratio)} />
                   </dl>
-                </div>
+                </article>
 
                 {selectedCommercialPriority && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Prioridad comercial</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
-                      <strong>Acción:</strong> {selectedCommercialPriority.action || selectedCommercialPriority.level || emptyValue}
-                      <br />
-                      <strong>Motivo:</strong> {selectedCommercialPriority.reason || "Sin motivo registrado."}
-                      <br />
-                      <strong>Derivación sugerida:</strong> {booleanText(selectedCommercialPriority.send_to_crm)}
-                    </p>
-                  </div>
+                  <article className="admin-panel-card admin-panel-card--success">
+                    <div className="admin-panel-card__header">
+                      <h3>Prioridad comercial</h3>
+                    </div>
+                    <dl className="admin-definition-list">
+                      <DataRow label="Acción" value={selectedCommercialPriority.action || selectedCommercialPriority.level || emptyValue} />
+                      <DataRow label="Motivo" value={selectedCommercialPriority.reason || "Sin motivo registrado."} />
+                      <DataRow label="Derivación sugerida" value={booleanText(selectedCommercialPriority.send_to_crm)} />
+                    </dl>
+                  </article>
                 )}
 
-                {selectedRecommendations.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Recomendaciones</h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedRecommendations.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <ListCard title="Recomendaciones" items={selectedRecommendations} />
 
                 {selectedResult.executive_summary && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Resumen Ejecutivo</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #D1CCC4" }}>
-                       {selectedResult.executive_summary}
-                    </p>
-                  </div>
-                )}
-                
-                {!selectedCommercialPriority && selectedResult.commercial_guidance && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Orientación Comercial</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
-                      {selectedResult.commercial_guidance}
-                    </p>
-                  </div>
+                  <article className="admin-panel-card">
+                    <div className="admin-panel-card__header">
+                      <h3>Resumen ejecutivo</h3>
+                    </div>
+                    <p>{selectedResult.executive_summary}</p>
+                  </article>
                 )}
 
-                <div style={{ marginTop: "auto" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Acciones Rápidas</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                {!selectedCommercialPriority && selectedResult.commercial_guidance && (
+                  <article className="admin-panel-card admin-panel-card--soft">
+                    <div className="admin-panel-card__header">
+                      <h3>Orientación comercial</h3>
+                    </div>
+                    <p>{selectedResult.commercial_guidance}</p>
+                  </article>
+                )}
+
+                <article className="admin-panel-card">
+                  <div className="admin-panel-card__header">
+                    <h3>Acciones rápidas</h3>
+                  </div>
+                  <div className="admin-action-grid">
                     <a
-                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
-                      className="secondary-button compact-button"
-                      style={{ textDecoration: "none", textAlign: "center", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem" }}
+                      href={selectedEmailHref}
+                      className="secondary-button admin-link-button"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                        <polyline points="22,6 12,13 2,6"></polyline>
-                      </svg>
                       Correo
                     </a>
-                    <a
-                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por RutaHogar.`)}`}
-                      style={{ textDecoration: "none", textAlign: "center", backgroundColor: "#25D366", color: "white", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem", fontWeight: "500", fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                      </svg>
-                      WhatsApp
-                    </a>
+                    {selectedPhone ? (
+                      <a
+                        href={selectedWhatsappHref}
+                        className="primary-button admin-link-button"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        WhatsApp
+                      </a>
+                    ) : (
+                      <button type="button" className="secondary-button admin-link-button" disabled>
+                        WhatsApp no disponible
+                      </button>
+                    )}
                   </div>
-                </div>
+                </article>
               </div>
             </div>
 
-            <hr style={{ margin: "1.5rem 0", border: "none", borderTop: "1px solid var(--color-border, #e0e0e0)" }} />
+            <section className="admin-panel-card admin-panel-card--soft admin-history-section">
+              <div className="admin-panel-card__header">
+                <h3>Historial inmutable</h3>
+              </div>
 
-            <section>
-              <h3 style={{ marginBottom: "1rem" }}>Historial inmutable (auditoría)</h3>
-              {leadHistory.length > 0 ? (
-                <div className="history-list" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {historyLoading ? (
+                <div className="admin-table-loading">
+                  <span className="admin-skeleton-line full"></span>
+                  <span className="admin-skeleton-line full"></span>
+                  <span className="admin-skeleton-line medium"></span>
+                </div>
+              ) : historyError ? (
+                <div className="error-message">{historyError}</div>
+              ) : leadHistory.length > 0 ? (
+                <div className="admin-history-list">
                   {leadHistory.map((item) => (
-                    <article
-                      className="history-card"
-                      key={item.id}
-                      style={{
-                        padding: "1rem",
-                        border: "1px solid var(--color-border, #e0e0e0)",
-                        borderRadius: "10px",
-                        background: "var(--color-surface-secondary, #f9f9f9)",
-                      }}
-                    >
-                      <div className="history-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                        <span className="eyebrow">{(() => { const d = new Date(item.created_at); const fecha = d.toLocaleDateString("es-CL"); const hora = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`; return `${fecha} ${hora} UTC`; })()}</span>
+                    <article className="admin-history-card" key={item.id}>
+                      <div className="admin-history-card__head">
+                        <span className="admin-tag admin-tag--soft">{formatFechaHora(item.created_at)} UTC</span>
                         <strong>
                           Score base: {formatScore(item.base_score ?? item.score, "Sin score")} · Score final: {formatScore(item.adjusted_score ?? item.score, "Sin score")} · Clasificación final: {item.classification || emptyValue}
                         </strong>
                       </div>
-                      <dl style={{ margin: 0, display: "grid", gap: "0.3rem", fontSize: "0.9rem" }}>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Comuna objetivo</dt>
-                          <dd style={{ margin: 0 }}>{item.snapshot?.comuna_objetivo || "No declarada"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Canal de origen</dt>
-                          <dd style={{ margin: 0 }}>{channelLabels[item.channel] || item.channel || "web"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Versión del algoritmo</dt>
-                          <dd style={{ margin: 0 }}>{item.algorithm_version || "—"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Desglose por componente</dt>
-                          <dd style={{ margin: 0 }}>
+
+                      <dl className="admin-definition-list">
+                        <DataRow label="Comuna objetivo" value={item.snapshot?.comuna_objetivo || "No declarada"} />
+                        <DataRow label="Canal de origen" value={channelLabels[item.channel] || item.channel || "web"} />
+                        <DataRow label="Versión del algoritmo" value={item.algorithm_version || "-"} />
+                        <div className="admin-definition-row admin-definition-row--stacked">
+                          <dt>Desglose por componente</dt>
+                          <dd>
                             {item.component_scores && Object.keys(item.component_scores).length > 0 ? (
-                              <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
+                              <ul className="admin-bullet-list admin-bullet-list--compact">
                                 {Object.entries(item.component_scores).map(([key, value]) => (
                                   <li key={key}>
-                                    <span>{key.replace(/_/g, " ")} </span>
-                                    <span style={{ color: value >= 0 ? "var(--color-positive, #2D8A4E)" : "var(--color-negative, #B83232)" }}>
-                                      {value >= 0 ? `+${value}` : value}
-                                    </span>
+                                    {key.replace(/_/g, " ")} {value >= 0 ? `+${value}` : value}
                                   </li>
                                 ))}
                               </ul>
-                            ) : "—"}
+                            ) : (
+                              "-"
+                            )}
                           </dd>
                         </div>
                       </dl>
 
                       {(item.events || []).length > 0 && (
-                        <div style={{ marginTop: "0.75rem", borderTop: "1px dashed var(--color-border, #e0e0e0)", paddingTop: "0.75rem" }}>
-                          <span className="eyebrow">Eventos del plan de ahorro</span>
-                          <ul style={{ margin: "0.5rem 0 0", padding: 0, listStyle: "none", display: "grid", gap: "0.45rem", fontSize: "0.9rem" }}>
-                            {(item.events || []).map((event, i) => (
-                              <li key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
-                                <span style={{ whiteSpace: "nowrap", color: "var(--color-muted, #888)", minWidth: "70px" }}>
-                                  {formatEventAt(event.at)}
-                                </span>
-                                <strong style={{ whiteSpace: "nowrap" }}>
-                                  {eventLabels[event.type] || event.type}
-                                </strong>
-                                <span style={{ color: "#5A6A7E" }}>{renderEventDetail(event)}</span>
+                        <div className="admin-history-events">
+                          <span className="admin-tag admin-tag--soft">Eventos del plan</span>
+                          <ul className="admin-event-list">
+                            {(item.events || []).map((event, index) => (
+                              <li key={`${item.id}-${index}`}>
+                                <strong>{eventLabels[event.type] || event.type}</strong>
+                                <span>{formatEventAt(event.at)}</span>
+                                <p>{renderEventDetail(event)}</p>
                               </li>
                             ))}
                           </ul>
@@ -680,8 +776,9 @@ export default function DashboardLeads({ evaluations }) {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state" style={{ color: "var(--color-muted, #888)", fontStyle: "italic" }}>
-                  <p style={{ margin: 0 }}>No hay registros de auditoría para esta evaluación.</p>
+                <div className="empty-state">
+                  <strong>Sin registros de auditoría</strong>
+                  <p>No hay eventos históricos asociados a esta evaluación.</p>
                 </div>
               )}
             </section>

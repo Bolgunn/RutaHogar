@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import AcademiaFinanciera from "./components/AcademiaFinanciera";
+import AdminHome from "./components/AdminHome";
 import AdminPanel from "./components/AdminPanel";
 import AdminProjectCatalog from "./components/AdminProjectCatalog";
 import AnonHeader from "./components/AnonHeader";
@@ -1392,6 +1393,8 @@ export default function App() {
           onAccept={handleDataConsent}
           onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
         />
+      ) : page === "home" && profile.role === roles.admin ? (
+        <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
       ) : page === "home" ? (
         <section className="evaluation-panel">
           <div className="section-heading">

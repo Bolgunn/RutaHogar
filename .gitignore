@@ -10,6 +10,9 @@ supabase/.env
 supabase/.temp/
 Makefile
 
+.agents
+skills-lock.json
+
 # Dependencies
 node_modules/
 frontend/node_modules/
