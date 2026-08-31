@@ -11,7 +11,8 @@ Supabase hosteado y pega los conteos del dry-run en el hilo del PR.
     python backend/scripts/backfill_capacity.py             # dry-run (por defecto)
     python backend/scripts/backfill_capacity.py --apply     # escribe
 
-Necesita SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY, en el entorno o en
+Necesita SUPABASE_URL y una llave que salte RLS -- SUPABASE_SECRET_KEY (esquema
+actual) o SUPABASE_SERVICE_ROLE_KEY (esquema legado) -- en el entorno o en
 backend/.env (la misma convención que GROQ_API_KEY). Usa la API REST por urllib
 para no sumar una dependencia al backend.
 """
@@ -46,6 +47,9 @@ CLAVES_CAPACIDAD = (
 )
 
 
+CAMPOS_ENTRADA = ("ingreso_mensual", "deuda_mensual", "ahorro_disponible")
+
+
 class FilaIncomprensible(Exception):
     """La fila no tiene la forma que este script sabe leer. No se escribe nada."""
 
@@ -63,12 +67,21 @@ def _desde_env_file(nombre: str) -> str:
 
 def _config():
     url = (os.environ.get("SUPABASE_URL") or _desde_env_file("SUPABASE_URL")).rstrip("/")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or _desde_env_file("SUPABASE_SERVICE_ROLE_KEY")
+    # Supabase renombró sus llaves: sb_secret_* reemplaza al JWT service_role.
+    key = ""
+    for nombre in ("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+        key = os.environ.get(nombre) or _desde_env_file(nombre)
+        if key:
+            break
     if not url or not key:
         sys.exit(
-            "Faltan SUPABASE_URL y/o SUPABASE_SERVICE_ROLE_KEY. Ponlas en el entorno "
-            "o en backend/.env. La service role key salta RLS: no la subas al repo."
+            "Faltan SUPABASE_URL y/o la llave secreta (SUPABASE_SECRET_KEY o "
+            "SUPABASE_SERVICE_ROLE_KEY). Ponlas en el entorno o en backend/.env."
         )
+    # La publishable respeta RLS: leería cero filas y el dry-run diría "nada que
+    # hacer", que es peor que fallar.
+    if key.startswith("sb_publishable_"):
+        sys.exit("Esa es la llave publishable: respeta RLS y no vería ninguna evaluación.")
     return url, key
 
 
@@ -106,23 +119,39 @@ def _snapshot(financial_data: dict) -> dict:
         valor = financial_data.get(clave)
         if isinstance(valor, dict) and valor:
             return valor
-    raise FilaIncomprensible("sin input_snapshot ni input")
+    # Forma legada: el input financiero guardado plano, sin result ni snapshots.
+    # Es la mayoría de las filas históricas y ALG-9 R2 ya la contempla: sin edad
+    # ni plazo declarados, el plazo cae al de referencia con age_term_verified
+    # en false. Es la razón por la que ese branch existe.
+    if any(campo in financial_data for campo in CAMPOS_ENTRADA):
+        return financial_data
+    raise FilaIncomprensible("sin input reconocible")
 
 
-def _resultado(financial_data: dict) -> dict:
+def _indicadores(financial_data: dict) -> dict:
     for clave in ("result", "result_snapshot"):
-        valor = financial_data.get(clave)
-        if isinstance(valor, dict):
-            return valor
-    raise FilaIncomprensible("sin result ni result_snapshot")
+        resultado = financial_data.get(clave)
+        if isinstance(resultado, dict):
+            indicadores = resultado.get("financial_indicators", {})
+            if not isinstance(indicadores, dict):
+                raise FilaIncomprensible(f"{clave}.financial_indicators no es un objeto")
+            return indicadores
+    return {}
+
+
+def _destino(nuevo: dict) -> dict:
+    for clave in ("result", "result_snapshot"):
+        if isinstance(nuevo.get(clave), dict):
+            return nuevo[clave]
+    # La fila legada no trae result. Se crea vacío: normalizeEvaluation ya
+    # resuelve score y classification desde las columnas de la tabla, así que
+    # esto no le quita nada — solo le da a la capacidad dónde vivir.
+    nuevo["result"] = {}
+    return nuevo["result"]
 
 
 def procesar_fila(financial_data: dict) -> tuple[str, dict | None]:
-    resultado = _resultado(financial_data)
-    indicadores = resultado.get("financial_indicators")
-    if not isinstance(indicadores, dict):
-        raise FilaIncomprensible("result.financial_indicators no es un objeto")
-
+    indicadores = _indicadores(financial_data)
     if all(clave in indicadores for clave in CLAVES_CAPACIDAD):
         return "ya_presente", None
 
@@ -131,8 +160,7 @@ def procesar_fila(financial_data: dict) -> tuple[str, dict | None]:
     capacidad = calculate_purchase_capacity(entrada, calculados)
 
     nuevo = json.loads(json.dumps(financial_data))
-    destino = nuevo.get("result") if isinstance(nuevo.get("result"), dict) else nuevo["result_snapshot"]
-    destino["financial_indicators"] = {**indicadores, **capacidad}
+    _destino(nuevo)["financial_indicators"] = {**indicadores, **capacidad}
 
     estado = "requires_info" if capacidad["capacidad_status"] == "requires_info" else "calculado"
     return estado, nuevo

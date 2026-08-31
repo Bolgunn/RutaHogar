@@ -64,11 +64,47 @@ def test_no_muta_la_fila_original():
     assert original["result"]["financial_indicators"] == {"ingreso_total": 0}
 
 
+# La mayoria de las filas historicas guardan el input plano, sin result ni
+# snapshots, y sin edad ni plazo. ALG-9 R2 contempla justo ese caso.
+FILA_LEGADA = {
+    "ingreso_mensual": 1500000,
+    "deuda_mensual": 100000,
+    "ahorro_disponible": 12000000,
+    "comuna_objetivo": "Macul",
+    "dividendo_estimado": 600000,
+    "tipo_contrato": "indefinido",
+    "continuidad_laboral": "mas_3_anios",
+    "morosidad_actual": "no",
+    "complemento_renta": False,
+}
+
+
+def test_calcula_la_forma_legada_plana():
+    estado, nuevo = procesar_fila(FILA_LEGADA)
+    indicadores = nuevo["result"]["financial_indicators"]
+
+    assert estado == "calculado"
+    assert indicadores["capacidad_status"] == "ok"
+    assert indicadores["capacidad_supuestos"]["plazo_origen"] == "default"
+    assert indicadores["capacidad_supuestos"]["age_term_verified"] is False
+
+
+def test_la_forma_legada_conserva_su_input_plano():
+    _, nuevo = procesar_fila(FILA_LEGADA)
+    for clave, valor in FILA_LEGADA.items():
+        assert nuevo[clave] == valor
+
+
+def test_la_forma_legada_tambien_es_idempotente():
+    _, nuevo = procesar_fila(FILA_LEGADA)
+    assert procesar_fila(nuevo) == ("ya_presente", None)
+
+
 @pytest.mark.parametrize(
     "fila",
     [
+        {},
         {"result": {"financial_indicators": {}}},
-        {"input_snapshot": ENTRADA},
         {"input_snapshot": ENTRADA, "result": {"financial_indicators": "nada"}},
     ],
 )
