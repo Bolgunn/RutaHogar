@@ -594,11 +594,55 @@ a {
   padding: 34px;
 }
 
+/* La fila entera abre el detalle del lead: el ejecutivo apunta al lead, no a un
+   boton. tabindex + Enter/Espacio la dejan alcanzable por teclado. */
+.lead-row {
+  cursor: pointer;
+}
+
+.lead-row:hover,
+.lead-row:focus-within {
+  background: var(--rh-surface-muted, #F4F1EC);
+}
+
+.lead-row:focus-within {
+  box-shadow: inset 3px 0 0 var(--rh-accent, #C4841D);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* El boton es la accion accesible de la fila; visualmente es solo el nombre. */
+.lead-row-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lead-row-open:hover,
+.lead-row-open:focus-visible {
+  text-decoration: underline;
+}
+
 /* Override for full-width panels */
 .recommendations-panel,
 .tracking-panel,
 .simulation-page,
 .academia-panel,
+.leads-panel,
 .milestone-panel {
   grid-template-columns: 1fr;
   max-width: 1120px;

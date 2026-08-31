@@ -299,16 +299,20 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
         </td>
         <td>
           {e.capacidad_uf === null ? "Sin dato" : `${e.capacidad_uf} UF`}
+          {/* El plazo viaja pegado a la capacidad que produjo, no en otra
+              columna: los leads se rankean bajo supuestos de plazo distintos y
+              el ejecutivo no puede comparar numeros invisiblemente distintos
+              (ALG-9 R2). La restriccion vinculante viene al lado por lo mismo. */}
+          <small style={{ display: "block", color: "#5A6A7E" }}>
+            {e.plazo_anios === null ? emptyValue : `${e.plazo_anios} años`}
+            {e.plazo_origen ? ` · ${e.plazo_origen}` : ""}
+            {e.restriccion_vinculante ? ` · limita ${e.restriccion_vinculante}` : ""}
+          </small>
           {e.capacidad_uf !== null && !e.alcanza_precio_min ? (
             <small style={{ display: "block", color: "#B4232A" }}>No alcanza el precio mínimo</small>
           ) : null}
         </td>
         <td>{e.pie_disponible_uf} UF</td>
-        <td>{e.restriccion_vinculante || emptyValue}</td>
-        <td>
-          {e.plazo_anios === null ? emptyValue : `${e.plazo_anios} años`}
-          <small style={{ display: "block", color: "#5A6A7E" }}>{e.plazo_origen || emptyValue}</small>
-        </td>
         <td>
           {match.bloqueador_principal ? (
             <>
@@ -328,11 +332,29 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     );
   };
 
+  const openLead = (item) => setSelectedLead(item);
+
   const leadRow = ({ lead: item, match }) => (
-    <tr key={item.id}>
-      <td>{formatFecha(item.created_at)}</td>
+    // La fila entera es clickeable por comodidad, pero la accion vive en un
+    // boton real dentro de la celda del lead: un <tr> con onClick se anuncia
+    // como fila, no como algo accionable, y con teclado no existe.
+    <tr key={item.id} className="lead-row" onClick={() => openLead(item)}>
+      {!selectedProject && <td>{formatFecha(item.created_at)}</td>}
       <td>
-        {item.full_name || item.email || emptyValue}
+        <button
+          type="button"
+          className="lead-row-open"
+          onClick={(e) => {
+            e.stopPropagation();
+            openLead(item);
+          }}
+        >
+          {item.full_name || item.email || emptyValue}
+          <span className="visually-hidden"> — ver detalles del lead</span>
+        </button>
+        {selectedProject ? (
+          <small style={{ display: "block", color: "#5A6A7E" }}>{formatFecha(item.created_at)}</small>
+        ) : null}
         {match?.reorientable ? (
           <small style={{ display: "block", color: "#1F6F4A" }}>Reorientable a este proyecto</small>
         ) : null}
@@ -355,19 +377,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
             : "Sin riesgos relevantes"}
         </td>
       )}
-      <td>
-        <button className="secondary-button compact-button" onClick={() => setSelectedLead(item)}>
-          Ver detalles
-        </button>
-      </td>
     </tr>
   );
 
   const tableHead = (
     <thead>
       <tr>
-        <th>Fecha</th>
-        <th>Nombre</th>
+        {!selectedProject && <th>Fecha</th>}
+        <th>{selectedProject ? "Lead" : "Nombre"}</th>
         <th>Comuna</th>
         <th>Clasificación</th>
         {selectedProject ? (
@@ -375,21 +392,18 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
             <th>Afinidad</th>
             <th>Capacidad</th>
             <th>Pie disponible</th>
-            <th>Restricción</th>
-            <th>Plazo</th>
             <th>Bloqueador principal</th>
           </>
         ) : (
           <th>Riesgos</th>
         )}
-        <th></th>
       </tr>
     </thead>
   );
-  const columnCount = selectedProject ? 11 : 6;
+  const columnCount = selectedProject ? 7 : 5;
 
   return (
-    <section className="section-block">
+    <section className="section-block leads-panel">
       <div className="section-heading">
         <span className="eyebrow">Gestión comercial</span>
         <h1>Dashboard Leads</h1>
