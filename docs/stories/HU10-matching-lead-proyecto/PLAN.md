@@ -21,15 +21,22 @@ For the build session. Standing instructions are in `docs/HANDBOOK.md` ("Startin
 session"); only what is specific to this story goes here.
 
 - Read first: `docs/algorithms/ALG-9-purchase-capacity.md` and `ALG-10-lead-project-affinity.md` **in
-  full** — they hold every number this story uses · `docs/research/spike1-e4-lead-project-matching-criteria.md`
-  §4–§8 (the normative source both ALGs were extracted from) · `backend/app/scoring_engine/indicators.py`
-  (the shape `purchase_capacity.py` sits beside) · `backend/app/scoring_engine/blockers.py` (codes and
-  severities the affinity penalty and blocker resolution consume verbatim) ·
-  `frontend/src/services/projectService.js` header (the frozen catalog contract)
-- Stop and report if: a case in `ALG-9-cases.json` or `ALG-10-cases.json` disagrees with the spike ·
-  the affinity weights produce a ranking that visibly contradicts E2 ("capacity beats
+  full** — they are **the normative source** and hold every number this story uses ·
+  `backend/app/scoring_engine/indicators.py` (the shape `purchase_capacity.py` sits beside) ·
+  `backend/app/scoring_engine/blockers.py` (codes and severities the affinity penalty and blocker
+  resolution consume verbatim) · `backend/app/scoring_engine/constants.py` (the three FOGAES
+  constants you must reuse, not redeclare) · `frontend/src/services/projectService.js` header (the
+  frozen catalog contract)
+- **The spike is history, not a spec.** `docs/research/spike1-e4-lead-project-matching-criteria.md`
+  explains *why* the criteria are what they are and is worth reading for that. But HU 10 amended it
+  in nine places — §4.4, §4.5, §5.1, §5.2, §6.1, §7, §8.1, §8.2/§8.3 and §8.4 — each dated in its
+  **Registro de cambios**. **Where the spike and an ALG disagree, the ALG governs**, and the spike
+  says so itself. Do not "reconcile" a case back to the spike.
+- Stop and report if: a case in `ALG-9-cases.json` or `ALG-10-cases.json` disagrees with **its own
+  ALG document** (the case files are generated from those rules, so a mismatch means one of them is
+  wrong) · the affinity weights produce a ranking that visibly contradicts E2 ("capacity beats
   classification") · you find yourself needing a capacity number on the frontend that the backend
-  does not already send
+  does not already send · you are about to declare a constant that already exists in `constants.py`
 
 ## Goal
 
