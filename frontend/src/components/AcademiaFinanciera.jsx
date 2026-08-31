@@ -1334,6 +1334,7 @@ const TABS = [
   { id: "casos", label: "Casos prácticos", icon: "ti-list-details" },
 ];
 
+<<<<<<< HEAD
 
 // ============================================================================
 // COMPONENTE PRINCIPAL
@@ -1347,6 +1348,17 @@ export default function AcademiaFinanciera({
   const [activeTab, setActiveTab] = useState("conceptos");
   const [openArticleId, setOpenArticleId] = useState(null);
   const [openCapsuleId, setOpenCapsuleId] = useState(null);
+=======
+export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNavigate, initialArticleId }) {
+  const [activeTab, setActiveTab] = useState("conceptos");
+  const [openArticleId, setOpenArticleId] = useState(initialArticleId || null);
+
+  React.useEffect(() => {
+    if (initialArticleId) {
+      setOpenArticleId(initialArticleId);
+    }
+  }, [initialArticleId]);
+>>>>>>> 7e2c518 (feat(hu11): link individual checklist items to specific academy articles)
 
   const openArticle = useCallback((id) => setOpenArticleId(id), []);
   const openCapsule = useCallback((id) => setOpenCapsuleId(id), []);
