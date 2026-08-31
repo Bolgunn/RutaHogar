@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
+import { matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import {
@@ -285,6 +286,16 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     [projects, selectedProjectId],
   );
 
+  // El veredicto del par se deriva, no se guarda: si el ejecutivo cambia de
+  // proyecto con el modal abierto, una copia guardada describiria otro proyecto.
+  // matchLeadToProjects es puro y determinista (ALG-10 invariante 5), asi que
+  // esto devuelve exactamente la misma evidencia que mostro la fila.
+  const selectedMatch = useMemo(() => {
+    if (!selectedLead || !selectedProject) return null;
+    const { matches, excluidos } = matchLeadToProjects(selectedLead, [selectedProject]);
+    return matches[0] || excluidos[0] || null;
+  }, [selectedLead, selectedProject]);
+
   const { ranked, descartados, requiereAntecedentes } = useMemo(
     () => rankLeadsForProject(filtered, selectedProject, sortBy),
     [filtered, selectedProject, sortBy],
@@ -334,6 +345,41 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   };
 
   const openLead = (item) => setSelectedLead(item);
+
+  const selectedComunaDeclarada =
+    selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "";
+
+  const accionesRapidas = selectedLead ? (
+    <div className="lead-profile-actions">
+                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Acciones Rápidas</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <a
+                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
+                      className="secondary-button compact-button"
+                      style={{ textDecoration: "none", textAlign: "center", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                      </svg>
+                      Correo
+                    </a>
+                    <a
+                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por RutaHogar.`)}`}
+                      style={{ textDecoration: "none", textAlign: "center", backgroundColor: "#25D366", color: "white", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem", fontWeight: "500", fontSize: "0.9rem", border: "none", cursor: "pointer" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                      </svg>
+                      WhatsApp
+                    </a>
+                  </div>
+    </div>
+  ) : null;
 
   const leadRow = ({ lead: item, match }) => (
     // La fila entera es clickeable por comodidad, pero la accion vive en un
@@ -621,37 +667,104 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid #eaeaea", paddingBottom: "1rem" }}>
-              <h2 style={{ margin: 0 }}>Perfil del Lead</h2>
+              <div>
+                <h2 style={{ margin: 0 }}>Perfil del Lead</h2>
+                <p className="lead-profile-headline">
+                  <span className={`status-pill ${getClassificationClass(selectedResult.classification)}`}>
+                    {selectedResult.classification || emptyValue}
+                  </span>
+                  <span>Score {formatScore(selectedFinalScore) ?? emptyValue}</span>
+                  {selectedAdjustment ? (
+                    <span>base {formatScore(selectedBaseScore) ?? emptyValue} · {getBaseClassification(selectedResult)}</span>
+                  ) : null}
+                </p>
+              </div>
               <button className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>
                 Cerrar
               </button>
             </div>
 
-            <div className="lead-score-highlight">
-              <div className={getScoreBadgeClassByScore(selectedBaseScore)}>
-                <span>Score base</span>
-                <strong>{formatScore(selectedBaseScore) ?? emptyValue}</strong>
-                <small>Base: {getBaseClassification(selectedResult)}</small>
-              </div>
-              <div className={getClassificationClass(selectedResult.classification)}>
-                <span>Score final</span>
-                <strong>{formatScore(selectedFinalScore) ?? emptyValue}</strong>
-                {selectedResult.score_adjustment_reason ? <small>Ajustado por bloqueadores</small> : null}
-              </div>
-              <div className={getClassificationClass(selectedResult.classification)}>
-                <span>Clasificación final</span>
-                <strong>{selectedResult.classification || emptyValue}</strong>
-              </div>
-            </div>
-            {selectedAdjustment ? (
-              <div className="score-adjustment-note">
-                <strong>{selectedAdjustment.message}</strong>
-                {selectedAdjustment.detail ? <p>{selectedAdjustment.detail}</p> : null}
-                {selectedResult.score_adjustment_reason ? <p>{selectedResult.score_adjustment_reason}</p> : null}
-              </div>
+            {/* Zona 2 — el veredicto del par. Solo para leads rankeados: un lead
+                excluido no tiene afinidad ni banda (ALG-10), asi que degrada al
+                perfil lead-global. */}
+            {selectedProject && selectedMatch && !selectedMatch.motivo_exclusion ? (
+              <section className="lead-profile-zone lead-profile-verdict">
+                <h3>Frente a este proyecto: {selectedProject.nombre}</h3>
+                <dl className="lead-profile-facts">
+                  <div>
+                    <dt>Afinidad</dt>
+                    <dd>
+                      {selectedMatch.afinidad}
+                      <small>{selectedMatch.clasificacion}</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Capacidad de compra</dt>
+                    <dd>
+                      {selectedMatch.evidencia.capacidad_uf} UF
+                      {/* El plazo viaja pegado al numero que produjo: los leads se
+                          rankean bajo supuestos de plazo distintos (ALG-9 R2). */}
+                      <small>
+                        {selectedMatch.evidencia.plazo_anios} años · {selectedMatch.evidencia.plazo_origen}
+                        {selectedMatch.evidencia.restriccion_vinculante
+                          ? " · limita " + selectedMatch.evidencia.restriccion_vinculante
+                          : ""}
+                      </small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Pie disponible</dt>
+                    <dd>{selectedMatch.evidencia.pie_disponible_uf} UF</dd>
+                  </div>
+                  <div>
+                    <dt>Rango del proyecto</dt>
+                    <dd>
+                      {selectedMatch.precio_min_uf}–{selectedMatch.precio_max_uf} UF
+                    </dd>
+                  </div>
+                </dl>
+
+                <p className="lead-profile-blocker">
+                  <strong>Bloqueador para este proyecto: </strong>
+                  {selectedMatch.bloqueador_principal ? (
+                    <>
+                      {selectedMatch.bloqueador_principal.titulo}
+                      {selectedMatch.bloqueador_principal.brecha_recurso_clp !== null
+                        ? " — le faltan " +
+                          money(selectedMatch.bloqueador_principal.brecha_recurso_clp) +
+                          " de " +
+                          selectedMatch.bloqueador_principal.brecha_recurso_tipo
+                        : ""}
+                    </>
+                  ) : (
+                    "ninguno."
+                  )}
+                </p>
+
+                {!selectedMatch.evidencia.alcanza_precio_min ? (
+                  <p className="lead-profile-warning">
+                    No alcanza el precio mínimo del proyecto: entra por cercanía, no calificado.
+                  </p>
+                ) : null}
+
+                {selectedMatch.reorientable ? (
+                  <p className="lead-profile-note">
+                    Oportunidad reorientable: puede comprar en {selectedProject.comuna}
+                    {selectedComunaDeclarada ? " aunque declaró " + selectedComunaDeclarada : ""}.
+                  </p>
+                ) : null}
+
+                {selectedMatch.evidencia.desbloqueable_con_fogaes ? (
+                  <p className="lead-profile-note">
+                    Se desbloquea con FOGAES: con el pie asistido del 10% alcanza este proyecto.
+                  </p>
+                ) : null}
+
+                {accionesRapidas}
+              </section>
             ) : null}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+            <div className="lead-profile-grid">
               {/* Columna Izquierda */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                 {/* Datos del lead */}
@@ -669,6 +782,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Fecha evaluación:</strong> <span style={{ textAlign: "right" }}>{formatFecha(selectedLead.created_at)}</span></div>
                   </div>
                 </div>
+
+                {selectedAdjustment ? (
+                  <div className="score-adjustment-note">
+                    <strong>{selectedAdjustment.message}</strong>
+                    {selectedAdjustment.detail ? <p>{selectedAdjustment.detail}</p> : null}
+                    {selectedResult.score_adjustment_reason ? <p>{selectedResult.score_adjustment_reason}</p> : null}
+                  </div>
+                ) : null}
 
                 {selectedMainBlocker && (
                   <div>
@@ -708,13 +829,35 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                     </ul>
                   </div>
                 )}
+
+                {!selectedProject || !selectedMatch || selectedMatch.motivo_exclusion
+                  ? accionesRapidas
+                  : null}
               </div>
 
               {/* Columna Derecha */}
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                 {selectedProjectFit && (
                   <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Compatibilidad con objetivo</h3>
+                    {/* Este bloque mide al lead contra SU objetivo declarado; la
+                        zona 2 lo mide contra el proyecto que eligio el ejecutivo.
+                        Pueden discrepar sin contradecirse -- de eso trata E4 --
+                        asi que cada encabezado nombra su sujeto. */}
+                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>
+                      Frente a su objetivo declarado
+                    </h3>
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.88rem", color: "#5A6A7E" }}>
+                      {selectedComunaDeclarada || "Sin comuna declarada"}
+                      {selectedFinancialIndicators.property_value_uf
+                        ? ` · referencia ${Math.round(selectedFinancialIndicators.property_value_uf)} UF`
+                        : ""}
+                    </p>
+                    {selectedProjectFit.status === "requires_info" ? (
+                      <p style={{ margin: "0 0 0.5rem", fontSize: "0.88rem", color: "#5A6A7E" }}>
+                        No se pudo poner precio a su objetivo, así que esta comparación queda
+                        pendiente. No dice nada sobre su capacidad de compra.
+                      </p>
+                    ) : null}
                     <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Clasificación</dt><dd style={{ margin: 0 }}>{selectedProjectFit.classification || selectedProjectFit.status || emptyValue}</dd></div>
                       <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Score</dt><dd style={{ margin: 0 }}>{formatScore(selectedProjectFit.score) ?? emptyValue}</dd></div>
@@ -792,42 +935,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                   </div>
                 )}
 
-                <div style={{ marginTop: "auto" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Acciones Rápidas</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <a
-                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
-                      className="secondary-button compact-button"
-                      style={{ textDecoration: "none", textAlign: "center", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                        <polyline points="22,6 12,13 2,6"></polyline>
-                      </svg>
-                      Correo
-                    </a>
-                    <a
-                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por RutaHogar.`)}`}
-                      style={{ textDecoration: "none", textAlign: "center", backgroundColor: "#25D366", color: "white", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem", fontWeight: "500", fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                      </svg>
-                      WhatsApp
-                    </a>
-                  </div>
-                </div>
               </div>
             </div>
 
             <hr style={{ margin: "1.5rem 0", border: "none", borderTop: "1px solid var(--color-border, #e0e0e0)" }} />
 
-            <section>
-              <h3 style={{ marginBottom: "1rem" }}>Historial inmutable (auditoría)</h3>
+            {/* Zona 5 -- material de auditoria (RNF 4/5), no de venta: tiene que
+                estar accesible, no tiene que ser lo primero que se ve. */}
+            <details className="lead-profile-history">
+              <summary>Ver historial de evaluaciones ({leadHistory.length})</summary>
               {leadHistory.length > 0 ? (
                 <div className="history-list" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                   {leadHistory.map((item) => (
@@ -905,7 +1021,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                   <p style={{ margin: 0 }}>No hay registros de auditoría para esta evaluación.</p>
                 </div>
               )}
-            </section>
+            </details>
           </div>
         </div>
       )}

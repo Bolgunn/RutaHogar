@@ -637,6 +637,117 @@ a {
   text-decoration: underline;
 }
 
+
+/* ── Perfil del Lead (HU 10) ──
+   Solo lo estructural vive aca. Lo cosmetico sigue inline en el componente:
+   mover 320 lineas de estilos de golpe, sin cobertura de render, esconde las
+   regresiones hasta que alguien abre el modal. */
+.lead-profile-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.92rem;
+  color: #5A6A7E;
+}
+
+.lead-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.lead-profile-grid > * {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.lead-profile-zone {
+  margin-bottom: 1.5rem;
+}
+
+.lead-profile-zone h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: #3D4B5E;
+}
+
+.lead-profile-verdict {
+  padding: 1.25rem;
+  border: 1px solid #E8E5DF;
+  border-left: 4px solid var(--rh-accent, #C4841D);
+  border-radius: 12px;
+  background: #FAF8F5;
+}
+
+.lead-profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+
+.lead-profile-facts dt {
+  font-size: 0.85rem;
+  color: #5A6A7E;
+}
+
+.lead-profile-facts dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #3D4B5E;
+}
+
+.lead-profile-facts dd small {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #5A6A7E;
+}
+
+.lead-profile-blocker,
+.lead-profile-note,
+.lead-profile-warning {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #5A6A7E;
+}
+
+.lead-profile-note {
+  color: #1F6F4A;
+}
+
+.lead-profile-warning {
+  color: #B4232A;
+}
+
+.lead-profile-actions {
+  margin-top: 1rem;
+}
+
+.lead-profile-history {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--color-border, #e0e0e0);
+  padding-top: 1rem;
+}
+
+.lead-profile-history > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #3D4B5E;
+}
+
+@media (max-width: 900px) {
+  .lead-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Override for full-width panels */
 .recommendations-panel,
 .tracking-panel,
