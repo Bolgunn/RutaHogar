@@ -387,12 +387,6 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     (alternativeStatusRank < currentStatusRank ? 1 : 0) +
     (valueComparison > 0 ? 1 : 0) +
     (gapComparison > 0 ? 1 : 0);
-  const currentPreferenceWins =
-    (currentPreference.communeMatch && !alternativePreference.communeMatch ? 1 : 0) +
-    (currentPreference.typeMatch && !alternativePreference.typeMatch ? 1 : 0);
-  const alternativePreferenceWins =
-    (alternativePreference.communeMatch && !currentPreference.communeMatch ? 1 : 0) +
-    (alternativePreference.typeMatch && !currentPreference.typeMatch ? 1 : 0);
   const currentPreferenceMatches = (currentPreference.communeMatch ? 1 : 0) + (currentPreference.typeMatch ? 1 : 0);
   const alternativePreferenceMatches =
     (alternativePreference.communeMatch ? 1 : 0) + (alternativePreference.typeMatch ? 1 : 0);
@@ -417,19 +411,6 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     sin_datos_suficientes: "Faltan datos para comparar",
   };
 
-  const summaryByRecommendation = {
-    escenario_actual:
-      currentPreferenceWins < alternativePreferenceWins
-        ? "El escenario actual se ve financieramente mas holgado, aunque la alternativa puede estar mejor alineada a tus preferencias."
-        : "El escenario actual concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    alternativa:
-      alternativePreferenceWins < currentPreferenceWins
-        ? "La alternativa se ve financieramente mas holgada, aunque el escenario actual puede estar mejor alineado a tus preferencias."
-        : "La alternativa concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    similar: "No hay una ventaja financiera clara; conviene decidir mirando comuna, tipo de vivienda y horizonte.",
-    sin_datos_suficientes: "Primero selecciona dos escenarios comparables.",
-  };
-
   const maxValueUf = Math.max(toNumber(current.valueUf), toNumber(alternative.valueUf), 1);
   const maxPieMinUf = Math.max(toNumber(current.pieMinimoUf), toNumber(alternative.pieMinimoUf), 1);
   const maxPieRecommendedUf = Math.max(toNumber(current.pieRecomendadoUf), toNumber(alternative.pieRecomendadoUf), 1);
@@ -438,7 +419,7 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
   return {
     recommendation,
     title: titleByRecommendation[recommendation],
-    summary: summaryByRecommendation[recommendation],
+    summary: "",
     advantages: {
       current: currentAdvantages.length ? currentAdvantages : ["No presenta una ventaja clara frente a la alternativa."],
       alternative: alternativeAdvantages.length ? alternativeAdvantages : ["No presenta una ventaja clara frente al escenario actual."],

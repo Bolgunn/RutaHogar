@@ -258,11 +258,11 @@ function AlternativesCarousel({ children }) {
 function ComparisonQuickRead({ insights }) {
   const usefulAlternative = (insights.advantages?.alternative || []).find((item) => !item.startsWith("No presenta"));
   const usefulCurrent = (insights.advantages?.current || []).find((item) => !item.startsWith("No presenta"));
-  const usefulTradeoff = (insights.considerations || []).find((item) => !item.startsWith("No se detecta"));
+  const usefulConsideration = (insights.considerations || []).find((item) => !item.startsWith("No se detecta"));
   const items = [
     usefulAlternative ? `Alternativa: ${usefulAlternative}` : null,
     usefulCurrent ? `Actual: ${usefulCurrent}` : null,
-    usefulTradeoff ? `Tradeoff: ${usefulTradeoff}` : "No hay una diferencia dominante entre ambos escenarios.",
+    usefulConsideration ? `A considerar: ${usefulConsideration}` : "No hay una diferencia dominante entre ambos escenarios.",
   ].filter(Boolean).slice(0, 3);
 
   return (
@@ -327,18 +327,6 @@ function getMetricShortDelta(metric) {
   return `${delta > 0 ? "+" : ""}${formatMetricValue(delta, metric.unit)}`;
 }
 
-function getMetricResultMeta(metric) {
-  const current = Number(metric.current);
-  const alternative = Number(metric.alternative);
-  if (!Number.isFinite(current) || !Number.isFinite(alternative) || Math.abs(alternative - current) < 0.5) {
-    return { label: "Similar", tone: "neutral" };
-  }
-  const alternativeWins = metric.lowerIsBetter ? alternative < current : alternative > current;
-  return alternativeWins
-    ? { label: "Gana alternativa", tone: "alternative" }
-    : { label: "Gana actual", tone: "current" };
-}
-
 function ComparisonMetricValue({ tone, label, value, metric }) {
   return (
     <span className={`comparison-dumbbell-value ${tone}`}>
@@ -363,7 +351,6 @@ function ComparisonDumbbell({ metrics, currentName, alternativeName }) {
         const start = Math.min(currentPosition, alternativePosition);
         const width = Math.abs(currentPosition - alternativePosition);
         const deltaMeta = getMetricDeltaMeta(metric);
-        const resultMeta = getMetricResultMeta(metric);
         const deltaLabel = getMetricShortDelta(metric);
         const currentValue = metric.currentLabel || formatMetricValue(metric.current, metric.unit);
         const alternativeValue = metric.alternativeLabel || formatMetricValue(metric.alternative, metric.unit);
@@ -391,7 +378,6 @@ function ComparisonDumbbell({ metrics, currentName, alternativeName }) {
 
             <div className="comparison-dumbbell-result">
               <b className={`delta-value ${deltaMeta.tone}`}>{deltaLabel}</b>
-              <span className={`comparison-result-chip ${resultMeta.tone}`}>{resultMeta.label}</span>
             </div>
           </article>
         );
@@ -415,13 +401,20 @@ function ComparisonVisual({ metrics, currentName, alternativeName, insights }) {
       <div className="comparison-visual">
         <ComparisonQuickRead insights={insights} />
         <ComparisonDumbbell metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-        <p className="comparison-reference-conclusion">{insights.summary}</p>
       </div>
     </details>
   );
 }
 
 function ConceptHelpCta({ onNavigate }) {
+  const handleAcademiaClick = () => {
+    onNavigate("academia");
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  };
+
   return (
     <section className="simulation-academy-cta" aria-labelledby="simulation-academy-title">
       <div>
@@ -430,7 +423,7 @@ function ConceptHelpCta({ onNavigate }) {
         <p>Entra a la Academia e infórmate antes de decidir qué escenario quieres mirar con más detalle.</p>
       </div>
       {onNavigate ? (
-        <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("academia")}>
+        <button className="secondary-button compact-button" type="button" onClick={handleAcademiaClick}>
           Ir a Academia
         </button>
       ) : (
@@ -667,6 +660,9 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     if (!currentComparable) {
       setComparison({ error: true });
       return;
+    }
+    if (item?.project?.id) {
+      setCompareProjectId(item.project.id);
     }
     setComparison({
       source: "accessible-option",
@@ -922,7 +918,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <div className="section-heading compact">
             <span className="eyebrow">Comparación</span>
             <h2 className="recommendation-section-title"><i className="ti ti-arrows-left-right"></i> Comparación de escenarios</h2>
-            <p>{comparisonInsights.summary}</p>
           </div>
 
           <div className="comparison-analysis">

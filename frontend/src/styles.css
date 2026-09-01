@@ -4613,7 +4613,7 @@ th {
 
 .comparison-dumbbell-row {
   display: grid;
-  grid-template-columns: minmax(145px, 0.2fr) minmax(190px, 0.24fr) minmax(250px, 1fr) minmax(132px, 0.16fr);
+  grid-template-columns: minmax(145px, 0.2fr) minmax(220px, 0.28fr) minmax(240px, 1fr) minmax(120px, 0.14fr);
   gap: var(--rh-space-5);
   align-items: center;
   padding: 18px 0;
@@ -4650,7 +4650,7 @@ th {
 
 .comparison-dumbbell-value {
   display: grid;
-  grid-template-columns: auto minmax(74px, auto) minmax(0, 1fr);
+  grid-template-columns: auto minmax(74px, auto) max-content;
   gap: 8px;
   align-items: center;
   min-width: 0;
@@ -4676,12 +4676,15 @@ th {
 .comparison-dumbbell-value .status-metric-value {
   width: fit-content;
   max-width: 100%;
+  overflow: visible;
   padding: 3px 8px;
   border-radius: var(--rh-radius-full);
   background: var(--rh-surface-alt);
   color: var(--rh-navy);
   font-family: var(--rh-font-body);
   font-size: 0.78rem;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .comparison-dumbbell-track {
@@ -4747,12 +4750,6 @@ th {
   font-weight: 850;
 }
 
-.comparison-dumbbell-result span {
-  font-size: 0.78rem;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
 .comparison-dumbbell-result .delta-value.good {
   color: var(--rh-success);
 }
@@ -4763,44 +4760,6 @@ th {
 
 .comparison-dumbbell-result .delta-value.neutral {
   color: var(--rh-text-muted);
-}
-
-.comparison-result-chip {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 9px;
-  border-radius: var(--rh-radius-full);
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.comparison-result-chip.alternative {
-  background: rgba(45, 138, 78, 0.12);
-  color: var(--rh-success);
-}
-
-.comparison-result-chip.current {
-  background: rgba(19, 43, 74, 0.1);
-  color: var(--rh-navy);
-}
-
-.comparison-result-chip.neutral {
-  background: var(--rh-surface-alt);
-  color: var(--rh-text-muted);
-}
-
-.comparison-reference-conclusion {
-  margin: 0;
-  padding: var(--rh-space-4) var(--rh-space-5);
-  border: 1px solid rgba(19, 43, 74, 0.1);
-  border-radius: var(--rh-radius-md);
-  background: var(--rh-blue-light);
-  color: var(--rh-navy);
-  font-weight: 750;
-  line-height: 1.5;
 }
 
 @keyframes comparisonBarFill {
