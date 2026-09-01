@@ -266,11 +266,6 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
 
       {evaluation && <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />}
 
-      <div className="warning-note">
-        <i className="ti ti-alert-triangle"></i>
-        Esta orientación no reemplaza una evaluación bancaria formal.
-      </div>
-
       <div className="recommendations-cta">
         <button className="primary-button" type="button" onClick={() => onNavigate?.("tracking")}>
           Ir al plan de mejora
