@@ -76,13 +76,18 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
           <p>Antecedentes referenciales para tu evaluación formal en la banca chilena.</p>
         </div>
         {onNavigate && (
-          <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-              <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
-            </svg>
-            ¿Dónde obtener cada documento?
-          </button>
+          <div className="academy-action-wrapper" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
+            <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
+              </svg>
+              Academia
+            </button>
+            <span className="helper-text" style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
+              ¿Dónde obtener los documentos?
+            </span>
+          </div>
         )}
       </div>
 

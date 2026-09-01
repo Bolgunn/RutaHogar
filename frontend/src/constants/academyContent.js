@@ -935,14 +935,14 @@ export const ACADEMY_ARTICLES = [
     tags: ["documentos", "requisitos", "evaluación"],
     body:
       "Reunir los antecedentes para tu evaluación hipotecaria es un paso clave. A continuación, te detallamos dónde puedes obtener cada uno de los documentos habituales:\n\n" +
-      "• **Cédula de identidad vigente**: Se obtiene directamente en las oficinas del **Registro Civil**. Asegúrate de que no esté vencida ni bloqueada.\n\n" +
-      "• **Certificado de residencia o Boleta de servicios**: El certificado de residencia se solicita en tu **Junta de Vecinos** o mediante una **Notaría Digital**. Como alternativa, los bancos suelen aceptar una boleta de servicios básicos (luz, agua, gas) a tu nombre emitida por las respectivas **empresas de servicios** (idealmente con menos de 3 meses de antigüedad).\n\n" +
-      "• **Comprobante de ahorro o pie**: Puedes descargar la cartola de tu cuenta de ahorro para la vivienda, fondos mutuos o depósitos directamente desde los canales digitales de tu institución financiera (por ejemplo, **BancoEstado**, **Coopeuch**, u otra **entidad bancaria**).\n\n" +
-      "• **Últimas liquidaciones de sueldo (3 a 6)**: Solicítalas a tu **Empleador** o al departamento de **Recursos Humanos (RRHH)** de tu empresa. Generalmente se piden 3 si tienes renta fija y 6 si tienes renta variable.\n\n" +
-      "• **Certificado de cotizaciones previsionales**: Se descarga desde el **sitio web de tu AFP** utilizando tu ClaveÚnica o tu Clave AFP. Suele solicitarse el historial de los últimos 12 a 24 meses con el RUT de tu empleador.\n\n" +
-      "• **Certificado de antigüedad laboral**: Es emitido por tu **Empleador**. Debe ser un documento oficial que especifique tu cargo, tipo de contrato y fecha de ingreso.\n\n" +
-      "• **Certificados de aclaración, regularización y deuda al día**: En caso de morosidades previas, puedes obtener estos certificados a través de **Equifax Dicom** o el **Boletín Comercial**, presentando la documentación que acredite el pago.\n\n" +
-      "• **Certificados de pago total o finiquitos de deudas liquidadas**: Si prepagaste un crédito de consumo o cerraste una tarjeta, debes solicitar el certificado de deuda saldada directamente a tu **Banco** o **Acreedor**.",
+      "• Cédula de identidad vigente: Se obtiene directamente en las oficinas del Registro Civil. Asegúrate de que no esté vencida ni bloqueada.\n\n" +
+      "• Certificado de residencia o Boleta de servicios: El certificado de residencia se solicita en tu Junta de Vecinos o mediante una Notaría Digital. Como alternativa, los bancos suelen aceptar una boleta de servicios básicos (luz, agua, gas) a tu nombre emitida por las respectivas empresas de servicios (idealmente con menos de 3 meses de antigüedad).\n\n" +
+      "• Comprobante de ahorro o pie: Puedes descargar la cartola de tu cuenta de ahorro para la vivienda, fondos mutuos o depósitos directamente desde los canales digitales de tu institución financiera (por ejemplo, BancoEstado, Coopeuch, u otra entidad bancaria).\n\n" +
+      "• Últimas liquidaciones de sueldo (3 a 6): Solicítalas a tu Empleador o al departamento de Recursos Humanos (RRHH) de tu empresa. Generalmente se piden 3 si tienes renta fija y 6 si tienes renta variable.\n\n" +
+      "• Certificado de cotizaciones previsionales: Se descarga desde el sitio web de tu AFP utilizando tu ClaveÚnica o tu Clave AFP. Suele solicitarse el historial de los últimos 12 a 24 meses con el RUT de tu empleador.\n\n" +
+      "• Certificado de antigüedad laboral: Es emitido por tu Empleador. Debe ser un documento oficial que especifique tu cargo, tipo de contrato y fecha de ingreso.\n\n" +
+      "• Certificados de aclaración, regularización y deuda al día: En caso de morosidades previas, puedes obtener estos certificados a través de Equifax Dicom o el Boletín Comercial, presentando la documentación que acredite el pago.\n\n" +
+      "• Certificados de pago total o finiquitos de deudas liquidadas: Si prepagaste un crédito de consumo o cerraste una tarjeta, debes solicitar el certificado de deuda saldada directamente a tu Banco o Acreedor.",
     sources: [
       {
         institution: "ScoreLeads",
