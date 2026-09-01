@@ -59,8 +59,15 @@ const sinRollback = [];
 const ultimaDefinicion = new Map();
 for (const archivo of archivos) {
   const declarados = objetos(leer(path.join(MIGRACIONES, archivo)));
-  if (declarados.size > 0 && !conRollback.has(archivo)) sinRollback.push(archivo);
   for (const [nombre, cuerpo] of declarados) ultimaDefinicion.set(nombre, { archivo, cuerpo });
+}
+
+// El rollback no depende de lo que la migracion declare. Condicionarlo a que
+// hubiera policies o funciones dejaba fuera justo a las que crean tablas,
+// agregan columnas o siembran datos -- donde revertir importa mas y es mas
+// dificil de improvisar despues.
+for (const archivo of archivos) {
+  if (!conRollback.has(archivo)) sinRollback.push(archivo);
 }
 
 for (const [nombre, { archivo, cuerpo }] of ultimaDefinicion) {
@@ -81,7 +88,11 @@ if (divergentes.length) {
 }
 
 if (sinRollback.length) {
-  console.log(`\nAdvertencia — migraciones sin rollback (${sinRollback.length}):`);
+  // El "de N" no es adorno: si el chequeo vuelve a filtrarse por lo que la
+  // migracion declara, la resta deja de cuadrar y se ve en la misma linea.
+  console.log(
+    `\nAdvertencia — ${sinRollback.length} de ${archivos.length} migraciones sin rollback:`,
+  );
   for (const archivo of sinRollback) console.log(`    ${archivo}`);
 }
 
@@ -89,6 +100,6 @@ const roto = faltantes.length + divergentes.length;
 console.log(
   roto === 0
     ? `\nschema.sql refleja las ${archivos.length} migraciones.`
-    : `\n${roto} objeto(s) fuera de sincronia. Reflejalos en schema.sql, en el mismo commit que la migracion.`,
+    : `\n${roto} objeto(s) de policy/funcion fuera de sincronia (${faltantes.length} ausente(s), ${divergentes.length} divergente(s)).\nReflejalos en schema.sql, en el mismo commit que la migracion.`,
 );
 process.exit(roto === 0 ? 0 : 1);
