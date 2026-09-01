@@ -32,6 +32,7 @@ import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./se
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
+import { getTenantContext } from "./services/projectService";
 import {
   getConsent,
   saveConsent,
@@ -386,6 +387,7 @@ export default function App() {
   const [anonInput, setAnonInput] = useState(initialAnonInput);
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
+  const [inmobiliariaId, setInmobiliariaId] = useState(null);
 
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
@@ -583,6 +585,20 @@ export default function App() {
   useEffect(() => {
     if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
   }, [page]);
+
+  // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
+  // El id llega desde el perfil del propio ejecutivo, no desde la URL.
+  useEffect(() => {
+    if (profile?.role !== roles.sales && profile?.role !== roles.admin) {
+      setInmobiliariaId(null);
+      return;
+    }
+    let active = true;
+    getTenantContext()
+      .then((context) => { if (active) setInmobiliariaId(context.inmobiliaria_id); })
+      .catch(() => { if (active) setInmobiliariaId(null); });
+    return () => { active = false; };
+  }, [profile?.role, profile?.id]);
 
   useEffect(() => {
     if (page === "signup-offer" && anonResult) {
@@ -1676,7 +1692,11 @@ export default function App() {
       ) : page === "academia" && profile.role === roles.user ? (
         <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
-        <DashboardLeads evaluations={evaluations} />
+        <DashboardLeads
+          evaluations={evaluations}
+          inmobiliariaId={inmobiliariaId}
+          ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+        />
       ) : page === "admin" && profile.role === roles.admin ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && profile.role === roles.admin ? (

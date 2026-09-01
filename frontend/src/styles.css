@@ -594,11 +594,205 @@ a {
   padding: 34px;
 }
 
+/* La fila entera abre el detalle del lead: el ejecutivo apunta al lead, no a un
+   boton. tabindex + Enter/Espacio la dejan alcanzable por teclado. */
+.lead-row {
+  cursor: pointer;
+}
+
+.lead-row:hover,
+.lead-row:focus-within {
+  background: var(--rh-surface-muted, #F4F1EC);
+}
+
+.lead-row:focus-within {
+  box-shadow: inset 3px 0 0 var(--rh-accent, #C4841D);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* El boton es la accion accesible de la fila; visualmente es solo el nombre. */
+.lead-row-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lead-row-open:hover,
+.lead-row-open:focus-visible {
+  text-decoration: underline;
+}
+
+
+/* ── Perfil del Lead (HU 10) ──
+   Solo lo estructural vive aca. Lo cosmetico sigue inline en el componente:
+   mover 320 lineas de estilos de golpe, sin cobertura de render, esconde las
+   regresiones hasta que alguien abre el modal. */
+.lead-profile-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.92rem;
+  color: #5A6A7E;
+}
+
+.lead-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.lead-profile-grid > * {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.lead-profile-zone {
+  margin-bottom: 1.5rem;
+}
+
+.lead-profile-zone h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: #3D4B5E;
+}
+
+.lead-profile-verdict {
+  padding: 1.25rem;
+  border: 1px solid #E8E5DF;
+  border-left: 4px solid var(--rh-accent, #C4841D);
+  border-radius: 12px;
+  background: #FAF8F5;
+}
+
+.lead-profile-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+
+.lead-profile-facts dt {
+  font-size: 0.85rem;
+  color: #5A6A7E;
+}
+
+.lead-profile-facts dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #3D4B5E;
+}
+
+.lead-profile-facts dd small {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #5A6A7E;
+}
+
+.lead-profile-blocker,
+.lead-profile-note,
+.lead-profile-warning {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #5A6A7E;
+}
+
+.lead-profile-note {
+  color: #1F6F4A;
+}
+
+.lead-profile-warning {
+  color: #B4232A;
+}
+
+.lead-profile-actions {
+  margin-top: 1rem;
+}
+
+.lead-profile-history {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--color-border, #e0e0e0);
+  padding-top: 1rem;
+}
+
+.lead-profile-history > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #3D4B5E;
+}
+
+@media (max-width: 900px) {
+  .lead-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Panel del ejecutivo (HU 10). Los mismos valores que estaban inline en
+   DashboardLeads: se centralizan para que el color de "sin dato", el de alerta
+   y el de oportunidad se definan una vez y no en cuarenta atributos style. */
+.leads-hint {
+  font-size: 0.88rem;
+  color: var(--rh-text-sec, #5A6A7E);
+  margin-bottom: 12px;
+}
+
+.leads-hint.is-error {
+  color: #B4232A;
+}
+
+.leads-group {
+  margin-top: 1.5rem;
+}
+
+.leads-group > h3 {
+  margin-bottom: 0.25rem;
+}
+
+.lead-cell-sub {
+  display: block;
+  color: var(--rh-text-sec, #5A6A7E);
+}
+
+.lead-cell-sub.is-alert {
+  color: #B4232A;
+}
+
+.lead-cell-sub.is-positive {
+  color: #1F6F4A;
+}
+
+.lead-descartado-motivo {
+  font-size: 0.85rem;
+  color: var(--rh-text-sec, #5A6A7E);
+}
+
 /* Override for full-width panels */
 .recommendations-panel,
 .tracking-panel,
 .simulation-page,
 .academia-panel,
+.leads-panel,
 .milestone-panel {
   grid-template-columns: 1fr;
   max-width: 1120px;

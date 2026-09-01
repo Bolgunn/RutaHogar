@@ -50,13 +50,13 @@ existing consumer reading the same fields it reads today.
 | `precio_min_uf`/`precio_max_uf` stay physical columns on `proyectos`, **maintained by trigger** | Keeps the frozen contract, every existing query and all 26 catalog tests untouched. A view would change the read path; a computed-on-read in `projectService` would leave the DB inconsistent for anything not going through the frontend | Medium — see Open questions |
 | A project with **no** units keeps its hand-entered range | Migration path: every existing project stays valid, and small inmobiliarias that do not want unit-level detail are not forced into it | Medium |
 | Units carry `tipologia`, `dormitorios`, `banos`, `superficie_m2`, `precio_uf`, `disponible` | The minimum that makes a unit a unit and matching useful. Deliberately excludes floor, orientation, parking, bodega — add them when something reads them | Medium |
-| Matching stays at **project** granularity in HU 10; unit granularity is a follow-up | Changing ALG-9's holgura component from "interpolate within the range" to "find the best affordable unit" is a real algorithm change to weights that are already uncalibrated | Low — arguably the whole point is unit matching |
+| Matching stays at **project** granularity in HU 10; unit granularity is a follow-up | Changing ALG-10's holgura component from "interpolate within the range" to "find the best affordable unit" is a real algorithm change to weights that are already uncalibrated | Low — arguably the whole point is unit matching |
 
 ## Standing questions *(provisional)*
 
 | # | Question | Answer |
 | :- | :------- | :----- |
-| 1 | Touches scoring? Which ALG, numbers changed? | **Not as scoped here.** No `scoring_engine/` file changes. If unit-level matching is pulled in, ALG-9's holgura component changes and this answer becomes "yes" |
+| 1 | Touches scoring? Which ALG, numbers changed? | **Not as scoped here.** No `scoring_engine/` file changes. If unit-level matching is pulled in, ALG-10's holgura component changes and this answer becomes "yes" |
 | 2 | Needs RLS / multi-tenant scoping? | **Yes.** `proyecto_unidades` holds no personal data but is tenant inventory; it needs policies mirroring `proyectos`, resolved through `proyecto_id → inmobiliaria_id`. **A new table without RLS does not ship (S6)** |
 | 3 | Needs a migration? Who applies it to hosted Supabase? | **Yes** — new table, indexes, RLS, trigger, rollback. Not auto-applied; whoever merges runs it and says so in the PR |
 | 4 | Changes the `POST /score` contract? | **No** |
@@ -78,7 +78,7 @@ is what makes this incrementally adoptable.
 
 ## Algorithms
 
-None created as scoped. **If unit-level matching is pulled in**, `ALG-9`'s holgura component is
+None created as scoped. **If unit-level matching is pulled in**, `ALG-10`'s holgura component is
 amended — replacing interpolation within `[precio_min_uf, precio_max_uf]` with a selection over
 units — and that is an ALG change in this PR, not a refactor.
 
@@ -120,13 +120,13 @@ unit CRUD in the admin catalog · displaying the unit breakdown in the simulatio
 | `U2` — A project without units keeps its hand-entered range | The 26 existing `projectCatalog.test.js` tests stay green unmodified |
 | `U3` — Deleting a unit recomputes the range | SQL test around the trigger |
 | `U4` — A unit is invisible across tenants | RLS test: an executive of inmobiliaria B cannot select A's units |
-| `U5` — The frozen contract is unchanged for existing consumers | `matchLeadToProjects` and its ALG-9 cases pass without modification |
+| `U5` — The frozen contract is unchanged for existing consumers | `matchLeadToProjects` and its ALG-10 cases pass without modification |
 
 ## Open questions — the grill agenda
 
 1. **Should matching move to unit granularity?** It is the strongest argument for this work and the
    biggest scope risk. Matching a lead to *"the 2D at 2.400"* rather than *"the project, somewhere
-   between 2.400 and 3.100"* changes HU 10's E1, E3 and E4 for the better — and changes ALG-9.
+   between 2.400 and 3.100"* changes HU 10's E1, E3 and E4 for the better — and changes ALG-10.
 2. **Does the intake gain a bedroom preference?** Without it, `dormitorios` is decoration. With it,
    HU 1's form changes and every stored evaluation predates the field.
 3. **Trigger, view, or application-side derivation?** The trigger keeps the contract but duplicates

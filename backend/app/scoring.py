@@ -13,6 +13,7 @@ from .scoring_engine.indicators import calculate_financial_indicators
 from .scoring_engine.improvement_plan import build_structured_improvement_plan
 from .scoring_engine.project_fit import calculate_project_fit
 from .scoring_engine.property_value import resolve_property_value_clp
+from .scoring_engine.purchase_capacity import calculate_purchase_capacity
 from .scoring_engine.housing_benefits import detect_housing_benefits
 
 
@@ -813,6 +814,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
     )
     financial_indicators.setdefault("property_value_clp", property_value_resolution.get("property_value_clp", 0))
     financial_indicators.setdefault("property_value_uf", property_value_resolution.get("property_value_uf", 0))
+    financial_indicators.update(calculate_purchase_capacity(data, financial_indicators))
     blockers = detect_blockers(data, financial_indicators)
     component_scores = calculate_component_scores(data, financial_indicators, blockers)
     project_fit = calculate_project_fit(data, financial_indicators, blockers)

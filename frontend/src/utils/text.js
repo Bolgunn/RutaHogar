@@ -63,6 +63,19 @@ export function normalizeDisplayList(items) {
     .filter(Boolean);
 }
 
+// normalizeDisplayList conserva los objetos {text, benefit} que el motor emite
+// desde HU 4, asi que sus listas son mixtas: strings en evaluaciones antiguas,
+// objetos en las nuevas. Un objeto renderizado como hijo de React tumba el arbol
+// entero, asi que todo consumidor tiene que leerlas por aca.
+export function displayItemText(item) {
+  if (typeof item === "string") return item;
+  return item?.text || "";
+}
+
+export function displayItemBenefit(item) {
+  return typeof item === "string" ? null : item?.benefit || null;
+}
+
 export function normalizeImprovementPlan(items) {
   if (!Array.isArray(items)) return [];
   

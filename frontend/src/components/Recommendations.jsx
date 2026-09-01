@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import BankingChecklist from "./BankingChecklist";
 import { buildRecommendations } from "../services/recommendationService";
+import { displayItemBenefit, displayItemText } from "../utils/text";
 
 import {
   formatBooleanText,
@@ -215,12 +216,17 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         <section>
           <h2 className="recommendation-section-title"><i className="ti ti-lightbulb"></i> Recomendaciones personalizadas</h2>
           <ul>
-            {data.recommendations.map((item) => (
-              <li key={item.text}>
+            {data.recommendations.map((item, index) => (
+              // Las listas son mixtas: string en evaluaciones legadas, objeto
+              // {text, benefit} desde HU 4. Leer item.text a secas renderizaba
+              // una vinieta vacia para las primeras.
+              <li key={`${displayItemText(item)}-${index}`}>
                 <i className="ti ti-circle-check recommendation-icon"></i>
                 <div>
-                  {item.text}
-                  {item.benefit && <p className="benefit"><b>Beneficio esperado: </b>{item.benefit}</p>}
+                  {displayItemText(item)}
+                  {displayItemBenefit(item) ? (
+                    <p className="benefit"><b>Beneficio esperado: </b>{displayItemBenefit(item)}</p>
+                  ) : null}
                 </div>
               </li>
             ))}
