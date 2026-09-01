@@ -17,6 +17,23 @@
 --
 -- Idempotente: drop + create, como el resto de las policies del repo.
 
+-- El correo vive en auth.users, que el rol `authenticated` no puede leer. Una
+-- policy se evalua CON LOS PRIVILEGIOS DE QUIEN CONSULTA, asi que un subselect
+-- a auth.users dentro de un USING no devuelve null: revienta con "permission
+-- denied for table users" y tumba el SELECT entero. Por eso el correo se lee
+-- por aca, en SECURITY DEFINER, igual que get_my_role y get_my_inmobiliaria.
+create or replace function public.get_my_email()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select lower(u.email) from auth.users u where u.id = auth.uid();
+$$;
+
+grant execute on function public.get_my_email() to authenticated;
+
 -- SECURITY DEFINER para no recursar sobre las policies de proyecto_ejecutivos.
 create or replace function public.is_ejecutivo_asignado(p_project_id uuid)
 returns boolean
@@ -31,7 +48,7 @@ as $$
     where pe.proyecto_id = p_project_id
       and (
         pe.ejecutivo_id = auth.uid()
-        or pe.ejecutivo_email = lower((select u.email from auth.users u where u.id = auth.uid()))
+        or pe.ejecutivo_email = public.get_my_email()
       )
   );
 $$;
@@ -84,7 +101,7 @@ create policy "Proyecto ejecutivos select tenant"
       and public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
       and (
         ejecutivo_id = auth.uid()
-        or ejecutivo_email = lower((select u.email from auth.users u where u.id = auth.uid()))
+        or ejecutivo_email = public.get_my_email()
       )
     )
   );

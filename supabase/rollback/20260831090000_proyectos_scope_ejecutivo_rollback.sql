@@ -27,3 +27,5 @@ create policy "Proyecto ejecutivos select tenant"
   );
 
 drop function if exists public.is_ejecutivo_asignado(uuid);
+-- HU 7 no tenia get_my_email(); nada mas la usa, asi que vuelve a irse con ella.
+drop function if exists public.get_my_email();
