@@ -1557,6 +1557,14 @@ export default function App() {
                   <p>Consulta acciones sugeridas según tu perfil.</p>
                 </div>
               </div>
+
+              <div className="dashboard-access-card" onClick={() => navigateToPage("projects")}>
+                <span className="dashboard-access-icon">🏢</span>
+                <div>
+                  <strong>Proyectos</strong>
+                  <p>Descubre propiedades y cotizaciones orientativas.</p>
+                </div>
+              </div>
             </div>
 
             <p className="hero-note">
