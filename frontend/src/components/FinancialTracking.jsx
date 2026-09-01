@@ -280,6 +280,7 @@ export default function FinancialTracking({
     ? (amortizacionConservadora > 0 ? Math.ceil(currentMorosidad / amortizacionConservadora) : 999)
     : 0;
   const currentPlanMorosidadMonths = planType === "acelerado" ? mesesMorosidadAcelerado : mesesMorosidadConservador;
+  const totalSaneamientoRequerido = currentMorosidad + excedenteDeuda;
 
   // Formato monetario
   const formatCurrency = (val) => `$${Math.round(val || 0).toLocaleString("es-CL")}`;
@@ -735,8 +736,9 @@ export default function FinancialTracking({
                 </strong>
               </div>
             ) : (
-              <div style={{ marginTop: "auto", color: "var(--color-success)", fontSize: "0.8rem", fontWeight: "600", textAlign: "center", paddingTop: "0.4rem" }}>
-                ✓ Nivel de deuda compatible.
+              <div style={{ marginTop: "auto", color: "var(--color-success)", fontSize: "0.8rem", fontWeight: "600", textAlign: "center", paddingTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                <span>✓ Nivel de deuda compatible.</span>
+                {currentMorosidad === 0 && <span>✓ Sin morosidad activa.</span>}
               </div>
             )}
           </div>

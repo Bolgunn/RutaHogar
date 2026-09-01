@@ -1,6 +1,19 @@
 import React, { useState } from "react";
 import { formatClp } from "../services/monthlyPlanService";
 
+function formatInteger(raw) {
+  if (raw === "" || raw == null) return "";
+  const digits = String(raw).replace(/\D/g, "");
+  if (digits === "") return "";
+  return Number(digits).toLocaleString("es-CL");
+}
+
+function stripFormat(value) {
+  return String(value)
+    .replace(/\./g, "")
+    .replace(/[^0-9]/g, "");
+}
+
 const MILESTONE_TYPES = [
   {
     id: "ahorro",
@@ -43,11 +56,17 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const currentDebt = Number(inputData.deuda_mensual) || 0;
   const currentContinuity = inputData.continuidad_laboral || "";
   const currentIncome = Number(inputData.ingreso_mensual) || 0;
+  
+  const currentMorosidadActual = inputData.morosidad_actual || "no";
+  const currentMontoMorosidad = Number(inputData.monto_morosidad) || 0;
+
+  const [newMorosidadActual, setNewMorosidadActual] = useState(currentMorosidadActual);
+  const [newMontoMorosidad, setNewMontoMorosidad] = useState(currentMontoMorosidad === 0 ? "" : currentMontoMorosidad.toString());
 
   const handleAhorroSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const savingsVal = Number(newSavings);
+    const savingsVal = Number(stripFormat(newSavings));
     if (!Number.isFinite(savingsVal) || savingsVal < 0 || newSavings === "") {
       setError("El nuevo ahorro debe ser un número válido mayor o igual a 0.");
       return;
@@ -66,19 +85,30 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const handleDeudaSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const debtVal = Number(newDebt);
+    const debtVal = Number(stripFormat(newDebt));
     if (!Number.isFinite(debtVal) || debtVal < 0 || newDebt === "") {
       setError("La deuda debe ser un número válido mayor o igual a 0.");
       return;
     }
-    if (debtVal >= currentDebt) {
-      setError(
-        `El nuevo monto debe ser inferior a tu deuda declarada previamente (${formatClp(currentDebt)}).`
-      );
+    
+    const montoMorosidadVal = newMorosidadActual === "si" ? Number(stripFormat(newMontoMorosidad)) : 0;
+    
+    const isDebtImproved = debtVal < currentDebt;
+    const isMorosidadImproved = 
+      (currentMorosidadActual === "si" && newMorosidadActual === "no") ||
+      (currentMorosidadActual === "si" && newMorosidadActual === "si" && montoMorosidadVal < currentMontoMorosidad);
+      
+    if (!isDebtImproved && !isMorosidadImproved) {
+      setError("El nuevo monto o estado de morosidad debe ser inferior a lo que declaraste previamente.");
       return;
     }
+    
     setIsSubmitting(true);
-    await onRegister({ deuda_mensual: debtVal });
+    await onRegister({ 
+      deuda_mensual: debtVal,
+      morosidad_actual: newMorosidadActual,
+      monto_morosidad: montoMorosidadVal
+    });
     setIsSubmitting(false);
   };
 
@@ -101,7 +131,7 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const handleRentaSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const incomeVal = Number(newIncome);
+    const incomeVal = Number(stripFormat(newIncome));
     if (!Number.isFinite(incomeVal) || incomeVal <= 0 || newIncome === "") {
       setError("La renta debe ser un número válido mayor a 0.");
       return;
@@ -184,10 +214,10 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
             <label className="simulator-field">
               Nuevo Ahorro Disponible Total (CLP)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={newSavings}
-                onChange={(e) => setNewSavings(e.target.value)}
+                onChange={(e) => setNewSavings(formatInteger(e.target.value))}
                 placeholder="Ej. 15.000.000"
                 autoFocus
               />
@@ -204,20 +234,45 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         {activeType === "deuda" && (
           <form onSubmit={handleDeudaSubmit} className="milestone-form">
             <div className="milestone-form-header">
-              <h3>Actualiza tu Deuda Mensual</h3>
+              <h3>Actualiza tu Deuda y Morosidad</h3>
               <p className="field-help">
-                Actualmente pagas al mes: <strong>{formatClp(currentDebt)}</strong>
+                Deuda actual declarada: <strong>{formatClp(currentDebt)}</strong><br/>
+                Morosidad: <strong>{currentMorosidadActual === "si" ? formatClp(currentMontoMorosidad) : "Al día"}</strong>
               </p>
             </div>
+            
+            <label className="simulator-field">
+              ¿Tienes morosidad actual?
+              <select
+                value={newMorosidadActual}
+                onChange={(e) => setNewMorosidadActual(e.target.value)}
+              >
+                <option value="no">No, estoy al día</option>
+                <option value="si">Sí, tengo atrasos</option>
+              </select>
+            </label>
+
+            {newMorosidadActual === "si" && (
+              <label className="simulator-field">
+                Monto de morosidad (CLP)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newMontoMorosidad}
+                  onChange={(e) => setNewMontoMorosidad(formatInteger(e.target.value))}
+                  placeholder="Ej. 500.000"
+                />
+              </label>
+            )}
+
             <label className="simulator-field">
               Nueva Deuda Mensual Total (CLP)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={newDebt}
-                onChange={(e) => setNewDebt(e.target.value)}
+                onChange={(e) => setNewDebt(formatInteger(e.target.value))}
                 placeholder="Ej. 150.000"
-                autoFocus
               />
             </label>
             {error && <div className="warning-note">{error}</div>}
@@ -268,11 +323,11 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
             <label className="field-label">
               Nueva Renta Mensual Líquida (CLP)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={newIncome}
-                onChange={(e) => setNewIncome(e.target.value)}
-                placeholder="Ej. 1200000"
+                onChange={(e) => setNewIncome(formatInteger(e.target.value))}
+                placeholder="Ej. 2.000.000"
                 className="text-input"
                 autoFocus
               />
