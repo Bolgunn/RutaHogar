@@ -116,10 +116,34 @@ esa tabla (§1, §2). La comuna del proyecto solo se compara con la
 
 ### 5. Filtrado por ejecutivo
 
-No existe `getProjectsForExecutive()` a propósito. Spike 1 E4 §8.2 deja a HU 13 la
-decisión del subconjunto, `ejecutivos[]` ya trae `ejecutivo_id` para filtrar, y RLS
-ya limita la lectura al tenant (un `ejecutivo` puede leer `proyectos` y
-`proyecto_ejecutivos` de su inmobiliaria).
+**Enmendado por HU 10.** Sigue sin existir `getProjectsForExecutive()`: el recorte
+es un argumento opcional, no una función aparte.
+
+```js
+getProjects({ inmobiliariaId, ejecutivo })          // ejecutivo: { id, email } | null
+getAvailableProjects({ inmobiliariaId, ejecutivo })
+```
+
+Sin `ejecutivo` el comportamiento es el de HU 7 — el catálogo del tenant — así que
+ningún llamador previo cambia. Con `ejecutivo`, quedan sólo los proyectos donde esa
+persona está asignada.
+
+Lo que cambió debajo es la premisa: HU 7 decía que "RLS ya limita la lectura al
+tenant", y eso era cierto pero **no alcanzaba**. Un `ejecutivo` leía *todo* el
+catálogo de su inmobiliaria, incluidos los proyectos de sus colegas; el vínculo de
+`proyecto_ejecutivos` era decorativo para la lectura. La migración
+`20260831090000_proyectos_scope_ejecutivo.sql` lo vuelve vinculante — ver
+[docs/database.md](database.md).
+
+Dos consecuencias para el consumidor:
+
+- **El recorte ocurre antes de `filterAvailable`**, que borra los vínculos
+  `pendiente` del arreglo `ejecutivos`. Al revés, un ejecutivo recién asignado
+  perdería su propio proyecto.
+- **`filterAssignedTo()` replica el predicado de la policy — id *o* correo, y
+  acepta el vínculo `pendiente`.** Tiene que ser el mismo predicado: el proveedor
+  `local` no tiene RLS y necesita el recorte, y contra Supabase un predicado más
+  estricto escondería proyectos que la base sí autoriza.
 
 ---
 
