@@ -338,71 +338,54 @@ export default function DashboardLeads({ evaluations }) {
       <div className="section-heading">
         <span className="eyebrow">Gestión comercial</span>
         <h1>Leads</h1>
-        <p>
-          Revisa el flujo evaluado, prioriza seguimientos y entra al detalle financiero-comercial con una lectura más clara.
-        </p>
       </div>
 
-      <div className="admin-hero admin-hero--compact admin-section-gap">
-        <div className="admin-hero__content">
-          <div className="admin-hero__meta">
-            <span className="admin-tag">Seguimiento activo</span>
-            <span className="admin-hero__subtle">
-              {filtered.length === evaluations.length
-                ? `${evaluations.length} leads visibles`
-                : `${filtered.length} leads filtrados de ${evaluations.length}`}
-            </span>
-          </div>
-          <h2>Una bandeja de trabajo orientada a prioridad, contexto y acción.</h2>
-          <p>
-            Filtra por clasificación, comuna, edad o fecha para que el equipo comercial no pierda foco entre registros de distinto valor.
-          </p>
+      <div className="admin-leads-topbar admin-section-gap">
+        <div className="admin-leads-topbar__intro">
+          <span className="admin-tag">Bandeja comercial</span>
+          <h2>{filtered.length === evaluations.length ? `${evaluations.length} leads visibles` : `${filtered.length} leads filtrados`}</h2>
+          <p>{filtered.length === evaluations.length ? "Sin filtros aplicados" : `de ${evaluations.length} evaluaciones`}</p>
         </div>
 
-        <div className="admin-hero__aside admin-hero__aside--stacked">
-          <div className="mini-stat">
-            <span>Último lead</span>
-            <strong>{latestLead ? formatFecha(latestLead.created_at) : "Sin datos"}</strong>
+        <dl className="admin-leads-context-strip">
+          <div className="admin-leads-context-strip__item">
+            <dt>Último lead</dt>
+            <dd>{latestLead ? formatFecha(latestLead.created_at) : "Sin datos"}</dd>
           </div>
-          <div className="mini-stat">
-            <span>Último alto potencial</span>
-            <strong>{latestHighLead ? formatFecha(latestHighLead.created_at) : "Sin datos"}</strong>
+          <div className="admin-leads-context-strip__item">
+            <dt>Último alto</dt>
+            <dd>{latestHighLead ? formatFecha(latestHighLead.created_at) : "Sin datos"}</dd>
           </div>
-          <div className="mini-stat">
-            <span>Comunas activas</span>
-            <strong>{allCommunes.length}</strong>
+          <div className="admin-leads-context-strip__item">
+            <dt>Comunas</dt>
+            <dd>{allCommunes.length}</dd>
           </div>
-        </div>
+        </dl>
       </div>
 
-      <div className="admin-kpi-grid">
-        <article className="admin-kpi-card admin-kpi-card--navy">
-          <span className="admin-kpi-card__label">Total evaluado</span>
-          <strong className="admin-kpi-card__value">{evaluations.length}</strong>
-          <p className="admin-kpi-card__hint">Volumen consolidado de leads listos para revisión.</p>
-        </article>
-        <article className="admin-kpi-card admin-kpi-card--success">
-          <span className="admin-kpi-card__label">Alta prioridad</span>
-          <strong className="admin-kpi-card__value">{counts.Alto}</strong>
-          <p className="admin-kpi-card__hint">Compatibilidad más alta para activación comercial inmediata.</p>
-        </article>
-        <article className="admin-kpi-card admin-kpi-card--gold">
-          <span className="admin-kpi-card__label">Prioridad media</span>
-          <strong className="admin-kpi-card__value">{counts.Medio}</strong>
-          <p className="admin-kpi-card__hint">Casos cercanos que pueden avanzar con orientación adicional.</p>
-        </article>
-        <article className="admin-kpi-card admin-kpi-card--danger">
-          <span className="admin-kpi-card__label">Prioridad baja</span>
-          <strong className="admin-kpi-card__value">{counts.Bajo}</strong>
-          <p className="admin-kpi-card__hint">Leads que requieren más preparación antes del siguiente paso.</p>
-        </article>
+      <div className="admin-leads-metric-strip admin-section-gap">
+        <div className="admin-leads-metric">
+          <span>Total</span>
+          <strong>{evaluations.length}</strong>
+        </div>
+        <div className="admin-leads-metric admin-leads-metric--high">
+          <span>Alta</span>
+          <strong>{counts.Alto}</strong>
+        </div>
+        <div className="admin-leads-metric admin-leads-metric--medium">
+          <span>Media</span>
+          <strong>{counts.Medio}</strong>
+        </div>
+        <div className="admin-leads-metric admin-leads-metric--low">
+          <span>Baja</span>
+          <strong>{counts.Bajo}</strong>
+        </div>
       </div>
 
       <div className="admin-surface admin-section-gap">
         <div className="admin-surface__header">
           <div className="admin-surface__title">
             <h2>Filtros de búsqueda</h2>
-            <p>Ajusta la bandeja para centrar el trabajo diario en los casos más relevantes.</p>
           </div>
           {hasActiveFilters && (
             <button type="button" className="secondary-button compact-button" onClick={clearFilters}>
@@ -473,23 +456,19 @@ export default function DashboardLeads({ evaluations }) {
         <div className="admin-surface__header">
           <div className="admin-surface__title">
             <h2>Bandeja de leads</h2>
-            <p>
-              {filtered.length === evaluations.length
-                ? `${evaluations.length} leads listos para revisión.`
-                : `${filtered.length} leads coinciden con los filtros aplicados.`}
-            </p>
+            <p>{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</p>
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap admin-leads-scroll" tabIndex="0" aria-label="Lista de leads">
           <table>
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Nombre</th>
+                <th>Contacto</th>
                 <th>Comuna</th>
                 <th>Clasificación</th>
-                <th>Riesgos</th>
+                <th>Riesgos registrados</th>
                 <th></th>
               </tr>
             </thead>
@@ -541,6 +520,7 @@ export default function DashboardLeads({ evaluations }) {
             </tbody>
           </table>
         </div>
+
       </div>
 
       {selectedLead && (

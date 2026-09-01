@@ -18,6 +18,7 @@ import NotificationToast from "./components/NotificationToast";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
+import AdminProfile from "./components/AdminProfile";
 import Recommendations from "./components/Recommendations";
 import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
@@ -247,6 +248,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "leads") return "/dashboard";
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
+  if (page === "admin-profile") return "/admin/perfil";
   return "/inicio";
 };
 
@@ -269,6 +271,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/ejecutivo/leads",
     "/admin",
     "/admin/proyectos",
+    "/admin/perfil",
     "/definir-password",
   ].includes(path);
 
@@ -281,7 +284,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/simulacion", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/simulacion", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/ejecutivo/leads"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -320,6 +323,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/") return { page: "admin", path: "/admin" };
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
+    if (path === "/admin/perfil") return { page: "admin-profile" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
     return { page: "admin", path: "/admin" };
@@ -494,10 +498,10 @@ export default function App() {
     };
   }, [userId]);
 
-  // Regenera la explicación IA de la preevaluación actual vía /score/explain.
+  // Regenera la explicación IA de una preevaluación vía /score/explain.
   // Devuelve true si se generó y persistió una explicación utilizable.
-  async function handleRetryAiExplanation() {
-    const evaluation = currentEvaluation;
+  async function handleRetryAiExplanation(evaluationToRetry = currentEvaluation) {
+    const evaluation = evaluationToRetry;
     if (!evaluation?.id || !evaluation?.input) return false;
 
     try {
@@ -1395,6 +1399,8 @@ export default function App() {
         />
       ) : page === "home" && profile.role === roles.admin ? (
         <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
+      ) : page === "admin-profile" && profile.role === roles.admin ? (
+        <AdminProfile profile={profile} onNavigate={navigateToPage} />
       ) : page === "home" ? (
         <section className="evaluation-panel">
           <div className="section-heading">
@@ -1603,6 +1609,7 @@ export default function App() {
           onSaveOnboarding={handleProfileOnboardingSave}
           onDeleteEvaluation={deleteEvaluation}
           onProfileUpdate={handleProfileUpdate}
+          onRetryExplanation={handleRetryAiExplanation}
         />
       ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking

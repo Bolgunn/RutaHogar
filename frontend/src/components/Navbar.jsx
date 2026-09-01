@@ -28,6 +28,9 @@ const navByRole = {
       { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M10 21v-5h4v5"/></svg> },
       { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
     ]},
+    { group: "Cuenta", items: [
+      { id: "admin-profile", label: "Mi perfil", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg> },
+    ]},
   ],
 };
 
@@ -59,7 +62,7 @@ export default function Navbar({ profile, page, currentScore, onNavigate, onLogo
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Usuario";
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email = profile?.email || "";
-  const accountTarget = role === roles.user ? "profile" : role === roles.admin ? "home" : "leads";
+  const accountTarget = role === roles.user ? "profile" : role === roles.admin ? "admin-profile" : "leads";
 
   const handleNavigate = (id) => {
     onNavigate(id);
