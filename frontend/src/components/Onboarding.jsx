@@ -164,7 +164,7 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">{isEditing ? "Editar contexto" : "Contexto inicial"}</div>
-            <h1 className="pre-wizard-card-title">{isEditing ? "Actualiza tu contexto" : "Cuéntanos sobre tu objetivo"}</h1>
+            <h2 className="pre-wizard-card-title">{isEditing ? "Actualiza tu contexto" : "Cuéntanos sobre tu objetivo"}</h2>
             <p className="pre-wizard-card-desc">
               {isEditing
                 ? "Modifica los datos de contexto para recalcular tu precalificación."

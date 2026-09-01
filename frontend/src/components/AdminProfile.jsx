@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { getProjects, getTenantContext } from "../services/projectService";
 
 function formatDate(value) {
   if (!value) return "Sin fecha registrada";
@@ -11,7 +12,9 @@ function formatDate(value) {
   });
 }
 
-export default function AdminProfile({ profile, onNavigate }) {
+export default function AdminProfile({ profile }) {
+  const [tenant, setTenant] = useState(null);
+  const [projectCount, setProjectCount] = useState(null);
   const initials = useMemo(() => {
     const name = profile?.full_name || profile?.email || "Administrador";
     return name
@@ -22,6 +25,19 @@ export default function AdminProfile({ profile, onNavigate }) {
       .slice(0, 2)
       .toUpperCase();
   }, [profile?.email, profile?.full_name]);
+
+  useEffect(() => {
+    let active = true;
+    getTenantContext()
+      .then(async (context) => {
+        if (!active) return;
+        setTenant(context);
+        const projects = await getProjects({ inmobiliariaId: context.isGlobalAdmin ? "all" : context.inmobiliaria_id });
+        if (active) setProjectCount(projects.length);
+      })
+      .catch(() => { if (active) { setTenant(null); setProjectCount(null); } });
+    return () => { active = false; };
+  }, []);
 
   return (
     <section className="section-block admin-account-page">
@@ -75,23 +91,23 @@ export default function AdminProfile({ profile, onNavigate }) {
           </dl>
         </section>
 
-        <section className="admin-surface admin-surface--soft">
+        <section className="admin-surface admin-account-organization">
           <div className="admin-surface__header">
             <div className="admin-surface__title">
-              <h2>Accesos</h2>
+              <h2>Organización</h2>
+              <p>Contexto operativo asociado a esta cuenta.</p>
             </div>
           </div>
-          <div className="admin-account-actions">
-            <button type="button" className="secondary-button" onClick={() => onNavigate("admin")}>
-              Inicio administrativo
-            </button>
-            <button type="button" className="secondary-button" onClick={() => onNavigate("admin-projects")}>
-              Proyectos
-            </button>
-            <button type="button" className="secondary-button" onClick={() => onNavigate("leads")}>
-              Leads
-            </button>
-          </div>
+          <dl className="admin-definition-list admin-account-details">
+            <div className="admin-definition-row">
+              <dt>Inmobiliaria</dt>
+              <dd>{tenant?.isGlobalAdmin ? "Cobertura global" : tenant?.inmobiliaria_nombre || "Sin inmobiliaria asociada"}</dd>
+            </div>
+            <div className="admin-definition-row">
+              <dt>Proyectos</dt>
+              <dd>{projectCount == null ? "Cargando proyectos" : projectCount}</dd>
+            </div>
+          </dl>
         </section>
       </div>
     </section>

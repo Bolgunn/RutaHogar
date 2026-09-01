@@ -1092,7 +1092,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Información personal</div>
-            <h1 className="pre-wizard-card-title">¿Cuándo naciste?</h1>
+            <h2 className="pre-wizard-card-title">¿Cuándo naciste?</h2>
             <p className="pre-wizard-card-desc">
               Tu edad se usa para calcular el plazo máximo del crédito hipotecario.
             </p>
@@ -1163,7 +1163,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Datos financieros</div>
-            <h1 className="pre-wizard-card-title">Tu situación financiera</h1>
+            <h2 className="pre-wizard-card-title">Tu situación financiera</h2>
             <p className="pre-wizard-card-desc">
               Usa montos aproximados. No pedimos claves, documentos ni información bancaria privada.
             </p>
@@ -1354,7 +1354,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Trabajo y antecedentes</div>
-            <h1 className="pre-wizard-card-title">Situación laboral</h1>
+            <h2 className="pre-wizard-card-title">Situación laboral</h2>
             <p className="pre-wizard-card-desc">
               La morosidad es autodeclarada y sólo se usa como señal orientativa.
             </p>
@@ -1588,7 +1588,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Último paso</div>
-            <h1 className="pre-wizard-card-title">Autorización y cálculo</h1>
+            <h2 className="pre-wizard-card-title">Autorización y cálculo</h2>
             <p className="pre-wizard-card-desc">
               Revisa tu información y acepta la autorización de tratamiento de datos para obtener tu precalificación.
             </p>

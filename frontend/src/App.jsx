@@ -18,6 +18,9 @@ import NotificationToast from "./components/NotificationToast";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
+import ProjectsWorkspace from "./components/ProjectsWorkspace";
+import ExecutiveProfile from "./components/ExecutiveProfile";
+import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
 import Recommendations from "./components/Recommendations";
 import Subsidios from "./components/Subsidios";
@@ -227,7 +230,7 @@ const mergeOnboardingData = (currentData, pendingData) => {
 
 const getInitialPageForProfile = (profile) => {
   if (!profile) return "auth";
-  if (profile.role === roles.sales) return "leads";
+  if (profile.role === roles.sales) return "home";
   if (profile.role === roles.admin) return "admin";
   if (profile.role !== roles.user) return "home";
   return hasCompletedOnboarding(getOnboardingData(profile)) ? "home" : "onboarding";
@@ -249,7 +252,9 @@ const getPrivatePathForPage = (page) => {
   if (page === "academia") return "/academia";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "profile") return "/perfil";
+  if (page === "sales-profile") return "/perfil";
   if (page === "leads") return "/dashboard";
+  if (page === "projects") return "/proyectos";
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
   if (page === "admin-profile") return "/admin/perfil";
@@ -279,6 +284,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/historial",
     "/dashboard",
     "/ejecutivo/leads",
+    "/proyectos",
     "/admin",
     "/admin/proyectos",
     "/admin/perfil",
@@ -294,7 +300,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/proyectos", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -323,11 +329,14 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
   }
 
   if (profile.role === roles.sales) {
-    if (path === "/") return { page: "leads", path: "/dashboard" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads" || path === "/inicio") {
+    if (path === "/") return { page: "home", path: "/inicio" };
+    if (path === "/inicio") return { page: "home" };
+    if (path === "/proyectos") return { page: "projects" };
+    if (path === "/perfil") return { page: "sales-profile" };
+    if (path === "/dashboard" || path === "/ejecutivo/leads") {
       return { page: "leads", path: path === "/dashboard" ? undefined : "/dashboard" };
     }
-    return { page: "leads", path: "/dashboard" };
+    return { page: "home", path: "/inicio" };
   }
 
   if (profile.role === roles.admin) {
@@ -335,6 +344,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
     if (path === "/admin/perfil") return { page: "admin-profile" };
+    if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
     return { page: "admin", path: "/admin" };
@@ -1428,8 +1438,15 @@ export default function App() {
         />
       ) : page === "home" && profile.role === roles.admin ? (
         <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
+      ) : page === "home" && profile.role === roles.sales ? (
+        <ExecutiveHome
+          profile={profile}
+          evaluations={evaluations}
+          inmobiliariaId={inmobiliariaId}
+          onNavigate={navigateToPage}
+        />
       ) : page === "admin-profile" && profile.role === roles.admin ? (
-        <AdminProfile profile={profile} onNavigate={navigateToPage} />
+        <AdminProfile profile={profile} />
       ) : page === "home" ? (
         <section className="evaluation-panel">
           <div className="section-heading">
@@ -1707,6 +1724,14 @@ export default function App() {
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
         />
+      ) : page === "projects" && profile.role === roles.sales ? (
+        <ProjectsWorkspace
+          inmobiliariaId={inmobiliariaId}
+          ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          isAdmin={false}
+        />
+      ) : page === "sales-profile" && profile.role === roles.sales ? (
+        <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
       ) : page === "admin" && profile.role === roles.admin ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && profile.role === roles.admin ? (

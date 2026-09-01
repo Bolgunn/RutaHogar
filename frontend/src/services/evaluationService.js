@@ -60,7 +60,7 @@ function buildFinancialDataSnapshot(evaluationPayload) {
   };
 }
 
-export function normalizeEvaluation(row, profilesMap = {}) {
+export function normalizeEvaluation(row, contactsMap = {}) {
   if (!row) return null;
 
   const recommendationData = row.recommendations || {};
@@ -69,6 +69,7 @@ export function normalizeEvaluation(row, profilesMap = {}) {
     : recommendationData.items || [];
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
+  const contact = contactsMap[row.user_id] || {};
 
   const onboarding = {
     objetivo_principal: row.objective || "",
@@ -84,8 +85,8 @@ export function normalizeEvaluation(row, profilesMap = {}) {
     email: row.email,
     housing_plan: row.housing_plan || null,
     plan_accepted_at: row.plan_accepted_at || null,
-    // Busca el nombre en el mapa de profiles por user_id
-    full_name: profilesMap[row.user_id] || null,
+    full_name: contact.full_name || null,
+    phone: contact.phone || null,
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -267,24 +268,22 @@ export async function getEvaluations(userId, role) {
   const { data, error } = await query;
   if (error) { logSupabaseError(error); throw error; }
 
-  // Para ejecutivos: buscar los full_name de los profiles en una segunda query.
-  // Necesario porque evaluations.user_id apunta a auth.users (no a public.profiles),
-  // y la política RLS de profiles solo permite leer el propio — usamos service-level
-  // a través del email guardado en la evaluación como fallback.
-  let profilesMap = {};
+  // El contacto de un lead se obtiene mediante una RPC limitada al staff, sin
+  // ampliar el acceso directo a perfiles personales.
+  let contactsMap = {};
   if (isSales && data?.length) {
     const userIds = [...new Set(data.map((r) => r.user_id).filter(Boolean))];
-    const { data: profilesData } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", userIds);
+    const { data: contactsData, error: contactsError } = await supabase
+      .rpc("list_lead_contacts", { p_user_ids: userIds });
 
-    if (profilesData) {
-      profilesMap = Object.fromEntries(profilesData.map((p) => [p.id, p.full_name]));
+    if (contactsError) {
+      logSupabaseError(contactsError);
+    } else if (contactsData) {
+      contactsMap = Object.fromEntries(contactsData.map((contact) => [contact.id, contact]));
     }
   }
 
-  return (data || []).map((row) => normalizeEvaluation(row, profilesMap));
+  return (data || []).map((row) => normalizeEvaluation(row, contactsMap));
 }
 
 export async function getLatestEvaluation(userId) {

@@ -821,69 +821,14 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
                   : `Artículos de ${activeTopicMeta?.label}`}
               </h3>
 
-              <div className="academy-articles-layout">
-                {/* PRIMER ARTÍCULO: DESTACADO */}
-                {filteredArticles[0] && (
-                  <button
-                    type="button"
-                    className="academy-article-featured"
-                    style={{
-                      "--card-accent":
-                        ACADEMY_TOPICS.find(
-                          (t) => t.id === filteredArticles[0].topic
-                        )?.accent,
-                    }}
-                    onClick={() => onOpenArticle(filteredArticles[0].id)}
-                  >
-                    <div className="academy-article-featured-badge">
-                      <i className="ti ti-star" aria-hidden="true" />
-                      Destacado
-                    </div>
-
-                    <TopicIcon
-                      topicId={filteredArticles[0].topic}
-                      size="md"
-                    />
-
-                    <h4>{filteredArticles[0].title}</h4>
-
-                    <p>{filteredArticles[0].summary}</p>
-
-                    <div className="academy-article-featured-meta">
-                      <span className="academy-meta-pill">
-                        <i className="ti ti-clock" aria-hidden="true" />
-                        {filteredArticles[0].minutes} min
-                      </span>
-
-                      <span className="academy-level-chip">
-                        {filteredArticles[0].level}
-                      </span>
-
-                      {filteredArticles[0].sources?.length > 0 && (
-                        <span className="academy-meta-pill academy-meta-pill--soft">
-                          <i className="ti ti-shield-check" aria-hidden="true" />
-                          {filteredArticles[0].sources.length} fuentes
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="academy-article-featured-cta">
-                      Leer artículo
-                      <i className="ti ti-arrow-right" aria-hidden="true" />
-                    </span>
-                  </button>
-                )}
-
-                {/* RESTO: GRILLA */}
-                <div className="academy-articles-grid">
-                  {filteredArticles.slice(1).map((article) => (
-                    <ArticleCard
-                      key={article.id}
-                      article={article}
-                      onOpen={onOpenArticle}
-                    />
-                  ))}
-                </div>
+              <div className="academy-articles-grid academy-articles-grid--directory">
+                {filteredArticles.map((article) => (
+                  <ArticleCard
+                    key={article.id}
+                    article={article}
+                    onOpen={onOpenArticle}
+                  />
+                ))}
               </div>
             </div>
           ) : (
@@ -1396,18 +1341,20 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, init
     <section className="section-block academia-panel">
       {/* HEADER */}
 
-      <div className="section-heading">
-        <span className="eyebrow">Academia financiera</span>
+      <header className="academy-intro">
+        <div>
+          <span className="eyebrow">Academia financiera</span>
 
-        <h1>Prepárate antes de comprar</h1>
+          <h1>Prepárate antes de comprar</h1>
 
-        <p>
-          Aprende sobre crédito hipotecario, ahorro, endeudamiento, UF,
-          subsidios y compra de vivienda con información respaldada por
-          fuentes oficiales chilenas.
-        </p>
+          <p>
+            Aprende sobre crédito hipotecario, ahorro, endeudamiento, UF,
+            subsidios y compra de vivienda con información respaldada por
+            fuentes oficiales chilenas.
+          </p>
+        </div>
 
-        <div className="academy-stats">
+        <div className="academy-stats" aria-label="Contenido disponible">
           <span className="academy-stat">
             <i className="ti ti-route" aria-hidden="true" />
             {ACADEMY_TOPICS.length} temas
@@ -1428,7 +1375,7 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, init
             SERNAC · CMF · MINVU · Banco Central
           </span>
         </div>
-      </div>
+      </header>
 
       {/* TABS */}
 

@@ -75,11 +75,13 @@ export default function AdminProjectCatalog() {
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState("todos");
   const [filterComuna, setFilterComuna] = useState("todas");
+  const [projectSort, setProjectSort] = useState({ field: "nombre", direction: "asc" });
 
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [projectSubmitAttempted, setProjectSubmitAttempted] = useState(false);
   const [executives, setExecutives] = useState([]);
   const [assignEmail, setAssignEmail] = useState("");
   const [assigning, setAssigning] = useState(false);
@@ -98,6 +100,7 @@ export default function AdminProjectCatalog() {
   const [creatingExecutive, setCreatingExecutive] = useState(false);
   const [executiveModalError, setExecutiveModalError] = useState("");
   const [newExecutiveCredentials, setNewExecutiveCredentials] = useState(null);
+  const [executiveSubmitAttempted, setExecutiveSubmitAttempted] = useState(false);
 
   const [adminModal, setAdminModal] = useState(false);
   const [adminInmobiliaria, setAdminInmobiliaria] = useState("");
@@ -204,6 +207,36 @@ export default function AdminProjectCatalog() {
     });
   }, [projects, search, filterEstado, filterComuna]);
 
+  const sortedProjects = useMemo(() => {
+    const valueFor = (project) => {
+      if (projectSort.field === "inmobiliaria") return project.inmobiliaria_nombre || "";
+      if (projectSort.field === "precio") return Number(project.precio_min_uf) || 0;
+      if (projectSort.field === "tipo") return tipoProyectoLabels[project.tipo] || project.tipo || "";
+      if (projectSort.field === "estado") return estadoProyectoLabels[project.estado] || project.estado || "";
+      return project[projectSort.field] || "";
+    };
+
+    return [...filtered].sort((left, right) => {
+      const leftValue = valueFor(left);
+      const rightValue = valueFor(right);
+      const comparison = typeof leftValue === "number"
+        ? leftValue - rightValue
+        : String(leftValue).localeCompare(String(rightValue), "es", { sensitivity: "base" });
+      return projectSort.direction === "asc" ? comparison : -comparison;
+    });
+  }, [filtered, projectSort]);
+
+  const toggleProjectSort = (field) => {
+    setProjectSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const sortIndicator = (field) => projectSort.field === field
+    ? projectSort.direction === "asc" ? "Ascendente" : "Descendente"
+    : "Ordenar";
+
   const refresh = async () => {
     const rows = await getProjects({ inmobiliariaId: selectedInmobiliaria });
     setProjects(rows);
@@ -211,6 +244,7 @@ export default function AdminProjectCatalog() {
 
   const openCreateModal = () => {
     setModalError("");
+    setProjectSubmitAttempted(false);
     setExecutives([]);
     setAssignEmail("");
     setForm({
@@ -226,6 +260,7 @@ export default function AdminProjectCatalog() {
 
   const openEditModal = (project) => {
     setModalError("");
+    setProjectSubmitAttempted(false);
     setExecutives(project.ejecutivos || []);
     setAssignEmail("");
     setForm({
@@ -246,6 +281,7 @@ export default function AdminProjectCatalog() {
     if (saving || assigning) return;
     setModal(null);
     setModalError("");
+    setProjectSubmitAttempted(false);
   };
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -253,6 +289,7 @@ export default function AdminProjectCatalog() {
   const { ok: formValid, errors: formErrors } = validateProject(form);
 
   const handleSave = async () => {
+    setProjectSubmitAttempted(true);
     if (!formValid) return;
     setSaving(true);
     setModalError("");
@@ -375,6 +412,7 @@ export default function AdminProjectCatalog() {
 
   const openExecutiveModal = () => {
     setExecutiveModalError("");
+    setExecutiveSubmitAttempted(false);
     setNewExecutiveCredentials(null);
     setExecutiveForm({
       ...emptyExecutiveForm,
@@ -390,6 +428,7 @@ export default function AdminProjectCatalog() {
   const { ok: executiveFormValid, errors: executiveFormErrors } = validateExecutive(executiveForm);
 
   const handleCreateExecutive = async () => {
+    setExecutiveSubmitAttempted(true);
     if (!executiveFormValid) return;
     setCreatingExecutive(true);
     setExecutiveModalError("");
@@ -774,18 +813,18 @@ export default function AdminProjectCatalog() {
             <table className="admin-project-table">
               <thead>
                 <tr>
-                  {isGlobalAdmin && <th>Inmobiliaria</th>}
-                  <th>Nombre</th>
-                  <th>Comuna</th>
-                  <th>Tipo</th>
-                  <th>Rango UF</th>
-                  <th>Estado</th>
+                   {isGlobalAdmin && <th aria-sort={projectSort.field === "inmobiliaria" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("inmobiliaria")}>Inmobiliaria <span aria-hidden="true">{sortIndicator("inmobiliaria") === "Ascendente" ? "↑" : sortIndicator("inmobiliaria") === "Descendente" ? "↓" : "↕"}</span></button></th>}
+                   <th>Nombre</th>
+                   <th aria-sort={projectSort.field === "comuna" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("comuna")}>Comuna <span aria-hidden="true">{sortIndicator("comuna") === "Ascendente" ? "↑" : sortIndicator("comuna") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "tipo" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("tipo")}>Tipo <span aria-hidden="true">{sortIndicator("tipo") === "Ascendente" ? "↑" : sortIndicator("tipo") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "precio" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("precio")}>Rango UF <span aria-hidden="true">{sortIndicator("precio") === "Ascendente" ? "↑" : sortIndicator("precio") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "estado" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("estado")}>Estado <span aria-hidden="true">{sortIndicator("estado") === "Ascendente" ? "↑" : sortIndicator("estado") === "Descendente" ? "↓" : "↕"}</span></button></th>
                   <th>Ejecutivos</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((project) => {
+                 {sortedProjects.map((project) => {
                   const { total, vinculados, pendientes } = countExecutives(project);
                   return (
                     <tr key={project.id} className="admin-project-table__row">
@@ -932,7 +971,7 @@ export default function AdminProjectCatalog() {
             if (!creatingExecutive) setExecutiveModal(false);
           }}
         >
-          <div className="admin-modal-card admin-modal-card--sm" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-card admin-modal-card--md admin-executive-modal" onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>Nuevo ejecutivo</h2>
@@ -982,8 +1021,8 @@ export default function AdminProjectCatalog() {
                       <h3>Datos de la cuenta</h3>
                     </div>
 
-                    <div className="form-grid">
-                      <div className="field-wrap">
+                    <div className={`form-grid admin-executive-form ${isGlobalAdmin ? "" : "is-tenant-scoped"}`}>
+                      <div className="field-wrap admin-executive-form__name">
                         <div className="field-label-row">
                           <label>Nombre completo</label>
                         </div>
@@ -995,12 +1034,12 @@ export default function AdminProjectCatalog() {
                           }
                           placeholder="Ej: Ana Soto"
                         />
-                        {executiveFormErrors.full_name && (
+                        {executiveSubmitAttempted && executiveFormErrors.full_name && (
                           <span className="field-warning">{executiveFormErrors.full_name}</span>
                         )}
                       </div>
 
-                      <div className="field-wrap">
+                      <div className="field-wrap admin-executive-form__email">
                         <div className="field-label-row">
                           <label>Correo</label>
                           <FieldTooltip text="Se usará como usuario. Si el correo ya tiene cuenta, se vincula como ejecutivo en vez de crear una nueva." />
@@ -1013,12 +1052,12 @@ export default function AdminProjectCatalog() {
                           }
                           placeholder="correo@inmobiliaria.cl"
                         />
-                        {executiveFormErrors.email && (
+                        {executiveSubmitAttempted && executiveFormErrors.email && (
                           <span className="field-warning">{executiveFormErrors.email}</span>
                         )}
                       </div>
 
-                      <div className="field-wrap">
+                      <div className="field-wrap admin-executive-form__phone">
                         <div className="field-label-row">
                           <label>Teléfono (opcional)</label>
                         </div>
@@ -1033,7 +1072,7 @@ export default function AdminProjectCatalog() {
                       </div>
 
                       {isGlobalAdmin && (
-                        <div className="field-wrap">
+                        <div className="field-wrap admin-executive-form__tenant">
                           <div className="field-label-row">
                             <label>Inmobiliaria</label>
                           </div>
@@ -1050,7 +1089,7 @@ export default function AdminProjectCatalog() {
                               </option>
                             ))}
                           </select>
-                          {executiveFormErrors.inmobiliaria_id && (
+                          {executiveSubmitAttempted && executiveFormErrors.inmobiliaria_id && (
                             <span className="field-warning">{executiveFormErrors.inmobiliaria_id}</span>
                           )}
                         </div>
@@ -1083,7 +1122,7 @@ export default function AdminProjectCatalog() {
                   <button
                     type="button"
                     onClick={handleCreateExecutive}
-                    disabled={creatingExecutive || !executiveFormValid}
+                    disabled={creatingExecutive}
                   >
                     {creatingExecutive ? "Creando…" : "Crear ejecutivo"}
                   </button>
@@ -1097,7 +1136,7 @@ export default function AdminProjectCatalog() {
       {/* ── Popup: Nuevo / editar proyecto ───────────────────────────── */}
       {modal && (
         <div className="admin-modal" onClick={closeModal}>
-          <div className="admin-modal-card admin-modal-card--md" onClick={(event) => event.stopPropagation()}>
+          <div className={`admin-modal-card admin-modal-card--lg admin-project-modal ${modal.mode === "create" ? "is-create" : "is-edit"}`} onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>{modal.mode === "create" ? "Nuevo proyecto" : "Editar proyecto"}</h2>
@@ -1125,8 +1164,8 @@ export default function AdminProjectCatalog() {
                   <h3>Datos del proyecto</h3>
                 </div>
 
-                <div className="form-grid">
-                  <div className="field-wrap">
+                <div className={`form-grid admin-project-form ${isGlobalAdmin ? "" : "is-tenant-scoped"}`}>
+                  <div className="field-wrap admin-project-form__name">
                     <div className="field-label-row">
                       <label>Nombre</label>
                     </div>
@@ -1136,11 +1175,11 @@ export default function AdminProjectCatalog() {
                       onChange={(event) => updateField("nombre", event.target.value)}
                       placeholder="Ej: Parque Ñuñoa"
                     />
-                    {formErrors.nombre && <span className="field-warning">{formErrors.nombre}</span>}
+                    {projectSubmitAttempted && formErrors.nombre && <span className="field-warning">{formErrors.nombre}</span>}
                   </div>
 
                   {isGlobalAdmin && (
-                    <div className="field-wrap">
+                    <div className="field-wrap admin-project-form__tenant">
                       <div className="field-label-row">
                         <label>Inmobiliaria</label>
                       </div>
@@ -1155,13 +1194,13 @@ export default function AdminProjectCatalog() {
                           </option>
                         ))}
                       </select>
-                      {formErrors.inmobiliaria_id && (
+                      {projectSubmitAttempted && formErrors.inmobiliaria_id && (
                         <span className="field-warning">{formErrors.inmobiliaria_id}</span>
                       )}
                     </div>
                   )}
 
-                  <div className="field-wrap">
+                  <div className="field-wrap admin-project-form__commune">
                     <div className="field-label-row">
                       <label>Comuna</label>
                       <FieldTooltip text="Se compara con la comuna de interés declarada por el lead. Una diferencia reduce la afinidad, pero nunca descarta el match." />
@@ -1177,10 +1216,10 @@ export default function AdminProjectCatalog() {
                         </option>
                       ))}
                     </select>
-                    {formErrors.comuna && <span className="field-warning">{formErrors.comuna}</span>}
+                    {projectSubmitAttempted && formErrors.comuna && <span className="field-warning">{formErrors.comuna}</span>}
                   </div>
 
-                  <div className="field-wrap">
+                  <div className="field-wrap admin-project-form__type">
                     <div className="field-label-row">
                       <label>Tipo</label>
                     </div>
@@ -1191,10 +1230,10 @@ export default function AdminProjectCatalog() {
                         </option>
                       ))}
                     </select>
-                    {formErrors.tipo && <span className="field-warning">{formErrors.tipo}</span>}
+                    {projectSubmitAttempted && formErrors.tipo && <span className="field-warning">{formErrors.tipo}</span>}
                   </div>
 
-                  <div className="field-wrap">
+                  <div className="field-wrap admin-project-form__status">
                     <div className="field-label-row">
                       <label>Estado</label>
                       <FieldTooltip text="«Agotado» excluye el proyecto de las recomendaciones del matching." />
@@ -1209,15 +1248,15 @@ export default function AdminProjectCatalog() {
                         </option>
                       ))}
                     </select>
-                    {formErrors.estado && <span className="field-warning">{formErrors.estado}</span>}
+                    {projectSubmitAttempted && formErrors.estado && <span className="field-warning">{formErrors.estado}</span>}
                   </div>
 
-                  <div className="field-wrap">
+                  <div className="field-wrap admin-project-form__price">
                     <div className="field-label-row">
                       <label>Rango de precio (UF)</label>
                       <FieldTooltip text="Mínimo: precio de la unidad disponible más barata. Máximo: la más cara. El matching usa el mínimo para decidir si el lead alcanza el proyecto. Si el proyecto tiene un precio único, repite el mismo valor." />
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <div className="admin-project-form__price-inputs">
                       <input
                         type="number"
                         min="0"
@@ -1234,15 +1273,15 @@ export default function AdminProjectCatalog() {
                       />
                       <span style={{ fontWeight: 700, color: "#526174" }}>UF</span>
                     </div>
-                    {formErrors.precio_min_uf && (
+                    {projectSubmitAttempted && formErrors.precio_min_uf && (
                       <span className="field-warning">{formErrors.precio_min_uf}</span>
                     )}
-                    {formErrors.precio_max_uf && (
+                    {projectSubmitAttempted && formErrors.precio_max_uf && (
                       <span className="field-warning">{formErrors.precio_max_uf}</span>
                     )}
                   </div>
 
-                  <div className="field-wrap">
+                  <div className="field-wrap admin-project-form__delivery">
                     <div className="field-label-row">
                       <label>Entrega estimada</label>
                       <FieldTooltip text="Mes de entrega del proyecto. Se muestra al usuario en la simulación; no afecta el matching ni el score. Déjalo vacío si aún no está comprometido." />
@@ -1252,12 +1291,12 @@ export default function AdminProjectCatalog() {
                       value={form.entrega_estimada}
                       onChange={(event) => updateField("entrega_estimada", event.target.value)}
                     />
-                    {formErrors.entrega_estimada && (
+                    {projectSubmitAttempted && formErrors.entrega_estimada && (
                       <span className="field-warning">{formErrors.entrega_estimada}</span>
                     )}
                   </div>
 
-                  <div className="field-wrap" style={{ gridColumn: "1 / -1" }}>
+                  <div className="field-wrap admin-project-form__description">
                     <div className="field-label-row">
                       <label>Descripción</label>
                       <FieldTooltip text="Texto de vitrina que el usuario ve junto al proyecto en la simulación. Opcional, máximo 500 caracteres." />
@@ -1269,14 +1308,14 @@ export default function AdminProjectCatalog() {
                       onChange={(event) => updateField("descripcion", event.target.value)}
                       placeholder="Ej: Departamento cercano a servicios y conectividad."
                     />
-                    {formErrors.descripcion && (
+                    {projectSubmitAttempted && formErrors.descripcion && (
                       <span className="field-warning">{formErrors.descripcion}</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="admin-panel-card">
+              <div className="admin-panel-card admin-project-modal__assignments">
                 <div className="admin-panel-card__header">
                   <h3>Ejecutivos asignados</h3>
                   {modal.mode !== "edit" && (
@@ -1350,7 +1389,7 @@ export default function AdminProjectCatalog() {
               <button type="button" className="secondary-button" onClick={closeModal} disabled={saving}>
                 Cancelar
               </button>
-              <button type="button" onClick={handleSave} disabled={saving || !formValid}>
+              <button type="button" onClick={handleSave} disabled={saving}>
                 {saving ? "Guardando…" : "Guardar proyecto"}
               </button>
             </div>

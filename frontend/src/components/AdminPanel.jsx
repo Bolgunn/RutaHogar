@@ -262,60 +262,7 @@ export default function AdminPanel({ evaluations, profile }) {
         </aside>
       </div>
 
-      <div className="admin-panel-board admin-panel-board--secondary admin-section-gap">
-        <article className="admin-surface admin-surface--soft">
-          <div className="admin-surface__header">
-            <div className="admin-surface__title">
-              <h2>Roles con acceso</h2>
-              <p>Mapa funcional de quién usa qué parte del producto.</p>
-            </div>
-          </div>
-
-          <div className="admin-role-grid">
-            {roleCards.map((item) => (
-              <article className="admin-role-tile" key={item.key}>
-                <span className="admin-tag admin-tag--soft">{item.state}</span>
-                <strong>{item.title}</strong>
-                <p>{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </article>
-
-        <article className="admin-surface">
-          <div className="admin-surface__header">
-            <div className="admin-surface__title">
-              <h2>Guardrails activos</h2>
-              <p>Reglas visibles que ordenan el uso del panel y el tratamiento de datos.</p>
-            </div>
-          </div>
-
-          <div className="admin-list admin-list--dense">
-            <article className="admin-list-item admin-list-item--dense">
-              <div className="admin-list-item__main">
-                <strong>Datos sensibles filtrados</strong>
-                <span>La vista omite documentos, claves bancarias y reglas internas de cálculo.</span>
-              </div>
-            </article>
-            <article className="admin-list-item admin-list-item--dense">
-              <div className="admin-list-item__main">
-                <strong>Solicitudes ARCO controladas</strong>
-                <span>
-                  {canSeeArco
-                    ? "Esta sesión puede revisar y procesar solicitudes de privacidad."
-                    : "Esta sesión no expone solicitudes ARCO por alcance de permisos."}
-                </span>
-              </div>
-            </article>
-            <article className="admin-list-item admin-list-item--dense">
-              <div className="admin-list-item__main">
-                <strong>Trazabilidad sin alterar scoring</strong>
-                <span>El panel observa y organiza la operación sin modificar reglas financieras ni scoring.</span>
-              </div>
-            </article>
-          </div>
-        </article>
-      </div>
+      
 
       {canSeeArco && (
         <div className="admin-surface admin-panel-arco-surface">
