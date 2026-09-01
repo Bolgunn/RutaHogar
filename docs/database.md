@@ -41,10 +41,23 @@ La deriva es difícil de ver porque el frontend suele filtrar lo mismo por su cu
 `filterAssignedTo()` recorta el catálogo en el cliente además de la policy. El síntoma queda tapado
 y sólo aparece a nivel de API.
 
-**Cómo comprobarlo**, sin depender de leerlo a ojo: extraer los cuerpos de policy de la migración y
-de `schema.sql`, normalizar espacios, descartar comentarios SQL, y comparar. Deben coincidir
-predicado por predicado; el rollback, en cambio, **no** debe coincidir — si coincide, no revierte
-nada.
+**Cómo comprobarlo**, sin depender de leerlo a ojo:
+
+```bash
+node scripts/check-schema-drift.js
+```
+
+Extrae los cuerpos de policy y de función de cada migración y de `schema.sql`, descarta comentarios y
+espacios, y compara. Compara sólo la **última** definición de cada objeto: las migraciones se pisan
+entre sí, y una policy reescrita tres veces sólo tiene que coincidir en su versión viva. Sale con
+código 1 si algo está fuera de sincronía, y avisa (sin abortar) de las migraciones sin rollback.
+
+**No está en CI** — ningún workflow lo corre. Se ejecuta a mano al escribir una migración.
+
+Al día de hoy reporta **11 objetos fuera de sincronía**: los 5 ausentes de la tabla de arriba y 6
+divergencias heredadas en `improvement_goals`, `evaluations` y `profiles`. Ninguno es de HU 10;
+`20260831090000` está sincronizada. Cerrarlos es una pasada de reconciliación propia, no de esta
+historia.
 
 ---
 
@@ -140,7 +153,10 @@ de un tenant ajeno. Una migración de scoping sólo debe **estrechar** lecturas,
    anterior — incluido borrar las funciones que la migración creó, si nada más las usa.
 3. **Reflejarla en `schema.sql`**, en el mismo commit. Ver la regla de arriba.
 4. **Responder la pregunta estándar 3 del plan** de la historia (*"¿Necesita migración? ¿Quién la
-   aplica al Supabase hosteado?"*) con el alcance real. CI la contrasta contra el diff.
+   aplica al Supabase hosteado?"*) con el alcance real. El handbook la da por contrastada contra el
+   diff *(planned)* — **hoy nadie la contrasta**: el único workflow del repo es
+   `deploy-supabase-functions.yml`, que despliega edge functions y no mira migraciones. Es una
+   revisión humana hasta que ese gate exista.
 5. **Aplicarla a mano** al Supabase hosteado. No hay runner automático ni CI que la ejecute: la corre
    quien mergea el PR, y deja constancia en el hilo.
 

@@ -90,7 +90,9 @@ extends the dashboard that already exists rather than adding a second lead surfa
 | 4 | Changes the `POST /score` contract? | **No.** Purely additive keys inside the existing `financial_indicators` dict. No field removed, renamed or retyped; no endpoint added (S2, guardrail #5) |
 | 5 | Consent / privacy impact? | **None new.** Capacity is derived from data the lead already submitted under `consentimiento = true`; no new intake field, no external data source (S5). The executive sees no personal data they cannot already see. `capacidad_supuestos` is metadata about the calculation, not about the person |
 
-> 1 and 3 are checked against the diff by CI.
+> 1 and 3 are meant to be checked against the diff by CI. **They are not**: the repo's only workflow
+> is `deploy-supabase-functions.yml`. The handbook marks this gate *(planned)*, and question 3 having
+> shipped with the wrong answer is what that missing gate looks like in practice.
 
 ## Entities
 
