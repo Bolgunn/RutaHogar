@@ -60,15 +60,10 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
   const completedCount = currentList.filter((i) => checked[i.id]).length;
   const progressPercent = Math.round((completedCount / (currentList.length || 1)) * 100);
 
-  // NOTA DE DOCUMENTACIÓN: 
-  // Actualmente un solo botón en el encabezado redirige a la Academia de forma general.
-  // Si en el futuro se desea que cada antecedente apunte a un artículo específico diferente, 
-  // se deben crear esos artículos detallados en `academyContent.js` y restaurar la lógica
-  // que pasaba `item.academyArticleId` a `onNavigate("academia", { articleId: ... })`.
   const handleOpenAcademia = (e) => {
     e.preventDefault();
     if (onNavigate) {
-      onNavigate("academia");
+      onNavigate("academia", { articleId: "docs-1" });
     }
   };
 
@@ -82,16 +77,19 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </div>
         {onNavigate && (
           <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
-            <i className="ti ti-books" /> Ir a la Academia
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+              <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
+            </svg>
+            ¿Dónde obtener cada documento?
           </button>
         )}
       </div>
 
-      {/* Criterio E3: Safeguards S1, S5, S7 Banner */}
+      {/* Criterio E3: Safeguards S1, S5, S7, S8 Banner Consolidado */}
       <div className="minimal-disclaimer-banner" role="alert">
         <div className="disclaimer-body">
-          <strong>{DISCLAIMER_TEXTS.bannerTitle}</strong>
-          <span>{DISCLAIMER_TEXTS.bannerText}</span>
+          <span>{DISCLAIMER_TEXTS.consolidated}</span>
         </div>
       </div>
 
@@ -158,9 +156,6 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </ul>
       </div>
 
-      <div className="checklist-footer-note">
-        <p><i className="ti ti-info-circle" /> {DISCLAIMER_TEXTS.legalNote}</p>
-      </div>
     </section>
   );
 }
