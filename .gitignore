@@ -27,8 +27,8 @@ docs/story-graph.html
 **/__pycache__/
 **/*.pyc
 
-# Obsidian UI state
-**/.obsidian/workspace.json
+# Obsidian: configuracion local del vault, no del proyecto
+**/.obsidian/
 .vercel
 .env*
 !.env.example
@@ -49,3 +49,5 @@ backend/vercel.json
 
 # Obsidian config in docs/
 docs/.obsidian/
+
+Makefile

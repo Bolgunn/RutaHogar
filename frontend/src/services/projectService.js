@@ -1,6 +1,6 @@
 import { supabase } from "../utils/supabase";
 import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
-import { filterAvailable, validateProject } from "./projectValidation";
+import { filterAssignedTo, filterAvailable, validateProject } from "./projectValidation";
 
 // Catálogo de proyectos inmobiliarios (HU 7).
 // Proveedores activos: 'local' (sin Supabase) y 'supabase'.
@@ -309,12 +309,17 @@ export async function assignAdmin(inmobiliariaId, email) {
 // Proyectos — contrato congelado para HU 13
 // ---------------------------------------------------------------
 
-export async function getProjects({ inmobiliariaId } = {}) {
+// `ejecutivo` ({ id, email }) acota el catálogo a los proyectos asignados a ese
+// ejecutivo comercial. Contra Supabase la policy ya lo hace en la base; se
+// filtra igual porque el proveedor local no tiene RLS. El admin no lo pasa: ve
+// su tenant. Van id y correo porque la policy acepta cualquiera de los dos.
+export async function getProjects({ inmobiliariaId, ejecutivo } = {}) {
   if (PROVIDER === "local") {
     const catalog = readCatalog();
-    return catalog.proyectos
+    const proyectos = catalog.proyectos
       .map((row) => buildLocalProject(catalog, row))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return filterAssignedTo(proyectos, ejecutivo);
   }
 
   // Vincula ejecutivos que ya crearon su cuenta desde la última carga.
@@ -346,12 +351,17 @@ export async function getProjects({ inmobiliariaId } = {}) {
   const namesById = await fetchExecutiveNames(assignments.map((item) => item.ejecutivo_id));
   const inmobiliariaNames = await inmobiliariaNameMap();
 
-  return rows.map((row) => buildRemoteProject(row, assignments, namesById, inmobiliariaNames));
+  const projects = rows.map((row) =>
+    buildRemoteProject(row, assignments, namesById, inmobiliariaNames),
+  );
+  return filterAssignedTo(projects, ejecutivo);
 }
 
 // E4: fuente de datos del matching (HU 13) — excluye 'agotado' y ejecutivos pendientes.
-export async function getAvailableProjects({ inmobiliariaId } = {}) {
-  const projects = await getProjects({ inmobiliariaId });
+// El recorte por ejecutivo ocurre antes de filterAvailable, que borra los
+// vínculos 'pendiente' del arreglo `ejecutivos`.
+export async function getAvailableProjects({ inmobiliariaId, ejecutivo } = {}) {
+  const projects = await getProjects({ inmobiliariaId, ejecutivo });
   return filterAvailable(projects);
 }
 

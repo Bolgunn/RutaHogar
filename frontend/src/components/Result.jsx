@@ -11,7 +11,7 @@ import {
   getClassificationTone,
   getUserResultFactors,
 } from "../utils/helpers";
-import { normalizeDisplayList, normalizeDisplayText } from "../utils/text";
+import { displayItemBenefit, displayItemText, normalizeDisplayList, normalizeDisplayText } from "../utils/text";
 
 function isPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -219,8 +219,10 @@ export default function Result({ data, onRetryExplanation }) {
             {briefRecommendations.length ? (
               briefRecommendations.map((step, i) => (
                 <li key={i}>
-                  {typeof step === "string" ? step : step.text}
-                  {typeof step !== "string" && step.benefit && <p className="benefit">Beneficio esperado: {step.benefit}</p>}
+                  {displayItemText(step)}
+                  {displayItemBenefit(step) ? (
+                    <p className="benefit">Beneficio esperado: {displayItemBenefit(step)}</p>
+                  ) : null}
                 </li>
               ))
             ) : (

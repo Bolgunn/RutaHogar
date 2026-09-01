@@ -228,7 +228,7 @@ client. Each names its proof; *(planned)* means the proof lands in phase 2.
 | S3 | **Scoring is rules, not ML.** No trained model computes or adjusts a score. | ALG path check *(planned)* + review |
 | S4 | **The score is clamped to [0,100] and always classified** — no null, no out-of-range value, no undocumented class. | invariant tests + ALG cases *(planned)* |
 | S5 | **Financial data is held under explicit consent.** `consentimiento` must be `true`; no external financial data (CMF, Dicom, banks, bureaus) without explicit consent and approved scope; ARCO requests stay serviceable. | contract validation + ARCO journey *(planned)* |
-| S6 | **Leads are scoped to their inmobiliaria.** Every table holding lead or profile data has an RLS policy; a new table without one does not ship. | standing question 2, checked against the diff *(planned)* |
+| S6 | **Leads are scoped to their inmobiliaria.** Every table holding lead or profile data has an RLS policy; a new table without one does not ship. **Known open gap: `evaluations` is not tenant-scoped** — see [database.md](database.md). | standing question 2, checked against the diff *(planned)* |
 | S7 | **The system does not approve credit.** Orientative pre-qualification only; no approval, no guarantee, no personalized financial advice. Every surface showing a score says so. | acceptance criteria of the result view |
 | S8 | **No credentials in source, no sensitive documents stored.** Every env var optional locally. | secret scanning *(planned)* + review |
 
@@ -264,6 +264,7 @@ and obvious in one deliberate pass.
 | `docs/procedures/` | how-to detail, consulted while working: grill, algorithms, golden payloads |
 | `docs/templates/` | `PLAN.md`, `ALG-N.md`, `ALG-N-cases.json`, `pull-request.md` |
 | `docs/algorithms/` | `ALG-N.md` + `ALG-N-cases.json` |
+| `docs/database.md` | RLS model, helper-function rules, and how a migration is applied |
 | `docs/stories/<HU>/PLAN.md` | one plan per story, git-tracked, reviewed in its PR |
 | `Wiki ScoreLeads/` | product and requirements: user stories, actors, risks, entregas |
 | `AGENTS.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md` | pointers here; **no rules of their own** |

@@ -1,4 +1,4 @@
-# Reporte de Aseguramiento de Calidad (QA) - ScoreLeads MVP
+# Reporte de Aseguramiento de Calidad (QA) - RutaHogar MVP
 
 ## Criterio de Aceptación 1 (CA1) de la HU3
 

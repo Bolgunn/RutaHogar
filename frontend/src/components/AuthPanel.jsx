@@ -470,6 +470,7 @@ const authStyles = `
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0;
+  margin-top: 7px;
 }
 .auth-phone-prefix {
   display: flex;
@@ -491,6 +492,10 @@ const authStyles = `
 .auth-phone input {
   border-radius: 0 10px 10px 0;
   height: 46px;
+  /* La regla global "input, select, textarea" trae margin-top: 7px. El prefijo
+     es un span y no lo recibe, asi que el input caia 7px mas abajo. El margen
+     lo lleva el contenedor. */
+  margin-top: 0;
 }
 
 /* ── Birth Date Grid ── */

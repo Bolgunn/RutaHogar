@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import BankingChecklist from "./BankingChecklist";
 import { buildRecommendations } from "../services/recommendationService";
+import { displayItemBenefit, displayItemText } from "../utils/text";
 
 import {
   formatBooleanText,
@@ -11,6 +12,8 @@ import {
   getUserResultFactors,
 } from "../utils/helpers";
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
+import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
+
 import AiExplanationBlock from "./AiExplanationBlock";
 
 function PlanCarousel({ children }) {
@@ -213,12 +216,17 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         <section>
           <h2 className="recommendation-section-title"><i className="ti ti-lightbulb"></i> Recomendaciones personalizadas</h2>
           <ul>
-            {data.recommendations.map((item) => (
-              <li key={item.text}>
+            {data.recommendations.map((item, index) => (
+              // Las listas son mixtas: string en evaluaciones legadas, objeto
+              // {text, benefit} desde HU 4. Leer item.text a secas renderizaba
+              // una vinieta vacia para las primeras.
+              <li key={`${displayItemText(item)}-${index}`}>
                 <i className="ti ti-circle-check recommendation-icon"></i>
                 <div>
-                  {item.text}
-                  {item.benefit && <p className="benefit"><b>Beneficio esperado: </b>{item.benefit}</p>}
+                  {displayItemText(item)}
+                  {displayItemBenefit(item) ? (
+                    <p className="benefit"><b>Beneficio esperado: </b>{displayItemBenefit(item)}</p>
+                  ) : null}
                 </div>
               </li>
             ))}
@@ -261,6 +269,36 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
               );
             })}
           </PlanCarousel>
+        </div>
+      )}
+
+      {data.housing_benefits?.applicable_benefits?.some((b) => b.eligible) && (
+        <div className="simulation-teaser">
+          <strong>Subsidios habitacionales</strong>
+          <p>
+            Descubre qu&#233; beneficios como FOGAES, DS49, DS1 o Ley 21.748 podr&#237;an ser compatibles con tu perfil.
+          </p>
+          <div className="simulation-teaser-actions">
+            <button type="button" className="secondary-button" onClick={() => onNavigate?.("subsidios")}>
+              Ver subsidios en detalle
+            </button>
+            {data.housing_benefits.applicable_benefits
+              .filter((b) => b.eligible)
+              .slice(0, 1)
+              .map((b) => {
+                const capsuleId = ACADEMY_BENEFIT_CAPSULES[b.academy_module];
+                return capsuleId ? (
+                  <button
+                    key={b.type}
+                    type="button"
+                    className="text-button"
+                    onClick={() => onNavigate?.("academia", { articleId: capsuleId })}
+                  >
+                    Explorar c&#225;psula: {b.name}
+                  </button>
+                ) : null;
+              })}
+          </div>
         </div>
       )}
 

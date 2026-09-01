@@ -1,770 +1,162 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
-import {
-  formatScore,
-  getBaseClassification,
-  getClassificationAdjustment,
-  getClassificationClass,
-  getScoreBadgeClassByScore,
-  translateSeverity,
-} from "../utils/helpers";
-
-function formatFecha(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("es-CL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function formatFechaHora(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("es-CL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-const eventLabels = {
-  no_viable_shown: "Plan no viable presentado",
-  apply_alternative: "Aplicó alternativa",
-  simulate_success: "Simulación viable",
-  accept_plan: "Aceptó el plan",
-  register_savings: "Registró ahorro",
-};
-
-function formatEventMoney(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return "";
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(Math.round(number / 1000) * 1000);
-}
-
-function renderEventDetail(event) {
-  const details = event.details || {};
-  switch (event.type) {
-    case "no_viable_shown":
-      return details.message || "Se presentó la condición No viable";
-    case "apply_alternative":
-      return `${details.title || details.alternative_id || "Alternativa"} -> ${details.result_viable ? "viable" : "no viable"}`;
-    case "simulate_success":
-      return details.months ? `Viable ahorrando en ${details.months} meses` : "Escenario simulado viable";
-    case "accept_plan":
-      return `Meta ${formatEventMoney(details.monthly_target)} / ${details.months ?? "-"} meses`;
-    case "register_savings":
-      return `${formatEventMoney(details.total_registered) || "$0"} acumulado (${details.progress_percent ?? 0}%)`;
-    default:
-      return "";
-  }
-}
-
-function formatEventAt(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const fecha = date.toLocaleDateString("es-CL");
-  const hora = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  return `${fecha} ${hora}`;
-}
-
-const AGE_RANGES = [
-  { label: "Todas las edades", min: 0, max: Infinity },
-  { label: "18 - 25 años", min: 18, max: 25 },
-  { label: "25 - 35 años", min: 25, max: 35 },
-  { label: "35 - 45 años", min: 35, max: 45 },
-  { label: "45 - 55 años", min: 45, max: 55 },
-  { label: "55 - 65 años", min: 55, max: 65 },
-  { label: "65+ años", min: 65, max: Infinity },
-];
-
-const channelLabels = {
-  web: "Web",
-  chatbot: "Chatbot",
-  whatsapp: "WhatsApp",
-  vendedor: "Vendedor",
-};
+import { getAvailableProjects } from "../services/projectService";
+import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
+import { rankLeadsForProject } from "../lib/matching/leadRanking";
+import { displayItemBenefit, displayItemText } from "../utils/text";
+import { formatScore, getClassificationClass } from "../utils/helpers";
 
 const DATE_RANGES = [
   { label: "Cualquier fecha", value: "todos" },
   { label: "Últimas 24 horas", value: "24h" },
   { label: "Última semana", value: "semana" },
   { label: "Último mes", value: "mes" },
-  { label: "Último año", value: "anio" },
+];
+const AGE_RANGES = [
+  { label: "Todas las edades", min: 0, max: Infinity },
+  { label: "18 - 25 años", min: 18, max: 25 },
+  { label: "25 - 35 años", min: 25, max: 35 },
+  { label: "35 - 45 años", min: 35, max: 45 },
+  { label: "45 - 55 años", min: 45, max: 55 },
+  { label: "55+ años", min: 55, max: Infinity },
 ];
 
-const DEFAULT_CLASSIFICATION_FILTER = "Alto";
-const emptyValue = "-";
-const CLP_FORMATTER = new Intl.NumberFormat("es-CL", {
-  style: "currency",
-  currency: "CLP",
-  maximumFractionDigits: 0,
-});
-
-function hasObjectData(value) {
-  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleDateString("es-CL");
 }
 
-function money(value) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return "Sin dato";
-  return CLP_FORMATTER.format(Math.round(numericValue));
+function threshold(range) {
+  const hours = { "24h": 24, semana: 24 * 7, mes: 24 * 30 }[range];
+  return hours ? new Date(Date.now() - hours * 60 * 60 * 1000) : null;
 }
 
-function booleanText(value) {
-  if (value === true) return "Sí";
-  if (value === false) return "No";
-  return "Sin dato";
+function DetailRow({ label, children }) {
+  return <div className="admin-definition-row"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
-function formatPercent(value) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return "Sin dato";
-  return `${Math.round(numericValue * 1000) / 10}%`;
-}
-
-function purchaseTermLabel(value) {
-  const labels = {
-    inmediato: "Inmediato",
-    "0_3_meses": "0 a 3 meses",
-    "3_a_6_meses": "3 a 6 meses",
-    "3_6_meses": "3 a 6 meses",
-    "6_a_12_meses": "6 a 12 meses",
-    "6_12_meses": "6 a 12 meses",
-    mas_12_meses: "Más de 12 meses",
-    solo_explorando: "Solo explorando",
-  };
-  return labels[value] || "Sin dato";
-}
-
-function getDateThreshold(value) {
-  const now = new Date();
-  switch (value) {
-    case "24h":
-      return new Date(now - 24 * 60 * 60 * 1000);
-    case "semana":
-      return new Date(now - 7 * 24 * 60 * 60 * 1000);
-    case "mes":
-      return new Date(now - 30 * 24 * 60 * 60 * 1000);
-    case "anio":
-      return new Date(now - 365 * 24 * 60 * 60 * 1000);
-    default:
-      return null;
-  }
-}
-
-function DataRow({ label, value }) {
-  return (
-    <div className="admin-definition-row">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
-function ListCard({ title, items, tone = "default" }) {
-  if (!items.length) return null;
-  return (
-    <article className={`admin-panel-card ${tone !== "default" ? `admin-panel-card--${tone}` : ""}`}>
-      <div className="admin-panel-card__header">
-        <h3>{title}</h3>
-      </div>
-      <ul className="admin-bullet-list">
-        {items.map((item, index) => (
-          <li key={`${title}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
-export default function DashboardLeads({ evaluations }) {
-  const [filter, setFilter] = useState(DEFAULT_CLASSIFICATION_FILTER);
-  const [filterCommune, setFilterCommune] = useState("todas");
-  const [filterAge, setFilterAge] = useState(0);
-  const [filterDate, setFilterDate] = useState("todos");
+export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo }) {
+  const [classification, setClassification] = useState("Alto");
+  const [commune, setCommune] = useState("todas");
+  const [age, setAge] = useState(0);
+  const [date, setDate] = useState("todos");
   const [search, setSearch] = useState("");
+  const [projects, setProjects] = useState([]);
+  const [projectsError, setProjectsError] = useState("");
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [projectId, setProjectId] = useState("");
+  const [sortBy, setSortBy] = useState("afinidad");
+  const [showExcluded, setShowExcluded] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [leadHistory, setLeadHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState("");
+  const [history, setHistory] = useState([]);
 
-  const selectedResult = selectedLead?.result || {};
-  const selectedInput = selectedLead?.input || {};
-  const selectedOnboarding = selectedLead?.onboarding || {};
-  const selectedMainBlocker = hasObjectData(selectedResult.main_blocker) ? selectedResult.main_blocker : null;
-  const selectedAdjustment = getClassificationAdjustment(selectedResult);
-  const selectedProjectFit = hasObjectData(selectedResult.project_fit) ? selectedResult.project_fit : null;
-  const selectedCommercialPriority = hasObjectData(selectedResult.commercial_priority_detail)
-    ? selectedResult.commercial_priority_detail
-    : null;
-  const selectedRecommendations = Array.isArray(selectedResult.recommendations) ? selectedResult.recommendations : [];
-  const selectedPositiveIndicators = Array.isArray(selectedResult.positive_indicators) ? selectedResult.positive_indicators : [];
-  const selectedRisks = Array.isArray(selectedResult.risks) ? selectedResult.risks : [];
-  const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators)
-    ? selectedResult.financial_indicators
-    : {};
-  const selectedPhone = selectedLead?.phone || selectedLead?.profile?.phone || "";
-  const selectedBaseScore = selectedResult.base_score ?? selectedResult.score;
-  const selectedFinalScore = selectedResult.adjusted_score ?? selectedResult.score;
-  const selectedLeadName = selectedLead?.full_name?.split(" ")[0] || "Cliente";
-  const selectedEmailHref = selectedLead
-    ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLeadName},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`
-    : "#";
-  const selectedWhatsappHref = selectedPhone
-    ? `https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLeadName}. Te escribo por RutaHogar.`)}`
-    : "";
-  const hasActiveFilters =
-    filter !== DEFAULT_CLASSIFICATION_FILTER ||
-    filterCommune !== "todas" ||
-    filterAge !== 0 ||
-    filterDate !== "todos" ||
-    search !== "";
-
-  const clearFilters = () => {
-    setFilter(DEFAULT_CLASSIFICATION_FILTER);
-    setFilterCommune("todas");
-    setFilterAge(0);
-    setFilterDate("todos");
-    setSearch("");
-  };
+  const executiveId = ejecutivo?.id ?? null;
+  const executiveEmail = ejecutivo?.email ?? null;
+  const executiveScope = useMemo(
+    () => executiveId || executiveEmail ? { id: executiveId, email: executiveEmail } : null,
+    [executiveId, executiveEmail],
+  );
 
   useEffect(() => {
-    if (!selectedLead) {
-      setLeadHistory([]);
-      setHistoryLoading(false);
-      setHistoryError("");
-      return;
-    }
-
     let active = true;
-    setHistoryLoading(true);
-    setHistoryError("");
+    setProjectsLoaded(false);
+    setProjectsError("");
+    getAvailableProjects({ inmobiliariaId, ejecutivo: executiveScope })
+      .then((items) => { if (active) setProjects(items); })
+      .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); })
+      .finally(() => { if (active) setProjectsLoaded(true); });
+    return () => { active = false; };
+  }, [inmobiliariaId, executiveScope]);
 
+  useEffect(() => {
+    if (!selectedLead) { setHistory([]); return; }
+    let active = true;
     getScoringHistoryByEvaluation(selectedLead.id)
-      .then((data) => {
-        if (!active) return;
-        setLeadHistory(data);
-      })
-      .catch((err) => {
-        if (!active) return;
-        console.error(err);
-        setHistoryError("No se pudo cargar el historial de auditoría.");
-      })
-      .finally(() => {
-        if (active) setHistoryLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      .then((items) => { if (active) setHistory(items); })
+      .catch(() => { if (active) setHistory([]); });
+    return () => { active = false; };
   }, [selectedLead]);
 
-  const allCommunes = useMemo(() => {
-    const communes = new Set();
-    evaluations.forEach((item) => {
-      const main = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
-      const alt = item.onboarding?.comuna_alternativa;
-      if (main) communes.add(main);
-      if (alt) communes.add(alt);
-    });
-    return [...communes].sort();
-  }, [evaluations]);
-
-  const counts = useMemo(() => {
-    const result = { Alto: 0, Medio: 0, Bajo: 0 };
-    evaluations.forEach((item) => {
-      const classification = item.result?.classification;
-      if (result[classification] !== undefined) result[classification] += 1;
-    });
+  const communes = useMemo(() => [...new Set(evaluations.flatMap((item) => [
+    item.input?.comuna_objetivo || item.onboarding?.comuna_interes,
+    item.onboarding?.comuna_alternativa,
+  ]).filter(Boolean))].sort(), [evaluations]);
+  const counts = useMemo(() => evaluations.reduce((result, item) => {
+    if (item.result?.classification in result) result[item.result.classification] += 1;
     return result;
-  }, [evaluations]);
-
-  const filtered = useMemo(() => {
-    const ageRange = AGE_RANGES[filterAge];
-    const dateThreshold = getDateThreshold(filterDate);
-    const searchLower = search.trim().toLowerCase();
-
-    return evaluations.filter((item) => {
-      if (filter !== "todos" && item.result?.classification !== filter) return false;
-
-      if (filterCommune !== "todas") {
-        const main = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
-        const alt = item.onboarding?.comuna_alternativa;
-        if (main !== filterCommune && alt !== filterCommune) return false;
-      }
-
-      if (ageRange.min > 0 || ageRange.max !== Infinity) {
-        const age = item.input?.edad;
-        if (age == null || age < ageRange.min || age >= ageRange.max) return false;
-      }
-
-      if (dateThreshold) {
-        const itemDate = item.created_at ? new Date(item.created_at) : null;
-        if (!itemDate || itemDate < dateThreshold) return false;
-      }
-
-      if (searchLower) {
-        const name = (item.full_name || "").toLowerCase();
-        const email = (item.email || "").toLowerCase();
-        if (!name.includes(searchLower) && !email.includes(searchLower)) return false;
-      }
-
-      return true;
-    });
-  }, [evaluations, filter, filterCommune, filterAge, filterDate, search]);
-
-  const latestLead = useMemo(() => {
-    return [...evaluations].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
-  }, [evaluations]);
-
-  const latestHighLead = useMemo(() => {
-    return [...evaluations]
-      .filter((item) => item.result?.classification === "Alto")
-      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
-  }, [evaluations]);
-
-  return (
-    <section className="section-block admin-leads-page">
-      <div className="section-heading">
-        <span className="eyebrow">Gestión comercial</span>
-        <h1>Leads</h1>
-      </div>
-
-      <div className="admin-leads-topbar admin-section-gap">
-        <div className="admin-leads-topbar__intro">
-          <span className="admin-tag">Bandeja comercial</span>
-          <h2>{filtered.length === evaluations.length ? `${evaluations.length} leads visibles` : `${filtered.length} leads filtrados`}</h2>
-          <p>{filtered.length === evaluations.length ? "Sin filtros aplicados" : `de ${evaluations.length} evaluaciones`}</p>
-        </div>
-
-        <dl className="admin-leads-context-strip">
-          <div className="admin-leads-context-strip__item">
-            <dt>Último lead</dt>
-            <dd>{latestLead ? formatFecha(latestLead.created_at) : "Sin datos"}</dd>
-          </div>
-          <div className="admin-leads-context-strip__item">
-            <dt>Último alto</dt>
-            <dd>{latestHighLead ? formatFecha(latestHighLead.created_at) : "Sin datos"}</dd>
-          </div>
-          <div className="admin-leads-context-strip__item">
-            <dt>Comunas</dt>
-            <dd>{allCommunes.length}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="admin-leads-metric-strip admin-section-gap">
-        <div className="admin-leads-metric">
-          <span>Total</span>
-          <strong>{evaluations.length}</strong>
-        </div>
-        <div className="admin-leads-metric admin-leads-metric--high">
-          <span>Alta</span>
-          <strong>{counts.Alto}</strong>
-        </div>
-        <div className="admin-leads-metric admin-leads-metric--medium">
-          <span>Media</span>
-          <strong>{counts.Medio}</strong>
-        </div>
-        <div className="admin-leads-metric admin-leads-metric--low">
-          <span>Baja</span>
-          <strong>{counts.Bajo}</strong>
-        </div>
-      </div>
-
-      <div className="admin-surface admin-section-gap">
-        <div className="admin-surface__header">
-          <div className="admin-surface__title">
-            <h2>Filtros de búsqueda</h2>
-          </div>
-          {hasActiveFilters && (
-            <button type="button" className="secondary-button compact-button" onClick={clearFilters}>
-              Limpiar filtros
-            </button>
-          )}
-        </div>
-
-        <div className="toolbar-filters admin-toolbar-filters">
-          <label style={{ flexBasis: "100%" }}>
-            Buscar por nombre o correo
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Ej: Camila Retamal o camila@correo.cl"
-              style={{ marginTop: "0.5rem" }}
-            />
-          </label>
-
-          <label>
-            Clasificación
-            <select value={filter} onChange={(event) => setFilter(event.target.value)}>
-              <option value="todos">Todos ({evaluations.length})</option>
-              <option value="Alto">Alto ({counts.Alto})</option>
-              <option value="Medio">Medio ({counts.Medio})</option>
-              <option value="Bajo">Bajo ({counts.Bajo})</option>
-            </select>
-          </label>
-
-          <label>
-            Comuna
-            <select value={filterCommune} onChange={(event) => setFilterCommune(event.target.value)}>
-              <option value="todas">Todas las comunas</option>
-              {allCommunes.map((commune) => (
-                <option key={commune} value={commune}>
-                  {commune}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Rango de edad
-            <select value={filterAge} onChange={(event) => setFilterAge(Number(event.target.value))}>
-              {AGE_RANGES.map((range, index) => (
-                <option key={index} value={index}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Fecha
-            <select value={filterDate} onChange={(event) => setFilterDate(event.target.value)}>
-              {DATE_RANGES.map((range) => (
-                <option key={range.value} value={range.value}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <div className="admin-surface">
-        <div className="admin-surface__header">
-          <div className="admin-surface__title">
-            <h2>Bandeja de leads</h2>
-            <p>{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</p>
-          </div>
-        </div>
-
-        <div className="table-wrap admin-leads-scroll" tabIndex="0" aria-label="Lista de leads">
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Contacto</th>
-                <th>Comuna</th>
-                <th>Clasificación</th>
-                <th>Riesgos registrados</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => (
-                <tr key={item.id}>
-                  <td>{formatFecha(item.created_at)}</td>
-                  <td>
-                    <strong>{item.full_name || item.email || emptyValue}</strong>
-                    <br />
-                    <span className="admin-table-meta">{item.email || "Sin correo"}</span>
-                  </td>
-                  <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
-                  <td>
-                    <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
-                      {item.result?.classification || emptyValue}
-                    </span>
-                  </td>
-                  <td>
-                    {item.result?.risks?.length
-                      ? item.result.risks.slice(0, 2).join(" · ")
-                      : "Sin riesgos relevantes"}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="secondary-button compact-button"
-                      onClick={() => setSelectedLead(item)}
-                    >
-                      Ver detalle
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filtered.length && (
-                <tr>
-                  <td colSpan="6">
-                    <div className="empty-state">
-                      <strong>{hasActiveFilters ? "No hay coincidencias" : "Aún no hay leads en esta vista"}</strong>
-                      <p>
-                        {hasActiveFilters
-                          ? "Ajusta los filtros para ampliar la búsqueda y recuperar más resultados."
-                          : "Cuando existan evaluaciones aparecerán aquí con su prioridad comercial."}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-      </div>
-
-      {selectedLead && (
-        <div className="admin-modal" onClick={() => setSelectedLead(null)}>
-          <div className="admin-modal-card admin-modal-card--xl" onClick={(event) => event.stopPropagation()}>
-            <div className="admin-modal-header">
-              <div className="admin-modal-heading">
-                <span className="eyebrow">Lead seleccionado</span>
-                <h2>{selectedLead.full_name || selectedLead.email || "Lead sin nombre"}</h2>
-                <p>
-                  {selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Comuna sin dato"} · {formatFechaHora(selectedLead.created_at)}
-                </p>
-              </div>
-              <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>
-                Cerrar
-              </button>
-            </div>
-
-            <div className="lead-score-highlight">
-              <div className={getScoreBadgeClassByScore(selectedBaseScore)}>
-                <span>Score base</span>
-                <strong>{formatScore(selectedBaseScore) ?? emptyValue}</strong>
-                <small>Base: {getBaseClassification(selectedResult)}</small>
-              </div>
-              <div className={getClassificationClass(selectedResult.classification)}>
-                <span>Score final</span>
-                <strong>{formatScore(selectedFinalScore) ?? emptyValue}</strong>
-                <small>{selectedResult.score_adjustment_reason ? "Ajustado por bloqueadores" : "Sin ajuste adicional"}</small>
-              </div>
-              <div className={getClassificationClass(selectedResult.classification)}>
-                <span>Clasificación final</span>
-                <strong>{selectedResult.classification || emptyValue}</strong>
-              </div>
-            </div>
-
-            {selectedAdjustment && (
-              <div className="admin-callout admin-callout--warning admin-section-gap">
-                <strong>{selectedAdjustment.message}</strong>
-                {selectedAdjustment.detail ? <p>{selectedAdjustment.detail}</p> : null}
-                {selectedResult.score_adjustment_reason ? <p>{selectedResult.score_adjustment_reason}</p> : null}
-              </div>
-            )}
-
-            <div className="admin-detail-grid">
-              <div className="admin-stack">
-                <article className="admin-panel-card">
-                  <div className="admin-panel-card__header">
-                    <h3>Información del cliente</h3>
-                  </div>
-                  <dl className="admin-definition-list">
-                    <DataRow label="Nombre" value={selectedLead.full_name || emptyValue} />
-                    <DataRow label="Correo" value={selectedLead.email || emptyValue} />
-                    <DataRow label="Teléfono" value={selectedPhone || emptyValue} />
-                    <DataRow label="Edad" value={selectedInput.edad != null ? `${selectedInput.edad} años` : emptyValue} />
-                    <DataRow label="Comuna principal" value={selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || emptyValue} />
-                    {selectedOnboarding.comuna_alternativa ? (
-                      <DataRow label="Comuna alternativa" value={selectedOnboarding.comuna_alternativa} />
-                    ) : null}
-                    <DataRow label="Fecha evaluación" value={formatFechaHora(selectedLead.created_at)} />
-                  </dl>
-                </article>
-
-                {selectedMainBlocker && (
-                  <article className="admin-panel-card admin-panel-card--warning">
-                    <div className="admin-panel-card__header">
-                      <h3>Bloqueador principal</h3>
-                    </div>
-                    <p className="admin-panel-card__body-strong">
-                      {selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}
-                    </p>
-                    {selectedMainBlocker.description ? <p>{selectedMainBlocker.description}</p> : null}
-                    <span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span>
-                  </article>
-                )}
-
-                <ListCard title="Indicadores positivos" items={selectedPositiveIndicators} tone="success" />
-                <ListCard title="Riesgos detectados" items={selectedRisks} tone="danger" />
-              </div>
-
-              <div className="admin-stack">
-                {selectedProjectFit && (
-                  <article className="admin-panel-card">
-                    <div className="admin-panel-card__header">
-                      <h3>Compatibilidad con objetivo</h3>
-                    </div>
-                    <dl className="admin-definition-list">
-                      <DataRow label="Clasificación" value={selectedProjectFit.classification || selectedProjectFit.status || emptyValue} />
-                      <DataRow label="Score" value={formatScore(selectedProjectFit.score) ?? emptyValue} />
-                      <DataRow label="Brecha ingreso" value={money(selectedProjectFit.income_gap)} />
-                      <DataRow label="Brecha pie" value={money(selectedProjectFit.down_payment_gap)} />
-                      <DataRow label="Compatible" value={booleanText(selectedProjectFit.compatible)} />
-                    </dl>
-                  </article>
-                )}
-
-                <article className="admin-panel-card">
-                  <div className="admin-panel-card__header">
-                    <h3>Señales comerciales declaradas</h3>
-                  </div>
-                  <dl className="admin-definition-list">
-                    <DataRow label="Plazo de compra" value={purchaseTermLabel(selectedInput.plazo_compra)} />
-                    <DataRow label="Proyecto visto" value={booleanText(selectedInput.tiene_propiedad_vista)} />
-                    <DataRow label="Pie estimado" value={formatPercent(selectedFinancialIndicators.pie_ratio)} />
-                  </dl>
-                </article>
-
-                {selectedCommercialPriority && (
-                  <article className="admin-panel-card admin-panel-card--success">
-                    <div className="admin-panel-card__header">
-                      <h3>Prioridad comercial</h3>
-                    </div>
-                    <dl className="admin-definition-list">
-                      <DataRow label="Acción" value={selectedCommercialPriority.action || selectedCommercialPriority.level || emptyValue} />
-                      <DataRow label="Motivo" value={selectedCommercialPriority.reason || "Sin motivo registrado."} />
-                      <DataRow label="Derivación sugerida" value={booleanText(selectedCommercialPriority.send_to_crm)} />
-                    </dl>
-                  </article>
-                )}
-
-                <ListCard title="Recomendaciones" items={selectedRecommendations} />
-
-                {selectedResult.executive_summary && (
-                  <article className="admin-panel-card">
-                    <div className="admin-panel-card__header">
-                      <h3>Resumen ejecutivo</h3>
-                    </div>
-                    <p>{selectedResult.executive_summary}</p>
-                  </article>
-                )}
-
-                {!selectedCommercialPriority && selectedResult.commercial_guidance && (
-                  <article className="admin-panel-card admin-panel-card--soft">
-                    <div className="admin-panel-card__header">
-                      <h3>Orientación comercial</h3>
-                    </div>
-                    <p>{selectedResult.commercial_guidance}</p>
-                  </article>
-                )}
-
-                <article className="admin-panel-card">
-                  <div className="admin-panel-card__header">
-                    <h3>Acciones rápidas</h3>
-                  </div>
-                  <div className="admin-action-grid">
-                    <a
-                      href={selectedEmailHref}
-                      className="secondary-button admin-link-button"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Correo
-                    </a>
-                    {selectedPhone ? (
-                      <a
-                        href={selectedWhatsappHref}
-                        className="primary-button admin-link-button"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        WhatsApp
-                      </a>
-                    ) : (
-                      <button type="button" className="secondary-button admin-link-button" disabled>
-                        WhatsApp no disponible
-                      </button>
-                    )}
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <section className="admin-panel-card admin-panel-card--soft admin-history-section">
-              <div className="admin-panel-card__header">
-                <h3>Historial inmutable</h3>
-              </div>
-
-              {historyLoading ? (
-                <div className="admin-table-loading">
-                  <span className="admin-skeleton-line full"></span>
-                  <span className="admin-skeleton-line full"></span>
-                  <span className="admin-skeleton-line medium"></span>
-                </div>
-              ) : historyError ? (
-                <div className="error-message">{historyError}</div>
-              ) : leadHistory.length > 0 ? (
-                <div className="admin-history-list">
-                  {leadHistory.map((item) => (
-                    <article className="admin-history-card" key={item.id}>
-                      <div className="admin-history-card__head">
-                        <span className="admin-tag admin-tag--soft">{formatFechaHora(item.created_at)} UTC</span>
-                        <strong>
-                          Score base: {formatScore(item.base_score ?? item.score, "Sin score")} · Score final: {formatScore(item.adjusted_score ?? item.score, "Sin score")} · Clasificación final: {item.classification || emptyValue}
-                        </strong>
-                      </div>
-
-                      <dl className="admin-definition-list">
-                        <DataRow label="Comuna objetivo" value={item.snapshot?.comuna_objetivo || "No declarada"} />
-                        <DataRow label="Canal de origen" value={channelLabels[item.channel] || item.channel || "web"} />
-                        <DataRow label="Versión del algoritmo" value={item.algorithm_version || "-"} />
-                        <div className="admin-definition-row admin-definition-row--stacked">
-                          <dt>Desglose por componente</dt>
-                          <dd>
-                            {item.component_scores && Object.keys(item.component_scores).length > 0 ? (
-                              <ul className="admin-bullet-list admin-bullet-list--compact">
-                                {Object.entries(item.component_scores).map(([key, value]) => (
-                                  <li key={key}>
-                                    {key.replace(/_/g, " ")} {value >= 0 ? `+${value}` : value}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              "-"
-                            )}
-                          </dd>
-                        </div>
-                      </dl>
-
-                      {(item.events || []).length > 0 && (
-                        <div className="admin-history-events">
-                          <span className="admin-tag admin-tag--soft">Eventos del plan</span>
-                          <ul className="admin-event-list">
-                            {(item.events || []).map((event, index) => (
-                              <li key={`${item.id}-${index}`}>
-                                <strong>{eventLabels[event.type] || event.type}</strong>
-                                <span>{formatEventAt(event.at)}</span>
-                                <p>{renderEventDetail(event)}</p>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <strong>Sin registros de auditoría</strong>
-                  <p>No hay eventos históricos asociados a esta evaluación.</p>
-                </div>
-              )}
-            </section>
-          </div>
-        </div>
-      )}
-    </section>
+  }, { Alto: 0, Medio: 0, Bajo: 0 }), [evaluations]);
+  const selectedProject = useMemo(
+    () => projects.find((item) => String(item.id) === projectId) || null,
+    [projects, projectId],
   );
+  const defaultClassification = selectedProject ? "todos" : "Alto";
+  const filtered = useMemo(() => {
+    const dateThreshold = threshold(date);
+    const ageRange = AGE_RANGES[age];
+    const term = search.trim().toLowerCase();
+    return evaluations.filter((item) => {
+      const mainCommune = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
+      if (classification !== "todos" && item.result?.classification !== classification) return false;
+      if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
+      if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
+      if (ageRange.min && item.input?.edad == null) return false;
+      if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
+      return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
+    });
+  }, [evaluations, classification, commune, age, date, search]);
+  const { ranked, descartados, requiereAntecedentes } = useMemo(
+    () => rankLeadsForProject(filtered, selectedProject, sortBy),
+    [filtered, selectedProject, sortBy],
+  );
+  const selectedMatch = useMemo(() => {
+    if (!selectedLead || !selectedProject) return null;
+    const { matches, excluidos } = matchLeadToProjects(selectedLead, [selectedProject]);
+    return matches[0] || excluidos[0] || null;
+  }, [selectedLead, selectedProject]);
+  const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search;
+  const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); };
+  const selectProject = (nextId) => { setProjectId(nextId); setClassification(nextId ? "todos" : "Alto"); };
+
+  const row = ({ lead, match }) => (
+    <tr key={lead.id} className="lead-row" onClick={() => setSelectedLead(lead)}>
+      {!selectedProject && <td>{formatDate(lead.created_at)}</td>}
+      <td><button type="button" className="lead-row-open" onClick={(event) => { event.stopPropagation(); setSelectedLead(lead); }}>{lead.full_name || lead.email || "Sin nombre"}</button></td>
+      <td>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</td>
+      <td><span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span></td>
+      {selectedProject ? <>
+        <td>{match?.afinidad ?? "-"}<small className="lead-cell-sub">{match?.clasificacion || ""}</small></td>
+        <td>{match?.evidencia?.capacidad_uf ?? "Sin dato"} UF<small className="lead-cell-sub">{match?.evidencia?.plazo_anios ? `${match.evidencia.plazo_anios} años` : ""}</small></td>
+        <td>{match?.evidencia?.pie_disponible_uf ?? "Sin dato"} UF</td>
+        <td>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</td>
+      </> : <td>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</td>}
+    </tr>
+  );
+  const head = <thead><tr>{!selectedProject && <th>Fecha</th>}<th>Lead</th><th>Comuna</th><th>Clasificación</th>{selectedProject ? <><th>Afinidad</th><th>Capacidad</th><th>Pie</th><th>Bloqueador</th></> : <th>Riesgos</th>}</tr></thead>;
+  const columnCount = selectedProject ? 8 : 5;
+
+  return <section className="section-block leads-panel">
+    <div className="section-heading"><span className="eyebrow">Gestión comercial</span><h1>Leads</h1></div>
+    <div className="admin-leads-metric-strip admin-section-gap"><div className="admin-leads-metric"><span>Total</span><strong>{evaluations.length}</strong></div><div className="admin-leads-metric admin-leads-metric--high"><span>Alta</span><strong>{counts.Alto}</strong></div><div className="admin-leads-metric admin-leads-metric--medium"><span>Media</span><strong>{counts.Medio}</strong></div><div className="admin-leads-metric admin-leads-metric--low"><span>Baja</span><strong>{counts.Bajo}</strong></div></div>
+    {projectsError && <p className="leads-hint is-error">{projectsError}</p>}
+    {!projectsError && executiveScope && projectsLoaded && !projects.length && <p className="leads-hint">Todavía no tienes proyectos asignados para priorizar leads.</p>}
+    <section className="admin-surface admin-section-gap"><div className="admin-surface__header"><div className="admin-surface__title"><h2>Filtros de búsqueda</h2></div>{activeFilters && <button type="button" className="secondary-button compact-button" onClick={clearFilters}>Limpiar filtros</button>}</div>
+      <div className="toolbar-filters admin-toolbar-filters">
+        <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label>Proyecto<select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select></label>
+        {selectedProject && <label>Ordenar por<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="afinidad">Afinidad</option><option value="capacidad">Capacidad</option></select></label>}
+        <label>Clasificación<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="todos">Todos</option>{["Alto", "Medio", "Bajo"].map((item) => <option key={item} value={item}>{item} ({counts[item]})</option>)}</select></label>
+        <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
+        <label>Fecha<select value={date} onChange={(event) => setDate(event.target.value)}>{DATE_RANGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      </div>
+    </section>
+    <section className="admin-surface"><div className="admin-surface__header"><div className="admin-surface__title"><h2>Bandeja de leads</h2><p>{selectedProject ? `${ranked.length} de ${filtered.length} alcanzan ${selectedProject.nombre}` : `${ranked.length} resultado${ranked.length === 1 ? "" : "s"}`}</p></div></div><div className="table-wrap admin-leads-scroll"><table>{head}<tbody>{ranked.map(row)}{!ranked.length && <tr><td colSpan={columnCount}>No hay leads para los filtros seleccionados.</td></tr>}</tbody></table></div></section>
+    {selectedProject && requiereAntecedentes.length > 0 && <section className="leads-group"><h3>Requieren antecedentes ({requiereAntecedentes.length})</h3><p className="leads-hint">Necesitan una evaluación vigente para calcular su capacidad.</p><div className="table-wrap"><table>{head}<tbody>{requiereAntecedentes.map(row)}</tbody></table></div></section>}
+    {selectedProject && descartados.length > 0 && <section className="leads-group"><button type="button" className="secondary-button compact-button" onClick={() => setShowExcluded((current) => !current)}>{showExcluded ? "Ocultar descartados" : `Ver descartados (${descartados.length})`}</button>{showExcluded && <div className="table-wrap"><table>{head}<tbody>{descartados.map(({ lead, match }) => <React.Fragment key={lead.id}>{row({ lead, match })}<tr><td colSpan={columnCount} className="lead-descartado-motivo">Motivo: {match.motivo_exclusion}</td></tr></React.Fragment>)}</tbody></table></div>}</section>}
+    {selectedLead && <div className="admin-modal" onClick={() => setSelectedLead(null)}><div className="admin-modal-card admin-modal-card--xl" onClick={(event) => event.stopPropagation()}><div className="admin-modal-header"><div className="admin-modal-heading"><span className="eyebrow">Lead seleccionado</span><h2>{selectedLead.full_name || selectedLead.email}</h2></div><button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>Cerrar</button></div>
+      <div className="lead-score-highlight"><div className={getClassificationClass(selectedLead.result?.classification)}><span>Score</span><strong>{formatScore(selectedLead.result?.score) ?? "-"}</strong></div><div className={getClassificationClass(selectedLead.result?.classification)}><span>Clasificación</span><strong>{selectedLead.result?.classification || "-"}</strong></div></div>
+      {selectedProject && selectedMatch && !selectedMatch.motivo_exclusion && <section className="lead-profile-zone lead-profile-verdict"><h3>Frente a este proyecto: {selectedProject.nombre}</h3><dl className="lead-profile-facts"><div><dt>Afinidad</dt><dd>{selectedMatch.afinidad}<small>{selectedMatch.clasificacion}</small></dd></div><div><dt>Capacidad</dt><dd>{selectedMatch.evidencia.capacidad_uf} UF<small>{selectedMatch.evidencia.plazo_anios} años</small></dd></div><div><dt>Pie disponible</dt><dd>{selectedMatch.evidencia.pie_disponible_uf} UF</dd></div></dl><p className="lead-profile-blocker"><strong>Bloqueador: </strong>{selectedMatch.bloqueador_principal?.titulo || "Ninguno"}</p>{selectedMatch.reorientable && <p className="lead-profile-note">Oportunidad reorientable para este proyecto.</p>}</section>}
+      <div className="admin-detail-grid"><div className="admin-stack"><article className="admin-panel-card"><h3>Información del cliente</h3><dl className="admin-definition-list"><DetailRow label="Correo">{selectedLead.email || "Sin dato"}</DetailRow><DetailRow label="Teléfono">{selectedLead.phone || selectedLead.profile?.phone || "Sin dato"}</DetailRow><DetailRow label="Comuna">{selectedLead.input?.comuna_objetivo || selectedLead.onboarding?.comuna_interes || "Sin dato"}</DetailRow><DetailRow label="Fecha">{formatDate(selectedLead.created_at)}</DetailRow></dl></article><article className="admin-panel-card"><h3>Riesgos detectados</h3><ul className="admin-bullet-list">{(selectedLead.result?.risks || []).map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article></div><div className="admin-stack"><article className="admin-panel-card"><h3>Recomendaciones</h3><ul className="admin-bullet-list">{(selectedLead.result?.recommendations || []).map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article><article className="admin-panel-card admin-panel-card--soft"><h3>Historial inmutable</h3>{history.length ? <ul className="admin-bullet-list">{history.map((item) => <li key={item.id}>{formatDate(item.created_at)} · Score {formatScore(item.adjusted_score ?? item.score) ?? "-"}</li>)}</ul> : <p>Sin registros de auditoría.</p>}</article></div></div>
+    </div></div>}
+  </section>;
 }

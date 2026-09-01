@@ -192,7 +192,9 @@ function getStatusMessage(status, mainGap, horizon, details = {}) {
   return byGap[mainGap] || "Este escenario requiere ajustes importantes antes de avanzar.";
 }
 
-export function evaluateScenario(input = {}, scenario) {
+// `capacidad` es el override de ALG-9 (HU 10). Sin él, el escenario se evalúa
+// exactamente como antes: ningún consumidor previo cambia de comportamiento.
+export function evaluateScenario(input = {}, scenario, capacidad = null) {
   const ufValueClp = getUfValue(input);
   const valueClp = toNumber(scenario?.valueClp);
   const valueUf = toNumber(scenario?.valueUf) || (ufValueClp > 0 ? valueClp / ufValueClp : 0);
@@ -208,9 +210,15 @@ export function evaluateScenario(input = {}, scenario) {
   const gapRecomendado = Math.max(pieRecomendado - savings, 0);
   const gapMinimoUf = ufValueClp > 0 ? gapMinimo / ufValueClp : 0;
   const gapRecomendadoUf = ufValueClp > 0 ? gapRecomendado / ufValueClp : 0;
-  const prudentDividend = Math.round(income * PRUDENT_DIVIDEND_RATE);
+  const prudentDividend = capacidad
+    ? capacidad.dividendoMaximoClp
+    : Math.round(income * PRUDENT_DIVIDEND_RATE);
   const debtRatio = income > 0 ? debt / income : 0;
-  const maxByMinDownPayment = savings > 0 ? savings / MIN_DOWN_PAYMENT_RATE : 0;
+  const maxByMinDownPayment = capacidad
+    ? capacidad.maxValueClp
+    : savings > 0
+      ? savings / MIN_DOWN_PAYMENT_RATE
+      : 0;
   const maxByRecommendedDownPayment = savings > 0 ? savings / RECOMMENDED_DOWN_PAYMENT_RATE : 0;
   const status = buildStatus({
     input,
@@ -521,14 +529,37 @@ export function buildSimulationContext(evaluation, onboarding) {
     classification: evaluation?.result?.classification,
     score: evaluation?.result?.score,
     risks: evaluation?.result?.risks || [],
+    // Sin esto la capacidad de ALG-9 nunca llega a esta pantalla.
+    financial_indicators: evaluation?.result?.financial_indicators,
+  };
+}
+
+// ALG-9 es la única fuente de "qué puede comprar este lead". El cálculo local
+// (savings / 0.10, sin puerta de ingreso, y 0.25 en cálculo donde ALG-9 resolvió
+// 0.30) difiere en un orden de magnitud para un lead limitado por renta; dos
+// pantallas no pueden discrepar sobre eso. El orden de esta lista NO cambia.
+function capacidadDesdeIndicadores(input) {
+  const indicadores = input?.financial_indicators;
+  if (!indicadores || indicadores.capacidad_status === "requires_info") return null;
+  const capacidadUf = indicadores.capacidad_compra_estimada_uf;
+  if (typeof capacidadUf !== "number") return null;
+  const ufValueClp = getUfValue(input);
+  return {
+    maxValueClp: capacidadUf * ufValueClp,
+    dividendoMaximoClp: indicadores.dividendo_maximo_sostenible_clp ?? 0,
   };
 }
 
 export function buildAccessibleAlternatives(projects = [], input = {}, onboarding = {}, limit = 4) {
   const ufValueClp = getUfValue(input);
+  const capacidad = capacidadDesdeIndicadores(input);
   return projects
     .map((project) => {
-      const scenarioEvaluation = evaluateScenario(input, projectToScenario(project, ufValueClp));
+      const scenarioEvaluation = evaluateScenario(
+        input,
+        projectToScenario(project, ufValueClp),
+        capacidad,
+      );
       const preference = getPreferenceScore(project, onboarding);
       return {
         ...scenarioEvaluation,
