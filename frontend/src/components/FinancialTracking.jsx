@@ -856,16 +856,7 @@ export default function FinancialTracking({
         </div>
       )}
 
-      <div className="tracking-actions">
-        <button type="button" className="primary-button" onClick={onOpenMilestoneRegistration}>
-          Registrar Avance / Hito Financiero
-        </button>
-        {evaluation?.plan_accepted_at ? (
-          <span className="success-inline">Plan activado. Podrás volver a precalificar después de avanzar en tus metas.</span>
-        ) : filteredGoals.length > 0 ? (
-          <button type="button" className="secondary-button" onClick={onAcceptPlan}>Aceptar plan</button>
-        ) : null}
-      </div>
+
 
 
       {/* Barra de Filtros y Boton de Ingresar Avances */}
@@ -1054,16 +1045,6 @@ export default function FinancialTracking({
                 >
                   Registrar Avance
                 </button>
-                {onOpenGoalPlan && (
-                  <button
-                    className="tertiary-button compact-button"
-                    type="button"
-                    onClick={() => onOpenGoalPlan?.(goal)}
-                    style={{ fontWeight: "600", flex: 1, backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", color: "#334155" }}
-                  >
-                    Ver plan mensual
-                  </button>
-                )}
               </div>
             </article>
           );
