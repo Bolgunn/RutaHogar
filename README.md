@@ -40,9 +40,9 @@ npm run dev
 ```
 
 The frontend requires Node.js 20.19+ or 22.12+ because the current Vite
-toolchain does not support older Node versions. Node 22 is recommended. Check
-your local version with `node -v`; if it is lower than 20.19, use `nvm use`
-from the repository root to pick the version declared in `.nvmrc`.
+toolchain does not support older Node versions. Node 22.23.2 is recommended.
+Check your local version with `node -v`; if it is lower than 20.19, run
+`nvm use` from the repository root to pick the version declared in `.nvmrc`.
 
 Or use Makefile targets from the repo root:
 
