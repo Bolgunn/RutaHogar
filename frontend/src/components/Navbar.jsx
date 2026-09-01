@@ -14,11 +14,6 @@ const navByRole = {
     { group: "Cuenta", items: [
       { id: "profile", label: "Mi perfil", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg> },
     ]},
-    { id: "evaluate", label: "Precalificación" },
-    { id: "recommendations", label: "Recomendaciones" },
-    { id: "tracking", label: "Plan de Mejora" },
-    { id: "projects", label: "Proyectos" },
-    { id: "academia", label: "Academia" },
   ],
   [roles.sales]: [
     { group: "Gestión", items: [

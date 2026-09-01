@@ -1,13 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildFinancialTracking, goalStatuses } from "../services/financialTracking";
 import { formatScore, getClassificationAdjustment, getScoreBadgeClass } from "../utils/helpers";
-import {
-  buildHousingNotViableRecommendation,
-  calculateHousingSavings,
-  determinePlanStatus,
-  formatClp,
-  getHousingPropertyPrice,
-} from "../services/housingSavingsPlanService";
+import { formatClp } from "../services/housingSavingsPlanService";
 
 function GoalsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -178,55 +172,7 @@ export default function FinancialTracking({
   }, [planType]);
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
-  const [housingPieType, setHousingPieType] = useState("minimo");
-
-  const housingInfo = useMemo(() => {
-    if (!evaluation) return null;
-    const input = evaluation.input || {};
-    const price = getHousingPropertyPrice(evaluation);
-    if (price <= 0) return null;
-    return calculateHousingSavings(input, price);
-  }, [evaluation]);
-
-  const notViableRecommendation = useMemo(
-    () =>
-      housingInfo && !housingInfo.isViable
-        ? buildHousingNotViableRecommendation(housingInfo)
-        : null,
-    [housingInfo],
-  );
-
-  const loggedNoViableKey = useRef(null);
-  useEffect(() => {
-    if (housingInfo && !housingInfo.isViable && notViableRecommendation) {
-      const key = `${evaluation?.id || ""}:no_viable_shown`;
-      if (loggedNoViableKey.current !== key) {
-        loggedNoViableKey.current = key;
-        onLogScoringEvent?.({
-          type: "no_viable_shown",
-          details: {
-            pie_type: housingPieType,
-            debt_reduction: notViableRecommendation.debtReduction,
-            income_increase: notViableRecommendation.incomeIncrease,
-            message: notViableRecommendation.message,
-          },
-        });
-      }
-    }
-  }, [housingInfo, housingPieType, notViableRecommendation, evaluation?.id, onLogScoringEvent]);
-
-  const housingStatus = useMemo(() => {
-    if (!housingInfo || housingInfo.error) return null;
-    return determinePlanStatus(
-      housingInfo,
-      evaluation?.housing_plan?.progress,
-      housingPieType,
-      Boolean(evaluation?.housing_plan),
-    );
-  }, [housingInfo, evaluation?.housing_plan, housingPieType]);
-
-  const shouldShowHousingPlan = housingInfo && !housingInfo.error && housingInfo.price > 0 &&
-    housingInfo.currentSavings < housingInfo.pieRecomendado;
+  const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
 
   const adjustment = useMemo(
     () => getClassificationAdjustment(evaluation?.result),
@@ -433,10 +379,7 @@ export default function FinancialTracking({
     ? Math.max(1, computedMesesAcelerado)
     : baseDesiredMonths;
 
-  const refPie = housingPieType === "recomendado" ? housingInfo?.pieRecomendado : housingInfo?.pieMinimo;
-  const refGap = housingPieType === "recomendado" ? housingInfo?.gapRecomendado : housingInfo?.gapMinimo;
-  const refMonths = housingPieType === "recomendado" ? housingInfo?.monthsRecomendado : housingInfo?.monthsMinimo;
-  const currentGap = housingStatus?.remainingGap ?? refGap;
+
 
   return (
     <section className="section-block tracking-panel">
@@ -488,6 +431,9 @@ export default function FinancialTracking({
                 {adjustment.detail ? <p>{adjustment.detail}</p> : null}
               </div>
             ) : null}
+          </div>
+        </div>
+      </div>
       {/* Gap Simulator UI - Cuadros Ajustables */}
       {indicators && (
         <div
@@ -894,110 +840,19 @@ export default function FinancialTracking({
       {tracking.warning && <div className="warning-note"><i className="ti ti-alert-triangle"></i>{tracking.warning}</div>}
 
       {shouldShowHousingPlan && (
-        <div className="housing-plan-block">
-          <div className="housing-plan-header">
+        <div className="housing-plan-block" style={{ padding: "1.5rem", border: "1px solid var(--border-light)", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+          <div>
             <span className="eyebrow">Plan de ahorro vivienda</span>
-            <h2 className="recommendation-section-title"><i className="ti ti-home-heart"></i> Plan de ahorro para tu vivienda</h2>
-            <p className="housing-plan-desc">
-              Tu vivienda de <strong>{formatClp(housingInfo.price)}</strong> requiere un PIE
-              mínimo de <strong>{formatClp(housingInfo.pieMinimo)}</strong> (10%) y recomendado
-              de <strong>{formatClp(housingInfo.pieRecomendado)}</strong> (20%).
-              Actualmente tienes <strong>{formatClp(housingInfo.currentSavings)}</strong> ahorrados.
-            </p>
+            <h2 className="recommendation-section-title" style={{ margin: 0 }}><i className="ti ti-home-heart"></i> Detalle de PIE y Dividendos</h2>
+            <p style={{ margin: "0.5rem 0 0 0", color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>Calcula tu capacidad de ahorro, brechas y plazos específicos para tu meta inmobiliaria.</p>
           </div>
-
-          <div className="housing-status-bar">
-            <div className={"housing-status-indicator " + planStatusClass(housingStatus?.status)}>
-              <span className="eyebrow">Estado</span>
-              <strong>{housingStatus?.label || "Pendiente"}</strong>
-            </div>
-            <div className="housing-pie-toggle">
-              <span className="eyebrow">Escenario</span>
-              <div className="regime-segmented-toggle">
-                <button
-                  type="button"
-                  className={housingPieType === "minimo" ? "is-active" : ""}
-                  onClick={() => setHousingPieType("minimo")}
-                >
-                  PIE mínimo (10%)
-                </button>
-                <button
-                  type="button"
-                  className={housingPieType === "recomendado" ? "is-active" : ""}
-                  onClick={() => setHousingPieType("recomendado")}
-                >
-                  PIE recomendado (20%)
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="housing-metrics">
-            <div className="metric">
-              <span>PIE requerido</span>
-              <strong>{formatClp(refPie)}</strong>
-            </div>
-            <div className={"metric " + (currentGap > 0 ? "metric-warning" : "metric-ok")}>
-              <span>Brecha</span>
-              <strong>{formatClp(currentGap)}</strong>
-            </div>
-            <div className="metric">
-              <span>Capacidad mensual</span>
-              <strong>{formatClp(housingInfo.monthlyCapacity)}</strong>
-              <small>Ingreso - Deuda - $550,000 costo vida</small>
-            </div>
-            <div className="metric metric-highlight">
-              <span>Tiempo estimado</span>
-              {refMonths ? (
-                <strong>{refMonths} meses</strong>
-              ) : (
-                <strong className="text-warning">No viable</strong>
-              )}
-              {housingInfo.isViable && (
-                <small>Ahorrando {formatClp(housingInfo.monthlyCapacity)} mensual</small>
-              )}
-            </div>
-          </div>
-
-          {!housingInfo.isViable && (
-            <div className="warning-note">
-              <i className="ti ti-alert-triangle"></i>
-              {notViableRecommendation?.message ||
-                "Con tu ingreso menos las deudas no alcanzas para cubrir el costo de vida base."}
-            </div>
-          )}
-
-          <div className="housing-plan-actions">
-            {evaluation?.housing_plan ? (
-              <div className="success-message">
-                Plan de ahorro confirmado. Registra tu ahorro mes a mes en el plan detallado.
-              </div>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!housingInfo.isViable}
-                  onClick={() => onAcceptPlan?.(housingPieType)}
-                >
-                  Aceptar plan
-                </button>
-                {!housingInfo.isViable && (
-                  <p className="alternative-reason">
-                    {notViableRecommendation?.message ||
-                      "El plan no es viable actualmente: tu capacidad de ahorro mensual no cubre el costo de vida base."}
-                  </p>
-                )}
-              </>
-            )}
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => onOpenHousingPlan?.(housingPieType)}
-            >
-              Ir al plan detallado
-            </button>
-          </div>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => onOpenHousingPlan?.("minimo")}
+          >
+            Ir al plan detallado
+          </button>
         </div>
       )}
 
@@ -1007,12 +862,12 @@ export default function FinancialTracking({
         </button>
         {evaluation?.plan_accepted_at ? (
           <span className="success-inline">Plan activado. Podrás volver a precalificar después de avanzar en tus metas.</span>
-        ) : displayedGoals.length > 0 ? (
+        ) : filteredGoals.length > 0 ? (
           <button type="button" className="secondary-button" onClick={onAcceptPlan}>Aceptar plan</button>
         ) : null}
       </div>
 
-      {displayedGoals.length === 0 ? (
+
       {/* Barra de Filtros y Boton de Ingresar Avances */}
       <div
         style={{
