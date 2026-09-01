@@ -1036,16 +1036,7 @@ export default function FinancialTracking({
                 </p>
               )}
 
-              <div className="goal-actions" style={{ marginTop: "auto", paddingTop: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  onClick={() => onOpenMilestoneRegistration?.(goal)}
-                  style={{ fontWeight: "600", flex: 1 }}
-                >
-                  Registrar Avance
-                </button>
-              </div>
+
             </article>
           );
         })}
