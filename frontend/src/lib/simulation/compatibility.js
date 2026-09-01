@@ -49,7 +49,7 @@ function getUfValue(input = {}) {
   return toNumber(input.uf_value_clp) || DEFAULT_UF_CLP;
 }
 
-function projectToScenario(project, ufValueClp) {
+export function projectToScenario(project, ufValueClp) {
   const valueUf = toNumber(project?.valor_uf);
   const valueClp = toNumber(project?.valor_clp) || Math.round(valueUf * ufValueClp);
   return {

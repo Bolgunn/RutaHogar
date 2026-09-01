@@ -6,6 +6,7 @@ import {
   evaluateScenario,
   getMaxValueRange,
   getScenarioFromManualValue,
+  projectToScenario,
 } from "../lib/simulation/compatibility";
 import {
   catalogProjectsToSimulation,
@@ -71,17 +72,7 @@ function getProjectLabel(project) {
 
 function projectToComparable(project, context, ufValueClp) {
   if (!project) return null;
-  const scenario = {
-    id: project.id,
-    source: "project",
-    label: project.nombre,
-    comuna: project.comuna,
-    tipo_vivienda: project.tipo_vivienda,
-    valueUf: Number(project.valor_uf) || 0,
-    valueClp: Number(project.valor_clp) || Math.round((Number(project.valor_uf) || 0) * ufValueClp),
-    project,
-  };
-  return evaluateScenario(context, scenario);
+  return evaluateScenario(context, projectToScenario(project, ufValueClp));
 }
 
 function getScenarioName(result) {
@@ -465,16 +456,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const scenario = useMemo(() => {
     if (mode === "manual") return manualScenario;
     if (!selectedProject) return null;
-    return {
-      id: selectedProject.id,
-      source: "project",
-      label: selectedProject.nombre,
-      comuna: selectedProject.comuna,
-      tipo_vivienda: selectedProject.tipo_vivienda,
-      valueUf: Number(selectedProject.valor_uf) || 0,
-      valueClp: Number(selectedProject.valor_clp) || Math.round((Number(selectedProject.valor_uf) || 0) * ufValueClp),
-      project: selectedProject,
-    };
+    return projectToScenario(selectedProject, ufValueClp);
   }, [manualScenario, mode, selectedProject, ufValueClp]);
 
   const scenarioResult = useMemo(
