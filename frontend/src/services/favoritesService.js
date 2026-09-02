@@ -84,10 +84,18 @@ export async function addFavorite(usuarioId, proyectoId) {
 
   if (PROVIDER === "local") return localProvider.add(usuarioId, proyectoId);
 
-  // upsert y no insert: repetir el favorito no es un error, es el mismo estado.
+  // Repetir el favorito no es un error, es el mismo estado. `ignoreDuplicates`
+  // genera ON CONFLICT DO NOTHING; sin el, PostgREST emite DO UPDATE, que bajo
+  // RLS exige una policy de UPDATE — y la migracion no crea ninguna a proposito
+  // (el toggle es insert o delete). Con DO UPDATE, refavoritear una fila que ya
+  // existe se rechaza con 42501 y el usuario ve "no se pudo guardar" por algo
+  // que ya estaba guardado.
   const { error } = await supabase
     .from("proyecto_favoritos")
-    .upsert({ usuario_id: usuarioId, proyecto_id: proyectoId }, { onConflict: "usuario_id,proyecto_id" });
+    .upsert({ usuario_id: usuarioId, proyecto_id: proyectoId }, {
+      onConflict: "usuario_id,proyecto_id",
+      ignoreDuplicates: true,
+    });
 
   if (error) {
     logSupabaseError(error);

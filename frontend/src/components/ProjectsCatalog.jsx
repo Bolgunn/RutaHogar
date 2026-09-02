@@ -22,6 +22,7 @@ export default function ProjectsCatalog({
   evaluationBase,
   onboarding,
   userId,
+  contactEmail,
   onBack,
   onSetGoal,
   onStartEvaluation,
@@ -55,8 +56,13 @@ export default function ProjectsCatalog({
     };
   }, []);
 
+  // Los favoritos se limpian al cambiar de usuario. Sin esto, las estrellas y
+  // el contador de la cuenta anterior siguen en pantalla hasta que resuelva la
+  // nueva carga — o para siempre si falla.
   useEffect(() => {
     let active = true;
+    setFavorites([]);
+    setFavoritesError("");
     if (!userId) return undefined;
 
     getFavorites(userId)
@@ -75,21 +81,35 @@ export default function ProjectsCatalog({
   // Optimista con rollback: marcar un favorito tiene que sentirse instantáneo,
   // y antes lo era (un setState que no podía fallar). Poner un viaje de red por
   // delante sería una regresión percibida.
+  //
+  // Las actualizaciones son funcionales y el rollback toca SOLO este proyecto:
+  // reemplazar el arreglo entero por el capturado al inicio descartaba otro
+  // toggle en vuelo (click rápido en dos tarjetas, o tarjeta + modal).
+  //
+  // Devuelve si la escritura llegó al servidor, para que el modal no anuncie
+  // un guardado que no ocurrió.
   const toggleFavorite = useCallback(
     async (projectId) => {
-      if (!userId) return;
+      if (!userId) return false;
       const wasFavorite = favorites.includes(projectId);
-      const previous = favorites;
 
       setFavoritesError("");
-      setFavorites(wasFavorite ? favorites.filter((id) => id !== projectId) : [...favorites, projectId]);
+      setFavorites((prev) => {
+        if (wasFavorite) return prev.filter((id) => id !== projectId);
+        return prev.includes(projectId) ? prev : [...prev, projectId];
+      });
 
       try {
         if (wasFavorite) await removeFavorite(userId, projectId);
         else await addFavorite(userId, projectId);
+        return true;
       } catch (err) {
-        setFavorites(previous);
+        setFavorites((prev) => {
+          if (wasFavorite) return prev.includes(projectId) ? prev : [...prev, projectId];
+          return prev.filter((id) => id !== projectId);
+        });
         setFavoritesError(err.message || "No se pudo actualizar tus favoritos.");
+        return false;
       }
     },
     [favorites, userId],
@@ -276,6 +296,7 @@ export default function ProjectsCatalog({
           context={context}
           ufValueClp={ufValueClp}
           onboarding={onboarding}
+          contactEmail={contactEmail}
           onClose={() => setSelectedProjectId("")}
           onSelectProject={(projectId) => setSelectedProjectId(projectId)}
           onSetGoal={onSetGoal}

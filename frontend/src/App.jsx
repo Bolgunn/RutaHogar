@@ -27,6 +27,7 @@ import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
+import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
@@ -1191,11 +1192,13 @@ export default function App() {
 
     try {
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const payload = buildFinancialInput({
-        ...currentEvaluation.input,
-        property_value: project.precio_min_uf,
-        property_value_unit: "uf",
-      });
+      const payload = buildFinancialInput(
+        buildProjectGoalInput(
+          currentEvaluation.input,
+          project,
+          currentEvaluation.input?.uf_value_clp,
+        ),
+      );
 
       const res = await fetch(`${apiBase.replace(/\/$/, "")}/score`, {
         method: "POST",
@@ -1733,6 +1736,7 @@ export default function App() {
             evaluationBase={currentEvaluation}
             onboarding={userOnboarding}
             userId={profile.id}
+            contactEmail={profile.email}
             onBack={() => navigateToPage("tracking")}
             onStartEvaluation={startEvaluation}
             onSetGoal={handleSetProjectGoal}

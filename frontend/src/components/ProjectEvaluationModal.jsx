@@ -39,6 +39,7 @@ export default function ProjectEvaluationModal({
   context,
   ufValueClp,
   onboarding,
+  contactEmail,
   onClose,
   onSelectProject,
   onSetGoal,
@@ -46,6 +47,7 @@ export default function ProjectEvaluationModal({
   isFavorite,
 }) {
   const [interestStatus, setInterestStatus] = useState("");
+  const [actionError, setActionError] = useState("");
   const [goalPending, setGoalPending] = useState(false);
 
   const evaluation = useMemo(
@@ -67,8 +69,17 @@ export default function ProjectEvaluationModal({
   const tone = statusTone[evaluation.status] || statusTone["Requiere ajuste"];
 
   const handleInterest = async (contactarEjecutivo) => {
+    setActionError("");
+
     if (!contactarEjecutivo) {
-      if (onToggleFavorite) await onToggleFavorite(project.id);
+      // El error del toggle lo captura el catálogo, que está DETRÁS de este
+      // overlay: si no se mira el resultado, el modal anuncia "guardado"
+      // mientras la estrella revierte y el aviso queda invisible.
+      const saved = onToggleFavorite ? await onToggleFavorite(project.id) : false;
+      if (!saved) {
+        setActionError("No pudimos actualizar tus favoritos. Intenta nuevamente.");
+        return;
+      }
       setInterestStatus(
         isFavorite
           ? "Proyecto removido de tus favoritos."
@@ -79,19 +90,20 @@ export default function ProjectEvaluationModal({
 
     try {
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      await fetch(`${apiBase.replace(/\/$/, "")}/interest`, {
+      const res = await fetch(`${apiBase.replace(/\/$/, "")}/interest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           proyecto_id: project.id,
           contactar_ejecutivo: true,
-          email: "usuario@ejemplo.com",
+          email: contactEmail || undefined,
         }),
       });
+      if (!res.ok) throw new Error(`El servidor respondió ${res.status}.`);
       setInterestStatus("¡Solicitud enviada! Un ejecutivo te contactará a la brevedad.");
     } catch (err) {
       console.error(err);
-      setInterestStatus("No pudimos enviar tu solicitud. Intenta nuevamente.");
+      setActionError("No pudimos enviar tu solicitud. Intenta nuevamente.");
     }
   };
 
@@ -167,6 +179,11 @@ export default function ProjectEvaluationModal({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {actionError && (
+                <div style={{ padding: "0.75rem", backgroundColor: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "8px", fontSize: "0.875rem" }}>
+                  {actionError}
+                </div>
+              )}
               <button className="primary-button" style={{ width: "100%", padding: "0.6rem" }} onClick={() => handleInterest(isCompatible)}>
                 {isCompatible ? "Contactar a un Ejecutivo" : (isFavorite ? "Quitar de mis Favoritos" : "Guardar en mis Favoritos")}
               </button>

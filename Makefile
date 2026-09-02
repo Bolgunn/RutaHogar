@@ -14,7 +14,8 @@ FRONTEND_DIR := frontend
 # juego de recetas es apuntar SHELL al bash que ya trae Git. PROGRA~1 es el
 # nombre corto de "Program Files": make 3.81 no sabe citar el espacio.
 ifeq ($(OS),Windows_NT)
-GIT_BASH := $(wildcard C:/PROGRA~1/Git/bin/bash.exe)
+# Git no siempre esta en el mismo sitio: 64/32 bits o instalacion por usuario.
+GIT_BASH := $(firstword $(wildcard   C:/PROGRA~1/Git/bin/bash.exe   C:/PROGRA~2/Git/bin/bash.exe   $(subst \,/,$(LOCALAPPDATA))/Programs/Git/bin/bash.exe))
 ifneq ($(GIT_BASH),)
 SHELL := $(GIT_BASH)
 endif
@@ -48,8 +49,15 @@ install: install-backend install-frontend
 # El venv se crea solo si no existe. Recrearlo en cada `make run` fallaba con
 # "Unable to copy venvlauncher.exe": si el venv esta activado en la terminal,
 # python.exe esta tomado y no se puede sobrescribir.
+#
+# La condicion es de make, no del shell: `[` no existe en cmd.exe, y sin el bash
+# de Git las recetas corren ahi. Asi `install-backend` y `run-backend` —el
+# camino alternativo que sugiere `help`— funcionan igual en una maquina sin Git
+# bash, que es donde se necesitan.
 install-backend:
-	@[ -d $(BACKEND_DIR)/.venv ] || $(PYTHON) -m venv $(BACKEND_DIR)/.venv
+ifeq ($(wildcard $(BACKEND_DIR)/.venv),)
+	$(PYTHON) -m venv $(BACKEND_DIR)/.venv
+endif
 	$(BACKEND_DIR)/$(VENV_BIN)/python -m pip install -r $(BACKEND_DIR)/requirements.txt
 
 install-frontend:
