@@ -435,7 +435,7 @@ function RecommendationEmpty({ onStartEvaluation }) {
         <p>Necesitas una precalificación guardada para comparar escenarios con tu perfil financiero actual.</p>
       </div>
       <div className="empty-state">
-        <strong>Aún no tienes una evaluación disponible.</strong>
+        <strong>Aún no tienes una calificación disponible.</strong>
         <p>Completa la precalificación para activar simulaciones referenciales de vivienda.</p>
         <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
       </div>

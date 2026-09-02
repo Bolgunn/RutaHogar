@@ -152,7 +152,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <p>
             <strong>RutaHogar</strong> es la plataforma responsable del
             tratamiento de tus datos personales. Actuamos como encargados del
-            tratamiento para la evaluación de factibilidad de compra de
+            tratamiento para la calificación de factibilidad de compra de
             vivienda.
           </p>
           <p>
@@ -187,8 +187,8 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <h3>3. Finalidad del tratamiento</h3>
           <p>
             Tus datos serán utilizados <strong>exclusivamente</strong> para
-            evaluar la factibilidad de compra de una vivienda mediante un score
-            financiero orientativo.
+            la calificación de factibilidad de compra de una vivienda mediante
+            un score financiero orientativo.
           </p>
           <p>
             Conforme al principio de finalidad establecido en la{" "}
@@ -237,7 +237,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <p>
             Tus datos personales serán conservados por un período máximo de{" "}
             <strong>12 meses</strong> contados desde la fecha de tu última
-            evaluación. Transcurrido ese plazo, los datos serán eliminados de
+            calificación. Transcurrido ese plazo, los datos serán eliminados de
             nuestros sistemas activos, salvo que exista una obligación legal que
             requiera su retención por un período adicional.
           </p>
@@ -338,7 +338,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
                 He leído y acepto los términos de esta autorización de
                 tratamiento de datos personales, y reconozco que los datos
                 proporcionados serán utilizados exclusivamente para la
-                evaluación de factibilidad de compra de vivienda.
+                calificación de factibilidad de compra de vivienda.
               </span>
             </label>
             <div className="consent-actions">

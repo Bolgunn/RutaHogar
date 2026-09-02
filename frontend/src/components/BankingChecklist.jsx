@@ -128,7 +128,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
       {/* Clean Full List */}
       <div className="minimal-checklist-group">
         <h4 className="group-title">Antecedentes generales y laborales</h4>
-        {priorityItems.length > 0 && <p className="minimal-checklist-priority-note">Los elementos marcados como prioritarios responden a antecedentes que conviene preparar primero según tu evaluación.</p>}
+        {priorityItems.length > 0 && <p className="minimal-checklist-priority-note">Los elementos marcados como prioritarios responden a antecedentes que conviene preparar primero según tu calificación.</p>}
         <ul className="checklist-minimal-rows">
           {currentList.map((item) => {
             const isPrio = item.mitigatesRisks.some((r) => activeRiskCodes.has(r)) ||

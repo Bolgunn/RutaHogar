@@ -75,7 +75,6 @@ def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
 def _clean_generated_text(text: str) -> str:
     replacements = {
         "preevaluacion": "precalificación",
-        "evaluacion": "evaluación",
         "situacion": "situación",
         "informacion": "información",
         "antiguedad": "antigüedad",
@@ -103,6 +102,16 @@ def _clean_generated_text(text: str) -> str:
             cleaned,
             flags=re.IGNORECASE,
         )
+    cleaned = re.sub(
+        r"\bevaluacion(es)?\b(?!\s+(?:bancaria|formal|hipotecaria|crediticia|oficial)\b)(?!\s+(?:del?|para\s+el)\s+(?:MINVU|SERVIU)\b)",
+        lambda match: (
+            "Calificaciones" if match.group(0) == "Evaluaciones" else
+            "Calificación" if match.group(0) == "Evaluacion" else
+            "calificaciones" if match.group(1) else "calificación"
+        ),
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     return cleaned
 
 
@@ -260,7 +269,7 @@ Recomendaciones del sistema:
 
 Indica UNA sola acción comercial concreta para este lead, usando especialmente commercial_priority_detail si está disponible.
 No ejecutes derivaciones reales ni digas que se enviará a CRM; solo orienta.
-Luego explica la razón considerando toda la evaluación.
+Luego explica la razón considerando toda la calificación.
 
 Formato de respuesta (respeta exactamente este formato):
 Acción: [nombre de la acción]\n
@@ -300,10 +309,10 @@ def generate_user_explanation(
     )
 
     prompt = f"""Eres un asesor financiero hipotecario que habla directamente con una persona interesada en comprar vivienda.
-Redacta UN párrafo de entre 80 y 120 palabras explicando los principales factores que influyeron en su evaluación.
+Redacta UN párrafo de entre 80 y 120 palabras explicando los principales factores que influyeron en su calificación.
 El score y la clasificación ya fueron calculados por reglas del sistema. La IA solo redacta la explicación.
 
-Datos de la evaluación:
+Datos de la calificación:
 - Score: {score}/100
 - Clasificación: {classification}
 

@@ -100,7 +100,7 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
     return (
       <section className="section-block recommendations-panel">
         <div className="section-heading">
-          <span className="eyebrow">Resultados de tu evaluación</span>
+          <span className="eyebrow">Resultados de tu calificación</span>
           <h1>Resultados de tu precalificación</h1>
         </div>
         <div className="empty-state">
@@ -116,7 +116,7 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
     <section className="section-block recommendations-panel">
       <div className="page-head">
         <div>
-          <span className="eyebrow">Resultados de tu evaluación</span>
+          <span className="eyebrow">Resultados de tu calificación</span>
           <h1>Orientación personalizada</h1>
           <p>Lee tu resultado, identifica los factores principales y define el siguiente paso con información referencial.</p>
         </div>

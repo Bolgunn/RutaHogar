@@ -91,7 +91,7 @@ export default function ProjectEvaluationModal({
 
   return <div className="project-evaluation-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="project-evaluation-modal__card" role="dialog" aria-modal="true" aria-labelledby="project-evaluation-title">
-      <button type="button" className="project-evaluation-modal__close" onClick={onClose} aria-label="Cerrar evaluación">x</button>
+      <button type="button" className="project-evaluation-modal__close" onClick={onClose} aria-label="Cerrar calificación">x</button>
       <span className="eyebrow">Proyecto seleccionado</span>
       <h2 id="project-evaluation-title">Compatibilidad con {project.nombre}</h2>
       <p className="project-evaluation-modal__context">{project.comuna || "Comuna sin dato"} · {formatProjectPrice(project)} · {formatClp(evaluation.valueClp)}</p>

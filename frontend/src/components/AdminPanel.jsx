@@ -157,7 +157,7 @@ export default function AdminPanel({ evaluations, profile }) {
 
       <section className="admin-panel-metric-strip admin-section-gap" aria-label="Resumen administrativo">
         <article className="admin-panel-metric">
-          <span>Evaluaciones</span>
+          <span>Calificaciones</span>
           <strong>{counts.total}</strong>
           <small>Base activa del panel.</small>
         </article>
@@ -193,7 +193,7 @@ export default function AdminPanel({ evaluations, profile }) {
           {!recentEvaluations.length ? (
             <div className="admin-compact-empty">
               <strong>No hay actividad registrada todavía.</strong>
-              <p>Cuando existan evaluaciones, esta bandeja mostrará el contexto mínimo para decidir el siguiente movimiento.</p>
+              <p>Cuando existan calificaciones, esta bandeja mostrará el contexto mínimo para decidir el siguiente movimiento.</p>
             </div>
           ) : (
             <div className="admin-list admin-list--dense">

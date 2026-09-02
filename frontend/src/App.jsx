@@ -833,7 +833,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       if (nextAuth?.profile) {
-        setSignupOfferError("Cuenta creada, pero no pudimos guardar tu evaluación. Por favor intenta de nuevo.");
+        setSignupOfferError("Cuenta creada, pero no pudimos guardar tu calificación. Por favor intenta de nuevo.");
         setAuth(nextAuth);
       } else {
         console.log("Error de Auth en registro:", err);
@@ -874,7 +874,7 @@ export default function App() {
         console.error(err);
         setAuth(nextAuth);
         setDataError(
-          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu evaluación anterior. Puedes volver a intentarlo desde tu perfil.",
+          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu calificación anterior. Puedes volver a intentarlo desde tu perfil.",
         );
         const fallbackPage = getInitialPageForProfile(nextAuth.profile);
         navigateToPageForProfile(fallbackPage, nextAuth.profile, { replace: true });
@@ -1047,7 +1047,7 @@ export default function App() {
       setTrackingGoals([]);
     } catch (err) {
       console.error(err);
-      setDataError("No se pudo eliminar la evaluación seleccionada.");
+      setDataError("No se pudo eliminar la calificación seleccionada.");
     }
   };
 
@@ -1216,7 +1216,7 @@ export default function App() {
         });
       } catch (fetchErr) {
         console.error('Network error al contactar API de scoring (¿Está encendido el servidor en el puerto 8000?)', fetchErr);
-        throw new Error(`Error de conexión con el motor de evaluación.`);
+        throw new Error(`Error de conexión con el motor de calificación.`);
       }
 
       if (!res.ok) {
@@ -1274,7 +1274,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`El motor de evaluación rechazó los datos (${res.status}).`);
+      if (!res.ok) throw new Error(`El motor de calificación rechazó los datos (${res.status}).`);
 
       const newEval = await createEvaluation(profile.id, {
         email: profile.email || "sin-email",
@@ -1595,8 +1595,8 @@ export default function App() {
             {currentEvaluation && !startingNewEvaluation ? (
               <section className="evaluation-review-gate">
                 <div className="evaluation-review-gate__details">
-                  <h2>¿Ha cambiado algo desde tu última evaluación?</h2>
-                  <p>Revisa tus respuestas antes de calcular nuevamente. Una nueva evaluación conservará tu historial anterior.</p>
+                  <h2>¿Ha cambiado algo desde tu última calificación?</h2>
+                  <p>Revisa tus respuestas antes de calcular nuevamente. Una nueva calificación conservará tu historial anterior.</p>
                   <div className="evaluation-review-gate__answers">
                     <details open>
                       <summary>Situación financiera</summary>
@@ -1643,8 +1643,8 @@ export default function App() {
                     </details>}
                   </div>
                   <div className="evaluation-review-gate__actions">
-                    <button type="button" className="secondary-button" onClick={() => navigateToPage("recommendations")}>Ver mi evaluación actual</button>
-                    <button type="button" className="primary-button" onClick={() => setStartingNewEvaluation(true)}>Sí, quiero hacer una nueva evaluación</button>
+                    <button type="button" className="secondary-button" onClick={() => navigateToPage("recommendations")}>Ver mi calificación actual</button>
+                    <button type="button" className="primary-button" onClick={() => setStartingNewEvaluation(true)}>Sí, quiero hacer una nueva calificación</button>
                   </div>
                 </div>
               </section>
@@ -1699,8 +1699,8 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onOpenHousingPlan={handleOpenHousingPlan}
           onLogScoringEvent={handleLogScoringEvent}
-          onOpenMilestoneRegistration={(goal) => {
-            setActiveGoal(goal || null);
+          onOpenMilestoneRegistration={() => {
+            setActiveGoal(null);
             navigateToPage("register-milestone");
           }}
           successMessage={milestoneSuccess}

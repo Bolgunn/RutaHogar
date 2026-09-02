@@ -129,7 +129,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const selectedCommunes = selectedLead ? comunasDeclaradas(selectedLead).declaradas : [];
   const selectedName = selectedLead?.full_name?.split(" ")[0] || "cliente";
   const selectedEmailHref = selectedLead
-    ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación financiera")}&body=${encodeURIComponent(`Hola ${selectedName},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`
+    ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Calificación financiera")}&body=${encodeURIComponent(`Hola ${selectedName},\n\nTe escribo a partir de tu calificación en RutaHogar.\n\nSaludos.`)}`
     : "#";
   const selectedWhatsappHref = selectedPhone
     ? `https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedName}. Te escribo por RutaHogar.`)}`
@@ -280,7 +280,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
           <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Puedes cambiar el criterio sin perder los filtros aplicados." : "Disponible al seleccionar un proyecto."}</small></label>
         </div>
         <div className="executive-leads-controls__priority">
-          <div><span className="eyebrow">Paso 2</span><strong>Prioridad de evaluación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
+          <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
           <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
             {[
               ["todos", "Total", evaluations.length, ""],
@@ -320,7 +320,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       <div className="executive-leads-list executive-leads-list--scroll" aria-label="Bandeja de leads">{ranked.map(leadCard)}{!ranked.length && <div className="executive-leads-empty"><strong>No hay leads en esta vista.</strong><span>Ajusta los filtros o restablece la vista para recuperar resultados.</span></div>}</div>
     </section>
 
-    {selectedProject && requiereAntecedentes.length > 0 && <section className="leads-group admin-surface executive-leads-followup"><div className="admin-surface__header"><div className="admin-surface__title"><span className="eyebrow">Seguimiento</span><h2>Requieren antecedentes ({requiereAntecedentes.length})</h2><p>Necesitan una evaluación vigente para calcular su capacidad antes de priorizarlos.</p></div></div><div className="executive-leads-list">{requiereAntecedentes.map(leadCard)}</div></section>}
+    {selectedProject && requiereAntecedentes.length > 0 && <section className="leads-group admin-surface executive-leads-followup"><div className="admin-surface__header"><div className="admin-surface__title"><span className="eyebrow">Seguimiento</span><h2>Requieren antecedentes ({requiereAntecedentes.length})</h2><p>Necesitan una calificación vigente para calcular su capacidad antes de priorizarlos.</p></div></div><div className="executive-leads-list">{requiereAntecedentes.map(leadCard)}</div></section>}
     {selectedProject && descartados.length > 0 && <section className="leads-group admin-surface executive-leads-excluded"><div className="admin-surface__header"><div className="admin-surface__title"><span className="eyebrow">Sin encaje actual</span><h2>Leads descartados ({descartados.length})</h2><p>Conserva esta lista para reorientar oportunidades cuando cambie el proyecto o el perfil.</p></div><button type="button" className="secondary-button compact-button" onClick={() => setShowExcluded((current) => !current)}>{showExcluded ? "Ocultar lista" : "Ver lista"}</button></div>{showExcluded && <div className="executive-leads-list">{descartados.map(({ lead, match }) => <React.Fragment key={lead.id}>{leadCard({ lead, match })}<p className="lead-descartado-motivo">Motivo: {match.motivo_exclusion}</p></React.Fragment>)}</div>}</section>}
     {selectedLead && (
       <div className="admin-modal" onClick={() => setSelectedLead(null)}>
@@ -336,7 +336,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
           <section className={`executive-lead-brief ${selectedResult.executive_summary ? "" : "is-without-summary"}`}>
             <div className="executive-lead-brief__decision">
-              <span className="eyebrow">Resultado de la evaluación</span>
+              <span className="eyebrow">Resultado de la calificación</span>
               <div>
                 <strong>{formatScore(selectedFinalScore) ?? "-"}</strong>
                 <span className={`status-pill ${getClassificationClass(selectedResult.classification)}`}>{selectedResult.classification || "Sin clasificación"}</span>
@@ -430,7 +430,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                   </article>
                 ))}
               </div>
-            ) : <p>Sin registros de auditoría para esta evaluación.</p>}
+            ) : <p>Sin registros de auditoría para esta calificación.</p>}
           </section>
         </div>
       </div>

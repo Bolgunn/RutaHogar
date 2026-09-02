@@ -255,7 +255,7 @@ export async function getEvaluations(userId, role) {
   }
 
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para cargar evaluaciones.");
+  if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
 
   const isSales = role === "ejecutivo" || role === "admin";
@@ -296,7 +296,7 @@ export async function getLatestEvaluation(userId) {
   }
 
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para cargar la evaluación actual.");
+  if (!user?.id) throw new Error("No hay usuario autenticado para cargar la calificación actual.");
 
   const { data, error } = await supabase
     .from("evaluations")
@@ -317,7 +317,7 @@ export async function deleteEvaluation(evaluationId, userId) {
   }
 
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para eliminar evaluaciones.");
+  if (!user?.id) throw new Error("No hay usuario autenticado para eliminar calificaciones.");
 
   const { error } = await supabase
     .from("evaluations")

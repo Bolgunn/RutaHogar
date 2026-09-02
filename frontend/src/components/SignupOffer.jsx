@@ -104,7 +104,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
         <h3 className="signup-offer-benefits-title">¿Por qué crear una cuenta?</h3>
         <ul className="signup-offer-benefit-list">
           {[
-            "Guarda tu historial de evaluaciones",
+            "Guarda tu historial de calificaciones",
             "Accede a tu plan de mejora personalizado",
             "Haz seguimiento de tu progreso financiero",
             "Recibe notificaciones cuando estés listo para comprar",
@@ -228,7 +228,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
           Salir
         </button>
         <p className="signup-offer-skip-note">
-          Tu evaluación no se guardará si continúas sin crear una cuenta.
+          Tu calificación no se guardará si continúas sin crear una cuenta.
         </p>
       </div>
 

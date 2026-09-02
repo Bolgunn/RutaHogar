@@ -60,10 +60,10 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
         <article className="admin-kpi-card admin-kpi-card--gold">
           <span className="admin-kpi-card__label">Oportunidades prioritarias</span>
           <strong className="admin-kpi-card__value">{leadStats.prioritarios}</strong>
-          <p className="admin-kpi-card__hint">Evaluaciones con clasificación alta disponibles.</p>
+          <p className="admin-kpi-card__hint">Calificaciones con clasificación alta disponibles.</p>
         </article>
         <article className="admin-kpi-card admin-kpi-card--soft">
-          <span className="admin-kpi-card__label">Evaluaciones disponibles</span>
+          <span className="admin-kpi-card__label">Calificaciones disponibles</span>
           <strong className="admin-kpi-card__value">{leadStats.total}</strong>
           <p className="admin-kpi-card__hint">Base actual para priorizar seguimiento.</p>
         </article>
@@ -74,7 +74,7 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
           <div className="admin-surface__header">
             <div className="admin-surface__title">
               <h2>Últimas oportunidades</h2>
-              <p>Evaluaciones recientes para revisar en la mesa de leads.</p>
+              <p>Calificaciones recientes para revisar en la mesa de leads.</p>
             </div>
             <button type="button" className="secondary-button compact-button" onClick={() => onNavigate("leads")}>Ver leads</button>
           </div>
@@ -95,7 +95,7 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
             </div>
           ) : (
             <div className="admin-compact-empty">
-              <strong>No hay evaluaciones disponibles todavía.</strong>
+              <strong>No hay calificaciones disponibles todavía.</strong>
               <p>Cuando existan, podrás priorizarlas desde la mesa de leads.</p>
             </div>
           )}

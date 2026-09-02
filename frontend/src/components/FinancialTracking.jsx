@@ -770,8 +770,8 @@ export default function FinancialTracking({
 
 
 
-      {/* Barra de Filtros -- el registro de avance vive en cada meta */}
-      <div className="tracking-goals-toolbar">
+       {/* Barra de filtros y acceso único al registro de avances. */}
+       <div className="tracking-goals-toolbar">
         <div className="tracking-goals-filters">
           <span className="tracking-goals-filters__label">Filtrar acciones</span>
           <div className="tracking-goals-filter">
@@ -820,9 +820,17 @@ export default function FinancialTracking({
             >
               Limpiar
             </button>
-          )}
-        </div>
-      </div>
+           )}
+         </div>
+         <button
+           className="primary-button tracking-goals-register"
+           type="button"
+           onClick={() => onOpenMilestoneRegistration?.()}
+         >
+           <i className="ti ti-chart-line" aria-hidden="true" />
+           Registrar avances
+         </button>
+       </div>
 
       {filteredGoals.length === 0 ? (
         <div className="empty-state">
@@ -849,15 +857,6 @@ export default function FinancialTracking({
               <h3>{goal.title}</h3>
               {goal.description && <p className="plan-card-desc">{goal.description}</p>}
               {goal.expected_benefit && <div className="plan-card-benefit"><strong>Beneficio esperado:</strong> {goal.expected_benefit}</div>}
-              <div className="goal-actions">
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  onClick={() => onOpenMilestoneRegistration?.(goal)}
-                >
-                  Registrar Avance
-                </button>
-              </div>
             </article>
           );
         })}

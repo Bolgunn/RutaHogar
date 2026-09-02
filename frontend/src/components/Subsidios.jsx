@@ -138,7 +138,7 @@ export default function Subsidios({ evaluation, onNavigate }) {
           ))}
         </div>
 
-      </> : <div className="empty-state"><strong>Esta evaluación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
+      </> : <div className="empty-state"><strong>Esta calificación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
 
       <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
         <button type="button" className="secondary-button" onClick={goToRecommendations}>

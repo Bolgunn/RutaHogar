@@ -168,7 +168,7 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
             <p className="pre-wizard-card-desc">
               {isEditing
                 ? "Modifica los datos de contexto para recalcular tu precalificación."
-                : "Estas preguntas ayudan a contextualizar tu precalificación. No reemplazan la evaluación financiera ni constituyen una aprobación formal."}
+                : "Estas preguntas ayudan a contextualizar tu precalificación. No reemplazan la calificación financiera ni constituyen una aprobación formal."}
             </p>
           </div>
 

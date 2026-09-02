@@ -502,7 +502,7 @@ def generate_improvement_plan(score_result: Dict, user_data: Dict) -> List[Dict[
         plan.append({
             "category": "Requisitos Co-deudor",
             "title": "Completar datos de co-deudor",
-            "description": "Completa toda la información del co-deudor para una evaluación precisa.",
+            "description": "Completa toda la información del co-deudor para una calificación precisa.",
             "impact_level": "Medio",
             "impact_score": 2,
             "expected_benefit": "Permite una simulación más realista del potencial de aprobación.",
@@ -620,7 +620,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
         components["carga_financiera"] -= 20
         score -= 20
         risk_codes.append("deuda_alta")
-        riesgos.append("La carga mensual de deudas podría afectar la evaluación.")
+        riesgos.append("La carga mensual de deudas podría afectar la calificación.")
         recomendaciones.append({"text": "Reducir compromisos mensuales antes de avanzar.", "benefit": "Mejorar tu relación deuda/ingreso y aumentar tu puntaje."})
     else:
         positivos.append("Carga de deuda aceptable")
@@ -645,7 +645,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
             components["pie_disponible"] += 5
             score += 5
             positivos.append("Ahorro inicial disponible")
-            recomendaciones.append({"text": "Aumentar ahorro para acercarse a una posición más sólida.", "benefit": "Alcanzar el 20% de pie recomendado y acceder a mejor evaluación."})
+            recomendaciones.append({"text": "Aumentar ahorro para acercarse a una posición más sólida.", "benefit": "Alcanzar el 20% de pie recomendado y acceder a mejor calificación."})
         else:
             components["pie_disponible"] -= 20
             score -= 20
@@ -788,7 +788,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                 score -= 15
                 risk_codes.append("complemento_deuda_alta")
                 riesgos.append("El co-deudor tiene una carga de deuda elevada en relación a sus ingresos.")
-                recomendaciones.append({"text": "El co-deudor debería reducir sus deudas antes de comprometerse.", "benefit": "Mejorar la renta combinada y no perjudicar tu evaluación."})
+                recomendaciones.append({"text": "El co-deudor debería reducir sus deudas antes de comprometerse.", "benefit": "Mejorar la renta combinada y no perjudicar tu calificación."})
 
             if comp_contrato == "independiente":
                 if comp_continuidad in ("entre_1_y_3_anios", "mas_3_anios"):
@@ -797,11 +797,11 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                     score -= 5
                     risk_codes.append("complemento_contrato_independiente")
                     riesgos.append("El co-deudor trabaja independiente con continuidad aún limitada.")
-                    recomendaciones.append({"text": "Respaldar ingresos del co-deudor con antecedentes formales.", "benefit": "Evitar descuentos en la evaluación por falta de respaldo."})
+                    recomendaciones.append({"text": "Respaldar ingresos del co-deudor con antecedentes formales.", "benefit": "Evitar descuentos en la calificación por falta de respaldo."})
             elif comp_contrato == "plazo_fijo":
                 score -= 10
                 risk_codes.append("complemento_contrato_plazo_fijo")
-                riesgos.append("El contrato a plazo fijo del co-deudor puede limitar su aporte a la evaluación.")
+                riesgos.append("El contrato a plazo fijo del co-deudor puede limitar su aporte a la calificación.")
             elif comp_contrato == "honorarios_variable":
                 score -= 6
                 risk_codes.append("complemento_contrato_variable")

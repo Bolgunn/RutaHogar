@@ -1010,7 +1010,7 @@ function InterpretaTab({ evaluation, onStartEvaluation, onOpenArticle, onRetryEx
           <div className="academy-recommendations-heading">
             <span className="eyebrow">Recomendado para ti</span>
 
-            <h3>Contenido relacionado con tu evaluación</h3>
+            <h3>Contenido relacionado con tu calificación</h3>
 
             <p>
               Seleccionamos estos artículos a partir de los factores
@@ -1105,7 +1105,7 @@ function CasosTab({ evaluation, onOpenArticle }) {
 
             <p>
               Encontramos un caso educativo con características similares a
-              algunos factores de tu evaluación.
+              algunos factores de tu calificación.
             </p>
           </div>
 

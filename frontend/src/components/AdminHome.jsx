@@ -231,7 +231,7 @@ export default function AdminHome({ evaluations, onNavigate }) {
               {!recentLeads.length ? (
                 <div className="empty-state">
                   <strong>Aún no hay leads recientes</strong>
-                  <p>Cuando existan evaluaciones, este resumen mostrará los ingresos más nuevos.</p>
+                  <p>Cuando existan calificaciones, este resumen mostrará los ingresos más nuevos.</p>
                 </div>
               ) : (
                 <div className="admin-list">

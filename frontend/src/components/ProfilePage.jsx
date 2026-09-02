@@ -589,7 +589,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <div>
           <span className="eyebrow">Mi perfil</span>
           <h1>Datos y actividad</h1>
-          <p>Información de contacto, preferencias de búsqueda e historial de evaluaciones.</p>
+          <p>Información de contacto, preferencias de búsqueda e historial de calificaciones.</p>
         </div>
       </div>
 
@@ -605,7 +605,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <div className="profile-stats">
           <div className="profile-stat">
             <div className="profile-stat__num">{evaluations.length}</div>
-            <div className="profile-stat__label">Evaluaciones</div>
+            <div className="profile-stat__label">Calificaciones</div>
           </div>
           <div className="profile-stat">
             <div className="profile-stat__num">
@@ -704,7 +704,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
           <div className="profile-card-header-row">
             <div>
               <strong>Preferencias de búsqueda</strong>
-              <p>Información declarada para tus evaluaciones.</p>
+              <p>Información declarada para tus calificaciones.</p>
             </div>
             {!onboardingEditing ? (
               <button
@@ -832,7 +832,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       <section className="profile-card profile-card--history">
         <div className="profile-card-header-row">
           <div>
-            <strong>Historial de evaluaciones</strong>
+            <strong>Historial de calificaciones</strong>
             <p>{evaluations.length} registro{evaluations.length === 1 ? "" : "s"}</p>
           </div>
         </div>
@@ -881,7 +881,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         ) : (
           <div className="empty-state">
             <strong>Aun no tienes precalificaciones guardadas.</strong>
-            <p>Cuando completes una evaluación, aparecerá aqui como registro independiente.</p>
+            <p>Cuando completes una calificación, aparecerá aqui como registro independiente.</p>
           </div>
         )}
       </section>
@@ -927,7 +927,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                 <strong>{text(selectedEvaluation.result?.classification)}</strong>
               </div>
               <div className="profile-score-date">
-                <span>Fecha evaluación</span>
+                <span>Fecha de calificación</span>
                 <strong>{new Date(selectedEvaluation.created_at).toLocaleDateString("es-CL")}</strong>
               </div>
             </div>
@@ -935,7 +935,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
 
             <div className="evaluation-detail-panel">
               <div className="evaluation-detail-section profile-evaluation-explanation">
-                <h4>Explicación de la evaluación</h4>
+                <h4>Explicación de la calificación</h4>
                 <AiExplanationBlock
                   text={selectedEvaluation.result?.ai_explanation}
                   onRetry={onRetryExplanation ? () => onRetryExplanation(selectedEvaluation) : undefined}

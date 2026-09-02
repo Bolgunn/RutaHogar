@@ -9,7 +9,7 @@ const WORD_FIXES = [
   [/\bAun\b/g, "Aún"],
   [/\baun\b/g, "aún"],
   [/\bpre-?evaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "precalificaciones" : "precalificación")],
-  [/\bevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "evaluaciones" : "evaluación")],
+  [/\bevaluacion(es)?\b(?!\s+(?:bancaria|formal|hipotecaria|crediticia|oficial)\b)(?!\s+(?:del?|para\s+el)\s+(?:MINVU|SERVIU)\b)/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "calificaciones" : "calificación")],
   [/\bsituacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "situaciones" : "situación")],
   [/\binformacion\b/gi, (match) => preserveCase(match, "información")],
   [/\bantiguedad\b/gi, (match) => preserveCase(match, "antigüedad")],
