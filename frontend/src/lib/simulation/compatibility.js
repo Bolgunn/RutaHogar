@@ -64,16 +64,21 @@ function projectToScenario(project, ufValueClp) {
   };
 }
 
-export function getScenarioFromManualValue(valueUf, ufValueClp) {
-  const numericUf = toNumber(valueUf);
+export function getScenarioFromManualValue(value, ufValueClp, unit = "uf") {
+  const safeUfValueClp = toNumber(ufValueClp) || DEFAULT_UF_CLP;
+  const normalizedUnit = normalizeText(unit);
+  const numericValue = toNumber(value);
+  const isClp = normalizedUnit === "clp";
+  const valueClp = isClp ? numericValue : Math.round(numericValue * safeUfValueClp);
+  const valueUf = isClp && safeUfValueClp > 0 ? valueClp / safeUfValueClp : numericValue;
   return {
     id: "manual",
     source: "manual",
     label: "Valor manual",
     comuna: "",
     tipo_vivienda: "",
-    valueUf: numericUf,
-    valueClp: Math.round(numericUf * ufValueClp),
+    valueUf,
+    valueClp,
     project: null,
   };
 }
@@ -379,7 +384,7 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     considerations.push("Ambos escenarios son similares financieramente; la decision depende mas de comuna, tipo de vivienda u horizonte.");
   }
   if (considerations.length === 0) {
-    considerations.push("No se detecta una diferencia decisiva; revisa preferencias de comuna, tipo de vivienda y horizonte antes de decidir.");
+    considerations.push("No se detecta una diferencia decisiva");
   }
 
   const currentFinancialWins =
@@ -390,12 +395,9 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     (alternativeStatusRank < currentStatusRank ? 1 : 0) +
     (valueComparison > 0 ? 1 : 0) +
     (gapComparison > 0 ? 1 : 0);
-  const currentPreferenceWins =
-    (currentPreference.communeMatch && !alternativePreference.communeMatch ? 1 : 0) +
-    (currentPreference.typeMatch && !alternativePreference.typeMatch ? 1 : 0);
-  const alternativePreferenceWins =
-    (alternativePreference.communeMatch && !currentPreference.communeMatch ? 1 : 0) +
-    (alternativePreference.typeMatch && !currentPreference.typeMatch ? 1 : 0);
+  const currentPreferenceMatches = (currentPreference.communeMatch ? 1 : 0) + (currentPreference.typeMatch ? 1 : 0);
+  const alternativePreferenceMatches =
+    (alternativePreference.communeMatch ? 1 : 0) + (alternativePreference.typeMatch ? 1 : 0);
 
   let recommendation = "similar";
   if (currentFinancialWins >= 2 && currentFinancialWins > alternativeFinancialWins) {
@@ -417,27 +419,15 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     sin_datos_suficientes: "Faltan datos para comparar",
   };
 
-  const summaryByRecommendation = {
-    escenario_actual:
-      currentPreferenceWins < alternativePreferenceWins
-        ? "El escenario actual se ve financieramente mas holgado, aunque la alternativa puede estar mejor alineada a tus preferencias."
-        : "El escenario actual concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    alternativa:
-      alternativePreferenceWins < currentPreferenceWins
-        ? "La alternativa se ve financieramente mas holgada, aunque el escenario actual puede estar mejor alineado a tus preferencias."
-        : "La alternativa concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    similar: "No hay una ventaja financiera clara; conviene decidir mirando comuna, tipo de vivienda y horizonte.",
-    sin_datos_suficientes: "Primero selecciona dos escenarios comparables.",
-  };
-
   const maxValueUf = Math.max(toNumber(current.valueUf), toNumber(alternative.valueUf), 1);
   const maxPieMinUf = Math.max(toNumber(current.pieMinimoUf), toNumber(alternative.pieMinimoUf), 1);
+  const maxPieRecommendedUf = Math.max(toNumber(current.pieRecomendadoUf), toNumber(alternative.pieRecomendadoUf), 1);
   const maxGapUf = Math.max(toNumber(current.gapMinimoUf), toNumber(alternative.gapMinimoUf), 1);
 
   return {
     recommendation,
     title: titleByRecommendation[recommendation],
-    summary: summaryByRecommendation[recommendation],
+    summary: "",
     advantages: {
       current: currentAdvantages.length ? currentAdvantages : ["No presenta una ventaja clara frente a la alternativa."],
       alternative: alternativeAdvantages.length ? alternativeAdvantages : ["No presenta una ventaja clara frente al escenario actual."],
@@ -472,10 +462,19 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
       },
       {
         id: "pie-minimo",
-        label: "Pie minimo requerido",
+        label: "Pie mínimo requerido",
         current: toNumber(current.pieMinimoUf),
         alternative: toNumber(alternative.pieMinimoUf),
         max: maxPieMinUf,
+        lowerIsBetter: true,
+        unit: "UF",
+      },
+      {
+        id: "pie-recomendado",
+        label: "Pie recomendado",
+        current: toNumber(current.pieRecomendadoUf),
+        alternative: toNumber(alternative.pieRecomendadoUf),
+        max: maxPieRecommendedUf,
         lowerIsBetter: true,
         unit: "UF",
       },
@@ -498,6 +497,17 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
         unit: "",
         currentLabel: current.status,
         alternativeLabel: alternative.status,
+      },
+      {
+        id: "preferencias",
+        label: "Preferencias",
+        current: currentPreferenceMatches,
+        alternative: alternativePreferenceMatches,
+        max: 2,
+        lowerIsBetter: false,
+        unit: "",
+        currentLabel: `${currentPreferenceMatches}/2`,
+        alternativeLabel: `${alternativePreferenceMatches}/2`,
       },
     ],
   };

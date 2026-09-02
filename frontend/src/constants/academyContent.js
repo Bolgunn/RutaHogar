@@ -83,6 +83,13 @@ export const ACADEMY_TOPICS = [
     icon: "ti-home",
     accent: "#6d28d9",
   },
+  {
+    id: "documentos",
+    label: "Documentación bancaria",
+    description: "Dónde y cómo obtener los antecedentes para tu evaluación.",
+    icon: "ti-file-text",
+    accent: "#475569",
+  },
 ];
 
 
@@ -977,6 +984,39 @@ export const ACADEMY_ARTICLES = [
     tags: ["subsidio", "tasa", "vivienda"],
     body:
       "La Ley N° 21.748 establece una reducción de la tasa de interés de 0.60 puntos porcentuales para créditos hipotecarios destinados a la compra de vivienda nueva.\n\nQué significa en la práctica: si tu tasa de interés es de, por ejemplo, 3.50%, con la Ley 21.748 pasaría a 2.90%. Esto reduce directamente tu dividendo mensual durante toda la vida del crédito, lo que puede representar un ahorro significativo.\n\nRequisitos: la vivienda debe ser nueva (no usada), debes ser persona natural (no empresa), y el valor de la propiedad no puede exceder las 4.000 UF.\n\nCómo se aplica: el banco aplica la reducción automáticamente cuando el crédito cumple con los requisitos de la ley. No necesitas realizar un trámite adicional; el banco verifica que la vivienda sea nueva y que el valor esté dentro del tope.\n\nEste beneficio es acumulable con otros subsidios habitacionales, lo que puede mejorar significativamente las condiciones de tu crédito.\n\nRecuerda: esta información es referencial. La aplicación efectiva de la reducción depende de la entidad bancaria.",
+  },
+
+  // ===========================================================================
+  // DOCUMENTACIÓN
+  // ===========================================================================
+
+  {
+    id: "docs-1",
+    topic: "documentos",
+    title: "Guía: Dónde obtener tus documentos para la evaluación hipotecaria",
+    summary:
+      "Aprende dónde y cómo conseguir cada uno de los antecedentes necesarios para tu evaluación bancaria.",
+    level: "Básico",
+    minutes: 6,
+    tags: ["documentos", "requisitos", "evaluación"],
+    body:
+      "Reunir los antecedentes para tu evaluación hipotecaria es un paso clave. A continuación, te detallamos dónde puedes obtener cada uno de los documentos habituales:\n\n" +
+      "• Cédula de identidad vigente: Se obtiene directamente en las oficinas del Registro Civil. Asegúrate de que no esté vencida ni bloqueada.\n\n" +
+      "• Certificado de residencia o Boleta de servicios: El certificado de residencia se solicita en tu Junta de Vecinos o mediante una Notaría Digital. Como alternativa, los bancos suelen aceptar una boleta de servicios básicos (luz, agua, gas) a tu nombre emitida por las respectivas empresas de servicios (idealmente con menos de 3 meses de antigüedad).\n\n" +
+      "• Comprobante de ahorro o pie: Puedes descargar la cartola de tu cuenta de ahorro para la vivienda, fondos mutuos o depósitos directamente desde los canales digitales de tu institución financiera (por ejemplo, BancoEstado, Coopeuch, u otra entidad bancaria).\n\n" +
+      "• Últimas liquidaciones de sueldo (3 a 6): Solicítalas a tu Empleador o al departamento de Recursos Humanos (RRHH) de tu empresa. Generalmente se piden 3 si tienes renta fija y 6 si tienes renta variable.\n\n" +
+      "• Certificado de cotizaciones previsionales: Se descarga desde el sitio web de tu AFP utilizando tu ClaveÚnica o tu Clave AFP. Suele solicitarse el historial de los últimos 12 a 24 meses con el RUT de tu empleador.\n\n" +
+      "• Certificado de antigüedad laboral: Es emitido por tu Empleador. Debe ser un documento oficial que especifique tu cargo, tipo de contrato y fecha de ingreso.\n\n" +
+      "• Certificados de aclaración, regularización y deuda al día: En caso de morosidades previas, puedes obtener estos certificados a través de Equifax Dicom o el Boletín Comercial, presentando la documentación que acredite el pago.\n\n" +
+      "• Certificados de pago total o finiquitos de deudas liquidadas: Si prepagaste un crédito de consumo o cerraste una tarjeta, debes solicitar el certificado de deuda saldada directamente a tu Banco o Acreedor.",
+    sources: [
+      {
+        institution: "ScoreLeads",
+        title: "Guía de Documentación Hipotecaria",
+        url: "#",
+      },
+    ],
+    reviewedAt: "2026-09",
   },
 ];
 
