@@ -66,7 +66,7 @@ function ProjectsCarousel({ children }) {
   );
 }
 
-export default function ProjectsCatalog({ evaluationBase, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation }) {
+export default function ProjectsCatalog({ evaluationBase, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -133,6 +133,14 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
   const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
+  const handleSimulateProject = (project) => {
+    if (!context) {
+      onStartEvaluation?.();
+      return;
+    }
+    onNavigate?.("simulation", { projectId: project.id });
+  };
+
   return <section className="section-block simulation-panel projects-catalog-page">
     <header className="projects-catalog-hero">
       <div className="section-heading">
@@ -196,7 +204,14 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
             <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>
-            <button type="button" className="primary-button" onClick={() => context ? setSelectedProjectId(project.id) : onStartEvaluation?.()}>{context ? "Revisar compatibilidad" : "Evaluar"}</button>
+            {context ? (
+              <div className="project-catalog-card__actions">
+                <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
+                <button type="button" className="secondary-button compact-button" onClick={() => handleSimulateProject(project)}>Simular</button>
+              </div>
+            ) : (
+              <button type="button" className="primary-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>
+            )}
           </div>
           </article>
             );

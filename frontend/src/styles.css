@@ -17636,3 +17636,30 @@ section-heading {
     border-top: 1px solid rgba(19, 43, 74, 0.1);
   }
 }
+
+/* Proyectos: acciones compactas para revisar o simular. */
+.project-catalog-card__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.project-catalog-card__actions .compact-button {
+  min-height: 40px;
+  margin: 0;
+  padding-right: 12px;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+.project-catalog-card__actions .secondary-button {
+  min-width: 92px;
+}
+
+@media (max-width: 420px) {
+  .project-catalog-card__actions {
+    grid-template-columns: 1fr;
+  }
+}

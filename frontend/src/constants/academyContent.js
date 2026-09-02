@@ -310,6 +310,22 @@ export const ACADEMY_ARTICLES = [
     reviewedAt: "2026-08",
   },
 
+
+  {
+    id: "carga-2",
+    topic: "carga",
+    title: "RCI: Relación Carga / Ingreso",
+    summary:
+      "Entiende cómo leer la relación entre tus cuotas mensuales y tus ingresos antes de evaluar una vivienda.",
+    level: "Básico",
+    minutes: 3,
+    tags: ["RCI", "relación carga ingreso", "deuda/ingreso", "carga financiera", "dividendo"],
+    body:
+      "La RCI, o Relación Carga / Ingreso, ayuda a mirar qué parte de tus ingresos mensuales se destina a obligaciones financieras. En una lectura simple, compara tus cuotas y compromisos de deuda con tus ingresos disponibles.\n\nEn RutaHogar se usa como referencia educativa para que entiendas si el dividendo estimado y tus deudas actuales dejan suficiente margen mensual. Si la relación se ve alta, puede ser una señal para ordenar deudas, ajustar el valor de vivienda o revisar el plazo antes de una evaluación formal.\n\nNo debe leerse como una regla única de aprobación. Cada institución financiera puede usar criterios propios, pedir antecedentes adicionales y considerar otros elementos del perfil, como continuidad laboral, ahorro disponible, historial de pagos y características de la operación.",
+    sources: [],
+    reviewedAt: "2026-09",
+  },
+
   // ===========================================================================
   // AHORRO Y PIE
   // ===========================================================================
@@ -1079,6 +1095,28 @@ export const ACADEMY_GLOSSARY = {
     definition:
       "Medida utilizada para analizar qué parte de los ingresos está comprometida con obligaciones financieras.",
     articleId: "carga-1",
+  },
+
+
+  RCI: {
+    label: "RCI",
+    definition:
+      "Relación Carga / Ingreso: referencia para comparar obligaciones mensuales con ingresos disponibles.",
+    articleId: "carga-2",
+  },
+
+  "relación carga ingreso": {
+    label: "Relación Carga / Ingreso",
+    definition:
+      "Comparación entre carga mensual e ingresos que ayuda a entender el margen disponible antes de asumir nuevas cuotas.",
+    articleId: "carga-2",
+  },
+
+  "deuda/ingreso": {
+    label: "deuda/ingreso",
+    definition:
+      "Lectura referencial de cuánto pesan las obligaciones mensuales frente a los ingresos.",
+    articleId: "carga-2",
   },
 
   dividendo: {
@@ -1867,6 +1905,23 @@ export const ACADEMY_CAPSULES = [
     articleId: "carga-1",
     videoUrl: null,
   },
+
+  {
+    id: "cap-carga-2",
+    topicId: "carga",
+    title: "RCI: deuda e ingreso en una sola lectura",
+    description:
+      "Una forma simple de entender cuánto margen queda antes de asumir un dividendo.",
+    minutes: 2,
+    takeaways: [
+      "Compara obligaciones mensuales con ingresos disponibles.",
+      "Sirve para detectar si el presupuesto queda demasiado ajustado.",
+      "Es una referencia, no una aprobación bancaria.",
+    ],
+    articleId: "carga-2",
+    videoUrl: null,
+  },
+
   {
     id: "cap-ahorro-1",
     topicId: "ahorro",

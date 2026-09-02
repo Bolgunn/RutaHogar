@@ -423,6 +423,7 @@ export default function App() {
   const [milestoneSuccess, setMilestoneSuccess] = useState("");
   const [trackingGoals, setTrackingGoals] = useState([]);
   const [academyArticleId, setAcademyArticleId] = useState(null);
+  const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
   const [activeGoal, setActiveGoal] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
@@ -513,6 +514,7 @@ export default function App() {
   const navigateToPage = (nextPage, options = {}) => {
     if (options.articleId) setAcademyArticleId(options.articleId);
     else if (nextPage !== "academia") setAcademyArticleId(null);
+    setSimulationInitialProjectId(nextPage === "simulation" ? options.projectId || null : null);
     navigateToPageForProfile(nextPage, profile, options);
   };
 
@@ -1811,6 +1813,7 @@ export default function App() {
           onboarding={userOnboarding}
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
+          initialProjectId={simulationInitialProjectId}
           onRetryExplanation={handleRetryAiExplanation}
         />
         ) : page === "academia" && profile.role === roles.user ? (
@@ -1824,6 +1827,7 @@ export default function App() {
             onBack={() => navigateToPage("tracking")}
             onStartEvaluation={startEvaluation}
             onSetGoal={handleSetProjectGoal}
+            onNavigate={navigateToPage}
           />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads

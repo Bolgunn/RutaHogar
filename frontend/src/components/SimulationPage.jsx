@@ -445,7 +445,7 @@ function RecommendationEmpty({ onStartEvaluation }) {
   );
 }
 
-export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate }) {
+export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate, initialProjectId }) {
   const context = useMemo(
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
@@ -500,6 +500,14 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       prev && projects.some((project) => project.id === prev) ? prev : projects[0].id,
     );
   }, [projects]);
+
+  useEffect(() => {
+    if (!initialProjectId || !projects.some((project) => project.id === initialProjectId)) return;
+    setMode("project");
+    setSelectedProjectId(initialProjectId);
+    setCompareProjectId("");
+    setComparison(null);
+  }, [initialProjectId, projects]);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
