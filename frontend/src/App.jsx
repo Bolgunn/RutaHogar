@@ -1136,6 +1136,8 @@ export default function App() {
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
       const scoreUrl = `${apiBase.replace(/\/$/, "")}/score`;
 
+      // 1. SANITIZAR DATOS: Mapear "renta_mensual" a "ingreso_mensual" si es necesario
+      // y forzar que los valores financieros sean números para evitar que la API crashee.
       const parsedMilestoneData = { ...milestoneData };
 
       if (parsedMilestoneData.renta_mensual !== undefined) {
@@ -1149,6 +1151,7 @@ export default function App() {
         parsedMilestoneData.ahorro_disponible = Number(parsedMilestoneData.ahorro_disponible);
       }
 
+      // 2. Construir el input mezclando la evaluación anterior con los datos sanitizados
       const newFinancialInput = buildFinancialInput({
         ...currentEvaluation.input,
         ...parsedMilestoneData,
@@ -1178,7 +1181,7 @@ export default function App() {
       const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
         email: profile?.email || "sin-email",
         onboarding: userOnboarding ? { ...userOnboarding } : null,
-        input: newFinancialInput,
+        input: newFinancialInput, // Guardamos el nuevo input en Supabase
         result: resultSnapshot,
         channel: getChannel(),
       });

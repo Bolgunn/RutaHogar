@@ -296,7 +296,6 @@ def _apply_final_classification(score: float, blockers: List[Dict]) -> tuple[str
             "Requiere antecedentes",
             "La clasificación requiere antecedentes adicionales por complemento de renta incompleto.",
         )
-
     return (
         _classify_weighted_score(score),
         "La clasificación final se calculó desde el score ajustado por antecedentes detectados.",

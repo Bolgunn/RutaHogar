@@ -341,6 +341,33 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
           </form>
         )}
 
+        {activeType === "renta" && (
+          <form onSubmit={handleRentaSubmit} className="milestone-form" style={{ padding: "1.5rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--surface-color)" }}>
+            <h3>Actualiza tu Renta Mensual</h3>
+            <p className="field-help" style={{ marginBottom: "1.5rem" }}>
+              Actualmente tienes declarado: <strong>{formatClp(currentIncome)}</strong>
+            </p>
+            <label className="field-label">
+              Nueva Renta Mensual Líquida (CLP)
+              <input
+                type="number"
+                min="0"
+                value={newIncome}
+                onChange={(e) => setNewIncome(e.target.value)}
+                placeholder="Ej. 1200000"
+                className="text-input"
+                autoFocus
+              />
+            </label>
+            {error && <div className="warning-note" style={{ marginTop: "1rem" }}>{error}</div>}
+            <div style={{ marginTop: "1.5rem" }}>
+              <button type="submit" className="primary-button" disabled={isSubmitting}>
+                {isSubmitting ? "Calculando nuevo score..." : "Registrar y Recalcular"}
+              </button>
+            </div>
+          </form>
+        )}
+
         {!activeType && (
           <div className="milestone-empty-state">
             <i className="ti ti-hand-click" aria-hidden="true" />
