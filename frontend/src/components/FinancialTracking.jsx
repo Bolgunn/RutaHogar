@@ -861,21 +861,17 @@ export default function FinancialTracking({
 
 
 
-      {/* Barra de Filtros y Boton de Ingresar Avances */}
+      {/* Barra de Filtros -- el registro de avance vive en cada meta */}
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
           marginBottom: "1.5rem",
         }}
       >
-        <button type="button" className="primary-button compact-button" onClick={onOpenMilestoneRegistration}>
-          Ingresar Avances
-        </button>
-
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--color-neutral-700)" }}>
             Filtrar por:

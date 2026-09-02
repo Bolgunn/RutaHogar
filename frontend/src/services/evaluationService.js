@@ -100,12 +100,10 @@ export function normalizeEvaluation(row, profilesMap = {}) {
       positive_indicators: normalizeDisplayList(storedResult.positive_indicators ?? recommendationData.positive_indicators),
       executive_summary: sanitizeAiText(normalizeDisplayText(storedResult.executive_summary ?? row.executive_summary ?? "")),
       commercial_guidance: sanitizeAiText(normalizeDisplayText(storedResult.commercial_guidance ?? row.commercial_guidance ?? "")),
-      executive_summary: normalizeDisplayText(storedResult.executive_summary ?? row.executive_summary ?? ""),
-      commercial_guidance: normalizeDisplayText(storedResult.commercial_guidance ?? row.commercial_guidance ?? ""),
       financial_indicators: storedResult.financial_indicators || row.financial_indicators || {},
     },
     plan_accepted_at: row.plan_accepted_at || null,
-    plan_type: row.plan_type || null,
+    plan_type: row.plan_type || row.housing_plan?.plan_type || null,
   };
 }
 
@@ -125,6 +123,7 @@ function normalizeLocalEvaluation(entry) {
       executive_summary: sanitizeAiText(result.executive_summary),
       commercial_guidance: sanitizeAiText(result.commercial_guidance),
     },
+    plan_type: entry.plan_type || entry.housing_plan?.plan_type || null,
   };
 }
 
@@ -338,25 +337,24 @@ export async function acceptEvaluationPlan(evaluationId, userId, updates = {}) {
     plan_accepted_at: acceptedAt,
   };
 
-  // El tipo de plan se guarda dentro del JSONB housing_plan para evitar errores de schema si no existe como columna
-  if (updates.plan_type) {
-    payload.housing_plan = {
-      plan_type: updates.plan_type,
-    };
-  }
-  
+  // El tipo de plan se guarda dentro del JSONB housing_plan para evitar errores de schema si no existe como columna.
+  // Se parcha sobre el housing_plan existente: reemplazarlo entero borraba el progreso ya guardado.
+  const planPatch = {};
+  if (updates.plan_type) planPatch.plan_type = updates.plan_type;
   if (updates.housing_plan) {
-    payload.housing_plan = {
-      status: "en_curso",
-      accepted_at: acceptedAt,
-      ...(payload.housing_plan || {}),
-      ...updates.housing_plan,
-    };
+    Object.assign(planPatch, { status: "en_curso", accepted_at: acceptedAt }, updates.housing_plan);
   }
+  const hasPlanPatch = Object.keys(planPatch).length > 0;
 
   if (!isSupabaseDataConfigured) {
     const next = readLocalEvaluations().map((item) =>
-      item.id === evaluationId ? { ...item, ...payload } : item,
+      item.id === evaluationId
+        ? {
+            ...item,
+            ...payload,
+            ...(hasPlanPatch ? { housing_plan: { ...(item.housing_plan || {}), ...planPatch } } : {}),
+          }
+        : item,
     );
     writeLocalEvaluations(next);
     return normalizeLocalEvaluation(next.find((item) => item.id === evaluationId) || null);
@@ -364,6 +362,16 @@ export async function acceptEvaluationPlan(evaluationId, userId, updates = {}) {
 
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para aceptar el plan.");
+
+  if (hasPlanPatch) {
+    const { data: current } = await supabase
+      .from("evaluations")
+      .select("housing_plan")
+      .eq("id", evaluationId)
+      .eq("user_id", user.id)
+      .single();
+    payload.housing_plan = { ...(current?.housing_plan || {}), ...planPatch };
+  }
 
   const { data, error } = await supabase
     .from("evaluations")
