@@ -26,6 +26,7 @@ import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
+import ProjectsCatalog from "./components/ProjectsCatalog";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
@@ -88,7 +89,7 @@ function getChannel() {
     const validChannels = ['web', 'chatbot', 'whatsapp', 'vendedor'];
     const channel = params.get('channel');
     if (channel && validChannels.includes(channel)) return channel;
-  } catch {}
+  } catch { }
   return 'web';
 }
 
@@ -121,9 +122,9 @@ const hasCompletedOnboarding = (data) => {
 
   return Boolean(
     data.objetivo_principal &&
-      data.tipo_propiedad &&
-      data.comuna_interes &&
-      data.plazo_compra,
+    data.tipo_propiedad &&
+    data.comuna_interes &&
+    data.plazo_compra,
   );
 };
 
@@ -245,6 +246,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "subsidios") return "/subsidios";
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
+  if (page === "projects") return "/proyectos";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "profile") return "/perfil";
   if (page === "leads") return "/dashboard";
@@ -279,6 +281,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/definir-password",
+    "/proyectos",
   ].includes(path);
 
   // Enlace de recuperación / invitación: vale con o sin sesión previa.
@@ -290,7 +293,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -310,6 +313,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/subsidios") return { page: "subsidios" };
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
+    if (path === "/proyectos") return { page: "projects" };
     if (path === "/plan-mejora") return { page: "tracking" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
     if (path === "/dashboard" || path === "/admin" || path === "/ejecutivo/leads" || path === "/login" || path === "/registro") {
@@ -415,10 +419,10 @@ export default function App() {
     ? profile?.onboarding_data || null
     : profile
       ? profile.onboarding_data ||
-        onboarding[userId] ||
-        onboarding[profile?.id] ||
-        onboarding[profile?.email] ||
-        null
+      onboarding[userId] ||
+      onboarding[profile?.id] ||
+      onboarding[profile?.email] ||
+      null
       : null;
   const onboardingCompleted = hasCompletedOnboarding(userOnboarding);
   const currentScoreNumber = currentEvaluation
@@ -427,9 +431,9 @@ export default function App() {
   const currentScore =
     currentEvaluation && currentScoreNumber !== null
       ? {
-          score: currentScoreNumber,
-          classification: currentEvaluation.result.classification,
-        }
+        score: currentScoreNumber,
+        classification: currentEvaluation.result.classification,
+      }
       : null;
 
   useEffect(() => {
@@ -496,7 +500,7 @@ export default function App() {
         console.error(err);
         if (active)
           setDataError(
-            "No pudimos cargar tu historial. Revisa que las tablas de Supabase esten creadas y vuelve a intentar.",
+            "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde.",
           );
       }
     }
@@ -783,7 +787,8 @@ export default function App() {
         setSignupOfferError("Cuenta creada, pero no pudimos guardar tu evaluación. Por favor intenta de nuevo.");
         setAuth(nextAuth);
       } else {
-        setSignupOfferError(err?.message || "No se pudo crear la cuenta. Intenta nuevamente.");
+        console.log("Error de Auth en registro:", err);
+        setSignupOfferError("No pudimos crear tu cuenta en este momento. Verifica que tus datos sean correctos o que el correo no esté ya registrado.");
       }
     } finally {
       setSignupOfferLoading(false);
@@ -819,7 +824,7 @@ export default function App() {
         console.error(err);
         setAuth(nextAuth);
         setDataError(
-          "Iniciaste sesion, pero no pudimos migrar la preevaluación previa. Tus datos temporales se conservaron para reintentar.",
+          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu evaluación anterior. Puedes volver a intentarlo desde tu perfil.",
         );
         const fallbackPage = getInitialPageForProfile(nextAuth.profile);
         navigateToPageForProfile(fallbackPage, nextAuth.profile, { replace: true });
@@ -941,14 +946,12 @@ export default function App() {
       navigateToPage("recommendations");
 
       setDataError("");
-      // Corrección: se usaban variables 'rt' y 't' no definidas.
       if (isSupabaseDataConfigured && !auth.session) {
         throw new Error(
           "No hay una sesión activa. Por favor, inicia sesión nuevamente.",
         );
       }
 
-      // Solo enviamos el userId si es un UUID válido, de lo contrario pasamos null para que el servicio use el usuario autenticado
       const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
         email: profile?.email || "sin-email",
         onboarding: userOnboarding ? { ...userOnboarding } : null,
@@ -978,7 +981,7 @@ export default function App() {
       if (resultRef.current !== resultSnapshot) return;
       setResultSaved(false);
       setDataError(
-        "El score se calculó, pero no pudimos guardar la preevaluación. Revisa que tu sesión siga activa y que Supabase permita insertar evaluaciones.",
+        "Tu pre-evaluación finalizó, pero hubo un problema al guardarla en tu historial. Si el problema persiste, vuelve a iniciar sesión.",
       );
     }
   };
@@ -1017,36 +1020,18 @@ export default function App() {
     }
   };
 
-  const handleAcceptPlan = async (housingPieType) => {
+  const handleAcceptPlan = async (planType) => {
     if (!currentEvaluation) return;
 
     try {
       setDataError("");
-      const input = currentEvaluation.input || {};
-      const price = getHousingPropertyPrice(currentEvaluation);
-      const housingInfo = price > 0 ? calculateHousingSavings(input, price) : null;
-
-      let snapshot;
-      if (housingInfo && !housingInfo.error && housingInfo.isViable) {
-        snapshot = buildHousingPlanSnapshot(housingInfo, housingPieType || "minimo");
-      } else {
-        snapshot = {
-          pie_type: housingPieType || "minimo",
-          property_price: price || 0,
-          pie_required: 0,
-          monthly_target: 0,
-          months: 0,
-          gap: 0,
-          current_savings: Number(input.ahorro_disponible) || 0,
-          progress: null,
-        };
-      }
 
       const updatedEvaluation = await acceptEvaluationPlan(
         currentEvaluation.id,
         userId || profile?.email || "local-user",
-        snapshot,
+        { plan_type: planType }
       );
+
       if (updatedEvaluation) {
         setEvaluations((prev) =>
           prev.map((item) =>
@@ -1056,11 +1041,7 @@ export default function App() {
         handleLogScoringEvent({
           type: "accept_plan",
           details: {
-            pie_type: snapshot.pie_type,
-            monthly_target: snapshot.monthly_target,
-            months: snapshot.months,
-            pie_required: snapshot.pie_required,
-            gap: snapshot.gap,
+            plan_type: planType,
           },
         });
       }
@@ -1094,12 +1075,12 @@ export default function App() {
       const updatedEvaluation = await saveHousingPlanProgress(
         currentEvaluation.id,
         userId || profile?.email || "local-user",
-        housingPlan,
+        housingPlan
       );
       if (updatedEvaluation) {
-        setEvaluations((prev) =>
-          prev.map((item) =>
-            item.id === updatedEvaluation.id ? updatedEvaluation : item,
+        setEvaluations(
+          evaluations.map((item) =>
+            item.id === currentEvaluation.id ? updatedEvaluation : item,
           ),
         );
       }
@@ -1146,29 +1127,49 @@ export default function App() {
       setDataError("No pudimos guardar el avance mensual.");
     }
   };
-
   const handleRegisterMilestone = async (milestoneData) => {
     if (!currentEvaluation) return;
     try {
       setDataError("");
       setMilestoneSuccess("");
-      
+
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
       const scoreUrl = `${apiBase.replace(/\/$/, "")}/score`;
 
+      const parsedMilestoneData = { ...milestoneData };
+
+      if (parsedMilestoneData.renta_mensual !== undefined) {
+        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.renta_mensual);
+        delete parsedMilestoneData.renta_mensual;
+      } else if (parsedMilestoneData.ingreso_mensual !== undefined) {
+        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.ingreso_mensual);
+      }
+
+      if (parsedMilestoneData.ahorro_disponible !== undefined) {
+        parsedMilestoneData.ahorro_disponible = Number(parsedMilestoneData.ahorro_disponible);
+      }
+
       const newFinancialInput = buildFinancialInput({
         ...currentEvaluation.input,
-        ...milestoneData,
+        ...parsedMilestoneData,
       });
 
-      const res = await fetch(scoreUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newFinancialInput),
-      });
+      let res;
+      try {
+        res = await fetch(scoreUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newFinancialInput),
+        });
+      } catch (fetchErr) {
+        console.error('Network error al contactar API de scoring (¿Está encendido el servidor en el puerto 8000?)', fetchErr);
+        throw new Error(`Error de conexión con el motor de evaluación.`);
+      }
 
       if (!res.ok) {
-        throw new Error(`Error en el scoring: ${res.status}`);
+        const errorText = await res.text();
+        console.error('Error interno en API de scoring', { status: res.status, body: errorText });
+        throw new Error(`El motor rechazó los datos (Código ${res.status}). Revisa la consola del backend.`);
       }
 
       const scoreResult = await res.json();
@@ -1182,20 +1183,15 @@ export default function App() {
         channel: getChannel(),
       });
 
-      setEvaluations((prev) => {
-        const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
-        return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
-      });
       prependEvaluation(savedEvaluation);
 
       setMilestoneSuccess("¡Hito registrado exitosamente! Tu score y plan han sido recalculados.");
-      setPage("tracking"); 
-      
-      // Auto-hide success message after 5 seconds
+      setPage("tracking");
+
       setTimeout(() => setMilestoneSuccess(""), 5000);
     } catch (err) {
       console.error("Error registrando hito", err);
-      setDataError("Hubo un problema registrando el hito. Por favor intenta de nuevo.");
+      setDataError("Hubo un problema al registrar tu nuevo hito. Por favor, verifica tus datos e intenta nuevamente.");
     }
   };
 
@@ -1330,10 +1326,11 @@ export default function App() {
               profile={null}
               consentGranted={true}
               isAnon
-              onConsentAccept={() => {}}
+              onConsentAccept={() => { }}
               onResult={handleAnonResult}
             />
           </section>
+
         </div>
       );
     }
@@ -1377,339 +1374,376 @@ export default function App() {
         onLogout={handleLogout}
       />
       <main className="content"><div className="content-inner">
-      {visibleError && (
-        <div className="error-message dismissible-message">
-          <span>{visibleError}</span>
-          <button
-            type="button"
-            aria-label="Cerrar mensaje"
-            onClick={() => setDismissedError(visibleError)}
-          >
-            x
-          </button>
-        </div>
-      )}
-
-      {/* Notificación para ejecutivos */}
-      <NotificationToast
-        count={newHighLeadsCount}
-        onClick={handleNotificationClick}
-        onClose={handleDismissNotification}
-      />
-
-      {page === "onboarding" && profile.role === roles.user ? (
-        <section className="evaluation-panel">
-          <div className="section-heading compact">
-            <span className="eyebrow">Disponible</span>
-            <h1>Pre-evaluación financiera</h1>
-            <p>
-              Completa todos los campos para calcular un score orientativo. El
-              resultado no equivale a aprobación bancaria.
-            </p>
-          </div>
-          <Onboarding
-            initialData={userOnboarding}
-            onComplete={handleOnboardingComplete}
-            isEditing
-            onBirthDateSave={handleBirthDateSave}
-          />
-        </section>
-      ) : page === "dataconsent" && profile.role === roles.user ? (
-        <DataConsent
-          profile={profile}
-          readonly={consentGranted}
-          onAccept={handleDataConsent}
-          onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
-        />
-      ) : page === "home" ? (
-        <section className="evaluation-panel">
-          <div className="section-heading">
-            <span className="eyebrow">Mi preparación financiera</span>
-            <h1>
-              Hola{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}
-            </h1>
-            <p>Este es tu resumen de preparación para comprar vivienda.</p>
-          </div>
-
-          {result && (
-            <div
-              className={
-                resultSaved === false ? "error-message" : "success-message"
-              }
+        {visibleError && (
+          <div className="error-message dismissible-message">
+            <span>{visibleError}</span>
+            <button
+              type="button"
+              aria-label="Cerrar mensaje"
+              onClick={() => setDismissedError(visibleError)}
             >
-              {resultSaved === false
-                ? `Score calculado: ${formatScore(result.score)} / ${result.classification}. No se pudo guardar en historial.`
-                : resultSaved === true
-                  ? `Precalificación guardada: ${formatScore(result.score)} / ${result.classification}. Puedes revisar el detalle en Perfil.`
-                  : `Score calculado: ${formatScore(result.score)} / ${result.classification}. Guardando historial...`}
-            </div>
-          )}
-
-          <div className="dashboard-status-grid">
-            <div className="dashboard-card">
-              <span className="dashboard-card-label">Score financiero orientativo</span>
-              {currentScore ? (
-                <div className={`dashboard-score score-${currentScore.classification?.toLowerCase()}`}>
-                  <strong>{currentScore.score}</strong>
-                  <span>{currentScore.classification}</span>
-                </div>
-              ) : (
-                <p className="dashboard-empty">Sin evaluación aún</p>
-              )}
-            </div>
-
-            <div className="dashboard-card">
-              <span className="dashboard-card-label">Objetivo de compra</span>
-              {userOnboarding?.comuna_interes ? (
-                <div className="dashboard-card-value">
-                  <strong>
-                    {userOnboarding.tipo_propiedad === "departamento" ? "Departamento" :
-                     userOnboarding.tipo_propiedad === "casa" ? "Casa" :
-                     userOnboarding.tipo_propiedad === "indiferente" ? "Indiferente" :
-                     "Sin definir"}{" "}
-                    en {userOnboarding.comuna_interes}
-                  </strong>
-                  <span>
-                    {plazoLabels[userOnboarding.plazo_compra] || userOnboarding.plazo_compra || "Plazo sin definir"}
-                  </span>
-                </div>
-              ) : (
-                <p className="dashboard-empty">Completa el cuestionario para definir tu objetivo</p>
-              )}
-            </div>
-
-            <div className="dashboard-card">
-              <span className="dashboard-card-label">Estado actual</span>
-              {currentScore ? (
-                <div className={`dashboard-status-badge status-${currentScore.classification?.toLowerCase()}`}>
-                  {currentScore.classification === "Alto" && "Compatible"}
-                  {currentScore.classification === "Medio" && "Cercano"}
-                  {currentScore.classification === "Bajo" && "Requiere ajuste"}
-                </div>
-              ) : onboardingCompleted ? (
-                <div className="dashboard-status-badge status-pendiente">Pendiente de evaluación</div>
-              ) : (
-                <div className="dashboard-status-badge status-pendiente">Sin datos suficientes</div>
-              )}
-            </div>
-
-            <div className="dashboard-card">
-              <span className="dashboard-card-label">Principal brecha</span>
-              {currentEvaluation?.result?.improvement_plan?.length > 0 ? (
-                <div className="dashboard-card-value">
-                  <strong>{currentEvaluation.result.improvement_plan[0].title || "Revisa tu plan de mejora"}</strong>
-                </div>
-              ) : currentScore ? (
-                <p className="dashboard-empty">Sin brechas detectadas</p>
-              ) : (
-                <p className="dashboard-empty">Realiza tu pre-evaluación para ver brechas</p>
-              )}
-            </div>
+              x
+            </button>
           </div>
+        )}
 
-          <div className="dashboard-next-action">
-            <span className="dashboard-card-label">Tu siguiente mejor acción</span>
-            {!onboardingCompleted ? (
-              <div className="dashboard-action-card" onClick={() => navigateToPage("onboarding")}>
-                <div>
-                  <strong>Completa tu perfil financiero</strong>
-                  <p>Responde el cuestionario para obtener tu score orientativo.</p>
-                </div>
-                <span className="dashboard-action-arrow">→</span>
-              </div>
-            ) : !currentScore ? (
-              <div className="dashboard-action-card" onClick={startEvaluation}>
-                <div>
-                  <strong>Realiza tu pre-evaluación</strong>
-                  <p>Calcula tu score financiero orientativo en unos minutos.</p>
-                </div>
-                <span className="dashboard-action-arrow">→</span>
-              </div>
-            ) : currentScore?.classification === "Bajo" ? (
-              <div className="dashboard-action-card" onClick={() => navigateToPage("tracking")}>
-                <div>
-                  <strong>Revisa tu plan de mejora</strong>
-                  <p>Tu score indica áreas de mejora. Conoce los pasos para avanzar.</p>
-                </div>
-                <span className="dashboard-action-arrow">→</span>
-              </div>
-            ) : (
-              <div className="dashboard-action-card" onClick={() => navigateToPage("simulation")}>
-                <div>
-                  <strong>Simula proyectos compatibles</strong>
-                  <p>Compara propuestas referenciales o ingresa un valor manual.</p>
-                </div>
-                <span className="dashboard-action-arrow">→</span>
+        {/* Notificación para ejecutivos */}
+        <NotificationToast
+          count={newHighLeadsCount}
+          onClick={handleNotificationClick}
+          onClose={handleDismissNotification}
+        />
+
+        {page === "onboarding" && profile.role === roles.user ? (
+          <section className="evaluation-panel">
+            <div className="section-heading compact">
+              <span className="eyebrow">Disponible</span>
+              <h1>Pre-evaluación financiera</h1>
+              <p>
+                Completa todos los campos para calcular un score orientativo. El
+                resultado no equivale a aprobación bancaria.
+              </p>
+            </div>
+            <Onboarding
+              initialData={userOnboarding}
+              onComplete={handleOnboardingComplete}
+              isEditing
+              onBirthDateSave={handleBirthDateSave}
+            />
+          </section>
+        ) : page === "dataconsent" && profile.role === roles.user ? (
+          <DataConsent
+            profile={profile}
+            readonly={consentGranted}
+            onAccept={handleDataConsent}
+            onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
+          />
+        ) : page === "home" ? (
+          <section className="evaluation-panel">
+            <div className="section-heading">
+              <span className="eyebrow">Mi preparación financiera</span>
+              <h1>
+                Hola{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}
+              </h1>
+              <p>Este es tu resumen de preparación para comprar vivienda.</p>
+            </div>
+
+            {result && (
+              <div
+                className={
+                  resultSaved === false ? "error-message" : "success-message"
+                }
+              >
+                {resultSaved === false
+                  ? `Score calculado: ${formatScore(result.score)} / ${result.classification}. No se pudo guardar en historial.`
+                  : resultSaved === true
+                    ? `Precalificación guardada: ${formatScore(result.score)} / ${result.classification}. Puedes revisar el detalle en Perfil.`
+                    : `Score calculado: ${formatScore(result.score)} / ${result.classification}. Guardando historial...`}
               </div>
             )}
-          </div>
 
-          <div className="dashboard-quick-access">
-            <div className="dashboard-access-card" onClick={() => navigateToPage("simulation")}>
-              <span className="dashboard-access-icon">📊</span>
-              <div>
-                <strong>Simulación</strong>
-                <p>Compara proyectos referenciales o ingresa un valor manual.</p>
+            <div className="dashboard-status-grid">
+              <div className="dashboard-card">
+                <span className="dashboard-card-label">Score financiero orientativo</span>
+                {currentScore ? (
+                  <div className={`dashboard-score score-${currentScore.classification?.toLowerCase()}`}>
+                    <strong>{currentScore.score}</strong>
+                    <span>{currentScore.classification}</span>
+                  </div>
+                ) : (
+                  <p className="dashboard-empty">Sin evaluación aún</p>
+                )}
+              </div>
+
+              <div className="dashboard-card">
+                <span className="dashboard-card-label">Objetivo de compra</span>
+                {userOnboarding?.comuna_interes ? (
+                  <div className="dashboard-card-value">
+                    <strong>
+                      {userOnboarding.tipo_propiedad === "departamento" ? "Departamento" :
+                        userOnboarding.tipo_propiedad === "casa" ? "Casa" :
+                          userOnboarding.tipo_propiedad === "indiferente" ? "Indiferente" :
+                            "Sin definir"}{" "}
+                      en {userOnboarding.comuna_interes}
+                    </strong>
+                    <span>
+                      {plazoLabels[userOnboarding.plazo_compra] || userOnboarding.plazo_compra || "Plazo sin definir"}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="dashboard-empty">Completa el cuestionario para definir tu objetivo</p>
+                )}
+              </div>
+
+              <div className="dashboard-card">
+                <span className="dashboard-card-label">Estado actual</span>
+                {currentScore ? (
+                  <div className={`dashboard-status-badge status-${currentScore.classification?.toLowerCase()}`}>
+                    {currentScore.classification === "Alto" && "Compatible"}
+                    {currentScore.classification === "Medio" && "Cercano"}
+                    {currentScore.classification === "Bajo" && "Requiere ajuste"}
+                  </div>
+                ) : onboardingCompleted ? (
+                  <div className="dashboard-status-badge status-pendiente">Pendiente de evaluación</div>
+                ) : (
+                  <div className="dashboard-status-badge status-pendiente">Sin datos suficientes</div>
+                )}
+              </div>
+
+              <div className="dashboard-card">
+                <span className="dashboard-card-label">Principal brecha</span>
+                {currentEvaluation?.result?.improvement_plan?.length > 0 ? (
+                  <div className="dashboard-card-value">
+                    <strong>{currentEvaluation.result.improvement_plan[0].title || "Revisa tu plan de mejora"}</strong>
+                  </div>
+                ) : currentScore ? (
+                  <p className="dashboard-empty">Sin brechas detectadas</p>
+                ) : (
+                  <p className="dashboard-empty">Realiza tu pre-evaluación para ver brechas</p>
+                )}
               </div>
             </div>
 
-            <div className="dashboard-access-card" onClick={() => navigateToPage("tracking")}>
-              <span className="dashboard-access-icon">📋</span>
-              <div>
-                <strong>Plan de mejora</strong>
-                <p>Revisa metas de ahorro, deuda y próximos pasos.</p>
+            <div className="dashboard-next-action">
+              <span className="dashboard-card-label">Tu siguiente mejor acción</span>
+              {!onboardingCompleted ? (
+                <div className="dashboard-action-card" onClick={() => navigateToPage("onboarding")}>
+                  <div>
+                    <strong>Completa tu perfil financiero</strong>
+                    <p>Responde el cuestionario para obtener tu score orientativo.</p>
+                  </div>
+                  <span className="dashboard-action-arrow">→</span>
+                </div>
+              ) : !currentScore ? (
+                <div className="dashboard-action-card" onClick={startEvaluation}>
+                  <div>
+                    <strong>Realiza tu pre-evaluación</strong>
+                    <p>Calcula tu score financiero orientativo en unos minutos.</p>
+                  </div>
+                  <span className="dashboard-action-arrow">→</span>
+                </div>
+              ) : currentScore?.classification === "Bajo" ? (
+                <div className="dashboard-action-card" onClick={() => navigateToPage("tracking")}>
+                  <div>
+                    <strong>Revisa tu plan de mejora</strong>
+                    <p>Tu score indica áreas de mejora. Conoce los pasos para avanzar.</p>
+                  </div>
+                  <span className="dashboard-action-arrow">→</span>
+                </div>
+              ) : (
+                <div className="dashboard-action-card" onClick={() => navigateToPage("simulation")}>
+                  <div>
+                    <strong>Simula proyectos compatibles</strong>
+                    <p>Compara propuestas referenciales o ingresa un valor manual.</p>
+                  </div>
+                  <span className="dashboard-action-arrow">→</span>
+                </div>
+              )}
+            </div>
+
+            <div className="dashboard-quick-access">
+              <div className="dashboard-access-card" onClick={() => navigateToPage("simulation")}>
+                <span className="dashboard-access-icon">📊</span>
+                <div>
+                  <strong>Simulación</strong>
+                  <p>Compara proyectos referenciales o ingresa un valor manual.</p>
+                </div>
+              </div>
+
+              <div className="dashboard-access-card" onClick={() => navigateToPage("tracking")}>
+                <span className="dashboard-access-icon">📋</span>
+                <div>
+                  <strong>Plan de mejora</strong>
+                  <p>Revisa metas de ahorro, deuda y próximos pasos.</p>
+                </div>
+              </div>
+
+              <div className="dashboard-access-card" onClick={() => navigateToPage("academia")}>
+                <span className="dashboard-access-icon">📚</span>
+                <div>
+                  <strong>Academia</strong>
+                  <p>Aprende conceptos como pie, dividendo, deuda y crédito hipotecario.</p>
+                </div>
+              </div>
+
+              <div className="dashboard-access-card" onClick={() => navigateToPage("recommendations")}>
+                <span className="dashboard-access-icon">💡</span>
+                <div>
+                  <strong>Recomendaciones</strong>
+                  <p>Consulta acciones sugeridas según tu perfil.</p>
+                </div>
+              </div>
+
+              <div className="dashboard-access-card" onClick={() => navigateToPage("projects")}>
+                <span className="dashboard-access-icon">🏢</span>
+                <div>
+                  <strong>Proyectos</strong>
+                  <p>Descubre propiedades y cotizaciones orientativas.</p>
+                </div>
               </div>
             </div>
 
-            <div className="dashboard-access-card" onClick={() => navigateToPage("academia")}>
-              <span className="dashboard-access-icon">📚</span>
-              <div>
-                <strong>Academia</strong>
-                <p>Aprende conceptos como pie, dividendo, deuda y crédito hipotecario.</p>
-              </div>
-            </div>
-
-            <div className="dashboard-access-card" onClick={() => navigateToPage("recommendations")}>
-              <span className="dashboard-access-icon">💡</span>
-              <div>
-                <strong>Recomendaciones</strong>
-                <p>Consulta acciones sugeridas según tu perfil.</p>
-              </div>
-            </div>
-          </div>
-
-          <p className="hero-note">
-            RutaHogar no aprueba créditos hipotecarios. Los resultados son referenciales y no reemplazan una evaluación bancaria formal.
-          </p>
-        </section>
-      ) : page === "evaluate" ? (
-        <section className="evaluation-panel">
-          <div className="section-heading compact">
-            <span className="eyebrow">Disponible</span>
-            <h1>Pre-evaluación financiera</h1>
-            <p>
-              Completa todos los campos para calcular un score orientativo. El
-              resultado no equivale a aprobación bancaria.
+            <p className="hero-note">
+              RutaHogar no aprueba créditos hipotecarios. Los resultados son referenciales y no reemplazan una evaluación bancaria formal.
             </p>
-          </div>
-          {userOnboarding && (
-            <div className="context-summary">
-              <strong>Contexto inicial</strong>
-              <span>
-                {userOnboarding.comuna_interes} ·{" "}
-                {plazoLabels[userOnboarding.plazo_compra] ||
-                  userOnboarding.plazo_compra}
-              </span>
-              <button
-                className="secondary-button compact-button"
-                type="button"
-                onClick={() => navigateToPage("onboarding")}
-              >
-                Editar contexto
-              </button>
+          </section>
+        ) : page === "evaluate" ? (
+          <section className="evaluation-panel">
+            <div className="section-heading compact">
+              <span className="eyebrow">Disponible</span>
+              <h1>Pre-evaluación financiera</h1>
+              <p>
+                Completa todos los campos para calcular un score orientativo. El
+                resultado no equivale a aprobación bancaria.
+              </p>
             </div>
-          )}
-          <ScoreForm
-            targetCommune={userOnboarding?.comuna_interes}
-            objective={userOnboarding?.objetivo_principal}
-            onboardingData={userOnboarding}
-            birthDate={profile?.birth_date || profile?.fecha_nacimiento}
+            {userOnboarding && (
+              <div className="context-summary">
+                <strong>Contexto inicial</strong>
+                <span>
+                  {userOnboarding.comuna_interes} ·{" "}
+                  {plazoLabels[userOnboarding.plazo_compra] ||
+                    userOnboarding.plazo_compra}
+                </span>
+                <button
+                  className="secondary-button compact-button"
+                  type="button"
+                  onClick={() => navigateToPage("onboarding")}
+                >
+                  Editar contexto
+                </button>
+              </div>
+            )}
+            <ScoreForm
+              targetCommune={userOnboarding?.comuna_interes}
+              objective={userOnboarding?.objetivo_principal}
+              onboardingData={userOnboarding}
+              birthDate={profile?.birth_date || profile?.fecha_nacimiento}
+              profile={profile}
+              consentGranted={consentGranted}
+              onConsentAccept={handleDataConsent}
+              onBirthDateSave={handleBirthDateSave}
+              onResult={handleResult}
+            />
+          </section>
+        ) : page === "profile" && profile.role === roles.user ? (
+          <ProfilePage
             profile={profile}
-            consentGranted={consentGranted}
-            onConsentAccept={handleDataConsent}
-            onBirthDateSave={handleBirthDateSave}
-            onResult={handleResult}
+            onboarding={userOnboarding}
+            evaluations={userEvaluations}
+            onSaveOnboarding={handleProfileOnboardingSave}
+            onDeleteEvaluation={deleteEvaluation}
+            onProfileUpdate={handleProfileUpdate}
           />
-        </section>
-      ) : page === "profile" && profile.role === roles.user ? (
-        <ProfilePage
-          profile={profile}
-          onboarding={userOnboarding}
-          evaluations={userEvaluations}
-          onSaveOnboarding={handleProfileOnboardingSave}
-          onDeleteEvaluation={deleteEvaluation}
-          onProfileUpdate={handleProfileUpdate}
-        />
-      ) : page === "tracking" && profile.role === roles.user ? (
-        <FinancialTracking
-          evaluation={currentEvaluation}
-          goals={trackingGoals}
-          onAcceptPlan={handleAcceptPlan}
-          onGoalStatusChange={handleGoalStatusChange}
-          onOpenGoalPlan={handleOpenGoalPlan}
-          onStartEvaluation={startEvaluation}
-          onOpenHousingPlan={handleOpenHousingPlan}
-          onLogScoringEvent={handleLogScoringEvent}
-          onOpenMilestoneRegistration={() => setPage("register-milestone")}
-          successMessage={milestoneSuccess}
-        />
-      ) : page === "housing-plan" && profile.role === roles.user ? (
-        <HousingSavingsPlan
-          evaluation={currentEvaluation}
-          initialPieType={housingInitialPieType}
-          onBack={() => setPage("tracking")}
-          onSaveHousingProgress={handleSaveHousingProgress}
-          onLogScoringEvent={handleLogScoringEvent}
-        />
-      ) : page === "register-milestone" && profile.role === roles.user ? (
-        <RegisterMilestone
-          evaluation={currentEvaluation}
-          onBack={() => setPage("tracking")}
-          onRegister={handleRegisterMilestone}
-        />
-      ) : page === "monthly-plan" && profile.role === roles.user ? (
-        <MonthlyPlan
-          evaluation={currentEvaluation}
-          goal={activeGoal}
-          onBack={() => navigateToPage("tracking")}
-          onSaveProgress={handleSaveGoalProgress}
-        />
-      ) : page === "objective-review" && profile.role === roles.user ? (
-        <ObjectiveReview
-          evaluation={currentEvaluation}
-          onBack={() => navigateToPage("tracking")}
-        />
-      ) : page === "recommendations" && profile.role === roles.user ? (
-        <Recommendations
-          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-          onStartEvaluation={startEvaluation}
-          onNavigate={navigateToPage}
-          onRetryExplanation={handleRetryAiExplanation}
-        />
-      ) : page === "subsidios" && profile.role === roles.user ? (
-        <Subsidios
-          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-          onNavigate={navigateToPage}
-        />
-      ) : page === "simulation" && profile.role === roles.user ? (
-        <SimulationPage
-          evaluation={currentEvaluation}
-          onboarding={userOnboarding}
-          onStartEvaluation={startEvaluation}
-          onNavigate={navigateToPage}
-          onRetryExplanation={handleRetryAiExplanation}
-        />
-      ) : page === "academia" && profile.role === roles.user ? (
-        <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
-        <DashboardLeads
-          evaluations={evaluations}
-          inmobiliariaId={inmobiliariaId}
-          ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
-        />
-      ) : page === "admin" && profile.role === roles.admin ? (
-        <AdminPanel evaluations={evaluations} profile={profile} />
-      ) : page === "admin-projects" && profile.role === roles.admin ? (
-        <AdminProjectCatalog />
-      ) : (
-        <section className="section-block">
-          <div className="section-heading">
-            <span className="eyebrow">Vista no disponible</span>
-            <h1>Revisa tu navegacion</h1>
-            <p>Tu rol actual no tiene acceso a esta vista.</p>
-          </div>
-        </section>
-      )}
+        ) : page === "tracking" && profile.role === roles.user ? (
+          <FinancialTracking
+            evaluation={currentEvaluation}
+            goals={trackingGoals}
+            onAcceptPlan={handleAcceptPlan}
+            onGoalStatusChange={handleGoalStatusChange}
+            onOpenGoalPlan={handleOpenGoalPlan}
+            onStartEvaluation={startEvaluation}
+            onOpenHousingPlan={handleOpenHousingPlan}
+            onLogScoringEvent={handleLogScoringEvent}
+            onOpenMilestoneRegistration={(goal) => {
+              setActiveGoal(goal || null);
+              setPage("register-milestone");
+            }}
+            successMessage={milestoneSuccess}
+            onNavigate={navigateToPage}
+          />
+        ) : page === "housing-plan" && profile.role === roles.user ? (
+          <HousingSavingsPlan
+            evaluation={currentEvaluation}
+            initialPieType={housingInitialPieType}
+            onBack={() => setPage("tracking")}
+            onSaveHousingProgress={handleSaveHousingProgress}
+            onLogScoringEvent={handleLogScoringEvent}
+          />
+        ) : page === "register-milestone" && profile.role === roles.user ? (
+          <RegisterMilestone
+            evaluation={currentEvaluation}
+            onBack={() => setPage("tracking")}
+            onRegister={handleRegisterMilestone}
+          />
+        ) : page === "monthly-plan" && profile.role === roles.user ? (
+          <MonthlyPlan
+            evaluation={currentEvaluation}
+            goal={activeGoal}
+            onBack={() => navigateToPage("tracking")}
+            onSaveProgress={handleSaveGoalProgress}
+          />
+        ) : page === "objective-review" && profile.role === roles.user ? (
+          <ObjectiveReview
+            evaluation={currentEvaluation}
+            onBack={() => navigateToPage("tracking")}
+          />
+        ) : page === "recommendations" && profile.role === roles.user ? (
+          <Recommendations
+            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+            onRetryExplanation={handleRetryAiExplanation}
+          />
+        ) : page === "subsidios" && profile.role === roles.user ? (
+          <Subsidios
+            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+            onNavigate={navigateToPage}
+          />
+        ) : page === "simulation" && profile.role === roles.user ? (
+          <SimulationPage
+            evaluation={currentEvaluation}
+            onboarding={userOnboarding}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+            onRetryExplanation={handleRetryAiExplanation}
+          />
+        ) : page === "academia" && profile.role === roles.user ? (
+          <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
+        ) : page === "projects" && profile.role === roles.user ? (
+          <ProjectsCatalog
+            evaluationBase={currentEvaluation}
+            onBack={() => navigateToPage("tracking")}
+            onSetGoal={async (project, projectResult) => {
+              try {
+                const payload = { ...currentEvaluation.input, property_value: project.precio_min_uf, property_value_unit: "uf" };
+                const newEval = await createEvaluation(profile.id, {
+                  email: profile.email || "sin-email",
+                  onboarding: userOnboarding || null,
+                  input: payload,
+                  result: projectResult,
+                  channel: "project_selection"
+                });
+
+                setEvaluations([newEval, ...evaluations.filter(e => e.id !== newEval.id)]);
+                sessionStorage.removeItem("scoreleads_selected_plan_type");
+                navigateToPage("tracking");
+                alert("¡Meta financiera actualizada al nuevo proyecto! Revisa cómo se ajustaron tus proyecciones.");
+              } catch (err) {
+                console.error(err);
+                alert("Error al fijar el proyecto como meta.");
+              }
+            }}
+          />
+        ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
+          <DashboardLeads
+            evaluations={evaluations}
+            inmobiliariaId={inmobiliariaId}
+            ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          />
+        ) : page === "admin" && profile.role === roles.admin ? (
+          <AdminPanel evaluations={evaluations} profile={profile} />
+        ) : page === "admin-projects" && profile.role === roles.admin ? (
+          <AdminProjectCatalog />
+        ) : (
+          <section className="section-block">
+            <div className="section-heading">
+              <span className="eyebrow">Vista no disponible</span>
+              <h1>Revisa tu navegacion</h1>
+              <p>Tu rol actual no tiene acceso a esta vista.</p>
+            </div>
+          </section>
+        )}
       </div></main>
     </div>
   );

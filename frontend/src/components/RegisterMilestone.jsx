@@ -1,6 +1,19 @@
 import React, { useState } from "react";
 import { formatClp } from "../services/monthlyPlanService";
 
+function formatInteger(raw) {
+  if (raw === "" || raw == null) return "";
+  const digits = String(raw).replace(/\D/g, "");
+  if (digits === "") return "";
+  return Number(digits).toLocaleString("es-CL");
+}
+
+function stripFormat(value) {
+  return String(value)
+    .replace(/\./g, "")
+    .replace(/[^0-9]/g, "");
+}
+
 const MILESTONE_TYPES = [
   {
     id: "ahorro",
@@ -30,10 +43,11 @@ const continuityOptions = [
 ];
 
 export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
-  const [activeType, setActiveType] = useState(null);
+  const [activeType, setActiveType] = useState(null); // 'ahorro', 'deuda', 'laboral', 'renta'
   const [newSavings, setNewSavings] = useState("");
   const [newDebt, setNewDebt] = useState("");
   const [newContinuity, setNewContinuity] = useState("");
+  const [newIncome, setNewIncome] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -41,11 +55,18 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const currentSavings = Number(inputData.ahorro_disponible) || 0;
   const currentDebt = Number(inputData.deuda_mensual) || 0;
   const currentContinuity = inputData.continuidad_laboral || "";
+  const currentIncome = Number(inputData.ingreso_mensual) || 0;
+  
+  const currentMorosidadActual = inputData.morosidad_actual || "no";
+  const currentMontoMorosidad = Number(inputData.monto_morosidad) || 0;
+
+  const [newMorosidadActual, setNewMorosidadActual] = useState(currentMorosidadActual);
+  const [newMontoMorosidad, setNewMontoMorosidad] = useState(currentMontoMorosidad === 0 ? "" : currentMontoMorosidad.toString());
 
   const handleAhorroSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const savingsVal = Number(newSavings);
+    const savingsVal = Number(stripFormat(newSavings));
     if (!Number.isFinite(savingsVal) || savingsVal < 0 || newSavings === "") {
       setError("El nuevo ahorro debe ser un número válido mayor o igual a 0.");
       return;
@@ -64,19 +85,30 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
   const handleDeudaSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    const debtVal = Number(newDebt);
+    const debtVal = Number(stripFormat(newDebt));
     if (!Number.isFinite(debtVal) || debtVal < 0 || newDebt === "") {
       setError("La deuda debe ser un número válido mayor o igual a 0.");
       return;
     }
-    if (debtVal >= currentDebt) {
-      setError(
-        `El nuevo monto debe ser inferior a tu deuda declarada previamente (${formatClp(currentDebt)}).`
-      );
+    
+    const montoMorosidadVal = newMorosidadActual === "si" ? Number(stripFormat(newMontoMorosidad)) : 0;
+    
+    const isDebtImproved = debtVal < currentDebt;
+    const isMorosidadImproved = 
+      (currentMorosidadActual === "si" && newMorosidadActual === "no") ||
+      (currentMorosidadActual === "si" && newMorosidadActual === "si" && montoMorosidadVal < currentMontoMorosidad);
+      
+    if (!isDebtImproved && !isMorosidadImproved) {
+      setError("El nuevo monto o estado de morosidad debe ser inferior a lo que declaraste previamente.");
       return;
     }
+    
     setIsSubmitting(true);
-    await onRegister({ deuda_mensual: debtVal });
+    await onRegister({ 
+      deuda_mensual: debtVal,
+      morosidad_actual: newMorosidadActual,
+      monto_morosidad: montoMorosidadVal
+    });
     setIsSubmitting(false);
   };
 
@@ -96,6 +128,27 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
     setIsSubmitting(false);
   };
 
+  const handleRentaSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    const incomeVal = Number(stripFormat(newIncome));
+    if (!Number.isFinite(incomeVal) || incomeVal <= 0 || newIncome === "") {
+      setError("La renta debe ser un número válido mayor a 0.");
+      return;
+    }
+    if (incomeVal === currentIncome) {
+      setError(
+        `El nuevo monto es idéntico a tu renta declarada previamente (${formatClp(
+          currentIncome
+        )}).`
+      );
+      return;
+    }
+    setIsSubmitting(true);
+    await onRegister({ ingreso_mensual: incomeVal });
+    setIsSubmitting(false);
+  };
+
   return (
     <section className="section-block milestone-panel">
       <div className="page-head">
@@ -111,21 +164,42 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         </p>
       </div>
 
-      <div className="milestone-type-grid">
-        {MILESTONE_TYPES.map((type) => (
-          <button
-            key={type.id}
-            type="button"
-            className={`milestone-type-card ${activeType === type.id ? "is-active" : ""}`}
-            onClick={() => { setActiveType(type.id); setError(""); }}
-          >
-            <i className={`ti ${type.icon}`} aria-hidden="true" />
-            <div>
-              <h3>{type.title}</h3>
-              <p>{type.desc}</p>
-            </div>
-          </button>
-        ))}
+      <div className="milestone-cards-container" style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "2rem" }}>
+        <button
+          className={`card-button ${activeType === 'ahorro' ? 'active' : ''}`}
+          onClick={() => { setActiveType('ahorro'); setError(""); }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'ahorro' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+        >
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💰 Aumento de Ahorro</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He logrado ahorrar más dinero para mi pie.</p>
+        </button>
+
+        <button
+          className={`card-button ${activeType === 'deuda' ? 'active' : ''}`}
+          onClick={() => { setActiveType('deuda'); setError(""); }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'deuda' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+        >
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💳 Reducción de Deuda</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He pagado parte o la totalidad de mis deudas.</p>
+        </button>
+
+        <button
+          className={`card-button ${activeType === 'laboral' ? 'active' : ''}`}
+          onClick={() => { setActiveType('laboral'); setError(""); }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'laboral' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+        >
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💼 Mejora Laboral</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He cambiado mi tipo de contrato o antigüedad.</p>
+        </button>
+
+        <button
+          className={`card-button ${activeType === 'renta' ? 'active' : ''}`}
+          onClick={() => { setActiveType('renta'); setError(""); }}
+          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'renta' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
+        >
+          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>📈 Aumento de Renta</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>Han subido mis ingresos mensuales líquidos.</p>
+        </button>
       </div>
 
       <div className="milestone-form-area">
@@ -140,10 +214,10 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
             <label className="simulator-field">
               Nuevo Ahorro Disponible Total (CLP)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={newSavings}
-                onChange={(e) => setNewSavings(e.target.value)}
+                onChange={(e) => setNewSavings(formatInteger(e.target.value))}
                 placeholder="Ej. 15.000.000"
                 autoFocus
               />
@@ -160,20 +234,45 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         {activeType === "deuda" && (
           <form onSubmit={handleDeudaSubmit} className="milestone-form">
             <div className="milestone-form-header">
-              <h3>Actualiza tu Deuda Mensual</h3>
+              <h3>Actualiza tu Deuda y Morosidad</h3>
               <p className="field-help">
-                Actualmente pagas al mes: <strong>{formatClp(currentDebt)}</strong>
+                Deuda actual declarada: <strong>{formatClp(currentDebt)}</strong><br/>
+                Morosidad: <strong>{currentMorosidadActual === "si" ? formatClp(currentMontoMorosidad) : "Al día"}</strong>
               </p>
             </div>
+            
+            <label className="simulator-field">
+              ¿Tienes morosidad actual?
+              <select
+                value={newMorosidadActual}
+                onChange={(e) => setNewMorosidadActual(e.target.value)}
+              >
+                <option value="no">No, estoy al día</option>
+                <option value="si">Sí, tengo atrasos</option>
+              </select>
+            </label>
+
+            {newMorosidadActual === "si" && (
+              <label className="simulator-field">
+                Monto de morosidad (CLP)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newMontoMorosidad}
+                  onChange={(e) => setNewMontoMorosidad(formatInteger(e.target.value))}
+                  placeholder="Ej. 500.000"
+                />
+              </label>
+            )}
+
             <label className="simulator-field">
               Nueva Deuda Mensual Total (CLP)
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={newDebt}
-                onChange={(e) => setNewDebt(e.target.value)}
+                onChange={(e) => setNewDebt(formatInteger(e.target.value))}
                 placeholder="Ej. 150.000"
-                autoFocus
               />
             </label>
             {error && <div className="warning-note">{error}</div>}
@@ -210,6 +309,33 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
             <div className="milestone-form-actions">
               <button type="submit" className="primary-button" disabled={isSubmitting}>
                 {isSubmitting ? "Calculando nuevo score…" : "Registrar y Recalcular"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {activeType === "renta" && (
+          <form onSubmit={handleRentaSubmit} className="milestone-form" style={{ padding: "1.5rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--surface-color)" }}>
+            <h3>Actualiza tu Renta Mensual</h3>
+            <p className="field-help" style={{ marginBottom: "1.5rem" }}>
+              Actualmente tienes declarado: <strong>{formatClp(currentIncome)}</strong>
+            </p>
+            <label className="field-label">
+              Nueva Renta Mensual Líquida (CLP)
+              <input
+                type="text"
+                inputMode="numeric"
+                value={newIncome}
+                onChange={(e) => setNewIncome(formatInteger(e.target.value))}
+                placeholder="Ej. 2.000.000"
+                className="text-input"
+                autoFocus
+              />
+            </label>
+            {error && <div className="warning-note" style={{ marginTop: "1rem" }}>{error}</div>}
+            <div style={{ marginTop: "1.5rem" }}>
+              <button type="submit" className="primary-button" disabled={isSubmitting}>
+                {isSubmitting ? "Calculando nuevo score..." : "Registrar y Recalcular"}
               </button>
             </div>
           </form>

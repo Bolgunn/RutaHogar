@@ -143,6 +143,7 @@ export function formatPlanActionMeta(action = {}) {
 
 export function getUserResultFactors(result = {}) {
   const factors = [];
+  if (!result) return factors;
   const seen = new Set();
 
   const addFactor = (item) => {

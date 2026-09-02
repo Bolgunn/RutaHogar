@@ -100,7 +100,12 @@ export function normalizeEvaluation(row, profilesMap = {}) {
       positive_indicators: normalizeDisplayList(storedResult.positive_indicators ?? recommendationData.positive_indicators),
       executive_summary: sanitizeAiText(normalizeDisplayText(storedResult.executive_summary ?? row.executive_summary ?? "")),
       commercial_guidance: sanitizeAiText(normalizeDisplayText(storedResult.commercial_guidance ?? row.commercial_guidance ?? "")),
+      executive_summary: normalizeDisplayText(storedResult.executive_summary ?? row.executive_summary ?? ""),
+      commercial_guidance: normalizeDisplayText(storedResult.commercial_guidance ?? row.commercial_guidance ?? ""),
+      financial_indicators: storedResult.financial_indicators || row.financial_indicators || {},
     },
+    plan_accepted_at: row.plan_accepted_at || null,
+    plan_type: row.plan_type || null,
   };
 }
 
@@ -325,17 +330,33 @@ export async function deleteEvaluation(evaluationId, userId) {
   if (error) { logSupabaseError(error); throw error; }
 }
 
-export async function acceptEvaluationPlan(evaluationId, userId, planSnapshot) {
+export async function acceptEvaluationPlan(evaluationId, userId, updates = {}) {
   const acceptedAt = new Date().toISOString();
-  const housingPlan = {
-    status: "en_curso",
-    accepted_at: acceptedAt,
-    ...planSnapshot,
+  
+  // Construir objeto de actualización base
+  const payload = {
+    plan_accepted_at: acceptedAt,
   };
+
+  // El tipo de plan se guarda dentro del JSONB housing_plan para evitar errores de schema si no existe como columna
+  if (updates.plan_type) {
+    payload.housing_plan = {
+      plan_type: updates.plan_type,
+    };
+  }
+  
+  if (updates.housing_plan) {
+    payload.housing_plan = {
+      status: "en_curso",
+      accepted_at: acceptedAt,
+      ...(payload.housing_plan || {}),
+      ...updates.housing_plan,
+    };
+  }
 
   if (!isSupabaseDataConfigured) {
     const next = readLocalEvaluations().map((item) =>
-      item.id === evaluationId ? { ...item, plan_accepted_at: acceptedAt, housing_plan: housingPlan } : item,
+      item.id === evaluationId ? { ...item, ...payload } : item,
     );
     writeLocalEvaluations(next);
     return normalizeLocalEvaluation(next.find((item) => item.id === evaluationId) || null);
@@ -346,7 +367,7 @@ export async function acceptEvaluationPlan(evaluationId, userId, planSnapshot) {
 
   const { data, error } = await supabase
     .from("evaluations")
-    .update({ housing_plan: housingPlan })
+    .update(payload)
     .eq("id", evaluationId)
     .eq("user_id", user.id)
     .select(evaluationSelectColumns)

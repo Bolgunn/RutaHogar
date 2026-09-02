@@ -23,7 +23,6 @@ if _env_path.exists():
 # Se puede cambiar sin tocar código con la variable GROQ_MODEL en backend/.env.
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 
-
 def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
     """Wrapper interno que consulta el modelo configurado vía Groq.
 
