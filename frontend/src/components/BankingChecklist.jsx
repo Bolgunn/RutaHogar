@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   DISCLAIMER_TEXTS,
   getChecklistForRegime,
@@ -9,6 +9,7 @@ import {
 export default function BankingChecklist({ evaluation, input: propInput, result: propResult, onNavigate }) {
   const result = evaluation?.result || propResult || {};
   const input = evaluation?.input || propInput || {};
+
 
   const initialRegime = useMemo(() => {
     const contract = (input.tipo_contrato || "").toLowerCase();
@@ -120,7 +121,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         <div className="minimal-progress">
           <span>Preparados: {completedCount} / {currentList.length} ({progressPercent}%)</span>
           <div className="progress-track" role="progressbar" aria-label="Avance del checklist" aria-valuemin="0" aria-valuemax={currentList.length} aria-valuenow={completedCount}>
-            <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+            <div className="progress-fill" style={{ width: String(progressPercent) + "%" }} />
           </div>
         </div>
       </div>
@@ -138,7 +139,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
             return (
               <li
                 key={item.id}
-                className={`minimal-row ${isPrio ? "is-priority" : ""} ${isChecked ? "is-checked" : ""}`}
+                className={["minimal-row", isPrio ? "is-priority" : "", isChecked ? "is-checked" : ""].filter(Boolean).join(" ")}
               >
                 <div className="row-main-wrapper">
                   <label className="checkbox-label">

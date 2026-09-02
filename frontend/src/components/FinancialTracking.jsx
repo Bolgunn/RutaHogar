@@ -284,6 +284,10 @@ export default function FinancialTracking({
     : 0;
   const currentPlanMorosidadMonths = planType === "acelerado" ? mesesMorosidadAcelerado : mesesMorosidadConservador;
   const totalSaneamientoRequerido = currentMorosidad + excedenteDeuda;
+  const conservadorPieTimelineIsResolved = computedMesesConservador <= 0;
+  const conservadorPieTimelineMessage = conservadorPieTimelineIsResolved
+    ? (brecha_pie_minimo <= 0 ? "Ya cuentas con el ahorro requerido." : "No se requiere plazo adicional para el pie.")
+    : "Toma más tiempo lograr el pie (" + formatMonthsToYears(computedMesesConservador) + " estimados).";
 
   // Formato monetario
   const formatCurrency = (val) => `$${Math.round(val || 0).toLocaleString("es-CL")}`;
@@ -321,7 +325,7 @@ export default function FinancialTracking({
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", marginTop: "1.5rem" }}>
           {/* Plan Acelerado */}
-          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "2px solid var(--color-primary)", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
+          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "1px solid #cbd5e1", backgroundColor: "#fff", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.02)" }}>
             <h2 style={{ fontSize: "1.25rem", color: "var(--color-primary)", margin: "0 0 1rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               Plan Acelerado
               <span style={{ fontSize: "0.75rem", backgroundColor: "var(--color-primary)", color: "#fff", padding: "4px 8px", borderRadius: "12px" }}>Recomendado</span>
@@ -357,14 +361,13 @@ export default function FinancialTracking({
             <ul style={{ paddingLeft: "1.2rem", margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "var(--color-neutral-700)", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", lineHeight: "1.4" }}>
               <li><strong>Pros:</strong> Ahorro mensual más cómodo y realista ({formatCurrency(ahorro_mensual_conservador)}/m).</li>
               <li><strong>Pros:</strong> Mayor holgura financiera mes a mes para destinar a otros gastos o imprevistos familiares.</li>
-              <li><strong>Contras:</strong> Toma más tiempo lograr el pie ({formatMonthsToYears(computedMesesConservador)} estimados).</li>
+              <li><strong>{conservadorPieTimelineIsResolved ? "Pros" : "Contras"}:</strong> {conservadorPieTimelineMessage}</li>
               <li><strong>Contras:</strong> Si tienes deudas o morosidad, tardarás más en sanearlas, arrastrando intereses.</li>
             </ul>
             <button
               type="button"
-              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", backgroundColor: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", borderRadius: "6px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+              className="primary-button"
+              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
               onClick={() => {
                 setPlanType("conservador");
                 if (onAcceptPlan) onAcceptPlan("conservador");
@@ -421,7 +424,10 @@ export default function FinancialTracking({
       )}
 
       <div className="recommendation-hero-row tracking-overview">
-        <div className={`tracking-overview__score ${getScoreBadgeClass(tracking.classification)}`}>
+        <div
+          className={`tracking-overview__score score-visual-card ${getScoreBadgeClass(tracking.classification)}`}
+          style={{ "--score-value": `${Math.max(0, Math.min(100, Number(tracking.score) || 0))}%` }}
+        >
           <span>Score financiero</span>
           <strong>{formatScore(tracking.score, "Sin score")}</strong>
           <small>Clasificación final: {tracking.classification || "Sin clasificación"}</small>
@@ -654,7 +660,7 @@ export default function FinancialTracking({
           </div>
 
           {/* Tarjeta 4: Ahorro Pie */}
-          <div
+          <div className="tracking-indicator-card"
             style={{
               padding: "1.25rem",
               backgroundColor: "#fff",
@@ -745,33 +751,11 @@ export default function FinancialTracking({
 
       {/* Seccion de Acciones de Habilitacion */}
       <div className="improvement-plan-section tracking-improvement-plan">
-        <h2><i className="ti ti-road"></i> Pasos sugeridos para mejorar</h2>
-        <p>Priorizadas para mejorar tu aprobación bancaria. Actualiza tus avances para recalcular tu score.</p>
-
-      {tracking.warning && <div className="warning-note"><i className="ti ti-alert-triangle"></i>{tracking.warning}</div>}
-
-      {shouldShowHousingPlan && (
-        <div className="housing-plan-block" style={{ padding: "1.5rem", border: "1px solid var(--border-light)", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+        <div className="tracking-improvement-heading">
           <div>
-            <span className="eyebrow">Plan de ahorro vivienda</span>
-            <h2 className="recommendation-section-title" style={{ margin: 0 }}><i className="ti ti-home-heart"></i> Detalle de PIE y Dividendos</h2>
-            <p style={{ margin: "0.5rem 0 0 0", color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>Calcula tu capacidad de ahorro, brechas y plazos específicos para tu meta inmobiliaria.</p>
+            <h2><i className="ti ti-road"></i> Pasos sugeridos para mejorar</h2>
+            <p>Priorizadas para mejorar tu aprobación bancaria. Actualiza tus avances para recalcular tu score.</p>
           </div>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => onOpenHousingPlan?.("minimo")}
-          >
-            Ir al plan detallado
-          </button>
-        </div>
-      )}
-
-
-
-
-       {/* Barra de filtros y acceso único al registro de avances. */}
-       <div className="tracking-goals-toolbar">
         <div className="tracking-goals-filters">
           <span className="tracking-goals-filters__label">Filtrar acciones</span>
           <div className="tracking-goals-filter">
@@ -822,6 +806,32 @@ export default function FinancialTracking({
             </button>
            )}
          </div>
+        </div>
+
+      {tracking.warning && <div className="warning-note"><i className="ti ti-alert-triangle"></i>{tracking.warning}</div>}
+
+      {shouldShowHousingPlan && (
+        <div className="housing-plan-block" style={{ padding: "1.5rem", border: "1px solid var(--border-light)", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+          <div>
+            <span className="eyebrow">Plan de ahorro vivienda</span>
+            <h2 className="recommendation-section-title" style={{ margin: 0 }}><i className="ti ti-home-heart"></i> Detalle de PIE y Dividendos</h2>
+            <p style={{ margin: "0.5rem 0 0 0", color: "var(--color-neutral-600)", fontSize: "0.9rem" }}>Calcula tu capacidad de ahorro, brechas y plazos específicos para tu meta inmobiliaria.</p>
+          </div>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => onOpenHousingPlan?.("minimo")}
+          >
+            Ir al plan detallado
+          </button>
+        </div>
+      )}
+
+
+
+
+       {/* Acceso único al registro de avances. */}
+       <div className="tracking-goals-toolbar">
          <button
            className="primary-button tracking-goals-register"
            type="button"

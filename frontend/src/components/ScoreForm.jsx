@@ -287,6 +287,9 @@ export default function ScoreForm({
   onConsentAccept,
   onViewConsent,
   onBirthDateSave,
+  onBack,
+  initialDraft,
+  onDraftChange,
 }) {
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
@@ -297,13 +300,13 @@ export default function ScoreForm({
   // la solicita antes de la precalificación y luego se migra al crear la cuenta.
   const needsBirthDate = isAnon && !storedBirthDate;
   const contextCompleted = Boolean(onboardingData);
-  const [birthFields, setBirthFields] = useState({ birth_day: "", birth_month: "", birth_year: "" });
+  const [birthFields, setBirthFields] = useState(() => initialDraft?.birthFields || { birth_day: "", birth_month: "", birth_year: "" });
   const [activeDateDropdown, setActiveDateDropdown] = useState(null);
   const effectiveBirthDate = needsBirthDate ? buildBirthDateIso(birthFields) : storedBirthDate;
   const declaredAge = useMemo(() => calculateAge(effectiveBirthDate), [effectiveBirthDate]);
   const asksPropertyValue = buyerObjectives.has(objective);
 
-  const [form, setForm] = useState({
+  const defaultScoreForm = {
     ingreso_mensual: "",
     deuda_mensual: "",
     ahorro_disponible: "",
@@ -328,11 +331,16 @@ export default function ScoreForm({
     valor_vehiculos: "",
     valor_inmuebles: "",
     patrimonio_unit: "clp",
-  });
+  };
+
+  const [form, setForm] = useState(() => ({
+    ...defaultScoreForm,
+    ...(initialDraft?.form || {}),
+  }));
 
   // Estado paralelo solo para mostrar los valores formateados en pantalla
-  const [displayValues, setDisplayValues] = useState({});
-  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(false);
+  const [displayValues, setDisplayValues] = useState(() => initialDraft?.displayValues || {});
+  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(Boolean(initialDraft?.dividendWasManuallyEdited));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -340,7 +348,12 @@ export default function ScoreForm({
   const [ufStatus, setUfStatus] = useState("fallback");
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
-  const [currentStep, setCurrentStep] = useState(contextCompleted ? 2 : (needsBirthDate ? 1 : 2));
+  const [incomeTipVisible, setIncomeTipVisible] = useState(true);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const draftStep = Number(initialDraft?.currentStep);
+    if (Number.isFinite(draftStep) && draftStep >= 1 && draftStep <= 4) return draftStep;
+    return contextCompleted ? 2 : (needsBirthDate ? 1 : 2);
+  });
 
   const consentDate = consentTimestamp
     ? new Date(consentTimestamp).toLocaleDateString("es-CL", {
@@ -349,6 +362,16 @@ export default function ScoreForm({
       day: "numeric",
     })
     : null;
+
+  useEffect(() => {
+    onDraftChange?.({
+      form,
+      displayValues,
+      dividendWasManuallyEdited,
+      birthFields,
+      currentStep,
+    });
+  }, [birthFields, currentStep, displayValues, dividendWasManuallyEdited, form, onDraftChange]);
 
   const debtExceedsIncome =
     form.ingreso_mensual !== "" &&
@@ -1019,12 +1042,18 @@ export default function ScoreForm({
   };
 
   const goBack = () => {
-    if (currentStep > 1 && !(currentStep === 2 && !needsBirthDate)) {
+    if (currentStep === 2 && !needsBirthDate) {
+      onBack?.();
+      return;
+    }
+    if (currentStep > 1) {
       setError(null);
       setCurrentStep((s) => s - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  const showFinancialBackButton = currentStep !== 2 || needsBirthDate || onBack;
 
   return (
     <form onSubmit={submit} className="pre-wizard">
@@ -1137,12 +1166,21 @@ export default function ScoreForm({
             </p>
           </div>
 
-          <div className="tip" style={{ marginBottom: '1.25rem' }}>
+          {incomeTipVisible && <div className="tip" style={{ marginBottom: '1.25rem' }}>
             <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
             <div className="tip__text">
               <strong>Consejo:</strong> Usa tu ingreso líquido real. No incluyas propinas o bonos variables.
             </div>
-          </div>
+            <button
+              type="button"
+              className="tip__toggle"
+              onClick={() => setIncomeTipVisible(false)}
+              aria-label="Cerrar consejo"
+              title="Cerrar consejo"
+            >
+              x
+            </button>
+          </div>}
 
           {/* ── Datos financieros ── */}
           <div className="pre-wizard-grid-2">
@@ -1306,10 +1344,12 @@ export default function ScoreForm({
           </div>
 
           <div className="pre-wizard-nav">
-            <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Volver
-            </button>
+            {showFinancialBackButton ? (
+              <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Volver
+              </button>
+            ) : <div />}
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
               <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>

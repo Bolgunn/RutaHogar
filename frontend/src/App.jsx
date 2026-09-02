@@ -374,6 +374,29 @@ const getRouteForPage = (page, profile, options = {}) => {
   return getPrivatePathForPage(page);
 };
 
+const pagesWithoutBackButton = new Set([
+  "auth",
+  "home",
+  "admin",
+  "onboarding",
+  "anon-onboarding",
+  "anon-evaluate",
+  "dataconsent",
+  "signup-offer",
+  "set-password",
+]);
+
+function AppBackButton({ onBack }) {
+  return (
+    <button className="app-back-button" type="button" onClick={onBack} aria-label="Volver">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span>Volver</span>
+    </button>
+  );
+}
+
 export default function App() {
   const storedAuth = useMemo(() => getStoredAuth(), []);
   const initialAnonOnboarding = useMemo(() => readSessionJson(ANON_ONBOARDING_KEY), []);
@@ -394,6 +417,7 @@ export default function App() {
   // Permite saber, al resolverse un guardado lento, si el resultado visible
   // sigue siendo el que originó ese guardado.
   const resultRef = useRef(null);
+  const navigationHistoryRef = useRef([]);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
   const [milestoneSuccess, setMilestoneSuccess] = useState("");
@@ -401,6 +425,7 @@ export default function App() {
   const [academyArticleId, setAcademyArticleId] = useState(null);
   const [activeGoal, setActiveGoal] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
+  const [scoreFormDraft, setScoreFormDraft] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
     try {
@@ -476,6 +501,11 @@ export default function App() {
   };
 
   const navigateToPageForProfile = (nextPage, nextProfile = profile, options = {}) => {
+    if (pagesWithoutBackButton.has(nextPage)) {
+      navigationHistoryRef.current = [];
+    } else if (!options.replace && page && page !== nextPage && !pagesWithoutBackButton.has(page)) {
+      navigationHistoryRef.current = [...navigationHistoryRef.current, page].slice(-12);
+    }
     setPage(nextPage);
     updateBrowserPath(getRouteForPage(nextPage, nextProfile, options), options);
   };
@@ -485,6 +515,19 @@ export default function App() {
     else if (nextPage !== "academia") setAcademyArticleId(null);
     navigateToPageForProfile(nextPage, profile, options);
   };
+
+  const handleInternalBack = () => {
+    const fallbackPage = getInitialPageForProfile(profile);
+    let previousPage = navigationHistoryRef.current.pop();
+
+    if (!previousPage || previousPage === page || previousPage === "landing" || previousPage === "auth") {
+      previousPage = fallbackPage;
+    }
+
+    navigateToPageForProfile(previousPage, profile, { replace: true });
+  };
+
+  const showInternalBack = Boolean(profile) && !pagesWithoutBackButton.has(page);
 
   useEffect(() => {
     const handlePopState = () => setPathname(window.location.pathname);
@@ -626,6 +669,13 @@ export default function App() {
     if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
   }, [page]);
 
+  useEffect(() => {
+    if (page !== "tracking") return;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, [page]);
+
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
@@ -677,6 +727,7 @@ export default function App() {
     setAnonOnboarding(null);
     setAnonResult(null);
     setAnonInput(null);
+    setScoreFormDraft(null);
   };
 
   const storeOnboardingForProfile = (nextProfile, answers) => {
@@ -783,6 +834,7 @@ export default function App() {
   };
 
   const handleAnonResult = (scoreResult, input) => {
+    setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const anonymousFlowId =
       input.anonymous_flow_id ||
@@ -833,7 +885,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       if (nextAuth?.profile) {
-        setSignupOfferError("Cuenta creada, pero no pudimos guardar tu calificación. Por favor intenta de nuevo.");
+        setSignupOfferError("Cuenta creada, pero no pudimos guardar tu precalificación. Por favor intenta de nuevo.");
         setAuth(nextAuth);
       } else {
         console.log("Error de Auth en registro:", err);
@@ -852,6 +904,7 @@ export default function App() {
   const startEvaluation = () => {
     setResult(null);
     setResultSaved(null);
+    setScoreFormDraft(null);
     setStartingNewEvaluation(false);
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
   };
@@ -874,7 +927,7 @@ export default function App() {
         console.error(err);
         setAuth(nextAuth);
         setDataError(
-          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu calificación anterior. Puedes volver a intentarlo desde tu perfil.",
+          "Iniciaste sesión con éxito, pero tuvimos un problema guardando tu precalificación anterior. Puedes volver a intentarlo desde tu perfil.",
         );
         const fallbackPage = getInitialPageForProfile(nextAuth.profile);
         navigateToPageForProfile(fallbackPage, nextAuth.profile, { replace: true });
@@ -982,6 +1035,7 @@ export default function App() {
   }, [result]);
 
   const handleResult = async (scoreResult, input) => {
+    setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const financialInput = buildFinancialInput(input);
 
@@ -1047,7 +1101,7 @@ export default function App() {
       setTrackingGoals([]);
     } catch (err) {
       console.error(err);
-      setDataError("No se pudo eliminar la calificación seleccionada.");
+      setDataError("No se pudo eliminar la precalificación seleccionada.");
     }
   };
 
@@ -1216,7 +1270,7 @@ export default function App() {
         });
       } catch (fetchErr) {
         console.error('Network error al contactar API de scoring (¿Está encendido el servidor en el puerto 8000?)', fetchErr);
-        throw new Error(`Error de conexión con el motor de calificación.`);
+        throw new Error(`Error de conexión con el motor de precalificación.`);
       }
 
       if (!res.ok) {
@@ -1274,7 +1328,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`El motor de calificación rechazó los datos (${res.status}).`);
+      if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
 
       const newEval = await createEvaluation(profile.id, {
         email: profile.email || "sin-email",
@@ -1366,7 +1420,7 @@ export default function App() {
       return (
         <div className="anon-shell">
           <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
-          <section className="evaluation-panel">
+          <section className="evaluation-panel prequalification-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
               <h1>Precalificación financiera</h1>
@@ -1389,7 +1443,7 @@ export default function App() {
       return (
         <div className="anon-shell">
           <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
-          <section className="evaluation-panel">
+          <section className="evaluation-panel prequalification-panel">
             <button className="secondary-button" type="button" onClick={() => navigateToPage("anon-onboarding")}>
               Volver
             </button>
@@ -1402,14 +1456,14 @@ export default function App() {
               </p>
             </div>
             {anonOnboarding && (
-              <div className="context-summary">
+              <div className="context-summary context-summary--prequalification">
                 <strong>Contexto inicial</strong>
                 <span>
                   {anonOnboarding.comuna_interes} ·{" "}
                   {plazoLabels[anonOnboarding.plazo_compra] || anonOnboarding.plazo_compra}
                 </span>
                 <button
-                  className="secondary-button compact-button"
+                  className="primary-button compact-button"
                   type="button"
                   onClick={() => navigateToPage("anon-onboarding")}
                 >
@@ -1426,6 +1480,8 @@ export default function App() {
               consentGranted={true}
               isAnon
               onConsentAccept={() => { }}
+              initialDraft={scoreFormDraft}
+              onDraftChange={setScoreFormDraft}
               onResult={handleAnonResult}
             />
           </section>
@@ -1438,7 +1494,7 @@ export default function App() {
       return (
         <div className="anon-shell">
           <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
-          <section className="evaluation-panel">
+          <section className="evaluation-panel prequalification-panel">
             <SignupOffer
               result={anonResult}
               anonBirthDate={anonInput?.birth_date}
@@ -1473,6 +1529,8 @@ export default function App() {
         onLogout={handleLogout}
       />
       <main className="content"><div className="content-inner">
+        {showInternalBack && <AppBackButton onBack={handleInternalBack} />}
+
         {visibleError && (
           <div className="error-message dismissible-message">
             <span>{visibleError}</span>
@@ -1494,7 +1552,7 @@ export default function App() {
         />
 
         {page === "onboarding" && profile.role === roles.user ? (
-          <section className="evaluation-panel">
+          <section className="evaluation-panel home-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
               <h1>Precalificación financiera</h1>
@@ -1529,7 +1587,7 @@ export default function App() {
         ) : page === "admin-profile" && profile.role === roles.admin ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
-          <section className="evaluation-panel">
+          <section className="evaluation-panel home-panel">
             <div className="section-heading">
               <span className="eyebrow">Mi preparación financiera</span>
               <h1>
@@ -1583,7 +1641,7 @@ export default function App() {
             </p>
           </section>
         ) : page === "evaluate" ? (
-          <section className="evaluation-panel">
+          <section className="evaluation-panel prequalification-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
               <h1>Precalificación financiera</h1>
@@ -1595,8 +1653,8 @@ export default function App() {
             {currentEvaluation && !startingNewEvaluation ? (
               <section className="evaluation-review-gate">
                 <div className="evaluation-review-gate__details">
-                  <h2>¿Ha cambiado algo desde tu última calificación?</h2>
-                  <p>Revisa tus respuestas antes de calcular nuevamente. Una nueva calificación conservará tu historial anterior.</p>
+                  <h2>¿Ha cambiado algo desde tu última precalificación?</h2>
+                  <p>Revisa tus respuestas antes de calcular nuevamente. Una nueva precalificación conservará tu historial anterior.</p>
                   <div className="evaluation-review-gate__answers">
                     <details open>
                       <summary>Situación financiera</summary>
@@ -1643,14 +1701,14 @@ export default function App() {
                     </details>}
                   </div>
                   <div className="evaluation-review-gate__actions">
-                    <button type="button" className="secondary-button" onClick={() => navigateToPage("recommendations")}>Ver mi calificación actual</button>
-                    <button type="button" className="primary-button" onClick={() => setStartingNewEvaluation(true)}>Sí, quiero hacer una nueva calificación</button>
+                    <button type="button" className="secondary-button" onClick={() => navigateToPage("recommendations")}>Ver mi precalificación actual</button>
+                    <button type="button" className="primary-button" onClick={() => { setScoreFormDraft(null); setStartingNewEvaluation(true); }}>Sí, quiero hacer una nueva precalificación</button>
                   </div>
                 </div>
               </section>
             ) : <>
             {userOnboarding && (
-              <div className="context-summary">
+              <div className="context-summary context-summary--prequalification">
                 <strong>Contexto inicial</strong>
                 <span>
                   {userOnboarding.comuna_interes} ·{" "}
@@ -1658,7 +1716,7 @@ export default function App() {
                     userOnboarding.plazo_compra}
                 </span>
                 <button
-                  className="secondary-button compact-button"
+                  className="primary-button compact-button"
                   type="button"
                   onClick={() => navigateToPage("onboarding")}
                 >
@@ -1675,6 +1733,9 @@ export default function App() {
               consentGranted={consentGranted}
               onConsentAccept={handleDataConsent}
               onBirthDateSave={handleBirthDateSave}
+              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+              initialDraft={scoreFormDraft}
+              onDraftChange={setScoreFormDraft}
               onResult={handleResult}
             />
             </>}

@@ -5,6 +5,67 @@ import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } 
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 
+function ProjectsCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  const updateArrows = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, [updateArrows]);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`simulation-carousel projects-catalog-carousel-shell ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Ver proyectos anteriores"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="simulation-carousel-strip projects-catalog-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Ver proyectos siguientes"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 export default function ProjectsCatalog({ evaluationBase, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +78,6 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
   const [commune, setCommune] = useState("");
   const [availability, setAvailability] = useState("todos");
   const [query, setQuery] = useState("");
-  const carouselRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -71,11 +131,9 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
     });
   }, [availability, commune, favorites, propertyType, projects, query, showFavoritesOnly]);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
-  const scrollCarousel = (direction) => carouselRef.current?.scrollBy({ left: direction * Math.max(carouselRef.current.clientWidth * 0.78, 280), behavior: "smooth" });
-
   const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
-  return <section className="section-block projects-catalog-page">
+  return <section className="section-block simulation-panel projects-catalog-page">
     <header className="projects-catalog-hero">
       <div className="section-heading">
         <span className="eyebrow">Catálogo habitacional</span>
@@ -111,11 +169,26 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
       ) : <section className="projects-catalog-results" aria-labelledby="projects-results-title">
         <div className="projects-catalog-results__heading">
           <div><span className="eyebrow">Explora a tu ritmo</span><h2 id="projects-results-title">Alternativas disponibles</h2></div>
-          <div className="projects-catalog-carousel-controls"><button type="button" onClick={() => scrollCarousel(-1)} aria-label="Ver proyectos anteriores">&larr;</button><button type="button" onClick={() => scrollCarousel(1)} aria-label="Ver proyectos siguientes">&rarr;</button></div>
+
         </div>
-        <div className="projects-catalog-carousel" ref={carouselRef}>
-          {visibleProjects.map((project) => <article className="project-catalog-card" key={project.id}>
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{favorites.includes(project.id) && <strong>Guardado</strong>}</div>
+        <ProjectsCarousel>
+          {visibleProjects.map((project) => {
+            const isFavorite = favorites.includes(project.id);
+            return (
+          <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""}`} key={project.id}>
+          {userId && (
+            <button
+              type="button"
+              className={`project-catalog-favorite-button ${isFavorite ? "is-active" : ""}`}
+              aria-label={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+              aria-pressed={isFavorite}
+              title={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+              onClick={() => toggleFavorite(project.id)}
+            >
+              <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
+            </button>
+          )}
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span></div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
@@ -123,11 +196,12 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
             <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>
-            {userId && <button type="button" className="text-button" aria-pressed={favorites.includes(project.id)} onClick={() => toggleFavorite(project.id)}>{favorites.includes(project.id) ? "Quitar de favoritos" : "Guardar en favoritos"}</button>}
             <button type="button" className="primary-button" onClick={() => context ? setSelectedProjectId(project.id) : onStartEvaluation?.()}>{context ? "Revisar compatibilidad" : "Evaluar"}</button>
           </div>
-          </article>)}
-        </div>
+          </article>
+            );
+          })}
+        </ProjectsCarousel>
       </section>}
     </>}
     {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} />}

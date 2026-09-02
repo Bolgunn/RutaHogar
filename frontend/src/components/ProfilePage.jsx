@@ -397,6 +397,15 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const [success, setSuccess] = useState("");
   const [selectedEvaluation, setSelectedEvaluation] = useState(null);
   const [onboardingEditing, setOnboardingEditing] = useState(false);
+  const latestEvaluation = useMemo(() => {
+    const getTime = (item) => {
+      const value = item?.created_at || item?.updated_at || item?.date || item?.timestamp;
+      const time = value ? new Date(value).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    return [...evaluations].sort((a, b) => getTime(b) - getTime(a))[0] || null;
+  }, [evaluations]);
 
   // Estado para edición de contacto
   const [contactEditing, setContactEditing] = useState(false);
@@ -605,11 +614,11 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <div className="profile-stats">
           <div className="profile-stat">
             <div className="profile-stat__num">{evaluations.length}</div>
-            <div className="profile-stat__label">Calificaciones</div>
+            <div className="profile-stat__label">Precalificaciones</div>
           </div>
           <div className="profile-stat">
             <div className="profile-stat__num">
-              {evaluations.length > 0 ? formatScore(evaluations[evaluations.length - 1]?.result?.score, "—") : "—"}
+              {latestEvaluation ? formatScore(latestEvaluation?.result?.score, "—") : "—"}
             </div>
             <div className="profile-stat__label">Último score</div>
           </div>
@@ -832,7 +841,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       <section className="profile-card profile-card--history">
         <div className="profile-card-header-row">
           <div>
-            <strong>Historial de calificaciones</strong>
+            <strong>Historial de precalificaciones</strong>
             <p>{evaluations.length} registro{evaluations.length === 1 ? "" : "s"}</p>
           </div>
         </div>

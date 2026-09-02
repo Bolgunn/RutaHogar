@@ -36,6 +36,7 @@ export default function ProjectEvaluationModal({
   const [interestStatus, setInterestStatus] = useState("");
   const [actionError, setActionError] = useState("");
   const [goalPending, setGoalPending] = useState(false);
+  const [confirmGoalChange, setConfirmGoalChange] = useState(false);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
   const evaluation = useMemo(
@@ -81,11 +82,16 @@ export default function ProjectEvaluationModal({
 
   const handleSetGoal = async () => {
     if (!onSetGoal) return;
+    if (!confirmGoalChange) {
+      setConfirmGoalChange(true);
+      return;
+    }
     setGoalPending(true);
     try {
       await onSetGoal(project);
     } finally {
       setGoalPending(false);
+      setConfirmGoalChange(false);
     }
   };
 
@@ -109,7 +115,23 @@ export default function ProjectEvaluationModal({
       {interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
-        <button type="button" className="secondary-button" disabled={goalPending} onClick={handleSetGoal}>{goalPending ? "Actualizando tu plan..." : "Usar como meta de mi plan"}</button>
+        <button
+          type="button"
+          className={`secondary-button project-goal-confirm-button ${confirmGoalChange ? "is-confirming" : ""}`}
+          disabled={goalPending}
+          onClick={handleSetGoal}
+        >
+          {goalPending
+            ? "Actualizando tu plan..."
+            : confirmGoalChange
+              ? "Confirmar: reiniciar plan y checklist"
+              : "Usar como meta de mi plan"}
+        </button>
+        {confirmGoalChange && (
+          <button type="button" className="text-button" onClick={() => setConfirmGoalChange(false)}>
+            Cancelar cambio
+          </button>
+        )}
         <button type="button" className="text-button" onClick={onClose}>Volver al catálogo</button>
       </div>}
     </section>

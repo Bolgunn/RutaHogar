@@ -402,7 +402,7 @@ function CapsuleModal({ capsule, onClose, onOpenArticle }) {
 // MODAL DE ARTÍCULO
 // ============================================================================
 
-function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related }) {
+function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related, canGoBack, onBack }) {
   const scrollRef = useRef(null);
 
   // Al abrir un artículo relacionado desde el modal, el contenido nuevo
@@ -436,6 +436,13 @@ function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related 
         >
           <i className="ti ti-x" aria-hidden="true" />
         </button>
+
+        {canGoBack && (
+          <button type="button" className="academy-modal-back" onClick={onBack}>
+            <i className="ti ti-arrow-left" aria-hidden="true" />
+            Volver
+          </button>
+        )}
 
         {/* HEADER */}
 
@@ -597,24 +604,25 @@ function RouteStop({ topic, index, onOpen }) {
   );
 }
 
-function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
-  const [activeTopic, setActiveTopic] = useState("todos");
-  const [query, setQuery] = useState("");
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const isSearching = normalizedQuery.length > 0;
-
-  const matchesQuery = (article) =>
+function articleMatchesAcademyQuery(article, normalizedQuery) {
+  return (
     !normalizedQuery ||
     article.title.toLowerCase().includes(normalizedQuery) ||
     article.summary.toLowerCase().includes(normalizedQuery) ||
-    article.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery));
+    article.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+  );
+}
+
+function ConceptosTab({ onOpenArticle, onOpenCapsule, query }) {
+  const [activeTopic, setActiveTopic] = useState("todos");
+  const normalizedQuery = query.trim().toLowerCase();
+  const isSearching = normalizedQuery.length > 0;
 
   const filteredArticles = useMemo(() => {
     return ACADEMY_ARTICLES.filter((article) => {
       const matchesTopic =
         activeTopic === "todos" || article.topic === activeTopic;
-      return matchesTopic && matchesQuery(article);
+      return matchesTopic && articleMatchesAcademyQuery(article, normalizedQuery);
     }).sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
   }, [activeTopic, normalizedQuery]);
 
@@ -625,50 +633,17 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule }) {
   // muestran los 36 artículos de golpe.
   const showDirectory = activeTopic === "todos" && !isSearching;
 
+  useEffect(() => {
+    if (normalizedQuery) setActiveTopic("todos");
+  }, [normalizedQuery]);
+
   const topicCapsules = useMemo(
     () => (activeTopicMeta ? getCapsulesForTopic(activeTopicMeta.id) : []),
     [activeTopicMeta]
   );
 
-  const handleSearchChange = (event) => {
-    setQuery(event.target.value);
-    if (event.target.value.trim()) setActiveTopic("todos");
-  };
-
   return (
     <div className="conceptos-tab">
-      {/* BÚSQUEDA + DISCLAIMER EN UNA FILA */}
-
-      <div className="academy-toolbar academy-toolbar-simple">
-        <div className="academy-search academy-search-wide">
-          <i className="ti ti-search" aria-hidden="true" />
-
-          <input
-            type="text"
-            placeholder="Buscar por tema, subsidio, tasa, UF..."
-            value={query}
-            onChange={handleSearchChange}
-            aria-label="Buscar artículos de la academia"
-          />
-        </div>
-
-        {isSearching && (
-          <span className="academy-search-count">
-            {plural(filteredArticles.length, "resultado", "resultados")} para "
-            {query.trim()}"
-          </span>
-        )}
-
-        {!isSearching && (
-          <div className="academy-disclaimer academy-disclaimer--inline">
-            <i className="ti ti-info-circle" aria-hidden="true" />
-            <p>
-              Contenido educativo. No constituye aprobación de crédito ni
-              asesoría financiera.
-            </p>
-          </div>
-        )}
-      </div>
 
       {showDirectory ? (
         <>
@@ -1065,14 +1040,15 @@ function CasosTab({ evaluation, onOpenArticle }) {
 
   const [openCaseId, setOpenCaseId] = useState(matchingCase?.id || null);
 
-  const openCaseAndScroll = useCallback((caseId) => {
-    setOpenCaseId(caseId);
+  const openCaseAndScroll = useCallback((caseId, isOpen) => {
+    setOpenCaseId(isOpen ? null : caseId);
+    if (isOpen) return;
 
-    requestAnimationFrame(() => {
+    window.setTimeout(() => {
       document
         .getElementById(`academy-case-${caseId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
   }, []);
 
   return (
@@ -1133,7 +1109,7 @@ function CasosTab({ evaluation, onOpenArticle }) {
                 type="button"
                 className="academy-case-header"
                 aria-expanded={isOpen}
-                onClick={() => setOpenCaseId(isOpen ? null : item.id)}
+                onClick={() => openCaseAndScroll(item.id, isOpen)}
               >
                 <span className="academy-case-index">
                   {String(index + 1).padStart(2, "0")}
@@ -1246,14 +1222,39 @@ const TABS = [
 
 export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNavigate, initialArticleId, onRetryExplanation }) {
   const [activeTab, setActiveTab] = useState("conceptos");
+  const [academyQuery, setAcademyQuery] = useState("");
   const [openArticleId, setOpenArticleId] = useState(initialArticleId || null);
   const [openCapsuleId, setOpenCapsuleId] = useState(null);
+  const [articleHistory, setArticleHistory] = useState([]);
+
+  const normalizedAcademyQuery = academyQuery.trim().toLowerCase();
+  const isAcademySearching = normalizedAcademyQuery.length > 0;
+  const academySearchCount = useMemo(
+    () => ACADEMY_ARTICLES.filter((article) => articleMatchesAcademyQuery(article, normalizedAcademyQuery)).length,
+    [normalizedAcademyQuery],
+  );
+
+  const handleAcademySearchChange = (event) => {
+    const nextQuery = event.target.value;
+    setAcademyQuery(nextQuery);
+    if (nextQuery.trim()) setActiveTab("conceptos");
+  };
 
   useEffect(() => {
-    if (initialArticleId) setOpenArticleId(initialArticleId);
+    if (initialArticleId) {
+      setOpenArticleId(initialArticleId);
+      setArticleHistory([]);
+    }
   }, [initialArticleId]);
 
-  const openArticle = useCallback((id) => setOpenArticleId(id), []);
+  const openArticle = useCallback((id) => {
+    setOpenArticleId((currentId) => {
+      if (currentId && currentId !== id) {
+        setArticleHistory((history) => [...history, currentId].slice(-8));
+      }
+      return id;
+    });
+  }, []);
   const openCapsule = useCallback((id) => setOpenCapsuleId(id), []);
 
   // Desde una cápsula, abrir su artículo debe cerrar la cápsula: los dos
@@ -1262,9 +1263,18 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
     setOpenCapsuleId(null);
     setOpenArticleId(id);
   }, []);
+  const goBackArticle = useCallback(() => {
+    setArticleHistory((history) => {
+      const previousId = history.at(-1);
+      if (previousId) setOpenArticleId(previousId);
+      return history.slice(0, -1);
+    });
+  }, []);
+
   const closeOverlays = useCallback(() => {
     setOpenArticleId(null);
     setOpenCapsuleId(null);
+    setArticleHistory([]);
   }, []);
 
   const activeArticle =
@@ -1342,23 +1352,42 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
         </div>
       </header>
 
-      {/* TABS */}
+      {/* TABS + BÚSQUEDA */}
 
-      <div className="academy-tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`academy-tab ${activeTab === tab.id ? "is-active" : ""
-              }`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <i className={`ti ${tab.icon}`} aria-hidden="true" />
-            {tab.label}
-          </button>
-        ))}
+      <div className="academy-nav-search-row">
+        <div className="academy-tabs" role="tablist">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={`academy-tab ${activeTab === tab.id ? "is-active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <i className={`ti ${tab.icon}`} aria-hidden="true" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="academy-search-group">
+          <div className="academy-search academy-search-wide">
+            <i className="ti ti-search" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Buscar por tema, subsidio, tasa, UF..."
+              value={academyQuery}
+              onChange={handleAcademySearchChange}
+              aria-label="Buscar artículos de la academia"
+            />
+          </div>
+          {isAcademySearching && (
+            <span className="academy-search-count">
+              {plural(academySearchCount, "resultado", "resultados")} para "{academyQuery.trim()}"
+            </span>
+          )}
+        </div>
       </div>
 
       {/* CONTENIDO */}
@@ -1367,6 +1396,7 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
         <ConceptosTab
           onOpenArticle={openArticle}
           onOpenCapsule={openCapsule}
+          query={academyQuery}
         />
       )}
 
@@ -1400,6 +1430,8 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
           onOpenArticle={openArticle}
           onOpenCapsule={openCapsule}
           related={relatedArticles}
+          canGoBack={articleHistory.length > 0}
+          onBack={goBackArticle}
         />
       )}
     </section>

@@ -1196,7 +1196,7 @@ a {
   border-radius: var(--rh-radius-lg);
   box-shadow: 0 1px 3px rgba(11, 26, 46, 0.04), 0 8px 24px rgba(11, 26, 46, 0.06);
   margin: var(--rh-space-5) auto;
-  max-width: 920px;
+  max-width: var(--rh-page-content-max);
 }
 
 .section-heading {
@@ -1352,6 +1352,10 @@ a {
   border: 1px solid var(--rh-border);
   border-radius: var(--rh-radius);
   background: var(--rh-surface-2);
+}
+
+.context-summary--prequalification {
+  background: #fff;
 }
 
 .context-summary strong {
@@ -2668,6 +2672,8 @@ a {
   max-height: 184px;
   align-self: start;
   justify-self: center;
+  display: grid;
+  place-items: center;
   flex: 0 0 184px;
   align-content: center;
   gap: 6px;
@@ -9893,7 +9899,7 @@ th {
 
 .content-inner {
   width: 100%;
-  max-width: 1120px;
+  max-width: 1300px;
   margin: 0 auto;
   display: flow-root;
   min-width: 0;
@@ -11544,7 +11550,7 @@ th {
    central único, igual que su título y los mensajes de contexto. */
 .evaluation-panel {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 920px;
+  max-width: var(--rh-page-content-max);
   margin-right: auto;
   margin-left: auto;
 }
@@ -11565,7 +11571,7 @@ th {
    mismo ancho y borde izquierdo; los flujos de lectura mantienen un ancho más
    corto, pero título y formulario coinciden en ese mismo eje. */
 :root {
-  --rh-page-content-max: 1120px;
+  --rh-page-content-max: 1360px;
   --rh-reading-content-max: 860px;
 }
 
@@ -11624,7 +11630,7 @@ th {
 
 .evaluation-panel {
   width: 100%;
-  max-width: 920px;
+  max-width: var(--rh-page-content-max);
 }
 
 .evaluation-panel > .section-heading,
@@ -13757,6 +13763,73 @@ th {
   color: var(--rh-text);
 }
 
+.tip__toggle {
+  align-self: flex-start;
+  margin-left: auto;
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rh-text-secondary);
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tip__toggle:hover {
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--rh-text);
+}
+
+.tip__toggle:focus-visible {
+  outline: 2px solid var(--rh-yellow);
+  outline-offset: 2px;
+}
+
+.home-panel,
+.prequalification-panel {
+  gap: clamp(28px, 4vw, 44px);
+}
+
+.home-panel > :is(.section-heading, .home-profile-brief, .home-purpose, .hero-note),
+.prequalification-panel > :is(.section-heading, .score-form, .pre-wizard, .onboarding-panel, .context-summary) {
+  width: 100%;
+  max-width: none;
+}
+
+.home-panel > .home-profile-brief {
+  margin-top: 0;
+}
+
+.home-panel > .home-purpose {
+  margin-top: 8px;
+}
+
+:is(.home-panel, .prequalification-panel, .recommendations-panel, .subsidios-page) {
+  width: 100%;
+  max-width: var(--rh-page-content-max);
+}
+
+:is(.home-panel, .prequalification-panel, .recommendations-panel, .subsidios-page) > :is(.section-heading, .page-head) {
+  width: 100%;
+  max-width: none;
+}
+
+.tip--hidden {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  justify-content: flex-end;
+}
+
+.tip--hidden .tip__icon,
+.tip--hidden .tip__text {
+  display: none;
+}
+
 /* ── Activity feed ── */
 .feed {
   display: flex;
@@ -15426,7 +15499,8 @@ th {
 }
 
 .subsidios-page .section-heading {
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
 }
 
 .subsidios-page .section-heading h1 {
@@ -15947,7 +16021,8 @@ th {
 }
 
 .recommendations-panel .page-head {
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
   margin: 0;
   padding: 4px 0 2px;
 }
@@ -16020,7 +16095,7 @@ th {
 .recommendations-panel .recommendation-summary-lists ul { gap: 10px; }
 .recommendations-panel .recommendation-summary-lists li { font-size: 0.88rem; line-height: 1.5; }
 .recommendations-panel .recommendation-summary-lists li > * { min-width: 0; }
-.recommendations-panel .recommendation-metrics-card { max-width: 720px; padding: 20px 22px; box-shadow: none; background: rgba(255,255,255,0.76); }
+.recommendations-panel .recommendation-metrics-card { width: 100%; max-width: none; padding: 20px 22px; box-shadow: none; background: rgba(255,255,255,0.76); }
 .recommendations-panel .warning-note { margin: 0; }
 .recommendations-panel .recommendations-cta { margin: 0; padding: 4px 0 0; border: 0; background: transparent; text-align: left; }
 .recommendations-panel .recommendations-cta .primary-button { margin: 0; }
@@ -16536,4 +16611,1028 @@ th {
 
 section-heading {
   margin-bottom: 12px;
+}
+
+/* Ajuste visual global: navegación interna y cabeceras de vistas principales. */
+:root {
+  --rh-soft-warning-bg: #fffbeb;
+  --rh-soft-warning-border: #fde68a;
+  --rh-soft-warning-text: #7c4a03;
+}
+
+.app-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  width: fit-content;
+  margin: 0 0 12px;
+  padding: 5px 9px 5px 6px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rh-navy);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.app-back-button:hover,
+.app-back-button:focus-visible {
+  background: rgba(19,43,74,0.07);
+  opacity: 1;
+}
+
+.app-back-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+:is(
+  .section-block > .section-heading,
+  .evaluation-panel > .section-heading,
+  .section-block > .page-head,
+  .consent-panel .consent-body > .section-heading,
+  .section-block > .executive-leads-heading,
+  .section-block > .projects-workspace__heading
+) {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(19,43,74,0.14);
+  border-radius: var(--rh-radius-lg);
+  background:
+    linear-gradient(90deg, rgba(19,43,74,0.035) 1px, transparent 1px),
+    linear-gradient(rgba(19,43,74,0.035) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(19,43,74,0.045), rgba(212,168,67,0.055)),
+    var(--rh-surface);
+  background-size: 24px 24px, 24px 24px, auto, auto;
+  box-shadow: var(--rh-shadow-xs);
+}
+
+:is(
+  .section-block > .section-heading,
+  .evaluation-panel > .section-heading,
+  .section-block > .page-head,
+  .consent-panel .consent-body > .section-heading,
+  .section-block > .executive-leads-heading,
+  .section-block > .projects-workspace__heading,
+  .projects-catalog-hero
+)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--rh-navy) 0 58%, var(--rh-gold) 58% 100%);
+}
+
+.projects-catalog-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+:is(
+  .warning-note,
+  .simulation-disclaimer,
+  .academy-score-disclaimer,
+  .academy-cases-disclaimer,
+  .minimal-disclaimer-banner,
+  .checklist-footer-note,
+  .hero-note
+) {
+  border: 1px solid var(--rh-soft-warning-border);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-soft-warning-bg);
+  color: var(--rh-soft-warning-text);
+  box-shadow: none;
+}
+
+:is(
+  .warning-note,
+  .simulation-disclaimer,
+  .academy-score-disclaimer,
+  .academy-cases-disclaimer,
+  .minimal-disclaimer-banner
+) i {
+  color: var(--rh-gold-dark);
+}
+
+:is(
+  .warning-note,
+  .simulation-disclaimer,
+  .academy-score-disclaimer,
+  .academy-cases-disclaimer,
+  .minimal-disclaimer-banner,
+  .checklist-footer-note
+) :is(p, span, strong) {
+  color: inherit;
+}
+
+.hero-note {
+  margin-top: 0;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.home-profile-brief {
+  width: 100%;
+  margin-top: var(--rh-view-gap);
+}
+
+.home-purpose {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(22px, 3vw, 40px);
+  padding: clamp(22px, 3vw, 30px);
+  border: 1px solid rgba(19,43,74,0.14);
+  border-radius: var(--rh-radius-lg);
+  background: rgba(255,255,255,0.78);
+  box-shadow: var(--rh-shadow-xs);
+}
+
+.home-purpose__intro h2 {
+  max-width: none;
+  letter-spacing: 0;
+}
+
+.home-purpose__intro p {
+  max-width: 58ch;
+}
+
+.tracking-overview__score.score-visual-card,
+.score-badge.score-visual-card {
+  border-right: 0;
+}
+
+.tracking-overview__score.score-visual-card small,
+.score-badge.score-visual-card small {
+  max-width: 132px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 820px) {
+  .app-back-button {
+    margin-bottom: 10px;
+  }
+
+  .home-purpose {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Ajuste de ancho y ritmo para Inicio y Precalificacion. */
+.content-inner > :is(.home-panel, .prequalification-panel) {
+  width: 100%;
+  max-width: var(--rh-page-content-max);
+}
+
+.content-inner > :is(.home-panel, .prequalification-panel) > :is(.section-heading, .page-head),
+.content-inner > .home-panel > :is(.home-profile-brief, .home-purpose, .hero-note),
+.content-inner > .prequalification-panel > :is(.score-form, .pre-wizard, .onboarding-panel, .context-summary) {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.content-inner > :is(.home-panel, .prequalification-panel) {
+  gap: clamp(34px, 4.6vw, 56px);
+}
+
+.content-inner > .home-panel > :is(.home-profile-brief, .home-purpose, .hero-note),
+.content-inner > .prequalification-panel > :is(.score-form, .pre-wizard, .onboarding-panel, .context-summary) {
+  margin-top: 0;
+}
+
+/* Inicio: el panel debe ocupar el mismo ancho que las vistas principales. */
+.evaluation-panel.home-panel,
+.evaluation-panel.prequalification-panel {
+  width: 100%;
+  max-width: var(--rh-page-content-max) !important;
+  gap: clamp(38px, 5vw, 64px);
+}
+
+.evaluation-panel.home-panel > .section-heading,
+.evaluation-panel.prequalification-panel > .section-heading {
+  width: 100%;
+  max-width: none !important;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.evaluation-panel.home-panel > .home-profile-brief,
+.evaluation-panel.home-panel > .home-purpose,
+.evaluation-panel.home-panel > .hero-note,
+.evaluation-panel.prequalification-panel > .score-form,
+.evaluation-panel.prequalification-panel > .pre-wizard,
+.evaluation-panel.prequalification-panel > .onboarding-panel,
+.evaluation-panel.prequalification-panel > .context-summary {
+  width: 100%;
+  max-width: none !important;
+  margin-top: 0;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+/* Separacion visual entre bloques de Inicio y Precalificacion. */
+.evaluation-panel.home-panel > * + *,
+.evaluation-panel.prequalification-panel > * + * {
+  margin-top: clamp(18px, 2.2vw, 30px);
+}
+
+.evaluation-panel.home-panel > .hero-note {
+  margin-top: clamp(16px, 2vw, 24px);
+}
+
+/* Separacion directa entre tarjetas principales de Inicio y Precalificacion. */
+.evaluation-panel.home-panel > .home-profile-brief,
+.evaluation-panel.home-panel > .home-purpose,
+.evaluation-panel.home-panel > .hero-note,
+.evaluation-panel.prequalification-panel > .context-summary,
+.evaluation-panel.prequalification-panel > .evaluation-review-gate,
+.evaluation-panel.prequalification-panel > .score-form,
+.evaluation-panel.prequalification-panel > .pre-wizard,
+.evaluation-panel.prequalification-panel > .onboarding-panel {
+  margin-top: clamp(20px, 2.4vw, 34px) !important;
+}
+
+.evaluation-panel.home-panel > .home-purpose {
+  margin-top: clamp(24px, 2.8vw, 38px) !important;
+}
+
+/* Catalogo de proyectos: mismo ancho visual que Beneficios habitacionales. */
+.section-block.simulation-panel.projects-catalog-page {
+  width: 100%;
+  max-width: var(--rh-page-content-max);
+  gap: clamp(24px, 3vw, 40px);
+}
+
+.section-block.simulation-panel.projects-catalog-page > .projects-catalog-hero,
+.section-block.simulation-panel.projects-catalog-page > .projects-catalog-discovery,
+.section-block.simulation-panel.projects-catalog-page > .projects-catalog-results,
+.section-block.simulation-panel.projects-catalog-page > .admin-compact-empty,
+.section-block.simulation-panel.projects-catalog-page > .warning-note {
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.section-block.simulation-panel.projects-catalog-page .projects-catalog-hero .section-heading {
+  width: 100%;
+  max-width: none;
+}
+
+/* Catalogo de proyectos: hero alineado al patron visual de Simulacion. */
+.section-block.simulation-panel.projects-catalog-page > .projects-catalog-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(19,43,74,0.14);
+  border-left: 1px solid rgba(19,43,74,0.14);
+  border-radius: var(--rh-radius-lg);
+  background:
+    linear-gradient(90deg, rgba(19,43,74,0.035) 1px, transparent 1px),
+    linear-gradient(rgba(19,43,74,0.035) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(19,43,74,0.045), rgba(212,168,67,0.055)),
+    var(--rh-surface);
+  background-size: 24px 24px, 24px 24px, auto, auto;
+  box-shadow: var(--rh-shadow-xs);
+}
+
+.section-block.simulation-panel.projects-catalog-page > .projects-catalog-hero::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--rh-navy) 0 58%, var(--rh-gold) 58% 100%);
+}
+
+/* Eyebrows de cabeceras principales: consistencia dorada. */
+.simulation-page > .section-heading .eyebrow,
+.academia-panel > .section-heading .eyebrow {
+  color: var(--rh-gold-dark);
+}
+
+/* Eyebrows de Simulacion y Academia en todos sus estados. */
+.section-block.simulation-page > :is(.section-heading, .page-head) .eyebrow,
+.section-block.academia-panel > .section-heading .eyebrow,
+.simulation-academy-cta .eyebrow {
+  color: var(--rh-gold-dark) !important;
+}
+
+/* Academia: eyebrow principal en dorado, sin chip gris. */
+.section-block.academia-panel > .section-heading .eyebrow,
+.academia-panel .academy-intro .eyebrow {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--rh-gold-dark) !important;
+}
+
+/* Resultados: eyebrow principal consistente en dorado. */
+.section-block.recommendations-panel > :is(.section-heading, .page-head) .eyebrow {
+  color: var(--rh-gold-dark) !important;
+}
+
+/* Perfil: eyebrow principal consistente en dorado. */
+.section-block.profile-page > :is(.section-heading, .page-head) .eyebrow {
+  color: var(--rh-gold-dark) !important;
+}
+
+/* Factores: separar titulo y descripcion para evitar texto pegado. */
+.factor-info {
+  display: grid;
+  gap: 3px;
+}
+
+.factor-name,
+.factor-desc {
+  display: block;
+}
+
+/* Checklist bancario: mostrar ambos regimenes sin selector. */
+.minimal-checklist-sections {
+  display: grid;
+  gap: clamp(18px, 2.4vw, 28px);
+}
+
+.minimal-checklist-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rh-space-4);
+  margin-bottom: var(--rh-space-3);
+}
+
+.minimal-checklist-group-header .group-title {
+  margin: 0;
+}
+
+.minimal-checklist-group-header p {
+  margin: 4px 0 0;
+  color: var(--rh-text-secondary);
+  font-size: 0.86rem;
+}
+
+.minimal-checklist-group-header .minimal-progress {
+  min-width: min(280px, 100%);
+}
+
+@media (max-width: 760px) {
+  .minimal-checklist-group-header {
+    display: grid;
+  }
+}
+
+/* Checklist: solo la etiqueta Prioritario usa rojo; la fila se mantiene neutral. */
+.minimal-row.is-priority {
+  border-color: rgba(19,43,74,0.12) !important;
+  border-left: 3px solid rgba(212,168,67,0.85) !important;
+  background: var(--rh-surface) !important;
+}
+
+.minimal-row.is-priority .row-title-line strong {
+  color: var(--rh-navy) !important;
+}
+
+.minimal-row.is-priority .row-desc {
+  color: var(--rh-text-secondary) !important;
+}
+
+.minimal-row.is-priority .prio-pill {
+  border-color: rgba(184,50,50,0.22) !important;
+  background: rgba(184,50,50,0.08) !important;
+  color: #B83232 !important;
+}
+
+/* Plan de mejora: tarjetas superiores con la misma altura por fila. */
+.tracking-indicators {
+  align-items: stretch !important;
+}
+
+.tracking-indicators > .tracking-indicator-card {
+  height: 100% !important;
+  align-self: stretch !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Plan de mejora: filtros a la derecha del encabezado, registro permanece abajo. */
+.tracking-improvement-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rh-space-4);
+}
+
+.tracking-improvement-heading > div:first-child {
+  min-width: 0;
+}
+
+.tracking-improvement-heading .tracking-goals-filters {
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+
+.tracking-goals-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 860px) {
+  .tracking-improvement-heading {
+    display: grid;
+  }
+
+  .tracking-improvement-heading .tracking-goals-filters {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* Plan de mejora: filtros bajo el texto y alineados a la izquierda. */
+.tracking-improvement-heading {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--rh-space-3);
+}
+
+.tracking-improvement-heading .tracking-goals-filters {
+  justify-self: start;
+  width: auto;
+  max-width: 100%;
+  margin-left: 0 !important;
+}
+
+.tracking-goals-toolbar {
+  justify-content: flex-end;
+}
+
+/* Plan de mejora: filtros y registro en una misma fila de acciones. */
+.tracking-improvement-plan .tracking-goals-toolbar {
+  margin-top: var(--rh-space-3);
+}
+
+.tracking-improvement-heading + .warning-note,
+.tracking-improvement-heading + .housing-plan-block,
+.tracking-improvement-heading + .warning-note + .housing-plan-block {
+  margin-top: var(--rh-space-4);
+}
+
+.tracking-improvement-heading .tracking-goals-filters {
+  margin-bottom: 0;
+}
+
+.tracking-improvement-plan > .tracking-goals-toolbar {
+  margin-top: calc(-1 * clamp(52px, 5vw, 62px));
+  min-height: clamp(52px, 5vw, 62px);
+  align-items: center;
+}
+
+@media (max-width: 860px) {
+  .tracking-improvement-plan > .tracking-goals-toolbar {
+    margin-top: var(--rh-space-3);
+    min-height: 0;
+    justify-content: flex-start;
+  }
+}
+
+/* Subsidios: mantener tarjetas alineadas por filas, sin efecto masonry. */
+.subsidios-page .simulation-benefits-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: var(--rh-space-4) !important;
+  align-items: stretch !important;
+  column-count: initial !important;
+  column-gap: normal !important;
+}
+
+.subsidios-page .benefit-card {
+  height: 100% !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  break-inside: auto !important;
+}
+
+.subsidios-page .benefit-card-actions,
+.subsidios-page .benefit-card-academy-link {
+  margin-top: auto !important;
+}
+
+/* Academia: los contadores del encabezado usan el mismo azul. */
+.academia-panel .academy-stats {
+  border-color: rgba(19, 43, 74, 0.18) !important;
+  background: rgba(19, 43, 74, 0.18) !important;
+}
+
+.academia-panel .academy-stat,
+.academia-panel .academy-stat--sources {
+  background: rgba(19, 43, 74, 0.06) !important;
+  color: var(--rh-navy) !important;
+}
+
+.academia-panel .academy-stat i,
+.academia-panel .academy-stat--sources i {
+  color: var(--rh-navy) !important;
+}
+
+@media (max-width: 760px) {
+  .subsidios-page .simulation-benefits-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Subsidios: mas aire entre tarjetas manteniendo alturas alineadas. */
+.subsidios-page .simulation-benefits-grid {
+  gap: clamp(22px, 2.8vw, 34px) !important;
+}
+
+/* Academia: stats con fondo azul consistente. */
+.academia-panel .academy-stats {
+  gap: 1px !important;
+  border-color: rgba(19, 43, 74, 0.32) !important;
+  background: rgba(19, 43, 74, 0.32) !important;
+}
+
+.academia-panel .academy-stat,
+.academia-panel .academy-stat--sources {
+  background: var(--rh-navy) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.academia-panel .academy-stat i,
+.academia-panel .academy-stat--sources i {
+  color: var(--rh-gold) !important;
+}
+
+/* Academia: pestañas y busqueda en una misma barra, sin disclaimer intermedio. */
+.academia-panel .academy-nav-search-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rh-space-4);
+  margin: 0 0 clamp(18px, 2.4vw, 28px);
+}
+
+.academia-panel .academy-nav-search-row .academy-tabs {
+  flex: 1 1 auto;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.academia-panel .academy-search-group {
+  display: grid;
+  flex: 0 1 430px;
+  gap: 6px;
+  min-width: min(360px, 100%);
+}
+
+.academia-panel .academy-nav-search-row .academy-search {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.academia-panel .academy-nav-search-row .academy-search-count {
+  margin: 0;
+  color: var(--rh-text-secondary);
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+@media (max-width: 980px) {
+  .academia-panel .academy-nav-search-row {
+    display: grid;
+  }
+
+  .academia-panel .academy-search-group {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .academia-panel .academy-nav-search-row .academy-search-count {
+    text-align: left;
+  }
+}
+
+/* Academia: retorno interno liviano al navegar entre articulos relacionados. */
+.academy-modal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  margin: 0 0 var(--rh-space-4);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--rh-text-secondary);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.academy-modal-back:hover,
+.academy-modal-back:focus-visible {
+  background: transparent;
+  color: var(--rh-navy);
+}
+
+.academy-modal-back i {
+  font-size: 1rem;
+}
+
+.glossary-term-static {
+  color: inherit;
+  font-weight: 700;
+}
+
+/* Academia: apertura suave de casos desplegables. */
+.academy-case-body {
+  animation: academyCaseOpen 180ms ease-out;
+}
+
+@keyframes academyCaseOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Simulacion: mensaje controlado para valor manual en UF. */
+.simulator-field-error {
+  display: block;
+  margin-top: 7px;
+  color: #B83232;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.simulator-field input[aria-invalid="true"] {
+  border-color: rgba(184, 50, 50, 0.55);
+  box-shadow: 0 0 0 3px rgba(184, 50, 50, 0.08);
+}
+
+/* Proyectos: favorito como estrella compacta en tarjeta. */
+.project-catalog-card {
+  position: relative;
+}
+
+.project-catalog-card__top {
+  padding-right: 54px;
+}
+
+.project-catalog-favorite-button {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px !important;
+  min-height: 32px;
+  height: 32px;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.84);
+  color: rgba(19, 43, 74, 0.44);
+  box-shadow: none;
+}
+
+.project-catalog-favorite-button:hover,
+.project-catalog-favorite-button:focus-visible {
+  background: var(--rh-surface);
+  color: var(--rh-gold-dark);
+}
+
+.project-catalog-favorite-button.is-active {
+  background: rgba(212, 168, 67, 0.16);
+  color: var(--rh-gold-dark);
+}
+
+.project-catalog-favorite-button i {
+  font-size: 1.15rem;
+}
+
+/* Proyectos: estrella favorita sin contenedor circular. */
+.project-catalog-favorite-button {
+  top: 12px;
+  right: 14px;
+  width: 28px !important;
+  min-height: 28px;
+  height: 28px;
+  background: transparent !important;
+  border-radius: 0;
+  color: rgba(19, 43, 74, 0.42);
+  box-shadow: none !important;
+}
+
+.project-catalog-favorite-button:hover,
+.project-catalog-favorite-button:focus-visible {
+  background: transparent !important;
+  color: var(--rh-gold-dark);
+}
+
+.project-catalog-favorite-button.is-active {
+  background: transparent !important;
+  color: var(--rh-gold);
+}
+
+.project-catalog-favorite-button i {
+  font-size: 1.35rem;
+}
+
+
+/* Proyectos: carrusel con la misma mecanica de movimiento que Simulacion. */
+.projects-catalog-carousel-shell {
+  margin-top: 2px;
+}
+
+.projects-catalog-carousel-shell .projects-catalog-carousel-strip {
+  gap: 16px;
+  padding: 4px 2px 16px;
+}
+
+.projects-catalog-carousel-shell .projects-catalog-carousel-strip > .project-catalog-card {
+  flex: 0 0 clamp(280px, calc((100% - 32px) / 3), 420px);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+@media (max-width: 900px) {
+  .projects-catalog-carousel-shell .projects-catalog-carousel-strip > .project-catalog-card {
+    flex-basis: min(340px, 48vw);
+  }
+}
+
+@media (max-width: 640px) {
+  .projects-catalog-carousel-shell .projects-catalog-carousel-strip > .project-catalog-card {
+    flex-basis: min(300px, 88vw);
+  }
+}
+
+/* Proyectos: doble confirmacion para cambiar vivienda objetivo. */
+.project-goal-confirm-button.is-confirming {
+  border-color: rgba(212, 168, 67, 0.62) !important;
+  background: #fffbeb !important;
+  color: #7c4a03 !important;
+}
+
+/* Simulacion: cabecera superior segun referencia aprobada. */
+.simulation-config-stack {
+  display: grid;
+  gap: clamp(16px, 2vw, 22px);
+  min-width: 0;
+}
+
+.simulation-preferences-card,
+.simulation-base-card {
+  position: relative;
+  display: grid;
+  gap: var(--rh-space-4);
+  padding: clamp(18px, 2.4vw, 24px);
+  border: 1px solid rgba(19, 43, 74, 0.12);
+  border-radius: var(--rh-radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgba(11, 26, 46, 0.04), 0 10px 26px rgba(11, 26, 46, 0.06);
+}
+
+.simulation-preferences-card.is-prominent {
+  padding: clamp(16px, 2.2vw, 22px);
+  border-bottom: 1px solid rgba(19, 43, 74, 0.12);
+}
+
+.simulation-preferences-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rh-space-4);
+}
+
+.simulation-preferences-card .compact-button {
+  min-width: 132px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.simulation-preferences-card .simulation-preference-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 14px 0;
+  border: 1px solid rgba(19, 43, 74, 0.1);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-surface);
+}
+
+.simulation-preferences-card .simulation-preference-item {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 clamp(14px, 2vw, 22px);
+  border-top: 0;
+  border-right: 1px solid rgba(19, 43, 74, 0.12);
+}
+
+.simulation-preferences-card .simulation-preference-item:last-child {
+  border-right: 0;
+}
+
+.simulation-preferences-card .simulation-preference-item i {
+  color: var(--rh-navy);
+  font-size: 1.65rem;
+}
+
+.simulation-preferences-card .simulation-preference-item span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--rh-text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.simulation-preferences-card .simulation-preference-item strong {
+  display: block;
+  color: var(--rh-navy);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.simulation-base-card .simulation-panel-heading {
+  padding-bottom: 14px;
+}
+
+.simulation-base-card .simulation-mode {
+  width: min(100%, 630px);
+  max-width: 630px;
+}
+
+.simulation-base-card .simulation-selector-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2vw, 24px);
+}
+
+.simulation-range-details--compact {
+  padding: 0;
+  border: 1px solid rgba(19, 43, 74, 0.1);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-surface);
+}
+
+.simulation-range-details--compact summary {
+  min-height: 70px;
+  padding: 12px clamp(14px, 2vw, 22px);
+}
+
+.simulation-range-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rh-space-4);
+  min-height: 70px;
+  padding: 12px clamp(14px, 2vw, 22px);
+}
+
+.simulation-range-summary-title {
+  min-width: max-content;
+  color: var(--rh-navy);
+  font-size: 1rem;
+}
+
+.simulation-range-summary-values {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(16px, 3vw, 34px);
+  margin-left: auto;
+}
+
+.simulation-range-summary-values > span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 7px;
+  align-items: center;
+  min-width: 130px;
+}
+
+.simulation-range-summary-values > span + span {
+  padding-left: clamp(16px, 2vw, 28px);
+  border-left: 1px solid rgba(19, 43, 74, 0.12);
+}
+
+.simulation-range-summary-values i:not(.ti-chevron-down) {
+  grid-row: 1 / span 2;
+  color: var(--rh-gold);
+  font-size: 1.1rem;
+}
+
+.simulation-range-summary-values > span:nth-child(2) i:not(.ti-chevron-down) {
+  color: var(--rh-navy);
+}
+
+.simulation-range-summary-values small {
+  color: var(--rh-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.simulation-range-summary-values strong {
+  color: var(--rh-navy);
+  font-family: var(--rh-font-mono);
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.simulation-range-summary-values em {
+  grid-column: 2;
+  color: var(--rh-text-secondary);
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.simulation-range-summary-values > .ti-chevron-down {
+  flex: 0 0 auto;
+  color: var(--rh-navy);
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.simulation-range-details--compact[open] .simulation-range-summary-values > .ti-chevron-down {
+  transform: rotate(180deg);
+}
+
+.simulation-range-details--compact .simulation-range {
+  padding: 0 22px 16px;
+}
+
+@media (max-width: 900px) {
+  .simulation-preferences-card .simulation-preference-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .simulation-preferences-card .simulation-preference-item:nth-child(2) {
+    border-right: 0;
+  }
+
+  .simulation-preferences-card .simulation-preference-item:nth-child(n + 3) {
+    padding-top: 14px;
+    border-top: 1px solid rgba(19, 43, 74, 0.1);
+  }
+}
+
+@media (max-width: 640px) {
+  .simulation-preferences-header,
+  .simulation-range-details--compact summary,
+  .simulation-range-summary-row,
+  .simulation-range-summary-values {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .simulation-preferences-card .simulation-preference-list,
+  .simulation-base-card .simulation-selector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-preferences-card .simulation-preference-item,
+  .simulation-preferences-card .simulation-preference-item:nth-child(2),
+  .simulation-preferences-card .simulation-preference-item:last-child {
+    border-right: 0;
+    border-top: 1px solid rgba(19, 43, 74, 0.1);
+  }
+
+  .simulation-preferences-card .simulation-preference-item:first-child {
+    border-top: 0;
+  }
+
+  .simulation-range-summary-values {
+    width: 100%;
+    gap: 10px;
+    margin-left: 0;
+  }
+
+  .simulation-range-summary-title {
+    min-width: 0;
+  }
+
+  .simulation-range-summary-values > span + span {
+    padding-left: 0;
+    padding-top: 10px;
+    border-left: 0;
+    border-top: 1px solid rgba(19, 43, 74, 0.1);
+  }
 }

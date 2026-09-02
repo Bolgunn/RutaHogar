@@ -29,6 +29,44 @@ function ConditionGroup({ items, variant, label }) {
   );
 }
 
+const normalizeBenefitText = (value = "") =>
+  String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+function getBenefitNotes(benefit) {
+  const notes = String(benefit?.notes || "").trim();
+  const pendingRequirements = Array.isArray(benefit?.conditions_not_met)
+    ? benefit.conditions_not_met.filter(Boolean)
+    : [];
+
+  if (!notes || pendingRequirements.length === 0) return notes;
+
+  const normalizedNotes = normalizeBenefitText(notes);
+  const normalizedPending = pendingRequirements.map(normalizeBenefitText).filter(Boolean);
+  const noteParts = notes
+    .split(/(?<=[.!?])\s+|[\n;•]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const isDuplicatedRequirement = (part) => {
+    const normalizedPart = normalizeBenefitText(part);
+    if (!normalizedPart) return false;
+    return normalizedPending.some(
+      (requirement) => normalizedPart.includes(requirement) || requirement.includes(normalizedPart),
+    );
+  };
+
+  const filteredParts = noteParts.filter((part) => !isDuplicatedRequirement(part));
+  if (filteredParts.length < noteParts.length) return filteredParts.join(" ");
+
+  const duplicatedCount = normalizedPending.filter((requirement) => normalizedNotes.includes(requirement)).length;
+  return duplicatedCount >= Math.min(2, normalizedPending.length) ? "" : notes;
+}
+
 export default function Subsidios({ evaluation, onNavigate }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const openBenefitCapsule = (academyModule) => {
@@ -92,7 +130,9 @@ export default function Subsidios({ evaluation, onNavigate }) {
         )}
 
         <div className="simulation-benefits-grid">
-          {benefits.map((benefit) => (
+          {benefits.map((benefit) => {
+            const benefitNotes = getBenefitNotes(benefit);
+            return (
           <article
             key={benefit.type}
             className={`benefit-card ${benefit.eligible ? "benefit-card--eligible" : ""}`}
@@ -100,7 +140,7 @@ export default function Subsidios({ evaluation, onNavigate }) {
             <div className="benefit-card-header">
               <div>
                 <h3 className="benefit-card-title">{benefit.name}</h3>
-                <p className="benefit-card-notes">{benefit.notes}</p>
+                {benefitNotes ? <p className="benefit-card-notes">{benefitNotes}</p> : null}
               </div>
               <span className={`benefit-badge ${benefit.eligible ? "benefit-badge--eligible" : "benefit-badge--ineligible"}`}>
                 {benefit.eligible ? "Compatible" : "Requiere ajustes"}
@@ -135,7 +175,8 @@ export default function Subsidios({ evaluation, onNavigate }) {
               </div>
             )}
           </article>
-          ))}
+            );
+          })}
         </div>
 
       </> : <div className="empty-state"><strong>Esta calificación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}

@@ -148,7 +148,7 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
 
           <div className="recommendation-summary-lists">
             <section>
-              <h2 className="recommendation-section-title"><i className="ti ti-lightbulb"></i> Recomendaciones personalizadas</h2>
+              <h2 className="recommendation-section-title"><i className="ti ti-bulb"></i> Recomendaciones personalizadas</h2>
               <ul>{data.recommendations.map((item, index) => <li key={`${displayItemText(item)}-${index}`}><i className="ti ti-circle-check recommendation-icon"></i><div>{displayItemText(item)}{displayItemBenefit(item) ? <p className="benefit"><b>Beneficio esperado: </b>{displayItemBenefit(item)}</p> : null}</div></li>)}</ul>
             </section>
             <section>

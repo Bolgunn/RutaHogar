@@ -60,6 +60,8 @@ export default function Navbar({ profile, page, currentScore, onNavigate, onLogo
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email = profile?.email || "";
   const accountTarget = role === roles.user ? "profile" : role === roles.admin ? "admin-profile" : "sales-profile";
+  const brandTarget = role === roles.admin ? "admin" : "home";
+  const brandHref = role === roles.admin ? "/admin" : "/inicio";
 
   const handleNavigate = (id) => {
     onNavigate(id);
@@ -67,7 +69,7 @@ export default function Navbar({ profile, page, currentScore, onNavigate, onLogo
 
   return (
     <aside className={`sidebar ${role === roles.admin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
-      <a className="sidebar-brand" href="/" onClick={(e) => { e.preventDefault(); handleNavigate("landing"); }}>
+      <a className="sidebar-brand" href={brandHref} onClick={(e) => { e.preventDefault(); handleNavigate(brandTarget); }}>
         <span className="sidebar-brand__pill">
           <img className="sidebar-brand__logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
         </span>

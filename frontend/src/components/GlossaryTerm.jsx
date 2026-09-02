@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ACADEMY_GLOSSARY } from "../constants/academyContent";
+import { ACADEMY_ARTICLES, ACADEMY_GLOSSARY } from "../constants/academyContent";
 
 /**
  * HU12 - E3 "Enlaces contextuales"
@@ -29,6 +29,14 @@ export default function GlossaryTerm({ term, onOpenArticle }) {
   }, [open, close]);
 
   if (!entry) return <span>{term}</span>;
+
+  const hasArticleTarget = Boolean(
+    entry.articleId && ACADEMY_ARTICLES.some((article) => article.id === entry.articleId),
+  );
+
+  if (!hasArticleTarget) {
+    return <span className="glossary-term-static">{entry.label}</span>;
+  }
 
   return (
     <span className="glossary-term-wrap" ref={ref}>
