@@ -852,13 +852,13 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               <span className="simulation-range-summary-values">
                 <span>
                   <i className="ti ti-point-filled" aria-hidden="true" />
-                  <small>Con pie recomendado</small>
+                  <small>Valor máximo vivienda con pie recomendado</small>
                   <strong>{formatUf(maxRange.minUf)}</strong>
                   <em>{formatClp(maxRange.minClp)}</em>
                 </span>
                 <span>
                   <i className="ti ti-point-filled" aria-hidden="true" />
-                  <small>Con pie mínimo</small>
+                  <small>Valor máximo vivienda con pie mínimo</small>
                   <strong>{formatUf(maxRange.maxUf)}</strong>
                   <em>{formatClp(maxRange.maxClp)}</em>
                 </span>

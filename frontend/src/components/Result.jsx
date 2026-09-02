@@ -72,7 +72,7 @@ function MetricItem({ label, value }) {
   );
 }
 
-export default function Result({ data, onNavigate }) {
+export default function Result({ data, onNavigate, onRetryExplanation }) {
   const {
     score,
     classification,
@@ -94,7 +94,6 @@ export default function Result({ data, onNavigate }) {
   const factors = getUserResultFactors(data);
   const hasProjectFit = isPlainObject(project_fit) && Object.keys(project_fit).length > 0;
   const structuredPlan = Array.isArray(structured_improvement_plan) ? structured_improvement_plan : [];
-
   const badgeClass = tone === "high" ? "alto" : tone === "medium" ? "medio" : tone === "low" ? "bajo" : "accent";
   const scoreValue = `${Math.max(0, Math.min(100, Number(score) || 0))}%`;
 

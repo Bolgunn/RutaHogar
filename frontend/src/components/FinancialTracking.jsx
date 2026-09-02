@@ -718,7 +718,7 @@ export default function FinancialTracking({
                     marginBottom: "0.5rem",
                   }}
                 >
-                  <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Meta Proyectada:</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Horizonte objetivo:</span>
                   <strong style={{ fontSize: "0.95rem", color: "var(--color-neutral-900)" }}>
                     {formatMonthsToYears(effectiveDesiredMonths)}
                   </strong>
