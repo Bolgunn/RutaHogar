@@ -141,7 +141,9 @@ export function formatPlanActionMeta(action = {}) {
   return items;
 }
 
-export function getUserResultFactors(result = {}) {
+export function getUserResultFactors(result) {
+  if (!result || typeof result !== "object") return [];
+
   const factors = [];
   if (!result) return factors;
   const seen = new Set();

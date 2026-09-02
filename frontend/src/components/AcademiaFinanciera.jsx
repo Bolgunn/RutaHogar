@@ -155,9 +155,8 @@ function CapsuleCarousel({ children }) {
 
   return (
     <div
-      className={`academy-carousel ${canPrev ? "has-prev" : ""} ${
-        canNext ? "has-next" : ""
-      }`}
+      className={`academy-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""
+        }`}
     >
       <button
         type="button"
@@ -1035,8 +1034,8 @@ function InterpretaTab({ evaluation, onStartEvaluation, onOpenArticle, onRetryEx
               const recommendation = classifyRiskText(risk);
               const article = recommendation.articleId
                 ? ACADEMY_ARTICLES.find(
-                    (item) => item.id === recommendation.articleId
-                  )
+                  (item) => item.id === recommendation.articleId
+                )
                 : null;
 
               return (
@@ -1197,7 +1196,7 @@ function CasosTab({ evaluation, onOpenArticle }) {
             </p>
           </div>
 
-          
+
         </div>
       )}
 
@@ -1214,9 +1213,8 @@ function CasosTab({ evaluation, onOpenArticle }) {
             <article
               key={item.id}
               id={`academy-case-${item.id}`}
-              className={`academy-case ${toneClass} ${
-                isOpen ? "is-open" : ""
-              } ${isMatch ? "is-match" : ""}`}
+              className={`academy-case ${toneClass} ${isOpen ? "is-open" : ""
+                } ${isMatch ? "is-match" : ""}`}
             >
               <button
                 type="button"
@@ -1247,9 +1245,8 @@ function CasosTab({ evaluation, onOpenArticle }) {
                 </span>
 
                 <i
-                  className={`ti ti-chevron-${
-                    isOpen ? "up" : "down"
-                  } academy-case-chevron`}
+                  className={`ti ti-chevron-${isOpen ? "up" : "down"
+                    } academy-case-chevron`}
                   aria-hidden="true"
                 />
               </button>
@@ -1334,7 +1331,7 @@ const TABS = [
   { id: "casos", label: "Casos prácticos", icon: "ti-list-details" },
 ];
 
-export default function AcademiaFinanciera({ evaluation, onStartEvaluation, initialArticleId, onRetryExplanation }) {
+export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNavigate, initialArticleId, onRetryExplanation }) {
   const [activeTab, setActiveTab] = useState("conceptos");
   const [openArticleId, setOpenArticleId] = useState(initialArticleId || null);
   const [openCapsuleId, setOpenCapsuleId] = useState(null);
@@ -1439,9 +1436,8 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, init
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
-            className={`academy-tab ${
-              activeTab === tab.id ? "is-active" : ""
-            }`}
+            className={`academy-tab ${activeTab === tab.id ? "is-active" : ""
+              }`}
             onClick={() => setActiveTab(tab.id)}
           >
             <i className={`ti ${tab.icon}`} aria-hidden="true" />

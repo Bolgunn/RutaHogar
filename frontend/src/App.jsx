@@ -1188,6 +1188,7 @@ export default function App() {
       setMilestoneSuccess("¡Hito registrado exitosamente! Tu score y plan han sido recalculados.");
       setPage("tracking");
 
+      // Auto-hide success message after 5 seconds
       setTimeout(() => setMilestoneSuccess(""), 5000);
     } catch (err) {
       console.error("Error registrando hito", err);

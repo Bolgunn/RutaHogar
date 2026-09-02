@@ -72,7 +72,7 @@ function MetricItem({ label, value }) {
   );
 }
 
-export default function Result({ data, onRetryExplanation }) {
+export default function Result({ data, onNavigate }) {
   const {
     score,
     classification,
@@ -232,7 +232,7 @@ export default function Result({ data, onRetryExplanation }) {
         </section>
       </div>
 
-      <BankingChecklist result={data} />
+      <BankingChecklist result={data} onNavigate={onNavigate} />
     </div>
   );
 }
