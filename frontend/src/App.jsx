@@ -32,6 +32,7 @@ import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
+import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
@@ -1248,6 +1249,51 @@ export default function App() {
     }
   };
 
+  // "Fijar como mi Meta" del catálogo (HU 9). La llamada a /score vive aquí y
+  // no en el modal: antes el modal evaluaba al abrirse y esta función persistía
+  // ese resultado, así que la evaluación guardada podía no corresponder al
+  // proyecto fijado. Ahora se calcula en el momento de fijar la meta.
+  //
+  // A diferencia del "proyecto objetivo" de HU 6 —que es solo localStorage—
+  // esto escribe una evaluación real: alimenta el seguimiento y el plan.
+  const handleSetProjectGoal = async (project) => {
+    if (!currentEvaluation) return;
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
+      const payload = buildFinancialInput(
+        buildProjectGoalInput(
+          currentEvaluation.input,
+          project,
+          currentEvaluation.input?.uf_value_clp,
+        ),
+      );
+
+      const res = await fetch(`${apiBase.replace(/\/$/, "")}/score`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`El motor de evaluación rechazó los datos (${res.status}).`);
+
+      const newEval = await createEvaluation(profile.id, {
+        email: profile.email || "sin-email",
+        onboarding: userOnboarding || null,
+        input: payload,
+        result: buildResultSnapshot(await res.json()),
+        channel: "project_selection",
+      });
+
+      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+      navigateToPage("tracking");
+      alert("¡Meta financiera actualizada al nuevo proyecto! Revisa cómo se ajustaron tus proyecciones.");
+    } catch (err) {
+      console.error(err);
+      alert("Error al fijar el proyecto como meta.");
+    }
+  };
+
   const handleLogout = async () => {
     await signOut();
     setAuth({ session: null, profile: null });
@@ -1711,26 +1757,12 @@ export default function App() {
         ) : page === "projects" && profile.role === roles.user ? (
           <ProjectsCatalog
             evaluationBase={currentEvaluation}
+            onboarding={userOnboarding}
+            userId={profile.id}
+            contactEmail={profile.email}
             onBack={() => navigateToPage("tracking")}
-            onSetGoal={async (project, projectResult) => {
-              try {
-                const payload = { ...currentEvaluation.input, property_value: project.precio_min_uf, property_value_unit: "uf" };
-                const newEval = await createEvaluation(profile.id, {
-                  email: profile.email || "sin-email",
-                  onboarding: userOnboarding || null,
-                  input: payload,
-                  result: projectResult,
-                  channel: "project_selection",
-                });
-                setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-                sessionStorage.removeItem("scoreleads_selected_plan_type");
-                navigateToPage("tracking");
-                alert("¡Meta financiera actualizada al nuevo proyecto! Revisa cómo se ajustaron tus proyecciones.");
-              } catch (err) {
-                console.error(err);
-                alert("Error al fijar el proyecto como meta.");
-              }
-            }}
+            onStartEvaluation={startEvaluation}
+            onSetGoal={handleSetProjectGoal}
           />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads

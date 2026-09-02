@@ -345,103 +345,22 @@ async def explain_endpoint(payload: ExplainRequest):
         )
 
     return response
-# --- Mock Data for HU9 ---
-import uuid
-from typing import List, Optional
-from datetime import datetime
 
-MOCK_INMOBILIARIAS = [
-    {"id": "inm-1", "nombre": "Inmobiliaria A", "created_at": datetime.utcnow().isoformat()},
-    {"id": "inm-2", "nombre": "Inmobiliaria B", "created_at": datetime.utcnow().isoformat()},
-]
 
-MOCK_PROYECTOS = [
-    {
-        "id": "proj-1",
-        "inmobiliaria_id": "inm-1",
-        "nombre": "Edificio Centro",
-        "comuna": "Santiago Centro",
-        "tipo": "Departamento",
-        "precio_min_uf": 2000.0,
-        "precio_max_uf": 2800.0,
-        "estado": "disponible",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "descripcion": "Departamentos modernos en el corazón de la ciudad.",
-        "entrega_estimada": "2027-01-01"
-    },
-    {
-        "id": "proj-2",
-        "inmobiliaria_id": "inm-1",
-        "nombre": "Altos de Ñuñoa",
-        "comuna": "Ñuñoa",
-        "tipo": "Departamento",
-        "precio_min_uf": 3500.0,
-        "precio_max_uf": 4500.0,
-        "estado": "disponible",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "descripcion": "Amplios departamentos con terminaciones de primer nivel.",
-        "entrega_estimada": "2026-12-01"
-    },
-    {
-        "id": "proj-3",
-        "inmobiliaria_id": "inm-2",
-        "nombre": "Condominio Florida",
-        "comuna": "La Florida",
-        "tipo": "Casa",
-        "precio_min_uf": 2500.0,
-        "precio_max_uf": 3200.0,
-        "estado": "disponible",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "descripcion": "Casas con patio y espacios familiares.",
-        "entrega_estimada": "Entrega inmediata"
-    },
-    {
-        "id": "proj-4",
-        "inmobiliaria_id": "inm-2",
-        "nombre": "Providencia Urbano",
-        "comuna": "Providencia",
-        "tipo": "Departamento",
-        "precio_min_uf": 4500.0,
-        "precio_max_uf": 6000.0,
-        "estado": "disponible",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "descripcion": "Exclusividad y conectividad a pasos del metro.",
-        "entrega_estimada": "2028-06-01"
-    },
-    {
-        "id": "proj-5",
-        "inmobiliaria_id": "inm-1",
-        "nombre": "Estudio Centro II",
-        "comuna": "Santiago Centro",
-        "tipo": "Departamento",
-        "precio_min_uf": 1800.0,
-        "precio_max_uf": 2400.0,
-        "estado": "disponible",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "descripcion": "Estudios ideales para inversionistas.",
-        "entrega_estimada": "2027-06-01"
-    }
-]
+# --- HU 9: interés en un proyecto ---
+# El catálogo de proyectos NO vive aquí. La fuente única es la tabla
+# `proyectos` de Supabase, que el frontend lee vía services/projectService.js
+# (contrato congelado en docs/project-catalog-contract.md). Antes existía en
+# este archivo un MOCK_PROYECTOS con cinco dicts y un GET /projects que lo
+# servía; se eliminó porque era una segunda fuente de proyectos, invisible para
+# el administrador que mantiene el catálogo. Ver
+# docs/stories/CATALOGO-UNICO-HU9/PLAN.md.
+
 
 class InterestRequest(BaseModel):
     proyecto_id: str
     contactar_ejecutivo: bool
     email: Optional[str] = None
-
-@app.get("/projects")
-async def get_projects():
-    res = []
-    for p in MOCK_PROYECTOS:
-        inm = next((i for i in MOCK_INMOBILIARIAS if i["id"] == p["inmobiliaria_id"]), None)
-        p_copy = dict(p)
-        p_copy["inmobiliaria_nombre"] = inm["nombre"] if inm else "Desconocida"
-        res.append(p_copy)
-    return res
 
 @app.post("/interest")
 async def post_interest(payload: InterestRequest):
