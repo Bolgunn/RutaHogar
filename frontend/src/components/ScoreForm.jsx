@@ -2,16 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import {
+  calculateMortgageDividend,
+  REFERENTIAL_MORTGAGE_ANNUAL_RATE,
+  roundCurrency,
+} from "../lib/mortgage";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
 
 const FALLBACK_UF_VALUE_CLP = 40695;
-const FALLBACK_MORTGAGE_ANNUAL_RATE = 0.049;
-const configuredMortgageRate = Number(import.meta.env.VITE_REFERENTIAL_MORTGAGE_RATE);
-const REFERENTIAL_MORTGAGE_ANNUAL_RATE =
-  Number.isFinite(configuredMortgageRate) && configuredMortgageRate > 0
-    ? configuredMortgageRate
-    : FALLBACK_MORTGAGE_ANNUAL_RATE;
 const DEBUG_SCORE_REQUESTS =
   import.meta.env.DEV && import.meta.env.VITE_DEBUG_SCORE === "true";
 
@@ -169,10 +168,6 @@ const integerFormattedFields = new Set([
   "property_value",
 ]);
 
-function roundCurrency(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
-
 function formatPercent(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return null;
@@ -226,36 +221,6 @@ function buildReferencePropertyValues(commune, ufValueClp) {
     property_value_source: referencePropertyValuesUf[commune]
       ? "referencia_comuna"
       : "referencia_general",
-  };
-}
-
-function calculateMortgageDividend({ propertyValueClp, savingsClp, termYears, annualRate }) {
-  const propertyValue = Number(propertyValueClp) || 0;
-  const principal = Math.max(0, propertyValue - (Number(savingsClp) || 0));
-  const months = Number(termYears) * 12;
-  const monthlyRate = Number(annualRate) / 12;
-
-  if (!Number.isFinite(months) || months <= 0 || propertyValue <= 0) {
-    return { dividend: null, principalClp: principal };
-  }
-
-  if (principal <= 0) {
-    return { dividend: 0, principalClp: principal };
-  }
-
-  if (!Number.isFinite(monthlyRate) || monthlyRate <= 0) {
-    return {
-      dividend: Math.round(principal / months),
-      principalClp: principal,
-    };
-  }
-
-  const compound = Math.pow(1 + monthlyRate, months);
-  const dividend = principal * ((monthlyRate * compound) / (compound - 1));
-
-  return {
-    dividend: Math.round(dividend),
-    principalClp: Math.round(principal),
   };
 }
 
