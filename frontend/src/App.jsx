@@ -48,7 +48,7 @@ import {
   isUUID,
 } from "./services/profileService";
 import { formatScore } from "./utils/helpers";
-import { plazoLabels } from "./constants";
+import { formatFormValue, plazoLabels } from "./constants";
 
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
@@ -192,6 +192,10 @@ const buildFinancialInput = (input = {}) => ({
   uf_value_clp: input.uf_value_clp,
 });
 
+const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
+  ? `$${Number(value).toLocaleString("es-CL")}`
+  : "No declarado";
+
 const normalizeMatchValue = (value) => {
   if (value === "" || value == null) return null;
   const numericValue = Number(value);
@@ -253,6 +257,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "academia") return "/academia";
   if (page === "projects") return "/proyectos";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
+  if (page === "register-milestone") return "/plan-mejora/hito";
   if (page === "profile") return "/perfil";
   if (page === "sales-profile") return "/perfil";
   if (page === "leads") return "/dashboard";
@@ -282,6 +287,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/comparar-proyectos",
     "/academia",
     "/plan-mejora",
+    "/plan-mejora/hito",
     "/perfil",
     "/historial",
     "/dashboard",
@@ -325,6 +331,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/academia") return { page: "academia" };
     if (path === "/proyectos") return { page: "projects" };
     if (path === "/plan-mejora") return { page: "tracking" };
+    if (path === "/plan-mejora/hito") return { page: "register-milestone" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
     if (path === "/dashboard" || path === "/admin" || path === "/ejecutivo/leads" || path === "/login" || path === "/registro") {
       return { page: "home", path: "/inicio" };
@@ -392,6 +399,7 @@ export default function App() {
   const [trackingGoals, setTrackingGoals] = useState([]);
   const [academyArticleId, setAcademyArticleId] = useState(null);
   const [activeGoal, setActiveGoal] = useState(null);
+  const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
     try {
@@ -527,8 +535,8 @@ export default function App() {
     };
   }, [userId]);
 
-  // Regenera la explicación IA de una preevaluación vía /score/explain.
-  // Devuelve true si se generó y persistió una explicación utilizable.
+  // Regenera los textos de IA de una precalificación vía /score/explain.
+  // El resumen y la guía comercial quedan disponibles para la mesa de leads.
   async function handleRetryAiExplanation(evaluationToRetry = currentEvaluation) {
     const evaluation = evaluationToRetry;
     if (!evaluation?.id || !evaluation?.input) return false;
@@ -536,15 +544,19 @@ export default function App() {
     try {
       const response = await axios.post(
         `${resolveApiBase()}/score/explain`,
-        { ...evaluation.input, scope: "user" },
+        { ...evaluation.input, scope: "all" },
         { timeout: 45000 },
       );
 
       const explanation = sanitizeAiText(response.data?.ai_explanation);
-      if (!explanation) return false;
+      const executiveSummary = sanitizeAiText(response.data?.executive_summary);
+      const commercialGuidance = sanitizeAiText(response.data?.commercial_guidance);
+      if (!explanation && !executiveSummary && !commercialGuidance) return false;
 
       const updated = await updateEvaluationAiContent(evaluation.id, {
-        ai_explanation: explanation,
+        ...(explanation ? { ai_explanation: explanation } : {}),
+        ...(executiveSummary ? { executive_summary: executiveSummary } : {}),
+        ...(commercialGuidance ? { commercial_guidance: commercialGuidance } : {}),
       });
 
       // `result` es estado propio del panel de resultado y no deriva de
@@ -553,7 +565,7 @@ export default function App() {
       // visible es el de la evaluación reintentada.
       setResult((prev) =>
         prev && prev.evaluation_id === evaluation.id
-          ? { ...prev, ai_explanation: explanation }
+          ? { ...prev, ...(explanation ? { ai_explanation: explanation } : {}) }
           : prev,
       );
 
@@ -565,14 +577,22 @@ export default function App() {
         setEvaluations((prev) =>
           prev.map((item) =>
             item.id === evaluation.id
-              ? { ...item, result: { ...item.result, ai_explanation: explanation } }
+              ? {
+                ...item,
+                result: {
+                  ...item.result,
+                  ...(explanation ? { ai_explanation: explanation } : {}),
+                  ...(executiveSummary ? { executive_summary: executiveSummary } : {}),
+                  ...(commercialGuidance ? { commercial_guidance: commercialGuidance } : {}),
+                },
+              }
               : item,
           ),
         );
       }
       return true;
     } catch (error) {
-      console.error("ScoreLeads /score/explain error", error);
+      console.error("RutaHogar /score/explain error", error);
       return false;
     }
   }
@@ -692,6 +712,7 @@ export default function App() {
         ? nextProfile.user_id
         : nextProfile?.id || nextProfile?.email || null;
     const onboardingToSave = mergeOnboardingData(nextProfile.onboarding_data, pendingOnboarding);
+    const anonymousBirthDate = pendingOnboarding?.birth_date || pendingInput?.birth_date || "";
     let migratedAuth = nextAuth;
     let migratedProfile = nextProfile;
 
@@ -708,6 +729,18 @@ export default function App() {
       });
       migratedAuth = { ...nextAuth, profile: migratedProfile };
       storeOnboardingForProfile(migratedProfile, onboardingToSave);
+    }
+
+    if (nextUserId && !migratedProfile.birth_date && anonymousBirthDate) {
+      const savedProfile = await upsertProfile(
+        nextUserId,
+        migratedProfile.full_name,
+        migratedProfile.role,
+        onboardingToSave,
+        { phone: migratedProfile.phone, birth_date: anonymousBirthDate },
+      );
+      migratedProfile = updateStoredProfile({ ...migratedProfile, ...savedProfile, email: migratedProfile.email });
+      migratedAuth = { ...migratedAuth, profile: migratedProfile };
     }
 
     let savedEvaluation = null;
@@ -818,6 +851,7 @@ export default function App() {
   const startEvaluation = () => {
     setResult(null);
     setResultSaved(null);
+    setStartingNewEvaluation(false);
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
   };
 
@@ -996,7 +1030,7 @@ export default function App() {
       if (resultRef.current !== resultSnapshot) return;
       setResultSaved(false);
       setDataError(
-        "Tu pre-evaluación finalizó, pero hubo un problema al guardarla en tu historial. Si el problema persiste, vuelve a iniciar sesión.",
+        "Tu precalificación finalizó, pero hubo un problema al guardarla en tu historial. Si el problema persiste, vuelve a iniciar sesión.",
       );
     }
   };
@@ -1289,7 +1323,7 @@ export default function App() {
           <section className="evaluation-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
-              <h1>Pre-evaluación financiera</h1>
+              <h1>Precalificación financiera</h1>
               <p>
                 Completa todos los campos para calcular un score orientativo. El
                 resultado no equivale a aprobación bancaria.
@@ -1315,7 +1349,7 @@ export default function App() {
             </button>
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
-              <h1>Pre-evaluación financiera</h1>
+              <h1>Precalificación financiera</h1>
               <p>
                 Completa todos los campos para calcular un score orientativo. El
                 resultado no equivale a aprobación bancaria.
@@ -1417,7 +1451,7 @@ export default function App() {
           <section className="evaluation-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
-              <h1>Pre-evaluación financiera</h1>
+              <h1>Precalificación financiera</h1>
               <p>
                 Completa todos los campos para calcular un score orientativo. El
                 resultado no equivale a aprobación bancaria.
@@ -1472,146 +1506,31 @@ export default function App() {
               </div>
             )}
 
-            <div className="dashboard-status-grid">
-              <div className="dashboard-card">
-                <span className="dashboard-card-label">Score financiero orientativo</span>
-                {currentScore ? (
-                  <div className={`dashboard-score score-${currentScore.classification?.toLowerCase()}`}>
-                    <strong>{currentScore.score}</strong>
-                    <span>{currentScore.classification}</span>
-                  </div>
-                ) : (
-                  <p className="dashboard-empty">Sin evaluación aún</p>
-                )}
+            <section className="home-profile-brief" aria-labelledby="home-profile-title">
+              <div className="home-profile-brief__status">
+                <span className="eyebrow">Tu perfil hoy</span>
+                <strong id="home-profile-title">{currentScore ? formatScore(currentScore.score, "Sin score") : "Pendiente"}</strong>
+                <span>{currentScore ? `Score orientativo · ${currentScore.classification || "Sin clasificación"}` : "Aún no has calculado tu score"}</span>
               </div>
+              <dl className="home-profile-brief__details">
+                <div><dt>Objetivo de vivienda</dt><dd>{userOnboarding?.comuna_interes ? `${userOnboarding.tipo_propiedad === "departamento" ? "Departamento" : userOnboarding.tipo_propiedad === "casa" ? "Casa" : "Vivienda"} en ${userOnboarding.comuna_interes}` : "Sin objetivo definido"}</dd></div>
+                <div><dt>Horizonte de compra</dt><dd>{userOnboarding?.plazo_compra ? (plazoLabels[userOnboarding.plazo_compra] || userOnboarding.plazo_compra) : "Sin plazo definido"}</dd></div>
+                <div><dt>Foco actual</dt><dd>{currentEvaluation?.result?.improvement_plan?.[0]?.title || (currentScore ? "Mantener tu preparación financiera" : "Completar tu información")}</dd></div>
+              </dl>
+              {!onboardingCompleted ? <button type="button" className="primary-button" onClick={() => navigateToPage("onboarding")}>Completar perfil</button> : !currentScore ? <button type="button" className="primary-button" onClick={startEvaluation}>Calcular score</button> : null}
+            </section>
 
-              <div className="dashboard-card">
-                <span className="dashboard-card-label">Objetivo de compra</span>
-                {userOnboarding?.comuna_interes ? (
-                  <div className="dashboard-card-value">
-                    <strong>
-                      {userOnboarding.tipo_propiedad === "departamento" ? "Departamento" :
-                        userOnboarding.tipo_propiedad === "casa" ? "Casa" :
-                          userOnboarding.tipo_propiedad === "indiferente" ? "Indiferente" :
-                            "Sin definir"}{" "}
-                      en {userOnboarding.comuna_interes}
-                    </strong>
-                    <span>
-                      {plazoLabels[userOnboarding.plazo_compra] || userOnboarding.plazo_compra || "Plazo sin definir"}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="dashboard-empty">Completa el cuestionario para definir tu objetivo</p>
-                )}
+            <section className="home-purpose" aria-labelledby="home-purpose-title">
+              <div className="home-purpose__intro">
+                <h2 id="home-purpose-title">Prepara tu compra con información clara</h2>
+                <p>RutaHogar ordena tu situación financiera para ayudarte a entender qué preparar antes de conversar con una institución financiera.</p>
               </div>
-
-              <div className="dashboard-card">
-                <span className="dashboard-card-label">Estado actual</span>
-                {currentScore ? (
-                  <div className={`dashboard-status-badge status-${currentScore.classification?.toLowerCase()}`}>
-                    {currentScore.classification === "Alto" && "Compatible"}
-                    {currentScore.classification === "Medio" && "Cercano"}
-                    {currentScore.classification === "Bajo" && "Requiere ajuste"}
-                  </div>
-                ) : onboardingCompleted ? (
-                  <div className="dashboard-status-badge status-pendiente">Pendiente de evaluación</div>
-                ) : (
-                  <div className="dashboard-status-badge status-pendiente">Sin datos suficientes</div>
-                )}
-              </div>
-
-              <div className="dashboard-card">
-                <span className="dashboard-card-label">Principal brecha</span>
-                {currentEvaluation?.result?.improvement_plan?.length > 0 ? (
-                  <div className="dashboard-card-value">
-                    <strong>{currentEvaluation.result.improvement_plan[0].title || "Revisa tu plan de mejora"}</strong>
-                  </div>
-                ) : currentScore ? (
-                  <p className="dashboard-empty">Sin brechas detectadas</p>
-                ) : (
-                  <p className="dashboard-empty">Realiza tu pre-evaluación para ver brechas</p>
-                )}
-              </div>
-            </div>
-
-            <div className="dashboard-next-action">
-              <span className="dashboard-card-label">Tu siguiente mejor acción</span>
-              {!onboardingCompleted ? (
-                <div className="dashboard-action-card" onClick={() => navigateToPage("onboarding")}>
-                  <div>
-                    <strong>Completa tu perfil financiero</strong>
-                    <p>Responde el cuestionario para obtener tu score orientativo.</p>
-                  </div>
-                  <span className="dashboard-action-arrow">→</span>
-                </div>
-              ) : !currentScore ? (
-                <div className="dashboard-action-card" onClick={startEvaluation}>
-                  <div>
-                    <strong>Realiza tu pre-evaluación</strong>
-                    <p>Calcula tu score financiero orientativo en unos minutos.</p>
-                  </div>
-                  <span className="dashboard-action-arrow">→</span>
-                </div>
-              ) : currentScore?.classification === "Bajo" ? (
-                <div className="dashboard-action-card" onClick={() => navigateToPage("tracking")}>
-                  <div>
-                    <strong>Revisa tu plan de mejora</strong>
-                    <p>Tu score indica áreas de mejora. Conoce los pasos para avanzar.</p>
-                  </div>
-                  <span className="dashboard-action-arrow">→</span>
-                </div>
-              ) : (
-                <div className="dashboard-action-card" onClick={() => navigateToPage("simulation")}>
-                  <div>
-                    <strong>Simula proyectos compatibles</strong>
-                    <p>Compara propuestas referenciales o ingresa un valor manual.</p>
-                  </div>
-                  <span className="dashboard-action-arrow">→</span>
-                </div>
-              )}
-            </div>
-
-            <div className="dashboard-quick-access">
-              <div className="dashboard-access-card" onClick={() => navigateToPage("simulation")}>
-                <span className="dashboard-access-icon">📊</span>
-                <div>
-                  <strong>Simulación</strong>
-                  <p>Compara proyectos referenciales o ingresa un valor manual.</p>
-                </div>
-              </div>
-
-              <div className="dashboard-access-card" onClick={() => navigateToPage("tracking")}>
-                <span className="dashboard-access-icon">📋</span>
-                <div>
-                  <strong>Plan de mejora</strong>
-                  <p>Revisa metas de ahorro, deuda y próximos pasos.</p>
-                </div>
-              </div>
-
-              <div className="dashboard-access-card" onClick={() => navigateToPage("academia")}>
-                <span className="dashboard-access-icon">📚</span>
-                <div>
-                  <strong>Academia</strong>
-                  <p>Aprende conceptos como pie, dividendo, deuda y crédito hipotecario.</p>
-                </div>
-              </div>
-
-              <div className="dashboard-access-card" onClick={() => navigateToPage("recommendations")}>
-                <span className="dashboard-access-icon">💡</span>
-                <div>
-                  <strong>Recomendaciones</strong>
-                  <p>Consulta acciones sugeridas según tu perfil.</p>
-                </div>
-              </div>
-
-              <div className="dashboard-access-card" onClick={() => navigateToPage("projects")}>
-                <span className="dashboard-access-icon">🏢</span>
-                <div>
-                  <strong>Proyectos</strong>
-                  <p>Descubre propiedades y cotizaciones orientativas.</p>
-                </div>
-              </div>
-            </div>
+              <ol className="home-purpose__steps">
+                <li><span>01</span><div><strong>Conoce tu punto de partida</strong><p>Revisa un score y los factores que influyen en tu preparación.</p></div></li>
+                <li><span>02</span><div><strong>Identifica qué puedes mejorar</strong><p>Prioriza ahorro, deudas y antecedentes según tu perfil.</p></div></li>
+                <li><span>03</span><div><strong>Toma decisiones con contexto</strong><p>Explora alternativas de vivienda y beneficios habitacionales de forma referencial.</p></div></li>
+              </ol>
+            </section>
 
             <p className="hero-note">
               RutaHogar no aprueba créditos hipotecarios. Los resultados son referenciales y no reemplazan una evaluación bancaria formal.
@@ -1621,12 +1540,69 @@ export default function App() {
           <section className="evaluation-panel">
             <div className="section-heading compact">
               <span className="eyebrow">Disponible</span>
-              <h1>Pre-evaluación financiera</h1>
+              <h1>Precalificación financiera</h1>
               <p>
                 Completa todos los campos para calcular un score orientativo. El
                 resultado no equivale a aprobación bancaria.
               </p>
             </div>
+            {currentEvaluation && !startingNewEvaluation ? (
+              <section className="evaluation-review-gate">
+                <div className="evaluation-review-gate__details">
+                  <h2>¿Ha cambiado algo desde tu última evaluación?</h2>
+                  <p>Revisa tus respuestas antes de calcular nuevamente. Una nueva evaluación conservará tu historial anterior.</p>
+                  <div className="evaluation-review-gate__answers">
+                    <details open>
+                      <summary>Situación financiera</summary>
+                      <div className="evaluation-review-gate__answer-content"><dl>
+                        <div><dt>Ingreso mensual</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.ingreso_mensual)}</dd></div>
+                        <div><dt>Deuda mensual</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.deuda_mensual)}</dd></div>
+                        <div><dt>Ahorro disponible</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.ahorro_disponible)}</dd></div>
+                        <div><dt>Dividendo estimado</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.dividendo_estimado)}</dd></div>
+                      </dl></div>
+                    </details>
+                    <details>
+                      <summary>Vivienda y objetivo</summary>
+                      <div className="evaluation-review-gate__answer-content"><dl>
+                        <div><dt>Comuna objetivo</dt><dd>{currentEvaluation.input?.comuna_objetivo || currentEvaluation.onboarding?.comuna_interes || "No declarada"}</dd></div>
+                        <div><dt>Tipo de vivienda</dt><dd>{formatFormValue(currentEvaluation.onboarding?.tipo_propiedad)}</dd></div>
+                        <div><dt>Valor estimado</dt><dd>{currentEvaluation.input?.property_value_uf ? `${currentEvaluation.input.property_value_uf} UF` : formatEvaluationAmount(currentEvaluation.input?.property_value_clp || currentEvaluation.input?.property_value)}</dd></div>
+                        <div><dt>Plazo de crédito</dt><dd>{currentEvaluation.input?.plazo_credito_hipotecario ? `${currentEvaluation.input.plazo_credito_hipotecario} años` : "No declarado"}</dd></div>
+                      </dl></div>
+                    </details>
+                    <details>
+                      <summary>Trabajo y deudas</summary>
+                      <div className="evaluation-review-gate__answer-content"><dl>
+                        <div><dt>Tipo de contrato</dt><dd>{formatFormValue(currentEvaluation.input?.tipo_contrato)}</dd></div>
+                        <div><dt>Continuidad laboral</dt><dd>{formatFormValue(currentEvaluation.input?.continuidad_laboral)}</dd></div>
+                        <div><dt>Morosidad actual</dt><dd>{formatFormValue(currentEvaluation.input?.morosidad_actual)}</dd></div>
+                        {currentEvaluation.input?.morosidad_actual === "si" && <><div><dt>Monto en morosidad</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.monto_morosidad)}</dd></div><div><dt>Antigüedad de morosidad</dt><dd>{formatFormValue(currentEvaluation.input?.antiguedad_morosidad)}</dd></div></>}
+                      </dl></div>
+                    </details>
+                    {currentEvaluation.input?.complemento_renta && <details>
+                      <summary>Complemento de renta</summary>
+                      <div className="evaluation-review-gate__answer-content"><dl>
+                        <div><dt>Ingreso complementario</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.ingreso_mensual_complementario)}</dd></div>
+                        <div><dt>Deuda complementaria</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.deuda_mensual_complementario)}</dd></div>
+                        <div><dt>Relación</dt><dd>{formatFormValue(currentEvaluation.input?.relacion_complementario)}</dd></div>
+                        <div><dt>Contrato complementario</dt><dd>{formatFormValue(currentEvaluation.input?.tipo_contrato_complementario)}</dd></div>
+                      </dl></div>
+                    </details>}
+                    {currentEvaluation.input?.declara_patrimonio && <details>
+                      <summary>Patrimonio declarado</summary>
+                      <div className="evaluation-review-gate__answer-content"><dl>
+                        <div><dt>Vehículos</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.valor_vehiculos)}</dd></div>
+                        <div><dt>Inmuebles u otros</dt><dd>{formatEvaluationAmount(currentEvaluation.input?.valor_inmuebles)}</dd></div>
+                      </dl></div>
+                    </details>}
+                  </div>
+                  <div className="evaluation-review-gate__actions">
+                    <button type="button" className="secondary-button" onClick={() => navigateToPage("recommendations")}>Ver mi evaluación actual</button>
+                    <button type="button" className="primary-button" onClick={() => setStartingNewEvaluation(true)}>Sí, quiero hacer una nueva evaluación</button>
+                  </div>
+                </div>
+              </section>
+            ) : <>
             {userOnboarding && (
               <div className="context-summary">
                 <strong>Contexto inicial</strong>
@@ -1655,6 +1631,7 @@ export default function App() {
               onBirthDateSave={handleBirthDateSave}
               onResult={handleResult}
             />
+            </>}
           </section>
         ) : page === "profile" && profile.role === roles.user ? (
           <ProfilePage
@@ -1678,7 +1655,7 @@ export default function App() {
           onLogScoringEvent={handleLogScoringEvent}
           onOpenMilestoneRegistration={(goal) => {
             setActiveGoal(goal || null);
-            setPage("register-milestone");
+            navigateToPage("register-milestone");
           }}
           successMessage={milestoneSuccess}
           onNavigate={navigateToPage}
@@ -1687,7 +1664,7 @@ export default function App() {
         <HousingSavingsPlan
           evaluation={currentEvaluation}
           initialPieType={housingInitialPieType}
-          onBack={() => setPage("tracking")}
+          onBack={() => navigateToPage("tracking")}
           onSaveHousingProgress={handleSaveHousingProgress}
           onLogScoringEvent={handleLogScoringEvent}
         />

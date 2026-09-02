@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { formatClp } from "../services/monthlyPlanService";
+import FieldTooltip from "./FieldTooltip";
 
 function formatInteger(raw) {
   if (raw === "" || raw == null) return "";
@@ -32,6 +33,12 @@ const MILESTONE_TYPES = [
     icon: "ti ti-briefcase",
     title: "Mejora Laboral",
     desc: "He cambiado mi tipo de contrato o antigüedad.",
+  },
+  {
+    id: "renta",
+    icon: "ti ti-trending-up",
+    title: "Aumento de Renta",
+    desc: "Han subido mis ingresos mensuales líquidos.",
   },
 ];
 
@@ -164,42 +171,23 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
         </p>
       </div>
 
-      <div className="milestone-cards-container" style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "2rem" }}>
-        <button
-          className={`card-button ${activeType === 'ahorro' ? 'active' : ''}`}
-          onClick={() => { setActiveType('ahorro'); setError(""); }}
-          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'ahorro' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
-        >
-          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💰 Aumento de Ahorro</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He logrado ahorrar más dinero para mi pie.</p>
-        </button>
-
-        <button
-          className={`card-button ${activeType === 'deuda' ? 'active' : ''}`}
-          onClick={() => { setActiveType('deuda'); setError(""); }}
-          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'deuda' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
-        >
-          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💳 Reducción de Deuda</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He pagado parte o la totalidad de mis deudas.</p>
-        </button>
-
-        <button
-          className={`card-button ${activeType === 'laboral' ? 'active' : ''}`}
-          onClick={() => { setActiveType('laboral'); setError(""); }}
-          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'laboral' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
-        >
-          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>💼 Mejora Laboral</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>He cambiado mi tipo de contrato o antigüedad.</p>
-        </button>
-
-        <button
-          className={`card-button ${activeType === 'renta' ? 'active' : ''}`}
-          onClick={() => { setActiveType('renta'); setError(""); }}
-          style={{ flex: "1 1 calc(50% - 1rem)", padding: "1.5rem", borderRadius: "8px", border: "none", background: activeType === 'renta' ? '#45a68e' : '#246354', color: "white", cursor: "pointer", textAlign: "left", transition: "background 0.2s" }}
-        >
-          <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem", color: "white" }}>📈 Aumento de Renta</h3>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#e2e8f0" }}>Han subido mis ingresos mensuales líquidos.</p>
-        </button>
+      <div className="milestone-choice-heading">
+        <span className="eyebrow">Elige el cambio</span>
+        <h2>¿Qué avanzó desde tu última evaluación?</h2>
+      </div>
+      <div className="milestone-type-grid">
+        {MILESTONE_TYPES.map((type) => (
+          <button
+            key={type.id}
+            type="button"
+            className={`milestone-type-card ${activeType === type.id ? "is-active" : ""}`}
+            aria-pressed={activeType === type.id}
+            onClick={() => { setActiveType(type.id); setError(""); }}
+          >
+            <i className={type.icon} aria-hidden="true" />
+            <span><h3>{type.title}</h3><p>{type.desc}</p></span>
+          </button>
+        ))}
       </div>
 
       <div className="milestone-form-area">
@@ -212,7 +200,7 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
               </p>
             </div>
             <label className="simulator-field">
-              Nuevo Ahorro Disponible Total (CLP)
+              Nuevo Ahorro Disponible Total (CLP) <FieldTooltip text="Indica el total que tienes disponible hoy para el pago inicial. Incluye solo recursos propios, APV o Cuenta 2 que realmente puedas utilizar." />
               <input
                 type="text"
                 inputMode="numeric"
@@ -266,7 +254,7 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
             )}
 
             <label className="simulator-field">
-              Nueva Deuda Mensual Total (CLP)
+              Nueva Deuda Mensual Total (CLP) <FieldTooltip text="Considera todas las cuotas mensuales vigentes: créditos, tarjetas, líneas de crédito y otros compromisos financieros." />
               <input
                 type="text"
                 inputMode="numeric"
@@ -328,33 +316,6 @@ export default function RegisterMilestone({ evaluation, onBack, onRegister }) {
                 value={newIncome}
                 onChange={(e) => setNewIncome(formatInteger(e.target.value))}
                 placeholder="Ej. 2.000.000"
-                className="text-input"
-                autoFocus
-              />
-            </label>
-            {error && <div className="warning-note" style={{ marginTop: "1rem" }}>{error}</div>}
-            <div style={{ marginTop: "1.5rem" }}>
-              <button type="submit" className="primary-button" disabled={isSubmitting}>
-                {isSubmitting ? "Calculando nuevo score..." : "Registrar y Recalcular"}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {activeType === "renta" && (
-          <form onSubmit={handleRentaSubmit} className="milestone-form" style={{ padding: "1.5rem", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--surface-color)" }}>
-            <h3>Actualiza tu Renta Mensual</h3>
-            <p className="field-help" style={{ marginBottom: "1.5rem" }}>
-              Actualmente tienes declarado: <strong>{formatClp(currentIncome)}</strong>
-            </p>
-            <label className="field-label">
-              Nueva Renta Mensual Líquida (CLP)
-              <input
-                type="number"
-                min="0"
-                value={newIncome}
-                onChange={(e) => setNewIncome(e.target.value)}
-                placeholder="Ej. 1200000"
                 className="text-input"
                 autoFocus
               />

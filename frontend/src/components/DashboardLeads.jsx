@@ -162,6 +162,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     return () => { active = false; };
   }, [selectedLead]);
 
+  useEffect(() => {
+    setSelectedLead((current) => {
+      if (!current) return current;
+      return evaluations.find((item) => item.id === current.id) || current;
+    });
+  }, [evaluations]);
+
   const communes = useMemo(() => [...new Set(evaluations.flatMap((item) => [
     item.input?.comuna_objetivo || item.onboarding?.comuna_interes,
     item.onboarding?.comuna_alternativa,

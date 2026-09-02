@@ -79,13 +79,12 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
       return;
     }
 
-    const birthDateIso = buildBirthDateIso(form);
-    if (!birthDateIso) {
+    const birthDateIso = isAnon ? buildBirthDateIso(form) : "";
+    if (isAnon && !birthDateIso) {
       setError("Ingresa tu fecha de nacimiento completa.");
       return;
     }
-    const age = calculateAge(birthDateIso);
-    if (age < 18) {
+    if (isAnon && calculateAge(birthDateIso) < 18) {
       setError("Debes ser mayor de 18 años para continuar.");
       return;
     }
@@ -110,15 +109,16 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
       return;
     }
 
-    if (onBirthDateSave && birthDateIso) {
+    if (isAnon && onBirthDateSave && birthDateIso) {
       onBirthDateSave(birthDateIso);
     }
 
     onComplete(form);
   };
 
-  const filledCount = [form.objetivo_principal, form.tipo_propiedad, form.comuna_interes, form.plazo_compra, form.birth_day, form.birth_month, form.birth_year].filter(Boolean).length;
-  const progressPercent = Math.round((filledCount / 7) * 100);
+  const contextFields = [form.objetivo_principal, form.tipo_propiedad, form.comuna_interes, form.plazo_compra];
+  const filledCount = [...contextFields, ...(isAnon ? [form.birth_day, form.birth_month, form.birth_year] : [])].filter(Boolean).length;
+  const progressPercent = Math.round((filledCount / (isAnon ? 7 : 4)) * 100);
 
   return (
     <div className="pre-wizard">
@@ -263,53 +263,18 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
               <span className="pre-wizard-field-hint">Opcional. Útil si estás open a otras zonas.</span>
             </div>
 
-            <div className="pre-wizard-divider" />
-
-            <div className="pre-wizard-field">
-              <label className="pre-wizard-field-label">Fecha de nacimiento</label>
-              <div className="birth-date-grid">
-                <div className="birth-date-field">
-                  <select
-                    id="birth_day"
-                    name="birth_day"
-                    value={form.birth_day}
-                    onChange={handleChange}
-                  >
-                    <option value="">DD</option>
-                    {dayOptions.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+            {isAnon && <>
+              <div className="pre-wizard-divider" />
+              <div className="pre-wizard-field">
+                <label className="pre-wizard-field-label">Fecha de nacimiento</label>
+                <div className="birth-date-grid">
+                  <div className="birth-date-field"><select id="birth_day" name="birth_day" value={form.birth_day} onChange={handleChange}><option value="">DD</option>{dayOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                  <div className="birth-date-field"><select id="birth_month" name="birth_month" value={form.birth_month} onChange={handleChange}><option value="">MM</option>{monthOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                  <div className="birth-date-field"><select id="birth_year" name="birth_year" value={form.birth_year} onChange={handleChange}><option value="">AAAA</option>{yearOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
                 </div>
-                <div className="birth-date-field">
-                  <select
-                    id="birth_month"
-                    name="birth_month"
-                    value={form.birth_month}
-                    onChange={handleChange}
-                  >
-                    <option value="">MM</option>
-                    {monthOptions.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="birth-date-field">
-                  <select
-                    id="birth_year"
-                    name="birth_year"
-                    value={form.birth_year}
-                    onChange={handleChange}
-                  >
-                    <option value="">AAAA</option>
-                    {yearOptions.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <span className="pre-wizard-field-hint">Tu edad se usa para calcular el plazo máximo del crédito hipotecario.</span>
               </div>
-              <span className="pre-wizard-field-hint">Tu edad se usa para calcular el plazo máximo del crédito hipotecario.</span>
-            </div>
+            </>}
 
             <label className="pre-wizard-check-row">
               <input

@@ -191,7 +191,7 @@ function goalsFromEvaluation(evaluation, months) {
   goals.push(
     buildGoal(
       "Volver a precalificar en el momento correcto",
-      "No recomendamos repetir la preevaluación inmediatamente. Vuelve a evaluar cuando hayas reducido deuda, aumentado ahorro o cambiado tu objetivo inmobiliario.",
+      "No recomendamos repetir la precalificación inmediatamente. Vuelve a evaluar cuando hayas reducido deuda, aumentado ahorro o cambiado tu objetivo inmobiliario.",
       Math.min(months, 6),
     ),
   );
@@ -220,7 +220,7 @@ function goalsFromStructuredPlan(result, fallbackMonths) {
 
       return buildGoal(
         title,
-        details.join(" ") || "Acción sugerida desde tu última preevaluación.",
+        details.join(" ") || "Acción sugerida desde tu última precalificación.",
         months,
         "pendiente",
         action.category,
@@ -247,8 +247,8 @@ export function buildFinancialTracking(evaluation) {
       score: evaluation.result?.score,
       classification,
       message: structuredGoals.length
-        ? "Usa el plan sugerido de tu última preevaluación como guía inicial mientras completas tus metas de seguimiento."
-        : "Aún no tienes metas de seguimiento guardadas. Puedes usar el plan sugerido de tu última preevaluación como guía inicial.",
+        ? "Usa el plan sugerido de tu última precalificación como guía inicial mientras completas tus metas de seguimiento."
+        : "Aún no tienes metas de seguimiento guardadas. Puedes usar el plan sugerido de tu última precalificación como guía inicial.",
       months,
       goals: structuredGoals,
       warning: "",
@@ -260,7 +260,7 @@ export function buildFinancialTracking(evaluation) {
     score: evaluation.result?.score,
     classification,
     message: unrealisticTimeline
-      ? "Con la información actual, el plazo declarado no parece realista. Te recomendamos reevaluar el tipo de propiedad, comuna objetivo o aumentar el plazo antes de una nueva preevaluación."
+      ? "Con la información actual, el plazo declarado no parece realista. Te recomendamos reevaluar el tipo de propiedad, comuna objetivo o aumentar el plazo antes de una nueva precalificación."
       : classificationMessages[classification] || classificationMessages.Bajo,
     months,
     targetCommune: onboarding.comuna_interes || input.comuna_objetivo || "",

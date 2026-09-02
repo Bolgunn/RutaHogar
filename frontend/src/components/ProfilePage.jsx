@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { comunasMvp } from "../constants/comunas";
-import { plazoLabels, propertyLabels } from "../constants";
+import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
 import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
 import AiExplanationBlock from "./AiExplanationBlock";
@@ -104,7 +104,7 @@ function uf(value) {
 
 function text(value, labels) {
   if (value === undefined || value === null || value === "") return emptyValue;
-  return labels?.[value] || value;
+  return labels?.[value] || formatFormValue(value, emptyValue);
 }
 
 function dividendOrigin(input = {}) {
@@ -905,7 +905,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                   {new Date(selectedEvaluation.created_at).toLocaleString("es-CL")}
                 </span>
                 <h2 id="profile-evaluation-detail-title">
-                  {canSeeTechnicalScoring ? "Detalle de scoring" : "Detalle de preevaluación"}
+                  {canSeeTechnicalScoring ? "Detalle de scoring" : "Detalle de precalificación"}
                 </h2>
               </div>
               <button

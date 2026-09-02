@@ -8,7 +8,7 @@ function preserveCase(match, replacement) {
 const WORD_FIXES = [
   [/\bAun\b/g, "Aún"],
   [/\baun\b/g, "aún"],
-  [/\bpreevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "preevaluaciones" : "preevaluación")],
+  [/\bpre-?evaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "precalificaciones" : "precalificación")],
   [/\bevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "evaluaciones" : "evaluación")],
   [/\bsituacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "situaciones" : "situación")],
   [/\binformacion\b/gi, (match) => preserveCase(match, "información")],

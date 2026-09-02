@@ -1,6 +1,6 @@
 // HU12 - Academia Financiera
 //
-// Contenido educativo contextual para ScoreLeads.
+// Contenido educativo contextual para RutaHogar.
 // Las afirmaciones financieras deben estar respaldadas por fuentes oficiales
 // chilenas. El contenido es estático; las condiciones de subsidios o productos
 // financieros que cambien con el tiempo deben derivar al sitio oficial.
@@ -144,7 +144,7 @@ export const ACADEMY_ARTICLES = [
       "capacidad de pago",
     ],
     body:
-      "Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito. La evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación.\n\nPor eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario. La decisión corresponde a la institución financiera y depende de sus políticas de evaluación y de las características concretas de la operación.\n\nEn ScoreLeads, la evaluación sirve como una referencia orientativa para identificar fortalezas y posibles bloqueadores del perfil. No reemplaza la evaluación formal de una institución financiera.",
+      "Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito. La evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación.\n\nPor eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario. La decisión corresponde a la institución financiera y depende de sus políticas de evaluación y de las características concretas de la operación.\n\nEn RutaHogar, la evaluación sirve como una referencia orientativa para identificar fortalezas y posibles bloqueadores del perfil. No reemplaza la evaluación formal de una institución financiera.",
     sources: [
       {
         institution: "SERNAC",
@@ -665,7 +665,7 @@ export const ACADEMY_ARTICLES = [
     minutes: 4,
     tags: ["subsidio", "vivienda", "MINVU"],
     body:
-      "Los subsidios habitacionales son beneficios otorgados por el Estado a personas o familias que cumplen los requisitos establecidos en cada programa.\n\nLos programas pueden tener objetivos, beneficiarios, montos, requisitos de ahorro y tipos de vivienda diferentes. Por eso no existe un único conjunto de requisitos que sirva para todos los subsidios.\n\nAntes de postular, revisa siempre el programa y el llamado específico publicado por MINVU. La información de ScoreLeads es educativa y no reemplaza la postulación ni la evaluación oficial.",
+      "Los subsidios habitacionales son beneficios otorgados por el Estado a personas o familias que cumplen los requisitos establecidos en cada programa.\n\nLos programas pueden tener objetivos, beneficiarios, montos, requisitos de ahorro y tipos de vivienda diferentes. Por eso no existe un único conjunto de requisitos que sirva para todos los subsidios.\n\nAntes de postular, revisa siempre el programa y el llamado específico publicado por MINVU. La información de RutaHogar es educativa y no reemplaza la postulación ni la evaluación oficial.",
     sources: [
       {
         institution: "MINVU",
@@ -728,7 +728,7 @@ export const ACADEMY_ARTICLES = [
     minutes: 3,
     tags: ["subsidio", "MINVU", "requisitos"],
     body:
-      "Los programas habitacionales tienen reglas establecidas por su normativa, pero los llamados específicos pueden establecer fechas, cupos, montos, condiciones y procedimientos determinados.\n\nPor ejemplo, el primer llamado nacional DS1 de 2026 tuvo fechas de postulación, ahorro mínimo y condiciones específicas para ese proceso.\n\nPor esta razón, una aplicación educativa no debería presentar los requisitos de un llamado antiguo como si fueran válidos para siempre. ScoreLeads debe entregar orientación general y derivar al sitio oficial de MINVU para comprobar las condiciones vigentes.",
+      "Los programas habitacionales tienen reglas establecidas por su normativa, pero los llamados específicos pueden establecer fechas, cupos, montos, condiciones y procedimientos determinados.\n\nPor ejemplo, el primer llamado nacional DS1 de 2026 tuvo fechas de postulación, ahorro mínimo y condiciones específicas para ese proceso.\n\nPor esta razón, una aplicación educativa no debería presentar los requisitos de un llamado antiguo como si fueran válidos para siempre. RutaHogar debe entregar orientación general y derivar al sitio oficial de MINVU para comprobar las condiciones vigentes.",
     sources: [
       {
         institution: "MINVU",
@@ -1011,7 +1011,7 @@ export const ACADEMY_ARTICLES = [
       "• Certificados de pago total o finiquitos de deudas liquidadas: Si prepagaste un crédito de consumo o cerraste una tarjeta, debes solicitar el certificado de deuda saldada directamente a tu Banco o Acreedor.",
     sources: [
       {
-        institution: "ScoreLeads",
+        institution: "RutaHogar",
         title: "Guía de Documentación Hipotecaria",
         url: "#",
       },

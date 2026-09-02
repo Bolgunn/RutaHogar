@@ -141,7 +141,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <span className="eyebrow">Privacidad y datos personales</span>
           <h1>Autorización de Tratamiento de Datos Personales</h1>
           <p>
-            Antes de realizar tu pre-evaluación financiera, necesitamos que
+            Antes de realizar tu precalificación financiera, necesitamos que
             autorices el tratamiento de tus datos personales de acuerdo con la
             legislación chilena.
           </p>

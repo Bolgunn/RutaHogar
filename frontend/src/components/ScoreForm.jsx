@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import { formatFormValue } from "../constants";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
 
@@ -327,7 +328,9 @@ export default function ScoreForm({
   const storedBirthDate = normalizeBirthDate(
     birthDate || profile?.birth_date || profile?.fecha_nacimiento || "",
   );
-  const needsBirthDate = !storedBirthDate;
+  // La fecha de nacimiento pertenece al perfil autenticado; el flujo anónimo
+  // la solicita antes de la precalificación y luego se migra al crear la cuenta.
+  const needsBirthDate = isAnon && !storedBirthDate;
   const contextCompleted = Boolean(onboardingData);
   const [birthFields, setBirthFields] = useState({ birth_day: "", birth_month: "", birth_year: "" });
   const [activeDateDropdown, setActiveDateDropdown] = useState(null);
@@ -710,14 +713,14 @@ export default function ScoreForm({
 
     if (form.complemento_renta && complementFieldsIncomplete) {
       setError(
-        "Completa los datos del complementario antes de calcular tu preevaluación.",
+        "Completa los datos del complementario antes de calcular tu precalificación.",
       );
       return false;
     }
 
     if (form.declara_patrimonio && patrimonioFieldsIncomplete) {
       setError(
-        "Completa la información de patrimonio antes de calcular tu preevaluación.",
+        "Completa la información de patrimonio antes de calcular tu precalificación.",
       );
       return false;
     }
@@ -1620,11 +1623,11 @@ export default function ScoreForm({
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Tipo de contrato</span>
-              <span className="pre-wizard-summary-value">{form.tipo_contrato || "—"}</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.tipo_contrato, "—")}</span>
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Continuidad laboral</span>
-              <span className="pre-wizard-summary-value">{form.continuidad_laboral || "—"}</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.continuidad_laboral, "—")}</span>
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Morosidad</span>

@@ -203,7 +203,7 @@ export async function createEvaluation(userId, evaluationPayload) {
   }
 
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para guardar la preevaluación.");
+  if (!user?.id) throw new Error("No hay usuario autenticado para guardar la precalificación.");
   await ensureUserProfile(user);
 
   let { data, error } = await supabase
@@ -436,7 +436,7 @@ export async function updateEvaluationAiContent(
   }
 
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para actualizar la preevaluación.");
+  if (!user?.id) throw new Error("No hay usuario autenticado para actualizar la precalificación.");
   await ensureUserProfile(user);
 
   const { data, error } = await supabase

@@ -69,14 +69,14 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
 
   return (
     <section className="section-block banking-checklist-minimal">
-      <div className="section-heading compact" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+      <div className="section-heading compact banking-checklist-minimal__heading">
         <div>
           <span className="eyebrow">Preparación Bancaria</span>
           <h2>Checklist Referencial de Antecedentes</h2>
           <p>Antecedentes referenciales para tu evaluación formal en la banca chilena.</p>
         </div>
         {onNavigate && (
-          <div className="academy-action-wrapper" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
+          <div className="academy-action-wrapper">
             <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
@@ -84,7 +84,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
               </svg>
               Academia
             </button>
-            <span className="helper-text" style={{ fontSize: "0.8rem", color: "var(--text-muted, #64748b)" }}>
+            <span className="helper-text">
               ¿Dónde obtener los documentos?
             </span>
           </div>
@@ -119,7 +119,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
 
         <div className="minimal-progress">
           <span>Preparados: {completedCount} / {currentList.length} ({progressPercent}%)</span>
-          <div className="progress-track">
+          <div className="progress-track" role="progressbar" aria-label="Avance del checklist" aria-valuemin="0" aria-valuemax={currentList.length} aria-valuenow={completedCount}>
             <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
@@ -127,7 +127,8 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
 
       {/* Clean Full List */}
       <div className="minimal-checklist-group">
-        <h4 className="group-title">Antecedentes Generales y Laborales</h4>
+        <h4 className="group-title">Antecedentes generales y laborales</h4>
+        {priorityItems.length > 0 && <p className="minimal-checklist-priority-note">Los elementos marcados como prioritarios responden a antecedentes que conviene preparar primero según tu evaluación.</p>}
         <ul className="checklist-minimal-rows">
           {currentList.map((item) => {
             const isPrio = item.mitigatesRisks.some((r) => activeRiskCodes.has(r)) ||

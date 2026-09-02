@@ -199,12 +199,10 @@ function ArticleCard({ article, onOpen }) {
       className="academy-card"
       style={{ "--card-accent": topic?.accent }}
       onClick={() => onOpen(article.id)}
-    >
-      <div className="academy-card-top">
-        <TopicIcon topicId={article.topic} size="sm" />
-
-        <span className="academy-level-chip">{article.level}</span>
-      </div>
+      >
+        <div className="academy-card-top">
+          <TopicIcon topicId={article.topic} size="sm" />
+        </div>
 
       <h3>{article.title}</h3>
 
@@ -215,12 +213,7 @@ function ArticleCard({ article, onOpen }) {
           {topic?.label}
         </span>
 
-        <span className="academy-meta-pill">
-          <i className="ti ti-clock" aria-hidden="true" />
-          {article.minutes} min
-        </span>
-
-        {article.sources?.length > 0 && (
+        {article.id !== "docs-1" && article.sources?.length > 0 && (
           <span className="academy-meta-pill academy-meta-pill--soft">
             <i className="ti ti-shield-check" aria-hidden="true" />
             {plural(article.sources.length, "fuente oficial", "fuentes oficiales")}
@@ -458,26 +451,14 @@ function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related 
           </div>
         </div>
 
-        {/* META */}
-
-        <div className="academy-modal-meta">
-          <span className="academy-meta-pill">
-            <i className="ti ti-chart-bar" aria-hidden="true" />
-            {article.level}
-          </span>
-
-          <span className="academy-meta-pill">
-            <i className="ti ti-clock" aria-hidden="true" />
-            {plural(article.minutes, "minuto", "minutos")} de lectura
-          </span>
-
-          {reviewedLabel && (
+        {reviewedLabel && (
+          <div className="academy-modal-meta">
             <span className="academy-meta-pill">
               <i className="ti ti-calendar-check" aria-hidden="true" />
               {reviewedLabel}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* CONTENIDO */}
 
@@ -487,32 +468,19 @@ function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related 
           ))}
         </div>
 
-        {/* FUENTES OFICIALES */}
-
-        {article.sources?.length > 0 && (
+        {article.id !== "docs-1" && article.sources?.length > 0 && (
           <div className="academy-modal-sources">
             <div className="academy-sources-intro">
               <i className="ti ti-shield-check" aria-hidden="true" />
-
               <div>
                 <strong>Fuentes oficiales</strong>
-
-                <p>
-                  Este artículo se basa en información de organismos chilenos.
-                  Verifica los detalles directamente en cada fuente:
-                </p>
+                <p>Este artículo se basa en información de organismos chilenos. Verifica los detalles directamente en cada fuente:</p>
               </div>
             </div>
-
             <ul className="academy-source-list">
               {article.sources.map((source, i) => (
                 <li key={`${source.institution}-${i}`}>
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="academy-source-link"
-                  >
+                  <a href={source.url} target="_blank" rel="noopener noreferrer" className="academy-source-link">
                     <strong>{source.institution}</strong>
                     <span className="academy-source-comma">,</span>
                     <em>{source.title}</em>
@@ -916,10 +884,10 @@ function InterpretaTab({ evaluation, onStartEvaluation, onOpenArticle, onRetryEx
           <i className="ti ti-chart-pie" aria-hidden="true" />
         </span>
 
-        <h3>Aún no tienes una preevaluación</h3>
+          <h3>Aún no tienes una precalificación</h3>
 
         <p>
-          Completa tu preevaluación financiera para conocer tu score,
+          Completa tu precalificación financiera para conocer tu score,
           entender los factores que influyen en él y recibir contenido
           educativo relevante para tu situación.
         </p>
@@ -1046,7 +1014,7 @@ function InterpretaTab({ evaluation, onStartEvaluation, onOpenArticle, onRetryEx
 
             <p>
               Seleccionamos estos artículos a partir de los factores
-              detectados en tu preevaluación.
+              detectados en tu precalificación.
             </p>
           </div>
 

@@ -74,7 +74,7 @@ def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
 
 def _clean_generated_text(text: str) -> str:
     replacements = {
-        "preevaluacion": "preevaluación",
+        "preevaluacion": "precalificación",
         "evaluacion": "evaluación",
         "situacion": "situación",
         "informacion": "información",
@@ -337,7 +337,7 @@ Responde solo el párrafo, sin títulos ni encabezados."""
     if not explanation:
         return None
 
-    disclaimer = "Esta preevaluación es orientativa y no reemplaza una evaluación bancaria formal."
+    disclaimer = "Esta precalificación es orientativa y no reemplaza una evaluación bancaria formal."
     if disclaimer not in explanation:
         explanation = f"{explanation}\n\n{disclaimer}"
     return explanation

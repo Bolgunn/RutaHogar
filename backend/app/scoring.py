@@ -774,7 +774,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                 components["perfil_compra"] -= 20
                 score -= 20
                 risk_codes.append("complemento_morosidad_alta")
-                riesgos.append("La persona complementaria declara morosidad, por lo que no mejora esta preevaluación.")
+                riesgos.append("La persona complementaria declara morosidad, por lo que no mejora esta precalificación.")
                 recomendaciones.append({"text": "Considerar complementar renta con una persona sin morosidad declarada.", "benefit": "Que el co-deudor aporte realmente a tu capacidad de compra."})
 
             if comp_relacion in relaciones_debiles:

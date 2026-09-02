@@ -441,11 +441,11 @@ function RecommendationEmpty({ onStartEvaluation }) {
       <div className="section-heading">
         <span className="eyebrow">Simulación</span>
         <h1>Simulación de compatibilidad</h1>
-        <p>Necesitas una preevaluación guardada para comparar escenarios con tu perfil financiero actual.</p>
+        <p>Necesitas una precalificación guardada para comparar escenarios con tu perfil financiero actual.</p>
       </div>
       <div className="empty-state">
         <strong>Aún no tienes una evaluación disponible.</strong>
-        <p>Completa la preevaluación para activar simulaciones referenciales de vivienda.</p>
+        <p>Completa la precalificación para activar simulaciones referenciales de vivienda.</p>
         <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
       </div>
     </section>
@@ -702,7 +702,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <span className="eyebrow">Simulación</span>
           <h1>Compatibilidad y alternativas</h1>
           <p>
-            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última preevaluación.
+            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última precalificación.
           </p>
         </div>
       </div>

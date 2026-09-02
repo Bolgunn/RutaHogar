@@ -107,7 +107,7 @@ export default function AdminPanel({ evaluations, profile }) {
     {
       key: "user",
       title: roleLabels.usuario,
-      description: "Recorre preevaluación, simulación y plan personal.",
+      description: "Recorre precalificación, simulación y plan personal.",
       state: "Experiencia cliente",
     },
   ];

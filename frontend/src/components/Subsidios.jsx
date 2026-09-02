@@ -52,8 +52,8 @@ export default function Subsidios({ evaluation, onNavigate }) {
           <h1>Beneficios habitacionales</h1>
         </div>
         <div className="empty-state">
-          <strong>Aún no tienes una preevaluación.</strong>
-          <p>Realiza una preevaluación para ver qué beneficios habitacionales podrían ser compatibles con tu perfil.</p>
+          <strong>Aún no tienes una precalificación.</strong>
+          <p>Realiza una precalificación para ver qué beneficios habitacionales podrían ser compatibles con tu perfil.</p>
           <button type="button" onClick={() => onNavigate?.("evaluate")}>Ir a precalificación</button>
         </div>
       </section>
@@ -138,11 +138,11 @@ export default function Subsidios({ evaluation, onNavigate }) {
           ))}
         </div>
 
-      </> : <div className="empty-state"><strong>Esta evaluación no incluye el análisis de subsidios.</strong><p>Realiza una nueva preevaluación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva preevaluación</button></div>}
+      </> : <div className="empty-state"><strong>Esta evaluación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
 
       <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
         <button type="button" className="secondary-button" onClick={goToRecommendations}>
-          Volver a Recomendaciones
+          Volver a Resultados
         </button>
       </div>
     </section>
