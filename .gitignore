@@ -11,6 +11,9 @@ supabase/.temp/
 Makefile
 handbookmd
 
+.agents
+skills-lock.json
+
 # Dependencies
 node_modules/
 frontend/node_modules/

@@ -42,6 +42,22 @@ export function buildProjectGoalInput(baseInput = {}, project = {}, ufValueClp) 
     property_value_uf: roundCurrency(valorUf),
     property_value_clp: valorClp,
     property_value_source: "project_selection",
+    // Este resumen solo identifica la meta en la experiencia; el motor recibe
+    // los campos financieros ya normalizados y no depende de esta metadata.
+    project_goal: {
+      id: project.id || null,
+      nombre: project.nombre || "Proyecto seleccionado",
+      comuna: project.comuna || "",
+      tipo_vivienda: project.tipo_vivienda || "",
+      estado: project.estado || "",
+      entrega_estimada: project.entrega_estimada || "",
+      inmobiliaria: project.inmobiliaria || "",
+      precio_min_uf: valorUf,
+      precio_max_uf: Number(project.precio_max_uf) || valorUf,
+    },
+    // Un proyecto en construcción corresponde a vivienda nueva para los
+    // requisitos que dependen de esa condición, como FOGAES y Ley 21.748.
+    vivienda_nueva: project.estado === "en_construccion",
     dividendo_estimado: dividendoEstimado,
     dividendo_esperado: dividendoEstimado,
     dividendo_estimado_origen: dividend == null ? baseInput.dividendo_estimado_origen : "calculado",

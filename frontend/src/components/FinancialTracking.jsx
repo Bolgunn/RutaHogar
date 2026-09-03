@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildFinancialTracking, goalStatuses } from "../services/financialTracking";
 import { formatScore, getClassificationAdjustment, getScoreBadgeClass } from "../utils/helpers";
 import { formatClp } from "../services/housingSavingsPlanService";
+import BankingChecklist from "./BankingChecklist";
+import FieldTooltip from "./FieldTooltip";
 
 function GoalsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -38,22 +40,22 @@ function GoalsCarousel({ children }) {
   };
 
   return (
-    <div className={`tracking-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+    <div className={`plan-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
       <button
         type="button"
-        className="tracking-carousel-arrow is-left"
+        className="plan-carousel-arrow is-left"
         onClick={() => scrollByPage(-1)}
         disabled={!canPrev}
         aria-label="Anterior"
       >
         <i className="ti ti-chevron-left" aria-hidden="true" />
       </button>
-      <div className="tracking-carousel-strip" ref={stripRef}>
+      <div className="plan-carousel-strip" ref={stripRef}>
         {children}
       </div>
       <button
         type="button"
-        className="tracking-carousel-arrow is-right"
+        className="plan-carousel-arrow is-right"
         onClick={() => scrollByPage(1)}
         disabled={!canNext}
         aria-label="Siguiente"
@@ -181,7 +183,6 @@ export default function FinancialTracking({
 
   const [filterPriority, setFilterPriority] = useState("Todos");
   const [filterCategory, setFilterCategory] = useState("Todos");
-  const [showRciTooltip, setShowRciTooltip] = useState(false);
 
   // Plazo de compra del contexto inicial (limite superior)
   const baseDesiredMonths = useMemo(() => {
@@ -201,10 +202,11 @@ export default function FinancialTracking({
           <h1>Mi plan de mejora</h1>
         </div>
         <div className="empty-state">
-          <strong>Aún no tienes una preevaluación.</strong>
-          <p>Realiza una preevaluación para generar tu plan de mejora.</p>
-          <button type="button" onClick={onStartEvaluation}>Iniciar pre-evaluación</button>
+          <strong>Aún no tienes una precalificación.</strong>
+          <p>Realiza una precalificación para generar tu plan de mejora.</p>
+          <button type="button" onClick={onStartEvaluation}>Iniciar precalificación</button>
         </div>
+        <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />
       </section>
     );
   }
@@ -223,6 +225,7 @@ export default function FinancialTracking({
           <p>Hemos mejorado nuestro sistema de planes. Necesitamos que vuelvas a evaluar tu perfil para generar tus nuevas metas financieras.</p>
           <button type="button" className="primary-button" onClick={onStartEvaluation}>Precalificar nuevamente</button>
         </div>
+        <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />
       </section>
     );
   }
@@ -281,6 +284,10 @@ export default function FinancialTracking({
     : 0;
   const currentPlanMorosidadMonths = planType === "acelerado" ? mesesMorosidadAcelerado : mesesMorosidadConservador;
   const totalSaneamientoRequerido = currentMorosidad + excedenteDeuda;
+  const conservadorPieTimelineIsResolved = computedMesesConservador <= 0;
+  const conservadorPieTimelineMessage = conservadorPieTimelineIsResolved
+    ? (brecha_pie_minimo <= 0 ? "Ya cuentas con el ahorro requerido." : "No se requiere plazo adicional para el pie.")
+    : "Toma más tiempo lograr el pie (" + formatMonthsToYears(computedMesesConservador) + " estimados).";
 
   // Formato monetario
   const formatCurrency = (val) => `$${Math.round(val || 0).toLocaleString("es-CL")}`;
@@ -318,7 +325,7 @@ export default function FinancialTracking({
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", marginTop: "1.5rem" }}>
           {/* Plan Acelerado */}
-          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "2px solid var(--color-primary)", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
+          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "1px solid #cbd5e1", backgroundColor: "#fff", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.02)" }}>
             <h2 style={{ fontSize: "1.25rem", color: "var(--color-primary)", margin: "0 0 1rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               Plan Acelerado
               <span style={{ fontSize: "0.75rem", backgroundColor: "var(--color-primary)", color: "#fff", padding: "4px 8px", borderRadius: "12px" }}>Recomendado</span>
@@ -354,14 +361,13 @@ export default function FinancialTracking({
             <ul style={{ paddingLeft: "1.2rem", margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "var(--color-neutral-700)", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", lineHeight: "1.4" }}>
               <li><strong>Pros:</strong> Ahorro mensual más cómodo y realista ({formatCurrency(ahorro_mensual_conservador)}/m).</li>
               <li><strong>Pros:</strong> Mayor holgura financiera mes a mes para destinar a otros gastos o imprevistos familiares.</li>
-              <li><strong>Contras:</strong> Toma más tiempo lograr el pie ({formatMonthsToYears(computedMesesConservador)} estimados).</li>
+              <li><strong>{conservadorPieTimelineIsResolved ? "Pros" : "Contras"}:</strong> {conservadorPieTimelineMessage}</li>
               <li><strong>Contras:</strong> Si tienes deudas o morosidad, tardarás más en sanearlas, arrastrando intereses.</li>
             </ul>
             <button
               type="button"
-              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem", backgroundColor: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", borderRadius: "6px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+              className="primary-button"
+              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
               onClick={() => {
                 setPlanType("conservador");
                 if (onAcceptPlan) onAcceptPlan("conservador");
@@ -371,6 +377,7 @@ export default function FinancialTracking({
             </button>
           </div>
         </div>
+        <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />
       </section>
     );
   }
@@ -384,18 +391,18 @@ export default function FinancialTracking({
 
   return (
     <section className="section-block tracking-panel">
-      <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
+      <div className="section-heading tracking-page-head">
         <div>
           <span className="eyebrow">Plan de Mejora {planType === "acelerado" ? "(Acelerado)" : "(Conservador)"}</span>
-          <h1 style={{ margin: "0.25rem 0" }}>Progreso Plan Financiero</h1>
-          <p style={{ margin: 0 }}>Métricas financieras proyectadas para alcanzar tu pre-aprobación bancaria.</p>
+          <h1>Progreso del plan financiero</h1>
+          <p>Una lectura referencial de las condiciones que conviene preparar antes de una evaluación bancaria.</p>
         </div>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+        <div className="tracking-page-head__actions">
           {onNavigate && (
             <button
               type="button"
               onClick={() => onNavigate("projects")}
-              style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem", borderRadius: "6px", backgroundColor: "#3b82f6", color: "#fff", border: "none", cursor: "pointer", fontWeight: "600", boxShadow: "0 1px 2px rgba(0,0,0,0.1)" }}
+              className="secondary-button compact-button"
             >
               Explorar Proyectos y Cotizar
             </button>
@@ -403,7 +410,7 @@ export default function FinancialTracking({
           <button
             type="button"
             onClick={() => setPlanType(null)}
-            style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", borderRadius: "6px", backgroundColor: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1", cursor: "pointer", fontWeight: "600" }}
+            className="text-button"
           >
             Cambiar de Plan
           </button>
@@ -416,8 +423,11 @@ export default function FinancialTracking({
         </div>
       )}
 
-      <div className="recommendation-hero-row">
-        <div className={`score-badge-wrap ${getScoreBadgeClass(tracking.classification)}`}>
+      <div className="recommendation-hero-row tracking-overview">
+        <div
+          className={`tracking-overview__score score-visual-card ${getScoreBadgeClass(tracking.classification)}`}
+          style={{ "--score-value": `${Math.max(0, Math.min(100, Number(tracking.score) || 0))}%` }}
+        >
           <span>Score financiero</span>
           <strong>{formatScore(tracking.score, "Sin score")}</strong>
           <small>Clasificación final: {tracking.classification || "Sin clasificación"}</small>
@@ -425,6 +435,7 @@ export default function FinancialTracking({
 
         <div className="recommendation-hero-explanations">
           <div className="recommendation-summary">
+            <span className="tracking-overview__label">Estado del plan</span>
             <p>{tracking.message}</p>
             {adjustment ? (
               <div className="score-adjustment-note">
@@ -437,17 +448,9 @@ export default function FinancialTracking({
       </div>
       {/* Gap Simulator UI - Cuadros Ajustables */}
       {indicators && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "1.2rem",
-            marginBottom: "2rem",
-            marginTop: "1.5rem"
-          }}
-        >
+        <div className="tracking-indicators">
           {/* Tarjeta 1: Capacidad de Dividendo */}
-          <div
+          <div className="tracking-indicator-card"
             style={{
               padding: "1.25rem",
               backgroundColor: "#fff",
@@ -461,31 +464,8 @@ export default function FinancialTracking({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
               <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
-                Capacidad de Dividendo
+                Capacidad de Dividendo <FieldTooltip text="Es el dividendo mensual referencial que tu renta y deudas actuales permitirían asumir. La banca define este límite en su evaluación formal." />
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowRciTooltip(!showRciTooltip)}
-                onMouseEnter={() => setShowRciTooltip(true)}
-                onMouseLeave={() => setShowRciTooltip(false)}
-                title="¿Qué es RCI?"
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "50%",
-                  width: "18px",
-                  height: "18px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.7rem",
-                  fontWeight: "700",
-                  color: "#64748b",
-                  cursor: "pointer",
-                }}
-              >
-                i
-              </button>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
@@ -514,36 +494,11 @@ export default function FinancialTracking({
               </strong>
             </div>
 
-            {showRciTooltip && (
-              <div
-                style={{
-                  marginTop: "0.75rem",
-                  backgroundColor: "#ffffff",
-                  color: "#334155",
-                  padding: "0.75rem",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "0.75rem",
-                  lineHeight: "1.4",
-                  boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)"
-                }}
-              >
-                <strong>¿Qué es el RCI y cuándo da $0?</strong>
-                <p style={{ margin: "0.25rem 0 0 0" }}>
-                  El RCI (Relación Cuota-Ingreso) limita cuánto puedes destinar a deudas (máximo 25% de tu ingreso líquido). Si tus deudas actuales superan este 25%, el dividendo viable será <strong>$0</strong> porque los bancos no permitirán nuevo endeudamiento.
-                </p>
-              </div>
-            )}
-
-            {!showRciTooltip && (
-              <div style={{ marginTop: "auto", fontSize: "0.75rem", color: "var(--color-neutral-500)", fontStyle: "italic", paddingTop: "0.5rem" }}>
-                Basado en tope bancario del 25% de renta líquida.
-              </div>
-            )}
+            <p className="tracking-indicator-note">Basado en el tope bancario referencial del 25% de renta líquida.</p>
           </div>
 
           {/* Tarjeta 2: Meta de Pie */}
-          <div
+          <div className="tracking-indicator-card"
             style={{
               padding: "1.25rem",
               backgroundColor: "#fff",
@@ -597,7 +552,7 @@ export default function FinancialTracking({
 
           {/* Tarjeta 3.1: Morosidad */}
           {currentMorosidad > 0 && (
-            <div
+            <div className="tracking-indicator-card"
               style={{
                 padding: "1.25rem",
                 backgroundColor: "#fff",
@@ -645,7 +600,7 @@ export default function FinancialTracking({
           )}
 
           {/* Tarjeta 3.2: Carga Financiera (RCI) */}
-          <div
+            <div className="tracking-indicator-card"
             style={{
               padding: "1.25rem",
               backgroundColor: "#fff",
@@ -658,46 +613,7 @@ export default function FinancialTracking({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
               <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0, display: "flex", alignItems: "center", gap: "0.4rem", position: "relative" }}>
-                Carga Financiera
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "16px",
-                    height: "16px",
-                    borderRadius: "50%",
-                    backgroundColor: "#cbd5e1",
-                    color: "#fff",
-                    fontSize: "10px",
-                    cursor: "help",
-                  }}
-                  onMouseEnter={() => setShowRciTooltip(true)}
-                  onMouseLeave={() => setShowRciTooltip(false)}
-                >
-                  ?
-                  {showRciTooltip && (
-                    <div style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      marginTop: "0.5rem",
-                      padding: "0.5rem",
-                      backgroundColor: "#1e293b",
-                      color: "#fff",
-                      fontSize: "0.75rem",
-                      borderRadius: "6px",
-                      width: "200px",
-                      zIndex: 10,
-                      fontWeight: "normal",
-                      textAlign: "center",
-                      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
-                    }}>
-                      Monto de deuda mensual que excede el 25% de tu ingreso. Los bancos te pedirán reducirlo para darte un crédito.
-                    </div>
-                  )}
-                </span>
+                Carga Financiera <FieldTooltip text="Monto de deuda mensual que excede el 25% de tu ingreso. Los bancos te pedirán reducirlo para darte un crédito." />
               </h3>
               <div style={{ marginTop: "-0.2rem", marginRight: "-0.2rem" }}>
                 <CircularProgress
@@ -719,7 +635,7 @@ export default function FinancialTracking({
             </div>
 
             {excedenteDeuda > 0 ? (
-              <div
+            <div className="tracking-indicator-card"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -744,7 +660,7 @@ export default function FinancialTracking({
           </div>
 
           {/* Tarjeta 4: Ahorro Pie */}
-          <div
+          <div className="tracking-indicator-card"
             style={{
               padding: "1.25rem",
               backgroundColor: "#fff",
@@ -802,7 +718,7 @@ export default function FinancialTracking({
                     marginBottom: "0.5rem",
                   }}
                 >
-                  <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Meta Proyectada:</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Horizonte objetivo:</span>
                   <strong style={{ fontSize: "0.95rem", color: "var(--color-neutral-900)" }}>
                     {formatMonthsToYears(effectiveDesiredMonths)}
                   </strong>
@@ -834,10 +750,63 @@ export default function FinancialTracking({
       )}
 
       {/* Seccion de Acciones de Habilitacion */}
-      <div className="section-heading" style={{ marginTop: "2rem" }}>
-        <h2>Pasos Sugeridos para Mejorar</h2>
-        <p>Priorizadas para mejorar tu aprobación bancaria. Actualiza tus avances para recalcular tu score.</p>
-      </div>
+      <div className="improvement-plan-section tracking-improvement-plan">
+        <div className="tracking-improvement-heading">
+          <div>
+            <h2><i className="ti ti-road"></i> Pasos sugeridos para mejorar</h2>
+            <p>Priorizadas para mejorar tu aprobación bancaria. Actualiza tus avances para recalcular tu score.</p>
+          </div>
+        <div className="tracking-goals-filters">
+          <span className="tracking-goals-filters__label">Filtrar acciones</span>
+          <div className="tracking-goals-filter">
+            <label htmlFor="goal-priority">Prioridad</label>
+            <select
+              id="goal-priority"
+              name="goal-priority"
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+            >
+              {priorities.map((pri) => (
+                <option key={pri} value={pri}>
+                  {pri}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="tracking-goals-filter">
+            <label htmlFor="goal-category">Tema</label>
+            <select
+              id="goal-category"
+              name="goal-category"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
+              {categories.map((cat) => {
+                const label = cat === 'Saneamiento' ? 'Morosidad' : cat;
+                return (
+                  <option key={cat} value={cat}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {(filterPriority !== "Todos" || filterCategory !== "Todos") && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterPriority("Todos");
+                setFilterCategory("Todos");
+              }}
+              className="tracking-goals-clear"
+            >
+              Limpiar
+            </button>
+           )}
+         </div>
+        </div>
 
       {tracking.warning && <div className="warning-note"><i className="ti ti-alert-triangle"></i>{tracking.warning}</div>}
 
@@ -861,91 +830,17 @@ export default function FinancialTracking({
 
 
 
-      {/* Barra de Filtros -- el registro de avance vive en cada meta */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "1rem",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: "0.85rem", fontWeight: "600", color: "var(--color-neutral-700)" }}>
-            Filtrar por:
-          </span>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--color-neutral-600)" }}>Prioridad</span>
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              style={{
-                padding: "0.3rem 0.5rem",
-                fontSize: "0.85rem",
-                borderRadius: "4px",
-                border: "1px solid #cbd5e1",
-                backgroundColor: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              {priorities.map((pri) => (
-                <option key={pri} value={pri}>
-                  {pri}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--color-neutral-600)" }}>Tema</span>
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              style={{
-                padding: "0.3rem 0.5rem",
-                fontSize: "0.85rem",
-                borderRadius: "4px",
-                border: "1px solid #cbd5e1",
-                backgroundColor: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              {categories.map((cat) => {
-                const label = cat === 'Saneamiento' ? 'Morosidad' : cat;
-                return (
-                  <option key={cat} value={cat}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          {(filterPriority !== "Todos" || filterCategory !== "Todos") && (
-            <button
-              type="button"
-              onClick={() => {
-                setFilterPriority("Todos");
-                setFilterCategory("Todos");
-              }}
-              style={{
-                border: "none",
-                background: "none",
-                color: "var(--color-primary)",
-                fontSize: "0.75rem",
-                cursor: "pointer",
-                textDecoration: "underline",
-                marginLeft: "0.25rem"
-              }}
-            >
-              Limpiar
-            </button>
-          )}
-        </div>
-      </div>
+       {/* Acceso único al registro de avances. */}
+       <div className="tracking-goals-toolbar">
+         <button
+           className="primary-button tracking-goals-register"
+           type="button"
+           onClick={() => onOpenMilestoneRegistration?.()}
+         >
+           <i className="ti ti-chart-line" aria-hidden="true" />
+           Registrar avances
+         </button>
+       </div>
 
       {filteredGoals.length === 0 ? (
         <div className="empty-state">
@@ -954,109 +849,41 @@ export default function FinancialTracking({
         </div>
       ) : null}
 
-      {/* Grilla de Tarjetas Tipo Marketplace */}
-      <div
-        className="tracking-goals"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "1rem",
-          paddingBottom: "1rem",
-        }}
-      >
+      <GoalsCarousel>
         {filteredGoals.map((goal) => {
           const impact = goal.impact_level || "Medio";
-          const isAlto = impact === "Alto";
-          const isMedio = impact === "Medio";
-          const isOpcional = impact === "Opcional";
-
-          // Estilos segun impacto (Opcional en morado claro)
-          const badgeBg = isAlto ? "#ef4444" : isMedio ? "#eab308" : isOpcional ? "#9333ea" : "#3b82f6";
-          const badgeColor = isMedio ? "#000" : "#fff";
-          const cardBorder = isAlto ? "#fee2e2" : isMedio ? "#fef3c7" : isOpcional ? "#f3e8ff" : "#dbeafe";
-          const cardBg = isAlto ? "#fffcfc" : isMedio ? "#fffdf5" : isOpcional ? "#faf5ff" : "#f8fafc";
+          const impactClass = impact === "Alto" ? "alto" : impact === "Medio" ? "medio" : "bajo";
           const displayCat = goal.category === "Saneamiento" ? "Morosidad" : goal.category;
 
           return (
             <article
-              className="tracking-goal"
+              className={`plan-card plan-card--${impactClass} tracking-plan-card`}
               key={goal.id}
-              style={{
-                padding: "1.2rem",
-                borderRadius: "8px",
-                border: `1px solid ${cardBorder}`,
-                backgroundColor: cardBg,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                height: "100%",
-              }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                {goal.category && (
-                  <span
-                    style={{
-                      fontWeight: "600",
-                      padding: "3px 8px",
-                      borderRadius: "12px",
-                      backgroundColor: "rgba(0,0,0,0.06)",
-                      color: "var(--color-neutral-700)",
-                      fontSize: "0.75rem",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {displayCat}
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontWeight: "600",
-                    padding: "3px 8px",
-                    borderRadius: "12px",
-                    backgroundColor: badgeBg,
-                    color: badgeColor,
-                    fontSize: "0.75rem",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Impacto: {impact}
-                </span>
+              <div className="plan-card-header">
+                <strong>{displayCat || "Acción"}</strong>
+                <span className={`impact-badge impact-badge--${impactClass}`}>Impacto: {impact}</span>
               </div>
-
-              <h3 style={{ margin: "0.2rem 0", fontSize: "1.05rem", color: "var(--color-neutral-900)" }}>
-                {goal.title}
-              </h3>
-
-              {goal.description && (
-                <p style={{ margin: 0, lineHeight: "1.4", fontSize: "0.9rem", color: "var(--color-neutral-800)" }}>
-                  {goal.description}
-                </p>
-              )}
-
-
-              <div className="goal-actions" style={{ marginTop: "auto", paddingTop: "0.75rem" }}>
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  onClick={() => onOpenMilestoneRegistration?.(goal)}
-                  style={{ fontWeight: "600", width: "100%" }}
-                >
-                  Registrar Avance
-                </button>
-              </div>
+              <h3>{goal.title}</h3>
+              {goal.description && <p className="plan-card-desc">{goal.description}</p>}
+              {goal.expected_benefit && <div className="plan-card-benefit"><strong>Beneficio esperado:</strong> {goal.expected_benefit}</div>}
             </article>
           );
         })}
+      </GoalsCarousel>
+
+       {tracking.ufNote && (
+         <div style={{ marginTop: "1.5rem", padding: "1rem", borderTop: "1px solid var(--border-light)" }}>
+           <p className="field-help" style={{ margin: 0 }}>
+             {tracking.ufNote}
+           </p>
+         </div>
+       )}
       </div>
 
-      {tracking.ufNote && (
-        <div style={{ marginTop: "1.5rem", padding: "1rem", borderTop: "1px solid var(--border-light)" }}>
-          <p className="field-help" style={{ margin: 0 }}>
-            {tracking.ufNote}
-          </p>
-        </div>
-      )}
+      <section className="tracking-checklist-section" aria-label="Checklist bancario">
+        <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />
+      </section>
     </section>
   );
 }

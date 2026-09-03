@@ -252,6 +252,29 @@ on public.evaluations
 for insert
 with check (auth.uid() = user_id::uuid);
 
+-- Entrega solo contacto de leads a ejecutivos y administradores. La función
+-- evita abrir lectura directa de todos los perfiles personales al staff.
+create or replace function public.list_lead_contacts(p_user_ids uuid[])
+returns table (
+  id uuid,
+  full_name text,
+  phone text
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id, p.full_name, p.phone
+  from public.profiles p
+  where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
+    and p.role = 'usuario'
+    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text]);
+$$;
+
+revoke all on function public.list_lead_contacts(uuid[]) from public;
+grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
 drop policy if exists "Evaluations delete own" on public.evaluations;
 create policy "Evaluations delete own"
 on public.evaluations
@@ -624,6 +647,20 @@ create policy "Inmobiliarias select staff"
   on public.inmobiliarias
   for select
   using (public.get_my_role() = any (array['admin'::text, 'ejecutivo'::text]));
+
+drop policy if exists "Inmobiliarias select lead catalog" on public.inmobiliarias;
+create policy "Inmobiliarias select lead catalog"
+  on public.inmobiliarias
+  for select
+  using (
+    public.get_my_role() = 'usuario'
+    and exists (
+      select 1
+      from public.proyectos
+      where proyectos.inmobiliaria_id = inmobiliarias.id
+        and proyectos.estado <> 'agotado'
+    )
+  );
 
 drop policy if exists "Inmobiliarias insert global admin" on public.inmobiliarias;
 create policy "Inmobiliarias insert global admin"

@@ -662,7 +662,7 @@ export default function LandingPage({
         {/* Stats */}
         <div className="lp-stats">
           <div className="lp-stats-inner">
-            <div className="lp-stat"><div className="lp-stat-num">~30s</div><div className="lp-stat-label">Tiempo de evaluación</div></div>
+            <div className="lp-stat"><div className="lp-stat-num">~30s</div><div className="lp-stat-label">Tiempo de calificación</div></div>
             <div className="lp-stat"><div className="lp-stat-num">0</div><div className="lp-stat-label">Documentos requeridos</div></div>
             <div className="lp-stat"><div className="lp-stat-num">0–100</div><div className="lp-stat-label">Rango de score</div></div>
             <div className="lp-stat"><div className="lp-stat-num">$0</div><div className="lp-stat-label">Costo, siempre</div></div>

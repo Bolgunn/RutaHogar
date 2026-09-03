@@ -1,32 +1,73 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
 import { buildSimulationContext, DEFAULT_UF_CLP } from "../lib/simulation/compatibility";
-import {
-  catalogProjectsToSimulation,
-  formatDeliveryMonth,
-  formatProjectPrice,
-} from "../lib/simulation/projectAdapter";
+import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
-import { estadoProyectoLabels } from "../constants/proyectos";
 
-// Catálogo de proyectos del lead (HU 9).
-//
-// Antes leía GET /projects de FastAPI, que servía cinco dicts hardcodeados en
-// main.py. Eso era una segunda fuente de proyectos —en otro lenguaje— invisible
-// para el administrador que mantiene el catálogo. Ahora lee lo mismo que la
-// simulación: getAvailableProjects(), traducido al vocabulario de simulación en
-// la única frontera que conoce ambos (projectAdapter.js).
-export default function ProjectsCatalog({
-  evaluationBase,
-  onboarding,
-  userId,
-  contactEmail,
-  onBack,
-  onSetGoal,
-  onStartEvaluation,
-}) {
+function ProjectsCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  const updateArrows = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, [updateArrows]);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`simulation-carousel projects-catalog-carousel-shell ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Ver proyectos anteriores"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="simulation-carousel-strip projects-catalog-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Ver proyectos siguientes"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+export default function ProjectsCatalog({ evaluationBase, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,276 +75,180 @@ export default function ProjectsCatalog({
   const [favorites, setFavorites] = useState([]);
   const [favoritesError, setFavoritesError] = useState("");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [propertyType, setPropertyType] = useState("todos");
+  const [commune, setCommune] = useState("");
+  const [availability, setAvailability] = useState("todos");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let active = true;
-
     getAvailableProjects()
-      .then((rows) => {
-        if (!active) return;
-        setProjects(catalogProjectsToSimulation(rows));
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err.message || "No se pudieron cargar los proyectos.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      .then((rows) => { if (active) setProjects(catalogProjectsToSimulation(rows)); })
+      .catch((cause) => { if (active) setError(cause.message || "No se pudo cargar el catálogo de proyectos."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  // Los favoritos se limpian al cambiar de usuario. Sin esto, las estrellas y
-  // el contador de la cuenta anterior siguen en pantalla hasta que resuelva la
-  // nueva carga — o para siempre si falla.
   useEffect(() => {
     let active = true;
     setFavorites([]);
     setFavoritesError("");
     if (!userId) return undefined;
-
-    getFavorites(userId)
-      .then((ids) => {
-        if (active) setFavorites(ids);
-      })
-      .catch((err) => {
-        if (active) setFavoritesError(err.message || "No se pudieron cargar tus favoritos.");
-      });
-
-    return () => {
-      active = false;
-    };
+    getFavorites(userId).then((ids) => { if (active) setFavorites(ids); }).catch((cause) => {
+      if (active) setFavoritesError(cause.message || "No se pudieron cargar tus favoritos.");
+    });
+    return () => { active = false; };
   }, [userId]);
 
-  // Optimista con rollback: marcar un favorito tiene que sentirse instantáneo,
-  // y antes lo era (un setState que no podía fallar). Poner un viaje de red por
-  // delante sería una regresión percibida.
-  //
-  // Las actualizaciones son funcionales y el rollback toca SOLO este proyecto:
-  // reemplazar el arreglo entero por el capturado al inicio descartaba otro
-  // toggle en vuelo (click rápido en dos tarjetas, o tarjeta + modal).
-  //
-  // Devuelve si la escritura llegó al servidor, para que el modal no anuncie
-  // un guardado que no ocurrió.
-  const toggleFavorite = useCallback(
-    async (projectId) => {
-      if (!userId) return false;
-      const wasFavorite = favorites.includes(projectId);
+  const toggleFavorite = useCallback(async (projectId) => {
+    if (!userId) return false;
+    const wasFavorite = favorites.includes(projectId);
+    setFavoritesError("");
+    setFavorites((current) => wasFavorite ? current.filter((id) => id !== projectId) : current.includes(projectId) ? current : [...current, projectId]);
+    try {
+      if (wasFavorite) await removeFavorite(userId, projectId);
+      else await addFavorite(userId, projectId);
+      return true;
+    } catch (cause) {
+      setFavorites((current) => wasFavorite ? current.includes(projectId) ? current : [...current, projectId] : current.filter((id) => id !== projectId));
+      setFavoritesError(cause.message || "No se pudo actualizar tus favoritos.");
+      return false;
+    }
+  }, [favorites, userId]);
 
-      setFavoritesError("");
-      setFavorites((prev) => {
-        if (wasFavorite) return prev.filter((id) => id !== projectId);
-        return prev.includes(projectId) ? prev : [...prev, projectId];
-      });
-
-      try {
-        if (wasFavorite) await removeFavorite(userId, projectId);
-        else await addFavorite(userId, projectId);
-        return true;
-      } catch (err) {
-        setFavorites((prev) => {
-          if (wasFavorite) return prev.includes(projectId) ? prev : [...prev, projectId];
-          return prev.filter((id) => id !== projectId);
-        });
-        setFavoritesError(err.message || "No se pudo actualizar tus favoritos.");
-        return false;
-      }
-    },
-    [favorites, userId],
-  );
-
-  const context = useMemo(
-    () => (evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null),
-    [evaluationBase, onboarding],
-  );
+  const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
   const ufValueClp = Number(context?.uf_value_clp) || DEFAULT_UF_CLP;
+  const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
+    ? evaluationBase.input.project_goal
+    : null;
+  const currentGoalProject = useMemo(() => {
+    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
+    if (currentGoal) return projects.find((project) => project.id === currentGoal.id) || currentGoal;
 
-  // El contador cuenta favoritos PRESENTES en el catálogo cargado. Un id
-  // huérfano —proyecto retirado, o guardado antes de esta versión— no puede
-  // anunciar "(3)" sobre una grilla vacía.
-  const catalogFavorites = useMemo(
-    () => projects.filter((project) => favorites.includes(project.id)),
-    [favorites, projects],
-  );
-  const visibleProjects = showFavoritesOnly ? catalogFavorites : projects;
+    // Las metas previas a project_goal no tenían identificador. Solo se
+    // recuperan si el valor UF identifica de forma única al proyecto actual.
+    const valueUf = Number(evaluationBase.input.property_value_uf) || Number(evaluationBase.input.property_value);
+    const matches = projects.filter((project) => Number(project.precio_min_uf) === valueUf);
+    return matches.length === 1 ? matches[0] : null;
+  }, [currentGoal, evaluationBase?.input?.property_value, evaluationBase?.input?.property_value_source, evaluationBase?.input?.property_value_uf, projects]);
+  const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
+  const communes = useMemo(() => [...new Set(projects.map((project) => project.comuna).filter(Boolean))].sort(), [projects]);
+  const visibleProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("es-CL");
+    return projects.filter((project) => {
+      const matchesType = propertyType === "todos" || project.tipo_vivienda === propertyType;
+      const matchesCommune = !commune || project.comuna === commune;
+      const matchesAvailability = availability === "todos" || project.estado === availability;
+      const matchesFavorite = !showFavoritesOnly || favorites.includes(project.id);
+      const searchable = `${project.nombre} ${project.comuna || ""}`.toLocaleLowerCase("es-CL");
+      return matchesType && matchesCommune && matchesAvailability && matchesFavorite && (!normalizedQuery || searchable.includes(normalizedQuery));
+    });
+  }, [availability, commune, favorites, propertyType, projects, query, showFavoritesOnly]);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
+  const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
-  if (loading) {
-    return (
-      <section className="section-block tracking-panel">
-        <div className="empty-state">
-          <strong>Cargando proyectos...</strong>
-        </div>
-      </section>
-    );
-  }
+  const handleSimulateProject = (project) => {
+    if (!context) {
+      onStartEvaluation?.();
+      return;
+    }
+    onNavigate?.("simulation", { projectId: project.id });
+  };
 
-  if (error) {
-    return (
-      <section className="section-block tracking-panel">
-        <div className="empty-state">
-          <strong>{error}</strong>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="section-block tracking-panel" style={{ position: "relative" }}>
-      {onBack && (
-        <button
-          onClick={onBack}
-          style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "0.5rem 1rem", cursor: "pointer", fontWeight: "600", color: "#475569" }}
-        >
-          Volver
-        </button>
-      )}
-      <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <span className="eyebrow">Catálogo</span>
-          <h1 style={{ margin: "0.25rem 0" }}>Proyectos Inmobiliarios</h1>
-          <p style={{ margin: 0 }}>Explora proyectos disponibles y evalúa tu compatibilidad financiera con ellos.</p>
-        </div>
-        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontWeight: "600", fontSize: "0.9rem" }}>
-          <input
-            type="checkbox"
-            checked={showFavoritesOnly}
-            onChange={(event) => setShowFavoritesOnly(event.target.checked)}
-          />
-          Mostrar solo favoritos ({catalogFavorites.length})
-        </label>
+  return <section className="section-block simulation-panel projects-catalog-page">
+    <header className="projects-catalog-hero">
+      <div className="section-heading">
+        <span className="eyebrow">Catálogo habitacional</span>
+        <h1>Proyectos para explorar</h1>
+        <p>Explora alternativas disponibles, ordénalas según tus preferencias y revisa su relación con tu calificación financiera.</p>
       </div>
-
-      {favoritesError && (
-        <div className="warning-note" style={{ marginTop: "1rem" }}>
-          {favoritesError}
+      <div className="projects-catalog-header__actions">
+        {onBack && <button type="button" className="secondary-button compact-button" onClick={onBack}>Volver al plan</button>}
+      </div>
+    </header>
+    {favoritesError && <div className="warning-note">{favoritesError}</div>}
+    {loading ? <div className="admin-compact-empty"><strong>Cargando proyectos disponibles...</strong></div> : error ? (
+      <div className="admin-compact-empty"><strong>{error}</strong><button type="button" className="secondary-button compact-button" onClick={() => window.location.reload()}>Reintentar</button></div>
+    ) : !projects.length ? (
+      <div className="admin-compact-empty"><strong>No hay proyectos disponibles.</strong><p>Vuelve más tarde para revisar nuevas alternativas.</p></div>
+    ) : <>
+      {currentGoalProject && <section className="projects-current-goal" aria-labelledby="current-goal-title">
+        <div className="projects-current-goal__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></div>
+        <div className="projects-current-goal__content">
+          <span className="eyebrow">Tu meta actual</span>
+          <h2 id="current-goal-title">{currentGoalProject.nombre}</h2>
+          <p>{currentGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(currentGoalProject)}</p>
+          {currentGoalProject.inmobiliaria && <p className="projects-current-goal__developer">Inmobiliaria: {currentGoalProject.inmobiliaria}</p>}
+          <div className="projects-current-goal__details">
+            <span>{propertyLabels[currentGoalProject.tipo_vivienda] || currentGoalProject.tipo_vivienda || "Vivienda"}</span>
+            <span>{availabilityLabel(currentGoalProject.estado)}</span>
+            {formatDeliveryMonth(currentGoalProject.entrega_estimada) && <span>Entrega {formatDeliveryMonth(currentGoalProject.entrega_estimada)}</span>}
+          </div>
         </div>
-      )}
-
-      {!context && projects.length > 0 && (
-        <div className="warning-note" style={{ marginTop: "1rem" }}>
-          Aún no tienes una preevaluación. Puedes explorar el catálogo, pero para ver tu
-          compatibilidad con un proyecto necesitas completarla primero.
+        {projects.some((project) => project.id === currentGoalProject.id) && <button type="button" className="secondary-button compact-button" onClick={() => setSelectedProjectId(currentGoalProject.id)}>Ver compatibilidad</button>}
+      </section>}
+      <section className="projects-catalog-discovery" aria-label="Filtros de proyectos">
+        <div className="projects-catalog-discovery__top">
+          <div className="projects-catalog-type-tabs" role="group" aria-label="Tipo de vivienda">
+            {[ ["todos", "Todos"], ["casa", "Casas"], ["departamento", "Departamentos"] ].map(([value, label]) => <button key={value} type="button" className={propertyType === value ? "is-active" : ""} onClick={() => setPropertyType(value)}>{label}</button>)}
+          </div>
+          <label className="projects-catalog-search"><span>Buscar</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre o comuna" /></label>
         </div>
-      )}
-
-      {projects.length === 0 ? (
-        <div className="empty-state" style={{ marginTop: "2rem" }}>
-          <strong>Aún no hay proyectos disponibles en el catálogo</strong>
-          <p style={{ margin: "0.5rem 0 0 0" }}>
-            Cuando una inmobiliaria publique proyectos, aparecerán aquí.
-          </p>
+        <div className="projects-catalog-filters">
+          <label><span>Comuna</span><select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="">Todas las comunas</option>{communes.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label><span>Disponibilidad</span><select value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="todos">Todos los estados</option><option value="disponible">Disponible</option><option value="en_construccion">En construcción</option></select></label>
+          <label className="projects-catalog-favorites"><input type="checkbox" checked={showFavoritesOnly} onChange={(event) => setShowFavoritesOnly(event.target.checked)} /><span>Solo favoritos <strong>{catalogFavorites.length}</strong></span></label>
+          <p><strong>{visibleProjects.length}</strong> {visibleProjects.length === 1 ? "proyecto encontrado" : "proyectos encontrados"}</p>
         </div>
-      ) : visibleProjects.length === 0 ? (
-        <div className="empty-state" style={{ marginTop: "2rem" }}>
-          <strong>Todavía no tienes favoritos guardados</strong>
-          <p style={{ margin: "0.5rem 0 0 0" }}>
-            Marca la estrella de un proyecto para volver a encontrarlo aquí.
-          </p>
-          <button className="secondary-button" style={{ marginTop: "1rem" }} onClick={() => setShowFavoritesOnly(false)}>
-            Ver todo el catálogo
-          </button>
+      </section>
+      {!visibleProjects.length ? (
+        <div className="admin-compact-empty"><strong>{showFavoritesOnly ? "Aún no guardas proyectos favoritos." : "No encontramos proyectos con esos filtros."}</strong><p>{showFavoritesOnly ? "Quita este filtro para volver al catálogo completo." : "Prueba otra comuna, tipo de vivienda o disponibilidad."}</p></div>
+      ) : <section className="projects-catalog-results" aria-labelledby="projects-results-title">
+        <div className="projects-catalog-results__heading">
+          <div><span className="eyebrow">Explora a tu ritmo</span><h2 id="projects-results-title">Alternativas disponibles</h2></div>
+
         </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.5rem", marginTop: "2rem" }}>
-          {visibleProjects.map((project) => {
-            const isFavorite = favorites.includes(project.id);
-            const deliveryMonth = formatDeliveryMonth(project.entrega_estimada);
-
-            return (
-              <article
-                key={project.id}
-                style={{
-                  backgroundColor: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div style={{ height: "160px", backgroundColor: "#cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}>
-                  [Imagen del Proyecto]
-                </div>
-
-                <div style={{ padding: "1.25rem", display: "flex", flexDirection: "column", flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                    <span style={{ fontSize: "0.75rem", backgroundColor: "#f1f5f9", color: "#475569", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
-                      {propertyLabels[project.tipo_vivienda] || project.tipo_vivienda}
-                    </span>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                      {userId && (
-                        <button
-                          type="button"
-                          title={isFavorite ? "Quitar de mis favoritos" : "Guardar en mis favoritos"}
-                          aria-label={isFavorite ? "Quitar de mis favoritos" : "Guardar en mis favoritos"}
-                          aria-pressed={isFavorite}
-                          onClick={() => toggleFavorite(project.id)}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: 0, lineHeight: 1, filter: isFavorite ? "none" : "grayscale(1)", opacity: isFavorite ? 1 : 0.45 }}
-                        >
-                          ⭐
-                        </button>
-                      )}
-                      <span style={{ fontSize: "0.85rem", fontWeight: "700", color: "var(--color-primary)" }}>
-                        {formatProjectPrice(project)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <h3 style={{ margin: "0.25rem 0", fontSize: "1.1rem" }}>{project.nombre}</h3>
-                  <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", color: "#64748b" }}>
-                    {[project.comuna, estadoProyectoLabels[project.estado] || project.estado, deliveryMonth]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-
-                  <p style={{ fontSize: "0.9rem", color: "var(--color-neutral-700)", flex: 1, marginBottom: "1rem" }}>
-                    {project.descripcion_corta}
-                  </p>
-
-                  {context ? (
-                    <button
-                      className="primary-button"
-                      style={{ width: "100%", padding: "0.6rem" }}
-                      onClick={() => setSelectedProjectId(project.id)}
-                    >
-                      Ver compatibilidad
-                    </button>
-                  ) : (
-                    <button
-                      className="primary-button"
-                      style={{ width: "100%", padding: "0.6rem" }}
-                      onClick={onStartEvaluation}
-                    >
-                      Evaluar
-                    </button>
-                  )}
-                </div>
-              </article>
+        <ProjectsCarousel>
+           {visibleProjects.map((project) => {
+             const isFavorite = favorites.includes(project.id);
+             const isCurrentGoal = currentGoalProject?.id === project.id;
+             return (
+          <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
+          {userId && (
+            <button
+              type="button"
+              className={`project-catalog-favorite-button ${isFavorite ? "is-active" : ""}`}
+              aria-label={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+              aria-pressed={isFavorite}
+              title={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+              onClick={() => toggleFavorite(project.id)}
+            >
+              <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
+            </button>
+          )}
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong>Meta actual</strong>}</div>
+          <div className="project-catalog-card__body">
+            <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
+            <h2>{project.nombre}</h2>
+            <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
+            <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
+            <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
+            <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>
+            {context ? (
+              <div className="project-catalog-card__actions">
+                <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
+                <button type="button" className="secondary-button compact-button" onClick={() => handleSimulateProject(project)}>Simular</button>
+              </div>
+            ) : (
+              <button type="button" className="primary-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>
+            )}
+          </div>
+          </article>
             );
           })}
-        </div>
-      )}
-
-      {selectedProject && context && (
-        <ProjectEvaluationModal
-          project={selectedProject}
-          projects={projects}
-          context={context}
-          ufValueClp={ufValueClp}
-          onboarding={onboarding}
-          contactEmail={contactEmail}
-          onClose={() => setSelectedProjectId("")}
-          onSelectProject={(projectId) => setSelectedProjectId(projectId)}
-          onSetGoal={onSetGoal}
-          onToggleFavorite={toggleFavorite}
-          isFavorite={favorites.includes(selectedProject.id)}
-        />
-      )}
-    </section>
-  );
+        </ProjectsCarousel>
+      </section>}
+    </>}
+    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} />}
+  </section>;
 }

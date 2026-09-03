@@ -18,6 +18,8 @@ import { CLP_FORMATTER } from "../services/financialTracking";
 import { plazoLabels, propertyLabels } from "../constants";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
+const MAX_MANUAL_UF_VALUE = 9999999;
+const MAX_MANUAL_UF_DIGITS = String(MAX_MANUAL_UF_VALUE).length;
 
 const statusClass = {
   Compatible: "compatible",
@@ -432,18 +434,18 @@ function RecommendationEmpty({ onStartEvaluation }) {
       <div className="section-heading">
         <span className="eyebrow">Simulación</span>
         <h1>Simulación de compatibilidad</h1>
-        <p>Necesitas una preevaluación guardada para comparar escenarios con tu perfil financiero actual.</p>
+        <p>Necesitas una precalificación guardada para comparar escenarios con tu perfil financiero actual.</p>
       </div>
       <div className="empty-state">
-        <strong>Aún no tienes una evaluación disponible.</strong>
-        <p>Completa la preevaluación para activar simulaciones referenciales de vivienda.</p>
+        <strong>Aún no tienes una calificación disponible.</strong>
+        <p>Completa la precalificación para activar simulaciones referenciales de vivienda.</p>
         <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
       </div>
     </section>
   );
 }
 
-export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate }) {
+export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate, initialProjectId }) {
   const context = useMemo(
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
@@ -456,6 +458,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [compareProjectId, setCompareProjectId] = useState("");
   const [manualUf, setManualUf] = useState("");
+  const [manualUfError, setManualUfError] = useState("");
   const [comparison, setComparison] = useState(null);
   const [targetProject, setTargetProject] = useState(() => {
     try {
@@ -498,6 +501,14 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     );
   }, [projects]);
 
+  useEffect(() => {
+    if (!initialProjectId || !projects.some((project) => project.id === initialProjectId)) return;
+    setMode("project");
+    setSelectedProjectId(initialProjectId);
+    setCompareProjectId("");
+    setComparison(null);
+  }, [initialProjectId, projects]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
@@ -527,7 +538,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     [context, onboarding, projects],
   );
   const maxRange = useMemo(() => getMaxValueRange(context), [context]);
-  const hasManualValue = mode !== "manual" || Number(manualUf) > 0;
+  const hasManualValue = mode !== "manual" || (Number(manualUf) > 0 && !manualUfError);
   const currentComparable = scenarioResult && hasManualValue ? scenarioResult : null;
   const targetProjectId = targetProject?.id || "";
   const compareProjectResult = useMemo(
@@ -582,6 +593,32 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     if (compareProjectId === projectId) {
       setComparison((prev) => (prev?.source === "project-selector" ? null : prev));
     }
+  };
+
+  const handleManualUfChange = (event) => {
+    const rawValue = event.target.value;
+    const digits = rawValue.replace(/\D/g, "");
+
+    if (!rawValue) {
+      setManualUf("");
+      setManualUfError("");
+      return;
+    }
+
+    if (rawValue !== digits) {
+      setManualUf(digits.slice(0, MAX_MANUAL_UF_DIGITS));
+      setManualUfError("Ingresa solo números en UF.");
+      return;
+    }
+
+    if (digits.length > MAX_MANUAL_UF_DIGITS || Number(digits) > MAX_MANUAL_UF_VALUE) {
+      setManualUf(digits.slice(0, MAX_MANUAL_UF_DIGITS));
+      setManualUfError("Ingresa un valor de hasta 9.999.999 UF.");
+      return;
+    }
+
+    setManualUf(digits);
+    setManualUfError("");
   };
 
   const handleCompareProjectChange = (projectId) => {
@@ -684,7 +721,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
           <span className="eyebrow">Simulación</span>
           <h1>Compatibilidad y alternativas</h1>
           <p>
-            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última preevaluación.
+            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última precalificación.
           </p>
         </div>
       </div>
@@ -695,41 +732,49 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       </div>
 
       <div className="simulation-layout">
-        <div className="simulator-panel">
-          <div className="simulation-preferences is-prominent">
-            <div className="simulation-panel-heading compact">
+        <div className="simulation-config-stack">
+          <div className="simulation-preferences simulation-preferences-card is-prominent">
+            <div className="simulation-preferences-header">
               <span className="eyebrow">Preferencias consideradas</span>
-              <div className="simulation-preferences-copy">
-                <p>
-                  Estamos usando tus respuestas preliminares, si quieres cambiarlas, actualízalas desde tu Perfil.
-                </p>
-                {onNavigate ? (
-                  <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("profile")}>
-                    Editar perfil
-                  </button>
-                ) : null}
-              </div>
+              {onNavigate ? (
+                <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("profile")}>
+                  Editar perfil
+                </button>
+              ) : null}
             </div>
             <div className="simulation-preference-list">
-              <article>
-                <span>Comuna objetivo</span>
-                <strong>{targetCommune}</strong>
+              <article className="simulation-preference-item">
+                <i className="ti ti-map-pin" aria-hidden="true" />
+                <div>
+                  <span>Comuna objetivo</span>
+                  <strong>{targetCommune}</strong>
+                </div>
               </article>
-              <article>
-                <span>Tipo preferido</span>
-                <strong>{typePreference}</strong>
+              <article className="simulation-preference-item">
+                <i className="ti ti-building" aria-hidden="true" />
+                <div>
+                  <span>Tipo preferido</span>
+                  <strong>{typePreference}</strong>
+                </div>
               </article>
-              <article>
-                <span>Horizonte</span>
-                <strong>{horizon}</strong>
+              <article className="simulation-preference-item">
+                <i className="ti ti-calendar" aria-hidden="true" />
+                <div>
+                  <span>Horizonte</span>
+                  <strong>{horizon}</strong>
+                </div>
               </article>
-              <article>
-                <span>Objetivo</span>
-                <strong>{targetGoal}</strong>
+              <article className="simulation-preference-item">
+                <i className="ti ti-target-arrow" aria-hidden="true" />
+                <div>
+                  <span>Objetivo</span>
+                  <strong>{targetGoal}</strong>
+                </div>
               </article>
             </div>
           </div>
 
+          <div className="simulation-base-card">
           <div className="simulation-panel-heading">
             <span className="eyebrow">Escenario base</span>
             <h2 className="recommendation-section-title"><i className="ti ti-settings"></i> Elige qué quieres evaluar</h2>
@@ -767,13 +812,15 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               <label className="simulator-field">
                 Valor de vivienda en UF
                 <input
-                  min="0"
                   inputMode="numeric"
-                  type="number"
+                  type="text"
                   value={manualUf}
-                  onChange={(event) => setManualUf(event.target.value)}
+                  onChange={handleManualUfChange}
+                  aria-invalid={manualUfError ? "true" : "false"}
+                  aria-describedby={manualUfError ? "manual-uf-error" : undefined}
                   placeholder="Ej: 2800"
                 />
+                {manualUfError && <span id="manual-uf-error" className="simulator-field-error">{manualUfError}</span>}
               </label>
             )}
 
@@ -799,24 +846,26 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
             </label>
           </div>
 
-          <details className="simulation-range-details">
-            <summary>
-              <span><i className="ti ti-chart-line"></i> Rango referencial por ahorro</span>
-              <i className="ti ti-chevron-down" aria-hidden="true" />
-            </summary>
-            <div className="simulation-range">
-              <article>
-                <span>Con pie recomendado</span>
-                <strong>{formatUf(maxRange.minUf)}</strong>
-                <small>{formatClp(maxRange.minClp)}</small>
-              </article>
-              <article>
-                <span>Con pie mínimo</span>
-                <strong>{formatUf(maxRange.maxUf)}</strong>
-                <small>{formatClp(maxRange.maxClp)}</small>
-              </article>
+          <div className="simulation-range-details simulation-range-details--compact simulation-range-details--static">
+            <div className="simulation-range-summary-row">
+              <span className="simulation-range-summary-title"><i className="ti ti-chart-line"></i> Rango referencial por ahorro</span>
+              <span className="simulation-range-summary-values">
+                <span>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  <small>Valor máximo vivienda con pie recomendado</small>
+                  <strong>{formatUf(maxRange.minUf)}</strong>
+                  <em>{formatClp(maxRange.minClp)}</em>
+                </span>
+                <span>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  <small>Valor máximo vivienda con pie mínimo</small>
+                  <strong>{formatUf(maxRange.maxUf)}</strong>
+                  <em>{formatClp(maxRange.maxClp)}</em>
+                </span>
+              </span>
             </div>
-          </details>
+          </div>
+          </div>
         </div>
       </div>
 

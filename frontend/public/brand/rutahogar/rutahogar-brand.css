@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@800&family=Nunito:wght@400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
 /* RutaHogar — identidad visual base
    Paleta Navy/Gold — Diseño basado en previsualización "Diseño C" */
 
@@ -79,6 +81,12 @@
   --rh-font: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --rh-font-display: 'DM Serif Display', Georgia, serif;
   --rh-font-mono: 'JetBrains Mono', monospace;
+
+  /* Wordmark RutaHogar */
+  --rh-logo-ruta-font: 'Alexandria', Arial, sans-serif;
+  --rh-logo-ruta-weight: 800;
+  --rh-logo-hogar-font: 'Nunito', Arial, sans-serif;
+  --rh-logo-hogar-weight: 400;
 
   /* ── Aliases para landing page ── */
   --rh-navy-deep: #0B1A2E;
@@ -176,6 +184,19 @@
 
 .rh-logo {
   display: block;
-  width: 175px;
+  width: 295px;
   height: auto;
+}
+
+/* ── Logo inline ──
+   Si el SVG se inserta inline, estas reglas garantizan las fuentes elegidas.
+   El SVG conserva además sus propios valores como fallback. */
+.rh-logo #ruta-text {
+  font-family: var(--rh-logo-ruta-font);
+  font-weight: var(--rh-logo-ruta-weight);
+}
+
+.rh-logo #hogar-text {
+  font-family: var(--rh-logo-hogar-font);
+  font-weight: var(--rh-logo-hogar-weight);
 }

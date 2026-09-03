@@ -952,7 +952,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
             <h1>{mode === "signin" ? "Bienvenido de vuelta" : "Crea tu cuenta"}</h1>
             <p className="auth-right-sub">
               {mode === "signin"
-                ? "Ingresa tus credenciales para acceder a tu pre-evaluación."
+                ? "Ingresa tus credenciales para acceder a tu precalificación."
                 : "Regístrate para guardar tu score y seguimiento financiero."}
             </p>
 

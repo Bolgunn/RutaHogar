@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { comunasMvp } from "../constants/comunas";
-import { plazoLabels, propertyLabels } from "../constants";
+import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
 import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
+import AiExplanationBlock from "./AiExplanationBlock";
 import {
   formatScore,
   getClassificationAdjustment,
@@ -103,7 +104,7 @@ function uf(value) {
 
 function text(value, labels) {
   if (value === undefined || value === null || value === "") return emptyValue;
-  return labels?.[value] || value;
+  return labels?.[value] || formatFormValue(value, emptyValue);
 }
 
 function dividendOrigin(input = {}) {
@@ -388,7 +389,7 @@ function ProfessionalEvaluationDetails({ result }) {
   );
 }
 
-export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate }) {
+export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation }) {
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
   const canSeeTechnicalScoring = profile?.role === "ejecutivo" || profile?.role === "admin";
   const [form, setForm] = useState(savedOnboarding);
@@ -396,6 +397,15 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const [success, setSuccess] = useState("");
   const [selectedEvaluation, setSelectedEvaluation] = useState(null);
   const [onboardingEditing, setOnboardingEditing] = useState(false);
+  const latestEvaluation = useMemo(() => {
+    const getTime = (item) => {
+      const value = item?.created_at || item?.updated_at || item?.date || item?.timestamp;
+      const time = value ? new Date(value).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    return [...evaluations].sort((a, b) => getTime(b) - getTime(a))[0] || null;
+  }, [evaluations]);
 
   // Estado para edición de contacto
   const [contactEditing, setContactEditing] = useState(false);
@@ -432,14 +442,26 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       }
     };
 
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
     document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedEvaluation]);
+
+  useEffect(() => {
+    if (!selectedEvaluation) return;
+    const updatedEvaluation = evaluations.find((item) => item.id === selectedEvaluation.id);
+    if (updatedEvaluation) setSelectedEvaluation(updatedEvaluation);
+  }, [evaluations, selectedEvaluation?.id]);
 
   // Al abrir el formulario de contacto, cargar los valores actuales del perfil
   const openContactEdit = () => {
@@ -576,27 +598,40 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <div>
           <span className="eyebrow">Mi perfil</span>
           <h1>Datos y actividad</h1>
-          <p>Administra tus respuestas preliminares y revisa el historial de scorings guardados.</p>
+          <p>Información de contacto, preferencias de búsqueda e historial de calificaciones.</p>
         </div>
       </div>
 
-      <div className="profile-grid">
-        <section className="profile-card">
+      <section className="profile-overview">
+        <div className="profile-overview__identity">
           <div className="profile-avatar">{userInitials}</div>
-          <div className="profile-stats">
-            <div className="profile-stat">
-              <div className="profile-stat__num">{evaluations.length}</div>
-              <div className="profile-stat__label">Evaluaciones</div>
-            </div>
-            <div className="profile-stat">
-              <div className="profile-stat__num">
-                {evaluations.length > 0 ? formatScore(evaluations[evaluations.length - 1]?.result?.score, "—") : "—"}
-              </div>
-              <div className="profile-stat__label">Último score</div>
-            </div>
+          <div>
+            <span className="profile-overview__label">Cuenta</span>
+            <h2>{profile?.full_name || "Usuario"}</h2>
+            <p>{profile?.email || "Sin correo"}</p>
           </div>
-          <div className="profile-card-header-row" style={{ marginTop: "var(--rh-space-4)" }}>
-            <strong>Datos del usuario</strong>
+        </div>
+        <div className="profile-stats">
+          <div className="profile-stat">
+            <div className="profile-stat__num">{evaluations.length}</div>
+            <div className="profile-stat__label">Precalificaciones</div>
+          </div>
+          <div className="profile-stat">
+            <div className="profile-stat__num">
+              {latestEvaluation ? formatScore(latestEvaluation?.result?.score, "—") : "—"}
+            </div>
+            <div className="profile-stat__label">Último score</div>
+          </div>
+        </div>
+      </section>
+
+      <div className="profile-grid">
+        <section className="profile-card profile-card--contact">
+          <div className="profile-card-header-row">
+            <div>
+              <strong>Contacto</strong>
+              <p>Datos usados para comunicarnos contigo.</p>
+            </div>
             {!contactEditing && (
               <button type="button" className="secondary-button compact-button" onClick={openContactEdit}>
                 Editar contacto
@@ -674,9 +709,12 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
           {contactSuccess && <div className="success-message" style={{ marginTop: 12 }}>{contactSuccess}</div>}
         </section>
 
-        <section className="profile-card">
+        <section className="profile-card profile-card--preferences">
           <div className="profile-card-header-row">
-            <strong>Respuestas preliminares</strong>
+            <div>
+              <strong>Preferencias de búsqueda</strong>
+              <p>Información declarada para tus calificaciones.</p>
+            </div>
             {!onboardingEditing ? (
               <button
                 type="button"
@@ -800,21 +838,24 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         </section>
       </div>
 
-      <section className="profile-card">
-        <strong>Historial de scoring</strong>
+      <section className="profile-card profile-card--history">
+        <div className="profile-card-header-row">
+          <div>
+            <strong>Historial de precalificaciones</strong>
+            <p>{evaluations.length} registro{evaluations.length === 1 ? "" : "s"}</p>
+          </div>
+        </div>
         {evaluations.length > 0 ? (
           <div className="history-list profile-history">
             {evaluations.map((item) => {
               const result = getResult(item);
 
               return (
-                <article className="history-card" key={item.id}>
+                <article className={`history-card profile-history-card ${getClassificationClass(result.classification)}`} key={item.id}>
                   <div className="history-card-header">
                     <div>
                       <span className="eyebrow">{new Date(item.created_at).toLocaleDateString("es-CL")}</span>
-                      <h3>
-                        Score financiero: {formatScore(result.score, "Sin score")} · Clasificación final: {result.classification || emptyValue}
-                      </h3>
+                      <h3>Score financiero: {formatScore(result.score, "Sin score")}</h3>
                     </div>
                     {/* <button className="secondary-button compact-button" type="button" onClick={() => onDeleteEvaluation(item.id)}>
                     Eliminar
@@ -827,6 +868,9 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                       Detalles
                     </button>
                   </div>
+                  <span className={`status-pill ${getClassificationClass(result.classification)}`}>
+                    {result.classification || emptyValue}
+                  </span>
                   <dl>
                     <div>
                       <dt>Comuna objetivo</dt>
@@ -839,12 +883,6 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                   </dl>
                   {canSeeTechnicalScoring ? <ProfessionalHistorySummary result={result} /> : null}
                   <ScoreAdjustmentNote result={result} />
-                  {result.ai_explanation ? (
-                    <>
-                      <strong>Explicación mejorada con IA</strong>
-                      <p>{displayText(result.ai_explanation)}</p>
-                    </>
-                  ) : null}
                 </article>
               );
             })}
@@ -852,7 +890,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         ) : (
           <div className="empty-state">
             <strong>Aun no tienes precalificaciones guardadas.</strong>
-            <p>Cuando completes una evaluación, aparecerá aqui como registro independiente.</p>
+            <p>Cuando completes una calificación, aparecerá aqui como registro independiente.</p>
           </div>
         )}
       </section>
@@ -876,7 +914,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                   {new Date(selectedEvaluation.created_at).toLocaleString("es-CL")}
                 </span>
                 <h2 id="profile-evaluation-detail-title">
-                  {canSeeTechnicalScoring ? "Detalle de scoring" : "Detalle de preevaluación"}
+                  {canSeeTechnicalScoring ? "Detalle de scoring" : "Detalle de precalificación"}
                 </h2>
               </div>
               <button
@@ -898,13 +936,23 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                 <strong>{text(selectedEvaluation.result?.classification)}</strong>
               </div>
               <div className="profile-score-date">
-                <span>Fecha evaluación</span>
+                <span>Fecha de calificación</span>
                 <strong>{new Date(selectedEvaluation.created_at).toLocaleDateString("es-CL")}</strong>
               </div>
             </div>
             <ScoreAdjustmentNote result={selectedEvaluation.result} />
 
             <div className="evaluation-detail-panel">
+              <div className="evaluation-detail-section profile-evaluation-explanation">
+                <h4>Explicación de la calificación</h4>
+                <AiExplanationBlock
+                  text={selectedEvaluation.result?.ai_explanation}
+                  onRetry={onRetryExplanation ? () => onRetryExplanation(selectedEvaluation) : undefined}
+                  actionLabel="Generar explicación"
+                  renderText={(aiText) => <p>{displayText(aiText)}</p>}
+                />
+              </div>
+
               {canSeeTechnicalScoring ? (
                 <ProfessionalEvaluationDetails result={getResult(selectedEvaluation)} />
               ) : null}

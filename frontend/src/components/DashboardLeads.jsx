@@ -6,94 +6,40 @@ import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import {
   formatScore,
-  getBaseClassification,
   getClassificationAdjustment,
   getClassificationClass,
-  getScoreBadgeClassByScore,
   translateSeverity,
 } from "../utils/helpers";
- 
-function formatFecha(created_at) {
-  if (!created_at) return "-";
-  const d = new Date(created_at);
-  if (isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("es-CL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-const eventLabels = {
-  no_viable_shown: "Plan no viable presentado",
-  apply_alternative: "Aplicó alternativa",
-  simulate_success: "Simulación viable",
-  accept_plan: "Aceptó el plan",
-  register_savings: "Registró ahorro",
-};
-
-function formatEventMoney(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return "";
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(Math.round(number / 1000) * 1000);
-}
-
-function renderEventDetail(event) {
-  const d = event.details || {};
-  switch (event.type) {
-    case "no_viable_shown":
-      return d.message || "Se presentó la condición No viable";
-    case "apply_alternative":
-      return `${d.title || d.alternative_id || "Alternativa"} → ${d.result_viable ? "viable" : "no viable"}`;
-    case "simulate_success":
-      return d.months ? `Viable ahorrando en ${d.months} meses` : "Escenario simulado viable";
-    case "accept_plan":
-      return `Meta ${formatEventMoney(d.monthly_target)} / ${d.months ?? "-"} meses`;
-    case "register_savings":
-      return `${formatEventMoney(d.total_registered) || "$0"} acumulado (${d.progress_percent ?? 0}%)`;
-    default:
-      return "";
-  }
-}
-
-function formatEventAt(at) {
-  const d = new Date(at);
-  if (isNaN(d.getTime())) return "";
-  const fecha = d.toLocaleDateString("es-CL");
-  const hora = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${fecha} ${hora}`;
-}
-
-const AGE_RANGES = [
-  { label: "Todas las edades", min: 0, max: Infinity },
-  { label: "18 – 25 años", min: 18, max: 25 },
-  { label: "25 – 35 años", min: 25, max: 35 },
-  { label: "35 – 45 años", min: 35, max: 45 },
-  { label: "45 – 55 años", min: 45, max: 55 },
-  { label: "55 – 65 años", min: 55, max: 65 },
-  { label: "65+ años", min: 65, max: Infinity },
-];
- 
-const channelLabels = {
-  web: "Web",
-  chatbot: "Chatbot",
-  whatsapp: "WhatsApp",
-  vendedor: "Vendedor",
-};
 
 const DATE_RANGES = [
   { label: "Cualquier fecha", value: "todos" },
   { label: "Últimas 24 horas", value: "24h" },
   { label: "Última semana", value: "semana" },
   { label: "Último mes", value: "mes" },
-  { label: "Último año", value: "anio" },
 ];
-const DEFAULT_CLASSIFICATION_FILTER = "Alto";
-const emptyValue = "-";
+const AGE_RANGES = [
+  { label: "Todas las edades", min: 0, max: Infinity },
+  { label: "18 - 25 años", min: 18, max: 25 },
+  { label: "25 - 35 años", min: 25, max: 35 },
+  { label: "35 - 45 años", min: 35, max: 45 },
+  { label: "45 - 55 años", min: 45, max: 55 },
+  { label: "55+ años", min: 55, max: Infinity },
+];
+
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleDateString("es-CL");
+}
+
+function threshold(range) {
+  const hours = { "24h": 24, semana: 24 * 7, mes: 24 * 30 }[range];
+  return hours ? new Date(Date.now() - hours * 60 * 60 * 1000) : null;
+}
+
+function DetailRow({ label, children }) {
+  return <div className="admin-definition-row"><dt>{label}</dt><dd>{children}</dd></div>;
+}
+
 const CLP_FORMATTER = new Intl.NumberFormat("es-CL", {
   style: "currency",
   currency: "CLP",
@@ -106,8 +52,7 @@ function hasObjectData(value) {
 
 function money(value) {
   const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return "Sin dato";
-  return CLP_FORMATTER.format(Math.round(numericValue));
+  return Number.isFinite(numericValue) ? CLP_FORMATTER.format(Math.round(numericValue)) : "Sin dato";
 }
 
 function booleanText(value) {
@@ -118,8 +63,7 @@ function booleanText(value) {
 
 function formatPercent(value) {
   const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) return "Sin dato";
-  return `${Math.round(numericValue * 1000) / 10}%`;
+  return Number.isFinite(numericValue) ? `${Math.round(numericValue * 1000) / 10}%` : "Sin dato";
 }
 
 function purchaseTermLabel(value) {
@@ -136,918 +80,390 @@ function purchaseTermLabel(value) {
   return labels[value] || "Sin dato";
 }
 
-function getDateThreshold(value) {
-  const now = new Date();
-  switch (value) {
-    case "24h":   return new Date(now - 24 * 60 * 60 * 1000);
-    case "semana": return new Date(now - 7 * 24 * 60 * 60 * 1000);
-    case "mes":   return new Date(now - 30 * 24 * 60 * 60 * 1000);
-    case "anio":  return new Date(now - 365 * 24 * 60 * 60 * 1000);
-    default:      return null;
-  }
+const eventLabels = {
+  no_viable_shown: "Plan no viable presentado",
+  apply_alternative: "Aplicó alternativa",
+  simulate_success: "Simulación viable",
+  accept_plan: "Aceptó el plan",
+  register_savings: "Registró ahorro",
+};
+
+function formatEventAt(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL");
+}
+
+function renderEventDetail(event) {
+  const details = event.details || {};
+  if (event.type === "apply_alternative") return details.title || details.alternative_id || "Alternativa aplicada";
+  if (event.type === "simulate_success") return details.months ? `Escenario viable en ${details.months} meses` : "Escenario viable";
+  if (event.type === "accept_plan") return details.months ? `Meta aceptada a ${details.months} meses` : "Meta aceptada";
+  if (event.type === "register_savings") return `${details.progress_percent ?? 0}% de avance registrado`;
+  return details.message || "Sin detalle adicional";
+}
+
+function componentScoreLabel(key) {
+  const labels = {
+    ahorro_pie: "Ahorro y pie",
+    pie_ahorro: "Ahorro y pie",
+    calidad_datos: "Información declarada",
+    endeudamiento: "Deudas",
+    capacidad_pago: "Capacidad de pago",
+    historial_pago: "Historial de pagos",
+    complemento_renta: "Renta complementaria",
+    estabilidad_laboral: "Estabilidad laboral",
+    perfil_compra: "Objetivo de compra",
+  };
+  return labels[key] || key.replace(/_/g, " ");
 }
 
 export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo }) {
-  const [filter, setFilter] = useState(DEFAULT_CLASSIFICATION_FILTER);
+  const [classification, setClassification] = useState("Alto");
+  const [commune, setCommune] = useState("todas");
+  const [age, setAge] = useState(0);
+  const [date, setDate] = useState("todos");
+  const [search, setSearch] = useState("");
   const [projects, setProjects] = useState([]);
   const [projectsError, setProjectsError] = useState("");
   const [projectsLoaded, setProjectsLoaded] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [projectId, setProjectId] = useState("");
   const [sortBy, setSortBy] = useState("afinidad");
-  const [showDescartados, setShowDescartados] = useState(false);
-  const [filterCommune, setFilterCommune] = useState("todas");
-  const [filterAge, setFilterAge] = useState(0);
-  const [filterDate, setFilterDate] = useState("todos");
-  const [search, setSearch] = useState("");
+  const [showExcluded, setShowExcluded] = useState(false);
+  const [showRequiresDocuments, setShowRequiresDocuments] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [leadHistory, setLeadHistory] = useState([]);
+  const [history, setHistory] = useState([]);
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
   const selectedOnboarding = selectedLead?.onboarding || {};
-  const selectedMainBlocker = hasObjectData(selectedResult.main_blocker) ? selectedResult.main_blocker : null;
-  const selectedAdjustment = getClassificationAdjustment(selectedResult);
-  const selectedProjectFit = hasObjectData(selectedResult.project_fit) ? selectedResult.project_fit : null;
-  const selectedCommercialPriority = hasObjectData(selectedResult.commercial_priority_detail)
-    ? selectedResult.commercial_priority_detail
-    : null;
-  const selectedRecommendations = Array.isArray(selectedResult.recommendations) ? selectedResult.recommendations : [];
-  const selectedPositiveIndicators = Array.isArray(selectedResult.positive_indicators) ? selectedResult.positive_indicators : [];
-  const selectedRisks = Array.isArray(selectedResult.risks) ? selectedResult.risks : [];
-  const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators)
-    ? selectedResult.financial_indicators
-    : {};
   const selectedPhone = selectedLead?.phone || selectedLead?.profile?.phone || "";
-  const selectedBaseScore = selectedResult.base_score ?? selectedResult.score;
   const selectedFinalScore = selectedResult.adjusted_score ?? selectedResult.score;
-  // Con un proyecto seleccionado, la afinidad ya pondera la clasificación
-  // (ALG-10 R2: Medio -8, Bajo -15, contra un máximo de -60 por holgura).
-  // Filtrar además por "Alto" aplicaría la misma señal dos veces y escondería
-  // justo a los leads que E2 existe para mostrar: los que pueden pagar el
-  // proyecto aunque su clasificación general no sea Alta.
-  const defaultClassificationFilter = selectedProjectId ? "todos" : DEFAULT_CLASSIFICATION_FILTER;
+  const selectedAdjustment = getClassificationAdjustment(selectedResult);
+  const selectedMainBlocker = hasObjectData(selectedResult.main_blocker) ? selectedResult.main_blocker : null;
+  const selectedProjectFit = hasObjectData(selectedResult.project_fit) ? selectedResult.project_fit : null;
+  const selectedPriority = hasObjectData(selectedResult.commercial_priority_detail) ? selectedResult.commercial_priority_detail : null;
+  const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators) ? selectedResult.financial_indicators : {};
+  const selectedCommunes = selectedLead ? comunasDeclaradas(selectedLead).declaradas : [];
+  const selectedName = selectedLead?.full_name?.split(" ")[0] || "cliente";
+  const selectedEmailHref = selectedLead
+    ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Calificación financiera")}&body=${encodeURIComponent(`Hola ${selectedName},\n\nTe escribo a partir de tu calificación en RutaHogar.\n\nSaludos.`)}`
+    : "#";
+  const selectedWhatsappHref = selectedPhone
+    ? `https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedName}. Te escribo por RutaHogar.`)}`
+    : "";
 
-  const hasActiveFilters =
-    filter !== defaultClassificationFilter ||
-    filterCommune !== "todas" ||
-    filterAge !== 0 ||
-    filterDate !== "todos" ||
-    search !== "";
-
-  const clearFilters = () => {
-    setFilter(defaultClassificationFilter);
-    setFilterCommune("todas");
-    setFilterAge(0);
-    setFilterDate("todos");
-    setSearch("");
-  };
-
-  // Cambiar de proyecto cambia el contexto, así que la clasificación vuelve al
-  // default de ese contexto. El ejecutivo puede volver a filtrarla a mano.
-  const selectProject = (projectId) => {
-    setSelectedProjectId(projectId);
-    setFilter(projectId ? "todos" : DEFAULT_CLASSIFICATION_FILTER);
-  };
-
-  useEffect(() => {
-    if (!selectedLead) { setLeadHistory([]); return; }
-    let active = true;
-    getScoringHistoryByEvaluation(selectedLead.id)
-      .then((data) => { if (active) setLeadHistory(data); })
-      .catch((err) => console.error(err));
-    return () => { active = false; };
-  }, [selectedLead]);
-
-  const allCommunes = useMemo(() => {
-    const set = new Set();
-    evaluations.forEach((item) => {
-      const main = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
-      const alt = item.onboarding?.comuna_alternativa;
-      if (main) set.add(main);
-      if (alt) set.add(alt);
-    });
-    return [...set].sort();
-  }, [evaluations]);
-
-  const counts = useMemo(() => {
-    const c = { Alto: 0, Medio: 0, Bajo: 0 };
-    evaluations.forEach((item) => {
-      const classification = item.result?.classification;
-      if (c[classification] !== undefined) c[classification]++;
-    });
-    return c;
-  }, [evaluations]);
-
-  const filtered = useMemo(() => {
-    const ageRange = AGE_RANGES[filterAge];
-    const dateThreshold = getDateThreshold(filterDate);
-    const searchLower = search.trim().toLowerCase();
-
-    return evaluations.filter((item) => {
-      if (filter !== "todos" && item.result?.classification !== filter) return false;
-
-      if (filterCommune !== "todas") {
-        const main = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
-        const alt = item.onboarding?.comuna_alternativa;
-        if (main !== filterCommune && alt !== filterCommune) return false;
-      }
-
-      if (ageRange.min > 0 || ageRange.max !== Infinity) {
-        const age = item.input?.edad;
-        if (age == null || age < ageRange.min || age >= ageRange.max) return false;
-      }
-
-      if (dateThreshold) {
-        const itemDate = item.created_at ? new Date(item.created_at) : null;
-        if (!itemDate || itemDate < dateThreshold) return false;
-      }
-
-      if (searchLower) {
-        const name = (item.full_name || "").toLowerCase();
-        const email = (item.email || "").toLowerCase();
-        if (!name.includes(searchLower) && !email.includes(searchLower)) return false;
-      }
-
-      return true;
-    });
-  }, [evaluations, filter, filterCommune, filterAge, filterDate, search]);
-
-  // El objeto `ejecutivo` se recrea en cada render de App, así que la identidad
-  // no sirve como dependencia: memorizarlo por sus dos campos es lo que evita
-  // que el efecto vuelva a pedir el catálogo en cada render.
-  const ejecutivoId = ejecutivo?.id ?? null;
-  const ejecutivoEmail = ejecutivo?.email ?? null;
-  const ejecutivoScope = useMemo(
-    () => (ejecutivoId || ejecutivoEmail ? { id: ejecutivoId, email: ejecutivoEmail } : null),
-    [ejecutivoId, ejecutivoEmail],
+  const executiveId = ejecutivo?.id ?? null;
+  const executiveEmail = ejecutivo?.email ?? null;
+  const executiveScope = useMemo(
+    () => executiveId || executiveEmail ? { id: executiveId, email: executiveEmail } : null,
+    [executiveId, executiveEmail],
   );
 
   useEffect(() => {
     let active = true;
     setProjectsLoaded(false);
-    getAvailableProjects({ inmobiliariaId, ejecutivo: ejecutivoScope })
-      .then((data) => { if (active) setProjects(data); })
+    setProjectsError("");
+    getAvailableProjects({ inmobiliariaId, ejecutivo: executiveScope })
+      .then((items) => { if (active) setProjects(items); })
       .catch(() => { if (active) setProjectsError("No se pudo cargar el catálogo de proyectos."); })
       .finally(() => { if (active) setProjectsLoaded(true); });
     return () => { active = false; };
-  }, [inmobiliariaId, ejecutivoScope]);
+  }, [inmobiliariaId, executiveScope]);
 
+  useEffect(() => {
+    if (!selectedLead) { setHistory([]); return; }
+    let active = true;
+    getScoringHistoryByEvaluation(selectedLead.id)
+      .then((items) => { if (active) setHistory(items); })
+      .catch(() => { if (active) setHistory([]); });
+    return () => { active = false; };
+  }, [selectedLead]);
+
+  useEffect(() => {
+    setSelectedLead((current) => {
+      if (!current) return current;
+      return evaluations.find((item) => item.id === current.id) || current;
+    });
+  }, [evaluations]);
+
+  const communes = useMemo(() => [...new Set(evaluations.flatMap((item) => [
+    item.input?.comuna_objetivo || item.onboarding?.comuna_interes,
+    item.onboarding?.comuna_alternativa,
+  ]).filter(Boolean))].sort(), [evaluations]);
+  const counts = useMemo(() => evaluations.reduce((result, item) => {
+    if (item.result?.classification in result) result[item.result.classification] += 1;
+    return result;
+  }, { Alto: 0, Medio: 0, Bajo: 0 }), [evaluations]);
   const selectedProject = useMemo(
-    () => projects.find((p) => String(p.id) === selectedProjectId) || null,
-    [projects, selectedProjectId],
+    () => projects.find((item) => String(item.id) === projectId) || null,
+    [projects, projectId],
   );
-
-  // El veredicto del par se deriva, no se guarda: si el ejecutivo cambia de
-  // proyecto con el modal abierto, una copia guardada describiria otro proyecto.
-  // matchLeadToProjects es puro y determinista (ALG-10 invariante 5), asi que
-  // esto devuelve exactamente la misma evidencia que mostro la fila.
+  const defaultClassification = selectedProject ? "todos" : "Alto";
+  const filtered = useMemo(() => {
+    const dateThreshold = threshold(date);
+    const ageRange = AGE_RANGES[age];
+    const term = search.trim().toLowerCase();
+    return evaluations.filter((item) => {
+      const mainCommune = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
+      if (classification !== "todos" && item.result?.classification !== classification) return false;
+      if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
+      if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
+      if (ageRange.min && item.input?.edad == null) return false;
+      if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
+      return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
+    });
+  }, [evaluations, classification, commune, age, date, search]);
+  const { ranked, descartados, requiereAntecedentes } = useMemo(
+    () => rankLeadsForProject(filtered, selectedProject, sortBy),
+    [filtered, selectedProject, sortBy],
+  );
   const selectedMatch = useMemo(() => {
     if (!selectedLead || !selectedProject) return null;
     const { matches, excluidos } = matchLeadToProjects(selectedLead, [selectedProject]);
     return matches[0] || excluidos[0] || null;
   }, [selectedLead, selectedProject]);
-
-  const { ranked, descartados, requiereAntecedentes } = useMemo(
-    () => rankLeadsForProject(filtered, selectedProject, sortBy),
-    [filtered, selectedProject, sortBy],
-  );
-
-  const evidenceCells = (match) => {
-    const e = match.evidencia;
-    return (
-      <>
-        <td>
-          {match.afinidad === null ? emptyValue : `${match.afinidad}`}
-          {match.clasificacion ? <small className="lead-cell-sub">{match.clasificacion}</small> : null}
-        </td>
-        <td>
-          {e.capacidad_uf === null ? "Sin dato" : `${e.capacidad_uf} UF`}
-          {/* El plazo viaja pegado a la capacidad que produjo, no en otra
-              columna: los leads se rankean bajo supuestos de plazo distintos y
-              el ejecutivo no puede comparar numeros invisiblemente distintos
-              (ALG-9 R2). La restriccion vinculante viene al lado por lo mismo. */}
-          <small className="lead-cell-sub">
-            {e.plazo_anios === null ? emptyValue : `${e.plazo_anios} años`}
-            {e.plazo_origen ? ` · ${e.plazo_origen}` : ""}
-            {e.restriccion_vinculante ? ` · limita ${e.restriccion_vinculante}` : ""}
-          </small>
-          {e.capacidad_uf !== null && !e.alcanza_precio_min ? (
-            <small className="lead-cell-sub is-alert">No alcanza el precio mínimo</small>
-          ) : null}
-        </td>
-        <td>{e.pie_disponible_uf} UF</td>
-        <td>
-          {match.bloqueador_principal ? (
-            <>
-              {match.bloqueador_principal.titulo}
-              {match.bloqueador_principal.brecha_recurso_clp !== null ? (
-                <small className="lead-cell-sub">
-                  Falta {money(match.bloqueador_principal.brecha_recurso_clp)} de{" "}
-                  {match.bloqueador_principal.brecha_recurso_tipo}
-                </small>
-              ) : null}
-            </>
-          ) : (
-            "Sin bloqueador para este proyecto"
-          )}
-        </td>
-      </>
-    );
+  const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search;
+  const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); };
+  const selectProject = (nextId) => {
+    setProjectId(nextId);
+    setClassification(nextId ? "todos" : "Alto");
+    setShowRequiresDocuments(false);
+    setShowExcluded(false);
   };
 
-  const openLead = (item) => setSelectedLead(item);
-
-  const selectedComunaDeclarada =
-    selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "";
-
-  // ALG-10 R4 tiene dos ramas de divergencia y sólo emite el booleano. Cuál
-  // disparó se deriva del mismo conjunto que usa la regla: si el proyecto está
-  // fuera de las comunas declaradas es 3a; si no, la reorientación viene de que
-  // su propio objetivo no le cierra (3b). Son dos hallazgos distintos y el
-  // ejecutivo los lee en voz alta frente al cliente, así que no comparten copy.
-  const selectedComunasDeclaradas = selectedLead
-    ? comunasDeclaradas(selectedLead).declaradas
-    : [];
-  const reorientablePorComuna =
-    selectedComunasDeclaradas.length > 0 &&
-    !selectedComunasDeclaradas.includes(selectedProject?.comuna);
-
-  const accionesRapidas = selectedLead ? (
-    <div className="lead-profile-actions">
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Acciones Rápidas</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <a
-                      href={`mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Evaluación Financiera")}&body=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"},\n\nTe escribo a partir de tu evaluación en RutaHogar.\n\nSaludos.`)}`}
-                      className="secondary-button compact-button"
-                      style={{ textDecoration: "none", textAlign: "center", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                        <polyline points="22,6 12,13 2,6"></polyline>
-                      </svg>
-                      Correo
-                    </a>
-                    <a
-                      href={`https://wa.me/${selectedPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${selectedLead.full_name?.split(" ")[0] || "Cliente"}! Te escribo por RutaHogar.`)}`}
-                      style={{ textDecoration: "none", textAlign: "center", backgroundColor: "#25D366", color: "white", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.6rem", fontWeight: "500", fontSize: "0.9rem", border: "none", cursor: "pointer" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "8px" }}>
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                      </svg>
-                      WhatsApp
-                    </a>
-                  </div>
-    </div>
-  ) : null;
-
-  const leadRow = ({ lead: item, match }) => (
-    // La fila entera es clickeable por comodidad, pero la accion vive en un
-    // boton real dentro de la celda del lead: un <tr> con onClick se anuncia
-    // como fila, no como algo accionable, y con teclado no existe.
-    <tr key={item.id} className="lead-row" onClick={() => openLead(item)}>
-      {!selectedProject && <td>{formatFecha(item.created_at)}</td>}
-      <td>
-        <button
-          type="button"
-          className="lead-row-open"
-          onClick={(e) => {
-            e.stopPropagation();
-            openLead(item);
-          }}
-        >
-          {item.full_name || item.email || emptyValue}
-          <span className="visually-hidden"> — ver detalles del lead</span>
-        </button>
-        {selectedProject ? (
-          <small className="lead-cell-sub">{formatFecha(item.created_at)}</small>
-        ) : null}
-        {match?.reorientable ? (
-          <small className="lead-cell-sub is-positive">Reorientable a este proyecto</small>
-        ) : null}
-        {match?.evidencia?.desbloqueable_con_fogaes && !match.motivo_exclusion ? (
-          <small className="lead-cell-sub">Se desbloquea con FOGAES</small>
-        ) : null}
-      </td>
-      <td>{item.input?.comuna_objetivo || item.onboarding?.comuna_interes || emptyValue}</td>
-      <td>
-        <span className={`status-pill ${getClassificationClass(item.result?.classification)}`}>
-          {item.result?.classification || emptyValue}
-        </span>
-      </td>
-      {match ? (
-        evidenceCells(match)
-      ) : (
-        <td>
-          {item.result?.risks?.length
-            ? item.result.risks.slice(0, 2).map(displayItemText).join(" ")
-            : "Sin riesgos relevantes"}
-        </td>
-      )}
-    </tr>
-  );
-
-  const tableHead = (
-    <thead>
-      <tr>
-        {!selectedProject && <th>Fecha</th>}
-        <th>{selectedProject ? "Lead" : "Nombre"}</th>
-        <th>Comuna</th>
-        <th>Clasificación</th>
-        {selectedProject ? (
-          <>
-            <th>Afinidad</th>
-            <th>Capacidad</th>
-            <th>Pie disponible</th>
-            <th>Bloqueador principal</th>
-          </>
-        ) : (
-          <th>Riesgos</th>
-        )}
-      </tr>
-    </thead>
-  );
-  const columnCount = selectedProject ? 7 : 5;
-
-  return (
-    <section className="section-block leads-panel">
-      <div className="section-heading">
-        <span className="eyebrow">Gestión comercial</span>
-        <h1>Dashboard Leads</h1>
-        <p>Vista para revisar leads evaluados y priorizar acciones comerciales.</p>
-      </div>
-
-      {projectsError && (
-        <p className="leads-hint is-error">{projectsError}</p>
-      )}
-
-      {!projectsError && ejecutivoScope && projectsLoaded && !projects.length && (
-        <p className="leads-hint">
-          Todavía no tienes proyectos asignados. Pídele al administrador de tu inmobiliaria que
-          te asigne al menos uno para priorizar leads por proyecto.
-        </p>
-      )}
-
-      <div className="toolbar-filters">
-        {/* Búsqueda por nombre/correo */}
-        <label style={{ flexBasis: "100%" }}>
-          Buscar por nombre o correo
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ej: Juan Pérez o juan@correo.cl"
-            style={{ marginTop: "0.5rem" }}
-          />
-        </label>
-
-        <label style={{ flexBasis: "320px" }}>
-          Proyecto
-          <select
-            value={selectedProjectId}
-            onChange={(e) => selectProject(e.target.value)}
-            disabled={Boolean(ejecutivoScope) && projectsLoaded && !projects.length}
-          >
-            <option value="">Sin proyecto — vista general de leads</option>
-            {projects.map((p) => (
-              <option key={p.id} value={String(p.id)}>
-                {p.nombre} · {p.comuna} · {p.precio_min_uf}–{p.precio_max_uf} UF
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {selectedProject && (
-          <label>
-            Ordenar por
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="afinidad">Afinidad con el proyecto</option>
-              <option value="capacidad">Capacidad de compra</option>
-            </select>
-          </label>
-        )}
-
-        <label>
-          Clasificación
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="todos">Todos ({evaluations.length})</option>
-            <option value="Alto">Alto ({counts.Alto})</option>
-            <option value="Medio">Medio ({counts.Medio})</option>
-            <option value="Bajo">Bajo ({counts.Bajo})</option>
-          </select>
-        </label>
-
-        <label>
-          Comuna
-          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}>
-            <option value="todas">Todas las comunas</option>
-            {allCommunes.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Rango de edad
-          <select value={filterAge} onChange={(e) => setFilterAge(Number(e.target.value))}>
-            {AGE_RANGES.map((range, i) => (
-              <option key={i} value={i}>{range.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          Fecha
-          <select value={filterDate} onChange={(e) => setFilterDate(e.target.value)}>
-            {DATE_RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        </label>
-
-        {/* Botón limpiar filtros — solo visible si hay algún filtro activo */}
-        {hasActiveFilters && (
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              onClick={clearFilters}
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Contador de resultados */}
-      <p className="leads-hint">
-        {selectedProject
-          ? `${ranked.length} de ${filtered.length} leads alcanzan ${selectedProject.nombre}, ordenados por ${sortBy === "capacidad" ? "capacidad de compra" : "afinidad"}`
-          : filtered.length === evaluations.length
-            ? `${evaluations.length} leads en total`
-            : `${filtered.length} de ${evaluations.length} leads`}
-      </p>
-
-      <div className="table-wrap">
-        <table>
-          {tableHead}
-          <tbody>
-            {ranked.map((fila) => leadRow(fila))}
-            {!ranked.length && (
-              <tr>
-                <td colSpan={columnCount}>
-                  {selectedProject
-                    ? "Ningún lead alcanza este proyecto con los filtros aplicados."
-                    : hasActiveFilters
-                      ? "No hay leads que coincidan con los filtros aplicados."
-                      : "Aún no existen leads para esta clasificación."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Requieren antecedentes: no son leads sin capacidad, son leads sin evaluación vigente. */}
-      {selectedProject && requiereAntecedentes.length > 0 && (
-        <div className="leads-group">
-          <h3>
-            Requieren antecedentes ({requiereAntecedentes.length})
-          </h3>
-          <p className="leads-hint">
-            No se les pudo calcular capacidad de compra. Necesitan una evaluación nueva, no son
-            leads que no puedan comprar.
-          </p>
-          <div className="table-wrap">
-            <table>
-              {tableHead}
-              <tbody>{requiereAntecedentes.map((fila) => leadRow(fila))}</tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {selectedProject && descartados.length > 0 && (
-        <div className="leads-group">
-          <button
-            type="button"
-            className="secondary-button compact-button"
-            onClick={() => setShowDescartados((v) => !v)}
-          >
-            {showDescartados ? "Ocultar descartados" : `Ver descartados (${descartados.length})`}
-          </button>
-          {showDescartados && (
-            <div className="table-wrap" style={{ marginTop: "0.75rem" }}>
-              <table>
-                {tableHead}
-                <tbody>
-                  {descartados.map((fila) => (
-                    <React.Fragment key={`${fila.lead.id}-descartado`}>
-                      {leadRow(fila)}
-                      <tr>
-                        <td colSpan={columnCount} className="lead-descartado-motivo">
-                          Motivo: {fila.match.motivo_exclusion}
-                        </td>
-                      </tr>
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+  const leadCard = ({ lead, match }) => (
+    <article
+      key={lead.id}
+      className="executive-lead-card"
+      role="button"
+      tabIndex="0"
+      onClick={() => setSelectedLead(lead)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setSelectedLead(lead);
+        }
+      }}
+      aria-label={`Ver ficha de ${lead.full_name || lead.email || "lead"}`}
+    >
+      <div className="executive-lead-card__identity">
+        <div>
+          <h3>{lead.full_name || lead.email || "Sin nombre"}</h3>
+          <p>{lead.email || "Sin correo registrado"}</p>
+          {selectedProject && match?.reorientable && (
+            <span className="executive-lead-card__reorientable">
+              <i className="ti ti-route" aria-hidden="true" />
+              Reorientable para este proyecto
+            </span>
           )}
         </div>
-      )}
+        <div className="executive-lead-card__status">
+          <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
+          <small>{formatDate(lead.created_at)}</small>
+        </div>
+      </div>
+      <dl className="executive-lead-card__facts">
+        <div><dt>Comuna</dt><dd>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</dd></div>
+        {selectedProject ? <>
+          <div><dt>Afinidad</dt><dd>{match?.afinidad ?? "-"}<small>{match?.clasificacion || "Sin dato"}</small></dd></div>
+          <div><dt>Capacidad</dt><dd>{match?.evidencia?.capacidad_uf ?? "Sin dato"} UF<small>{match?.evidencia?.plazo_anios ? `${match.evidencia.plazo_anios} años` : "Sin dato"}</small></dd></div>
+          <div><dt>Pie disponible</dt><dd>{match?.evidencia?.pie_disponible_uf ?? "Sin dato"} UF</dd></div>
+          <div className="executive-lead-card__fact--wide"><dt>Bloqueador</dt><dd>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</dd></div>
+        </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</dd></div>}
+      </dl>
+      <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
+    </article>
+  );
 
-      {/* Modal de detalles */}
-      {selectedLead && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setSelectedLead(null)}
-        >
-          <div
-            className="lead-detail-card"
-            style={{
-              background: "var(--color-surface, #fff)",
-              borderRadius: "14px",
-              padding: "2rem",
-              maxWidth: "80%",
-              width: "90%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", borderBottom: "1px solid #eaeaea", paddingBottom: "1rem" }}>
-              <div>
-                <h2 style={{ margin: 0 }}>Perfil del Lead</h2>
-                <p className="lead-profile-headline">
-                  <span className={`status-pill ${getClassificationClass(selectedResult.classification)}`}>
-                    {selectedResult.classification || emptyValue}
-                  </span>
-                  <span>Score {formatScore(selectedFinalScore) ?? emptyValue}</span>
-                  {selectedAdjustment ? (
-                    <span>base {formatScore(selectedBaseScore) ?? emptyValue} · {getBaseClassification(selectedResult)}</span>
-                  ) : null}
-                </p>
-              </div>
-              <button className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>
-                Cerrar
+  return <section className="section-block leads-panel admin-leads-page">
+    <header className="executive-leads-heading">
+      <div className="section-heading">
+        <span className="eyebrow">Gestión comercial</span>
+        <h1>Mesa de oportunidades</h1>
+        <p>Prioriza conversaciones con contexto financiero y habitacional.</p>
+      </div>
+      <div className="executive-leads-heading__note">
+        <span>Vista de trabajo</span>
+        <strong>{selectedProject ? "Con proyecto seleccionado" : "Prioridad general"}</strong>
+      </div>
+    </header>
+
+    {projectsError && <p className="leads-hint is-error">{projectsError}</p>}
+    {!projectsError && executiveScope && projectsLoaded && !projects.length && <p className="leads-hint">Todavía no tienes proyectos asignados para priorizar leads.</p>}
+
+    <section className="admin-surface admin-section-gap executive-leads-controls">
+      <div className="admin-surface__header">
+        <div className="admin-surface__title">
+          <h2>Encuentra la conversación adecuada</h2>
+          <p>Combina una prioridad, territorio o perfil para enfocar la bandeja.</p>
+        </div>
+        {activeFilters && <button type="button" className="secondary-button compact-button" onClick={clearFilters}>Restablecer vista</button>}
+        </div>
+        <div className="executive-leads-controls__guide">
+          <span>Cómo usar esta bandeja</span>
+          <p>Selecciona primero un proyecto. Luego elige si quieres ver antes el mejor encaje o la mayor capacidad de compra; usa los filtros restantes solo para acotar la lista.</p>
+        </div>
+        <div className="executive-leads-controls__primary">
+          <label className="executive-leads-controls__project">Proyecto<select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Al elegirlo, calculamos afinidad, capacidad y pie para ese proyecto.</small></label>
+          <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Puedes cambiar el criterio sin perder los filtros aplicados." : "Disponible al seleccionar un proyecto."}</small></label>
+        </div>
+        <div className="executive-leads-controls__priority">
+          <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
+          <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
+            {[
+              ["todos", "Total", evaluations.length, ""],
+              ["Alto", "Alta prioridad", counts.Alto, "admin-leads-metric--high"],
+              ["Medio", "Prioridad media", counts.Medio, "admin-leads-metric--medium"],
+              ["Bajo", "Prioridad baja", counts.Bajo, "admin-leads-metric--low"],
+            ].map(([value, label, count, tone]) => (
+              <button type="button" key={value} className={`admin-leads-metric executive-priority-rail__item ${tone} ${classification === value ? "is-active" : ""}`} onClick={() => setClassification(value)} aria-pressed={classification === value}>
+                <span>{label}</span>
+                <strong>{count}</strong>
               </button>
-            </div>
-
-            {/* Zona 2 — el veredicto del par. Solo para leads rankeados: un lead
-                excluido no tiene afinidad ni banda (ALG-10), asi que degrada al
-                perfil lead-global. */}
-            {selectedProject && selectedMatch && !selectedMatch.motivo_exclusion ? (
-              <section className="lead-profile-zone lead-profile-verdict">
-                <h3>Frente a este proyecto: {selectedProject.nombre}</h3>
-                <dl className="lead-profile-facts">
-                  <div>
-                    <dt>Afinidad</dt>
-                    <dd>
-                      {selectedMatch.afinidad}
-                      <small>{selectedMatch.clasificacion}</small>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Capacidad de compra</dt>
-                    <dd>
-                      {selectedMatch.evidencia.capacidad_uf} UF
-                      {/* El plazo viaja pegado al numero que produjo: los leads se
-                          rankean bajo supuestos de plazo distintos (ALG-9 R2). */}
-                      <small>
-                        {selectedMatch.evidencia.plazo_anios} años · {selectedMatch.evidencia.plazo_origen}
-                        {selectedMatch.evidencia.restriccion_vinculante
-                          ? " · limita " + selectedMatch.evidencia.restriccion_vinculante
-                          : ""}
-                      </small>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Pie disponible</dt>
-                    <dd>{selectedMatch.evidencia.pie_disponible_uf} UF</dd>
-                  </div>
-                  <div>
-                    <dt>Rango del proyecto</dt>
-                    <dd>
-                      {selectedMatch.precio_min_uf}–{selectedMatch.precio_max_uf} UF
-                    </dd>
-                  </div>
-                </dl>
-
-                <p className="lead-profile-blocker">
-                  <strong>Bloqueador para este proyecto: </strong>
-                  {selectedMatch.bloqueador_principal ? (
-                    <>
-                      {selectedMatch.bloqueador_principal.titulo}
-                      {selectedMatch.bloqueador_principal.brecha_recurso_clp !== null
-                        ? " — le faltan " +
-                          money(selectedMatch.bloqueador_principal.brecha_recurso_clp) +
-                          " de " +
-                          selectedMatch.bloqueador_principal.brecha_recurso_tipo
-                        : ""}
-                    </>
-                  ) : (
-                    "ninguno."
-                  )}
-                </p>
-
-                {!selectedMatch.evidencia.alcanza_precio_min ? (
-                  <p className="lead-profile-warning">
-                    No alcanza el precio mínimo del proyecto: entra por cercanía, no calificado.
-                  </p>
-                ) : null}
-
-                {selectedMatch.reorientable ? (
-                  <p className="lead-profile-note">
-                    {reorientablePorComuna
-                      ? `Oportunidad reorientable: puede comprar en ${selectedProject.comuna}, fuera de ${selectedComunasDeclaradas.join(" y ")}.`
-                      : "Oportunidad reorientable: su objetivo declarado no le cierra, pero este proyecto sí."}
-                  </p>
-                ) : null}
-
-                {selectedMatch.evidencia.desbloqueable_con_fogaes ? (
-                  <p className="lead-profile-note">
-                    Se desbloquea con FOGAES: con el pie asistido del 10% alcanza este proyecto.
-                  </p>
-                ) : null}
-
-                {accionesRapidas}
-              </section>
-            ) : null}
-
-            <div className="lead-profile-grid">
-              {/* Columna Izquierda */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {/* Datos del lead */}
-                <div style={{ background: "#FAF8F5", padding: "1.25rem", borderRadius: "12px", border: "1px solid #E8E5DF" }}>
-                  <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#3D4B5E" }}>Información del Cliente</h3>
-                  <div style={{ display: "grid", gap: "0.6rem", fontSize: "0.95rem", color: "#5A6A7E" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Nombre:</strong> <span style={{ textAlign: "right" }}>{selectedLead.full_name || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Email:</strong> <span style={{ textAlign: "right" }}>{selectedLead.email || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Teléfono:</strong> <span style={{ textAlign: "right" }}>{selectedPhone || emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Edad:</strong> <span style={{ textAlign: "right" }}>{selectedInput.edad != null ? `${selectedInput.edad} años` : emptyValue}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Comuna principal:</strong> <span style={{ textAlign: "right" }}>{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || emptyValue}</span></div>
-                    {selectedOnboarding.comuna_alternativa && (
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Comuna alternativa:</strong> <span style={{ textAlign: "right" }}>{selectedOnboarding.comuna_alternativa}</span></div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between" }}><strong>Fecha evaluación:</strong> <span style={{ textAlign: "right" }}>{formatFecha(selectedLead.created_at)}</span></div>
-                  </div>
-                </div>
-
-                {selectedAdjustment ? (
-                  <div className="score-adjustment-note">
-                    <strong>{selectedAdjustment.message}</strong>
-                    {selectedAdjustment.detail ? <p>{selectedAdjustment.detail}</p> : null}
-                    {selectedResult.score_adjustment_reason ? <p>{selectedResult.score_adjustment_reason}</p> : null}
-                  </div>
-                ) : null}
-
-                {selectedMainBlocker && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Bloqueador principal</h3>
-                    <div style={{ background: "#fff7ed", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #C4841D", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      <strong>{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</strong>
-                      {selectedMainBlocker.description ? <p style={{ margin: "0.5rem 0" }}>{selectedMainBlocker.description}</p> : null}
-                      <span>Severidad: {translateSeverity(selectedMainBlocker.severity)}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Indicadores positivos */}
-                {selectedPositiveIndicators.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
-                       <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Indicadores positivos
-                    </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedPositiveIndicators.map((ind, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{displayItemText(ind)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Riesgos detectados */}
-                {selectedRisks.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E", display: "flex", alignItems: "center", gap: "6px" }}>
-                       <span style={{ color: "#ef4444", fontWeight: "bold" }}>⚠</span> Riesgos detectados
-                    </h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedRisks.map((r, i) => (
-                        <li key={i} style={{ marginBottom: "0.25rem" }}>{displayItemText(r)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {!selectedProject || !selectedMatch || selectedMatch.motivo_exclusion
-                  ? accionesRapidas
-                  : null}
-              </div>
-
-              {/* Columna Derecha */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {selectedProjectFit && (
-                  <div>
-                    {/* Este bloque mide al lead contra SU objetivo declarado; la
-                        zona 2 lo mide contra el proyecto que eligio el ejecutivo.
-                        Pueden discrepar sin contradecirse -- de eso trata E4 --
-                        asi que cada encabezado nombra su sujeto. */}
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>
-                      Frente a su objetivo declarado
-                    </h3>
-                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.88rem", color: "#5A6A7E" }}>
-                      {selectedComunaDeclarada || "Sin comuna declarada"}
-                      {selectedFinancialIndicators.property_value_uf
-                        ? ` · referencia ${Math.round(selectedFinancialIndicators.property_value_uf)} UF`
-                        : ""}
-                    </p>
-                    {selectedProjectFit.status === "requires_info" ? (
-                      <p style={{ margin: "0 0 0.5rem", fontSize: "0.88rem", color: "#5A6A7E" }}>
-                        No se pudo poner precio a su objetivo, así que esta comparación queda
-                        pendiente. No dice nada sobre su capacidad de compra.
-                      </p>
-                    ) : null}
-                    <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Clasificación</dt><dd style={{ margin: 0 }}>{selectedProjectFit.classification || selectedProjectFit.status || emptyValue}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Score</dt><dd style={{ margin: 0 }}>{formatScore(selectedProjectFit.score) ?? emptyValue}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Brecha ingreso</dt><dd style={{ margin: 0 }}>{money(selectedProjectFit.income_gap)}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Brecha pie</dt><dd style={{ margin: 0 }}>{money(selectedProjectFit.down_payment_gap)}</dd></div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><dt>Compatible</dt><dd style={{ margin: 0 }}>{booleanText(selectedProjectFit.compatible)}</dd></div>
-                    </dl>
-                  </div>
-                )}
-
-                <div>
-                  <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Señales comerciales declaradas</h3>
-                  <dl style={{ margin: 0, display: "grid", gap: "0.5rem", color: "#5A6A7E", fontSize: "0.95rem", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #E8EDF5" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Plazo de compra</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{purchaseTermLabel(selectedInput.plazo_compra)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Propiedad o proyecto visto</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{booleanText(selectedInput.tiene_propiedad_vista)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <dt>Pie estimado</dt>
-                      <dd style={{ margin: 0, textAlign: "right" }}>{formatPercent(selectedFinancialIndicators.pie_ratio)}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                {selectedCommercialPriority && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Prioridad comercial</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
-                      <strong>Acción:</strong> {selectedCommercialPriority.action || selectedCommercialPriority.level || emptyValue}
-                      <br />
-                      <strong>Motivo:</strong> {selectedCommercialPriority.reason || "Sin motivo registrado."}
-                      <br />
-                      <strong>Derivación sugerida:</strong> {booleanText(selectedCommercialPriority.send_to_crm)}
-                    </p>
-                  </div>
-                )}
-
-                {selectedRecommendations.length > 0 && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Recomendaciones</h3>
-                    <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.5" }}>
-                      {selectedRecommendations.map((item, index) => (
-                        <li key={index} style={{ marginBottom: "0.35rem" }}>
-                          {displayItemText(item)}
-                          {displayItemBenefit(item) ? (
-                            <small className="lead-cell-sub">
-                              Beneficio esperado: {displayItemBenefit(item)}
-                            </small>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {selectedResult.executive_summary && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Resumen Ejecutivo</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#FAF8F5", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #D1CCC4" }}>
-                       {selectedResult.executive_summary}
-                    </p>
-                  </div>
-                )}
-                
-                {!selectedCommercialPriority && selectedResult.commercial_guidance && (
-                  <div>
-                    <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem", color: "#3D4B5E" }}>Orientación Comercial</h3>
-                    <p style={{ margin: 0, color: "#5A6A7E", fontSize: "0.95rem", lineHeight: "1.6", background: "#E8F5EC", padding: "1rem", borderRadius: "8px", borderLeft: "4px solid #4ade80" }}>
-                      {selectedResult.commercial_guidance}
-                    </p>
-                  </div>
-                )}
-
-              </div>
-            </div>
-
-            <hr style={{ margin: "1.5rem 0", border: "none", borderTop: "1px solid var(--color-border, #e0e0e0)" }} />
-
-            {/* Zona 5 -- material de auditoria (RNF 4/5), no de venta: tiene que
-                estar accesible, no tiene que ser lo primero que se ve. */}
-            <details className="lead-profile-history">
-              <summary>Ver historial de evaluaciones ({leadHistory.length})</summary>
-              {leadHistory.length > 0 ? (
-                <div className="history-list" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {leadHistory.map((item) => (
-                    <article
-                      className="history-card"
-                      key={item.id}
-                      style={{
-                        padding: "1rem",
-                        border: "1px solid var(--color-border, #e0e0e0)",
-                        borderRadius: "10px",
-                        background: "var(--color-surface-secondary, #f9f9f9)",
-                      }}
-                    >
-                      <div className="history-card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                        <span className="eyebrow">{(() => { const d = new Date(item.created_at); const fecha = d.toLocaleDateString("es-CL"); const hora = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`; return `${fecha} ${hora} UTC`; })()}</span>
-                        <strong>
-                          Score base: {formatScore(item.base_score ?? item.score, "Sin score")} · Score final: {formatScore(item.adjusted_score ?? item.score, "Sin score")} · Clasificación final: {item.classification || emptyValue}
-                        </strong>
-                      </div>
-                      <dl style={{ margin: 0, display: "grid", gap: "0.3rem", fontSize: "0.9rem" }}>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Comuna objetivo</dt>
-                          <dd style={{ margin: 0 }}>{item.snapshot?.comuna_objetivo || "No declarada"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Canal de origen</dt>
-                          <dd style={{ margin: 0 }}>{channelLabels[item.channel] || item.channel || "web"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Versión del algoritmo</dt>
-                          <dd style={{ margin: 0 }}>{item.algorithm_version || "—"}</dd>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <dt style={{ fontWeight: 600, minWidth: "140px" }}>Desglose por componente</dt>
-                          <dd style={{ margin: 0 }}>
-                            {item.component_scores && Object.keys(item.component_scores).length > 0 ? (
-                              <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
-                                {Object.entries(item.component_scores).map(([key, value]) => (
-                                  <li key={key}>
-                                    <span>{key.replace(/_/g, " ")} </span>
-                                    <span style={{ color: value >= 0 ? "var(--color-positive, #2D8A4E)" : "var(--color-negative, #B83232)" }}>
-                                      {value >= 0 ? `+${value}` : value}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : "—"}
-                          </dd>
-                        </div>
-                      </dl>
-
-                      {(item.events || []).length > 0 && (
-                        <div style={{ marginTop: "0.75rem", borderTop: "1px dashed var(--color-border, #e0e0e0)", paddingTop: "0.75rem" }}>
-                          <span className="eyebrow">Eventos del plan de ahorro</span>
-                          <ul style={{ margin: "0.5rem 0 0", padding: 0, listStyle: "none", display: "grid", gap: "0.45rem", fontSize: "0.9rem" }}>
-                            {(item.events || []).map((event, i) => (
-                              <li key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
-                                <span style={{ whiteSpace: "nowrap", color: "var(--color-muted, #888)", minWidth: "70px" }}>
-                                  {formatEventAt(event.at)}
-                                </span>
-                                <strong style={{ whiteSpace: "nowrap" }}>
-                                  {eventLabels[event.type] || event.type}
-                                </strong>
-                                <span style={{ color: "#5A6A7E" }}>{renderEventDetail(event)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state" style={{ color: "var(--color-muted, #888)", fontStyle: "italic" }}>
-                  <p style={{ margin: 0 }}>No hay registros de auditoría para esta evaluación.</p>
-                </div>
-              )}
-            </details>
+            ))}
           </div>
         </div>
-      )}
+        <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
+          <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
+          <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
+        <label>Fecha<select value={date} onChange={(event) => setDate(event.target.value)}>{DATE_RANGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      </div>
     </section>
-  );
+
+    {selectedProject && <aside className="executive-project-context">
+      <div><span className="eyebrow">Proyecto en foco</span><strong>{selectedProject.nombre}</strong><p>{selectedProject.comuna} · {selectedProject.precio_min_uf}-{selectedProject.precio_max_uf} UF</p></div>
+      <p>La bandeja muestra afinidad, capacidad y pie para decidir a quién contactar primero.</p>
+    </aside>}
+
+    <section className="admin-surface executive-leads-inbox">
+      <div className="admin-surface__header">
+        <div className="admin-surface__title">
+          <span className="eyebrow">Bandeja activa</span>
+          <h2>{selectedProject ? "Leads con mejor encaje" : "Leads para revisar"}</h2>
+          <p>{selectedProject ? `${ranked.length} de ${filtered.length} alcanzan ${selectedProject.nombre}.` : `${ranked.length} resultado${ranked.length === 1 ? "" : "s"} según la prioridad y los filtros aplicados.`}</p>
+        </div>
+        <span className="executive-leads-inbox__cue">Selecciona un lead para ver su ficha</span>
+      </div>
+      <div className="executive-leads-list executive-leads-list--scroll" aria-label="Bandeja de leads">{ranked.map(leadCard)}{!ranked.length && <div className="executive-leads-empty"><strong>No hay leads en esta vista.</strong><span>Ajusta los filtros o restablece la vista para recuperar resultados.</span></div>}</div>
+    </section>
+
+    {selectedProject && requiereAntecedentes.length > 0 && <section className="leads-group admin-surface executive-leads-followup"><div className="admin-surface__header"><div className="admin-surface__title"><span className="eyebrow">Seguimiento</span><h2>Requieren antecedentes ({requiereAntecedentes.length})</h2><p>Necesitan una calificación vigente para calcular su capacidad antes de priorizarlos.</p></div><button type="button" className="secondary-button compact-button" onClick={() => setShowRequiresDocuments((current) => !current)}>{showRequiresDocuments ? "Ocultar lista" : "Ver lista"}</button></div>{showRequiresDocuments && <div className="executive-leads-list executive-leads-list--scroll">{requiereAntecedentes.map(leadCard)}</div>}</section>}
+    {selectedProject && descartados.length > 0 && <section className="leads-group admin-surface executive-leads-excluded"><div className="admin-surface__header"><div className="admin-surface__title"><span className="eyebrow">Sin encaje actual</span><h2>Leads descartados ({descartados.length})</h2><p>Conserva esta lista para reorientar oportunidades cuando cambie el proyecto o el perfil.</p></div><button type="button" className="secondary-button compact-button" onClick={() => setShowExcluded((current) => !current)}>{showExcluded ? "Ocultar lista" : "Ver lista"}</button></div>{showExcluded && <div className="executive-leads-list">{descartados.map(({ lead, match }) => <React.Fragment key={lead.id}>{leadCard({ lead, match })}<p className="lead-descartado-motivo">Motivo: {match.motivo_exclusion}</p></React.Fragment>)}</div>}</section>}
+    {selectedLead && (
+      <div className="admin-modal" onClick={() => setSelectedLead(null)}>
+        <div className="admin-modal-card admin-modal-card--xl executive-lead-detail" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-header">
+            <div className="admin-modal-heading">
+              <span className="eyebrow">Ficha comercial</span>
+              <h2>{selectedLead.full_name || selectedLead.email || "Lead sin nombre"}</h2>
+              <p>{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Comuna sin dato"} · Evaluado el {formatDate(selectedLead.created_at)}</p>
+            </div>
+            <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>Cerrar ficha</button>
+          </div>
+
+          <section className={`executive-lead-brief ${selectedResult.executive_summary ? "" : "is-without-summary"}`}>
+            <div className="executive-lead-brief__decision">
+              <span className="eyebrow">Resultado de la calificación</span>
+              <div>
+                <strong>{formatScore(selectedFinalScore) ?? "-"}</strong>
+                <span className={`status-pill ${getClassificationClass(selectedResult.classification)}`}>{selectedResult.classification || "Sin clasificación"}</span>
+              </div>
+              {selectedAdjustment && <small>{selectedAdjustment.message}</small>}
+            </div>
+
+            {selectedResult.executive_summary && <div className="executive-lead-brief__summary"><span className="eyebrow">Resumen ejecutivo</span><p>{selectedResult.executive_summary}</p></div>}
+
+            <div className="executive-lead-brief__contact">
+              <span className="eyebrow">Contacto</span>
+              <div className="admin-action-grid">
+                {selectedLead.email ? <a href={selectedEmailHref} className="secondary-button admin-link-button">Enviar correo</a> : <button type="button" className="secondary-button admin-link-button" disabled>Correo no disponible</button>}
+                {selectedPhone ? <a href={selectedWhatsappHref} className="primary-button admin-link-button" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a> : <button type="button" className="secondary-button admin-link-button" disabled>WhatsApp no disponible</button>}
+              </div>
+            </div>
+          </section>
+
+          {selectedAdjustment && selectedAdjustment.detail && <div className="admin-callout executive-lead-detail__adjustment"><strong>{selectedAdjustment.detail}</strong>{selectedResult.score_adjustment_reason && <p>{selectedResult.score_adjustment_reason}</p>}</div>}
+
+          {selectedProject && selectedMatch && !selectedMatch.motivo_exclusion && (
+            <section className="lead-profile-zone lead-profile-verdict">
+              <span className="eyebrow">Veredicto frente al proyecto</span>
+              <h3>{selectedProject.nombre}</h3>
+              <dl className="lead-profile-facts">
+                <div><dt>Afinidad</dt><dd>{selectedMatch.afinidad}<small>{selectedMatch.clasificacion}</small></dd></div>
+                <div><dt>Capacidad de compra</dt><dd>{selectedMatch.evidencia.capacidad_uf} UF<small>{selectedMatch.evidencia.plazo_anios} años{selectedMatch.evidencia.plazo_origen ? ` · ${selectedMatch.evidencia.plazo_origen}` : ""}{selectedMatch.evidencia.restriccion_vinculante ? ` · limita ${selectedMatch.evidencia.restriccion_vinculante}` : ""}</small></dd></div>
+                <div><dt>Pie disponible</dt><dd>{selectedMatch.evidencia.pie_disponible_uf} UF</dd></div>
+                <div><dt>Rango del proyecto</dt><dd>{selectedMatch.precio_min_uf}-{selectedMatch.precio_max_uf} UF</dd></div>
+              </dl>
+              <p className="lead-profile-blocker"><strong>Bloqueador para este proyecto: </strong>{selectedMatch.bloqueador_principal?.titulo || "Ninguno"}{selectedMatch.bloqueador_principal?.brecha_recurso_clp != null ? ` · faltan ${money(selectedMatch.bloqueador_principal.brecha_recurso_clp)} de ${selectedMatch.bloqueador_principal.brecha_recurso_tipo}` : ""}</p>
+              {!selectedMatch.evidencia.alcanza_precio_min && <p className="lead-profile-warning">No alcanza el precio mínimo del proyecto: aparece por cercanía, no como oportunidad calificada.</p>}
+              {selectedMatch.reorientable && <div className="lead-profile-reorientation"><strong><i className="ti ti-route" aria-hidden="true" /> Oportunidad reorientable</strong><p>{selectedCommunes.length && !selectedCommunes.includes(selectedProject.comuna) ? `Su capacidad permite evaluar ${selectedProject.nombre} en ${selectedProject.comuna}, aunque esa comuna queda fuera de las alternativas declaradas.` : `Su objetivo declarado no cierra, pero su capacidad permite evaluar ${selectedProject.nombre}.`}</p></div>}
+              {selectedMatch.evidencia.desbloqueable_con_fogaes && <p className="lead-profile-note">Se puede desbloquear con FOGAES: con pie asistido de 10% alcanza este proyecto.</p>}
+            </section>
+          )}
+
+          <div className="admin-detail-grid executive-lead-detail__matrix">
+            <div className="admin-stack">
+              <article className="admin-panel-card executive-lead-detail__client">
+                <div className="admin-panel-card__header"><h3>Información del cliente</h3></div>
+                <dl className="admin-definition-list">
+                  <DetailRow label="Correo">{selectedLead.email || "Sin dato"}</DetailRow>
+                  <DetailRow label="Teléfono">{selectedPhone || "Sin dato"}</DetailRow>
+                  <DetailRow label="Edad">{selectedInput.edad != null ? `${selectedInput.edad} años` : "Sin dato"}</DetailRow>
+                  <DetailRow label="Comuna principal">{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Sin dato"}</DetailRow>
+                  {selectedOnboarding.comuna_alternativa && <DetailRow label="Comuna alternativa">{selectedOnboarding.comuna_alternativa}</DetailRow>}
+                </dl>
+              </article>
+
+              {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-lead-detail__blocker"><div className="admin-panel-card__header"><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
+
+              {selectedResult.positive_indicators?.length > 0 && <article className="admin-panel-card admin-panel-card--success executive-lead-detail__positive"><div className="admin-panel-card__header"><h3>Indicadores positivos</h3></div><ul className="admin-bullet-list">{selectedResult.positive_indicators.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+              {selectedResult.risks?.length > 0 && <article className="admin-panel-card admin-panel-card--danger executive-lead-detail__risks"><div className="admin-panel-card__header"><h3>Riesgos detectados</h3></div><ul className="admin-bullet-list">{selectedResult.risks.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+            </div>
+
+            <div className="admin-stack">
+              {selectedProjectFit && <article className="admin-panel-card executive-lead-detail__fit"><div className="admin-panel-card__header"><h3>Compatibilidad con su objetivo</h3></div><dl className="admin-definition-list"><DetailRow label="Clasificación">{selectedProjectFit.classification || selectedProjectFit.status || "Sin dato"}</DetailRow><DetailRow label="Score">{formatScore(selectedProjectFit.score) ?? "Sin dato"}</DetailRow><DetailRow label="Brecha de ingreso">{money(selectedProjectFit.income_gap)}</DetailRow><DetailRow label="Brecha de pie">{money(selectedProjectFit.down_payment_gap)}</DetailRow><DetailRow label="Compatible">{booleanText(selectedProjectFit.compatible)}</DetailRow></dl></article>}
+
+              <article className="admin-panel-card executive-lead-detail__signals">
+                <div className="admin-panel-card__header"><h3>Señales comerciales</h3></div>
+                <dl className="admin-definition-list"><DetailRow label="Plazo de compra">{purchaseTermLabel(selectedInput.plazo_compra)}</DetailRow><DetailRow label="Proyecto visto">{booleanText(selectedInput.tiene_propiedad_vista)}</DetailRow><DetailRow label="Pie estimado">{formatPercent(selectedFinancialIndicators.pie_ratio)}</DetailRow></dl>
+              </article>
+
+              {selectedPriority && <article className="admin-panel-card admin-panel-card--success executive-lead-detail__priority"><div className="admin-panel-card__header"><h3>Prioridad comercial</h3></div><dl className="admin-definition-list"><DetailRow label="Acción">{selectedPriority.action || selectedPriority.level || "Sin dato"}</DetailRow><DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow><DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow></dl></article>}
+
+              {selectedResult.recommendations?.length > 0 && <article className="admin-panel-card executive-lead-detail__recommendations"><div className="admin-panel-card__header"><h3>Recomendaciones</h3></div><ul className="admin-bullet-list">{selectedResult.recommendations.map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article>}
+
+              {!selectedPriority && selectedResult.commercial_guidance && <article className="admin-panel-card admin-panel-card--soft executive-lead-detail__guidance"><div className="admin-panel-card__header"><h3>Orientación comercial</h3></div><p>{selectedResult.commercial_guidance}</p></article>}
+
+            </div>
+          </div>
+
+          <section className="admin-panel-card admin-panel-card--soft executive-lead-detail__history">
+            <div className="admin-panel-card__header"><h3>Historial inmutable</h3></div>
+            {history.length ? (
+              <div className="admin-history-list">
+                {history.map((item) => (
+                  <details className="admin-history-card" key={item.id}>
+                    <summary className="admin-history-card__summary">
+                      <span className="admin-history-card__score"><small>Calificación</small><strong>{formatScore(item.adjusted_score ?? item.score) ?? "-"}</strong></span>
+                      <span className={`status-pill ${getClassificationClass(item.classification)}`}>{item.classification || "Sin clasificación"}</span>
+                      <span className="admin-history-card__date">Actualizada {formatEventAt(item.created_at)}</span>
+                      <span className="admin-history-card__expand">Ver detalle <i className="ti ti-chevron-down" aria-hidden="true" /></span>
+                    </summary>
+                    <div className="admin-history-card__details">
+                      <section className="admin-history-breakdown">
+                        <div className="admin-history-breakdown__head"><div><strong>Componentes de la calificación</strong><p>Factores que explican este resultado referencial.</p></div><span>Base {formatScore(item.base_score ?? item.score) ?? "-"}</span></div>
+                        {item.component_scores && Object.keys(item.component_scores).length ? <ul className="admin-history-components">{Object.entries(item.component_scores).map(([key, value]) => <li key={key}><span>{componentScoreLabel(key)}</span><strong>{value >= 0 ? `+${value}` : value}</strong></li>)}</ul> : <p>Sin detalle disponible.</p>}
+                      </section>
+                      {item.snapshot?.comuna_objetivo && <p className="admin-history-card__context">Objetivo registrado: <strong>{item.snapshot.comuna_objetivo}</strong></p>}
+                      {item.events?.length > 0 && <div className="admin-history-events"><strong>Eventos del plan</strong><ul className="admin-event-list">{item.events.map((event, index) => <li key={`${item.id}-${index}`}><strong>{eventLabels[event.type] || event.type}</strong><span>{formatEventAt(event.at)}</span><p>{renderEventDetail(event)}</p></li>)}</ul></div>}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ) : <p>Sin registros de auditoría para esta calificación.</p>}
+          </section>
+        </div>
+      </div>
+    )}
+  </section>;
 }

@@ -14,6 +14,7 @@ export default function AiExplanationBlock({
   text,
   renderText,
   onRetry,
+  actionLabel = "Intentar de nuevo",
 }) {
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
@@ -56,7 +57,7 @@ export default function AiExplanationBlock({
         <p>
           {retryFailed
             ? "Espera unos segundos e inténtalo nuevamente."
-            : "Puedes generar un resumen personalizado de los factores de tu evaluación cuando quieras."}
+            : "Puedes generar un resumen personalizado de los factores de tu calificación cuando quieras."}
         </p>
       </div>
 
@@ -75,7 +76,7 @@ export default function AiExplanationBlock({
           ) : (
             <>
               <i className="ti ti-refresh" aria-hidden="true" />
-              Intentar de nuevo
+              {actionLabel}
             </>
           )}
         </button>

@@ -97,6 +97,36 @@ describe("buildProjectGoalInput", () => {
     expect(result.property_value_uf).toBe(4000);
   });
 
+  it("marca vivienda nueva al fijar un proyecto en construccion", () => {
+    const result = buildProjectGoalInput(baseInput, {
+      precio_min_uf: 4000,
+      estado: "en_construccion",
+    }, UF);
+
+    expect(result.vivienda_nueva).toBe(true);
+  });
+
+  it("marca vivienda usada para proyectos sin estado de construccion", () => {
+    const result = buildProjectGoalInput(
+      { ...baseInput, vivienda_nueva: true },
+      { precio_min_uf: 4000, estado: "disponible" },
+      UF,
+    );
+
+    expect(result.vivienda_nueva).toBe(false);
+  });
+
+  it("conserva un resumen del proyecto para identificar la meta actual", () => {
+    const result = buildProjectGoalInput(baseInput, project, UF);
+
+    expect(result.project_goal).toMatchObject({
+      id: "p1",
+      nombre: "Parque Ñuñoa",
+      precio_min_uf: 5000,
+      precio_max_uf: 6200,
+    });
+  });
+
   it("cae al uf_value_clp del input si no se pasa uno", () => {
     const result = buildProjectGoalInput(baseInput, project);
     expect(result.property_value_clp).toBe(5000 * UF);

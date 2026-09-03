@@ -305,7 +305,7 @@ class ExplainRequest(ScoreRequest):
 @app.post("/score/explain")
 async def explain_endpoint(payload: ExplainRequest):
     """
-    Regenera los textos de IA para una preevaluación ya calculada.
+    Regenera los textos de IA para una precalificación ya calculada.
     Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
     y devuelve únicamente los textos generados. Si un texto no pudo
     generarse, su campo llega en null: el detalle del fallo nunca se expone

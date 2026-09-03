@@ -4,6 +4,7 @@ export default function FieldTooltip({ text }) {
   const [open, setOpen] = useState(false);
   const [cloudStyle, setCloudStyle] = useState({});
   const [arrowOffset, setArrowOffset] = useState(12);
+  const [placement, setPlacement] = useState("top");
   const ref = useRef(null);
   const btnRef = useRef(null);
 
@@ -27,7 +28,8 @@ export default function FieldTooltip({ text }) {
     const rect = btnRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
 
-    const bottom = window.innerHeight - rect.top + GAP;
+    const cloudHeight = 120;
+    const opensBelow = rect.top < cloudHeight + GAP + MARGIN;
 
     let left = rect.left + rect.width / 2 - CLOUD_WIDTH / 2;
     left = Math.max(MARGIN, Math.min(left, viewportWidth - CLOUD_WIDTH - MARGIN));
@@ -36,7 +38,12 @@ export default function FieldTooltip({ text }) {
     const arrowLeft = iconCenterX - left;
 
     setArrowOffset(Math.max(10, Math.min(arrowLeft, CLOUD_WIDTH - 10)));
-    setCloudStyle({ bottom, left, top: "auto", transform: "none" });
+    setPlacement(opensBelow ? "bottom" : "top");
+    setCloudStyle(
+      opensBelow
+        ? { top: rect.bottom + GAP, left, bottom: "auto", transform: "none" }
+        : { bottom: window.innerHeight - rect.top + GAP, left, top: "auto", transform: "none" },
+    );
   }, []);
 
   useEffect(() => {
@@ -68,7 +75,7 @@ export default function FieldTooltip({ text }) {
 
       {open && (
         <div
-          className="field-tooltip-cloud"
+          className={`field-tooltip-cloud field-tooltip-cloud--${placement}`}
           role="tooltip"
           style={cloudStyle}
           ref={(el) => {

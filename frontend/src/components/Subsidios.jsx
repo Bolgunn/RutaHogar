@@ -16,115 +16,195 @@ function ConditionList({ items, variant }) {
   );
 }
 
+function ConditionGroup({ items, variant, label }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <details className={`benefit-condition-group benefit-condition-group--${variant}`}>
+      <summary>
+        <strong className={`benefit-detail-label benefit-detail-label--${variant}`}>{label}</strong>
+        <span>{items.length}</span>
+      </summary>
+      <ConditionList items={items} variant={variant} />
+    </details>
+  );
+}
+
+const normalizeBenefitText = (value = "") =>
+  String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+function getBenefitNotes(benefit) {
+  const notes = String(benefit?.notes || "").trim();
+  const pendingRequirements = Array.isArray(benefit?.conditions_not_met)
+    ? benefit.conditions_not_met.filter(Boolean)
+    : [];
+
+  if (!notes || pendingRequirements.length === 0) return notes;
+
+  const normalizedNotes = normalizeBenefitText(notes);
+  const normalizedPending = pendingRequirements.map(normalizeBenefitText).filter(Boolean);
+  const noteParts = notes
+    .split(/(?<=[.!?])\s+|[\n;•]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const isDuplicatedRequirement = (part) => {
+    const normalizedPart = normalizeBenefitText(part);
+    if (!normalizedPart) return false;
+    return normalizedPending.some(
+      (requirement) => normalizedPart.includes(requirement) || requirement.includes(normalizedPart),
+    );
+  };
+
+  const filteredParts = noteParts.filter((part) => !isDuplicatedRequirement(part));
+  if (filteredParts.length < noteParts.length) return filteredParts.join(" ");
+
+  const duplicatedCount = normalizedPending.filter((requirement) => normalizedNotes.includes(requirement)).length;
+  return duplicatedCount >= Math.min(2, normalizedPending.length) ? "" : notes;
+}
+
 export default function Subsidios({ evaluation, onNavigate }) {
-  const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
+  const hasProjectGoal = evaluation?.input?.property_value_source === "project_selection";
+  const data = useMemo(
+    () => buildRecommendations(hasProjectGoal ? evaluation : null),
+    [evaluation, hasProjectGoal],
+  );
   const openBenefitCapsule = (academyModule) => {
     const articleId = ACADEMY_BENEFIT_CAPSULES[academyModule];
     if (articleId) onNavigate?.("academia", { articleId });
     else onNavigate?.("academia");
   };
   const goToRecommendations = () => onNavigate?.("recommendations");
+  const goToProjects = () => onNavigate?.("projects");
 
   const benefits = data?.housing_benefits?.applicable_benefits || [];
+  const hasBenefitsAssessment = Array.isArray(data?.housing_benefits?.applicable_benefits);
   const disclaimer = data?.housing_benefits?.disclaimer || "";
   const summary = data?.housing_benefits?.summary || "";
   const eligibleCount = benefits.filter((b) => b.eligible).length;
 
   if (!evaluation) {
     return (
-      <section className="section-block simulation-panel">
+      <section className="section-block simulation-panel subsidios-page">
         <div className="section-heading">
           <span className="eyebrow">Subsidios</span>
           <h1>Beneficios habitacionales</h1>
         </div>
         <div className="empty-state">
-          <strong>Aún no tienes una preevaluación.</strong>
-          <p>Realiza una preevaluación para ver qué beneficios habitacionales podrían ser compatibles con tu perfil.</p>
+          <strong>Aún no tienes una precalificación.</strong>
+          <p>Realiza una precalificación para ver qué beneficios habitacionales podrían ser compatibles con tu perfil.</p>
           <button type="button" onClick={() => onNavigate?.("evaluate")}>Ir a precalificación</button>
         </div>
       </section>
     );
   }
 
+  if (!hasProjectGoal) {
+    return (
+      <section className="section-block simulation-panel subsidios-page">
+        <div className="section-heading">
+          <span className="eyebrow">Subsidios</span>
+          <h1>Beneficios habitacionales</h1>
+        </div>
+        <div className="empty-state">
+          <strong>Aún no tienes un proyecto seleccionado como meta.</strong>
+          <p>Selecciona un proyecto del catálogo y úsalo como meta para revisar qué beneficios podrían ser compatibles con el valor y la condición de esa vivienda.</p>
+          <button type="button" onClick={goToProjects}>Explorar proyectos</button>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="section-block simulation-panel">
+    <section className="section-block simulation-panel subsidios-page">
       <div className="section-heading">
         <span className="eyebrow">Subsidios</span>
         <h1>Beneficios habitacionales</h1>
-        <p>{summary}</p>
+        {summary && <p>{summary}</p>}
       </div>
 
-      <div className="simulation-summary-bar">
-        <div className="simulation-summary-stat">
-          <strong>{eligibleCount}</strong>
-          <span>de {benefits.length} compatibles</span>
+      {hasBenefitsAssessment ? <>
+        <div className="simulation-summary-bar">
+          <div className="simulation-summary-stat">
+            <strong>{eligibleCount}<small>/{benefits.length}</small></strong>
+            <span>beneficios compatibles</span>
+          </div>
+          <div className="simulation-summary-copy">
+            <strong>{eligibleCount > 0 ? "Alternativas compatibles para revisar" : "Sin alternativas compatibles por ahora"}</strong>
+            <p className="simulation-summary-text">
+              {eligibleCount > 0
+                ? "Consulta los requisitos y pasos de cada beneficio."
+                : "Revisa los requisitos pendientes para saber qué puedes fortalecer."}
+            </p>
+          </div>
         </div>
-        <p className="simulation-summary-text">
-          {eligibleCount > 0
-            ? "Tu perfil podría calificar para algunos de estos beneficios. Revisa los detalles abajo."
-            : "Ningún beneficio es compatible actualmente, pero algunos requisitos pueden fortalecerse."}
-        </p>
-      </div>
 
-      <div className="simulation-benefits-grid">
-        {benefits.map((benefit) => (
+        {disclaimer && (
+          <div className="simulation-disclaimer">
+            <strong>Importante</strong>
+            <p>{disclaimer}</p>
+          </div>
+        )}
+
+        <div className="simulation-benefits-grid">
+          {benefits.map((benefit) => {
+            const benefitNotes = getBenefitNotes(benefit);
+            return (
           <article
             key={benefit.type}
             className={`benefit-card ${benefit.eligible ? "benefit-card--eligible" : ""}`}
           >
             <div className="benefit-card-header">
-              <h3 className="benefit-card-title">{benefit.name}</h3>
+              <div>
+                <h3 className="benefit-card-title">{benefit.name}</h3>
+                {benefitNotes ? <p className="benefit-card-notes">{benefitNotes}</p> : null}
+              </div>
               <span className={`benefit-badge ${benefit.eligible ? "benefit-badge--eligible" : "benefit-badge--ineligible"}`}>
                 {benefit.eligible ? "Compatible" : "Requiere ajustes"}
               </span>
             </div>
 
-            <p className="benefit-card-notes">{benefit.notes}</p>
-
             <div className="benefit-card-details">
-              {benefit.conditions_met.length > 0 && (
-                <div className="benefit-card-detail-section">
-                  <strong className="benefit-detail-label benefit-detail-label--met">
-                    Requisitos cumplidos ({benefit.conditions_met.length})
-                  </strong>
-                  <ConditionList items={benefit.conditions_met} variant="met" />
-                </div>
-              )}
-              {benefit.conditions_not_met.length > 0 && (
-                <div className="benefit-card-detail-section">
-                  <strong className="benefit-detail-label benefit-detail-label--pending">
-                    Requisitos pendientes ({benefit.conditions_not_met.length})
-                  </strong>
-                  <ConditionList items={benefit.conditions_not_met} variant="pending" />
-                  {!benefit.eligible && (
-                    <div className="benefit-card-academy-link">
-                      <button type="button" className="text-button" onClick={() => openBenefitCapsule(benefit.academy_module)}>
-                        Descubre cómo cumplir este requisito en nuestra Academia Financiera
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <ConditionGroup
+                items={benefit.conditions_met}
+                variant="met"
+                label={`Cumples ${benefit.conditions_met.length} requisito${benefit.conditions_met.length === 1 ? "" : "s"}`}
+              />
+              <ConditionGroup
+                items={benefit.conditions_not_met}
+                variant="pending"
+                label={`Por revisar ${benefit.conditions_not_met.length} requisito${benefit.conditions_not_met.length === 1 ? "" : "s"}`}
+              />
             </div>
 
             {benefit.eligible && (
               <div className="benefit-card-actions">
                 <button type="button" className="primary-button" onClick={() => openBenefitCapsule(benefit.academy_module)}>
-                  Ver pasos en la Academia Financiera
+                  Ver pasos en Academia
+                </button>
+              </div>
+            )}
+            {!benefit.eligible && benefit.conditions_not_met.length > 0 && (
+              <div className="benefit-card-academy-link">
+                <button type="button" className="text-button" onClick={() => openBenefitCapsule(benefit.academy_module)}>
+                  Ver guía para avanzar
                 </button>
               </div>
             )}
           </article>
-        ))}
-      </div>
+            );
+          })}
+        </div>
 
-      <div className="simulation-disclaimer">
-        <p>{disclaimer}</p>
-      </div>
+      </> : <div className="empty-state"><strong>Esta calificación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
 
       <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
         <button type="button" className="secondary-button" onClick={goToRecommendations}>
-          Volver a Recomendaciones
+          Volver a Resultados
         </button>
       </div>
     </section>
