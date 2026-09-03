@@ -16112,6 +16112,7 @@ th {
 .project-catalog-card__status { padding: 3px 7px; border-radius: 999px; background: rgba(19,43,74,0.07); color: var(--rh-navy); }
 .project-catalog-card__status.is-disponible { background: rgba(37,99,84,0.13); color: #1c5b4b; }
 .project-catalog-card__status.is-en_construccion { background: rgba(212,168,67,0.2); color: #765009; }
+.project-catalog-card__developer { width: 100%; color: var(--rh-text-secondary); font-size: 0.84rem; font-weight: 700; }
 
 .project-evaluation-modal {
   position: fixed;
@@ -16169,6 +16170,7 @@ th {
 .projects-current-goal .eyebrow { margin: 0 0 3px; color: var(--rh-text-muted); }
 .projects-current-goal h2 { margin: 0; color: var(--rh-navy); font-family: var(--rh-font-display); font-size: 1.1rem; }
 .projects-current-goal p { margin: 3px 0 0; color: var(--rh-text-secondary); font-size: 0.86rem; }
+.projects-current-goal .projects-current-goal__developer { color: var(--rh-navy); font-size: 0.9rem; font-weight: 750; }
 .projects-current-goal .compact-button { width: auto; margin-left: auto; white-space: nowrap; }
 .projects-current-goal__details { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .projects-current-goal__details span { padding: 3px 7px; border: 1px solid rgba(19, 43, 74, 0.1); border-radius: var(--rh-radius-sm); color: var(--rh-text-secondary); font-size: 0.72rem; font-weight: 750; }

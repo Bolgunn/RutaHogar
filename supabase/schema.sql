@@ -648,6 +648,20 @@ create policy "Inmobiliarias select staff"
   for select
   using (public.get_my_role() = any (array['admin'::text, 'ejecutivo'::text]));
 
+drop policy if exists "Inmobiliarias select lead catalog" on public.inmobiliarias;
+create policy "Inmobiliarias select lead catalog"
+  on public.inmobiliarias
+  for select
+  using (
+    public.get_my_role() = 'usuario'
+    and exists (
+      select 1
+      from public.proyectos
+      where proyectos.inmobiliaria_id = inmobiliarias.id
+        and proyectos.estado <> 'agotado'
+    )
+  );
+
 drop policy if exists "Inmobiliarias insert global admin" on public.inmobiliarias;
 create policy "Inmobiliarias insert global admin"
   on public.inmobiliarias

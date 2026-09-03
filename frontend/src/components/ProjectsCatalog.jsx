@@ -178,6 +178,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
           <span className="eyebrow">Tu meta actual</span>
           <h2 id="current-goal-title">{currentGoalProject.nombre}</h2>
           <p>{currentGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(currentGoalProject)}</p>
+          {currentGoalProject.inmobiliaria && <p className="projects-current-goal__developer">Inmobiliaria: {currentGoalProject.inmobiliaria}</p>}
           <div className="projects-current-goal__details">
             <span>{propertyLabels[currentGoalProject.tipo_vivienda] || currentGoalProject.tipo_vivienda || "Vivienda"}</span>
             <span>{availabilityLabel(currentGoalProject.estado)}</span>
@@ -229,7 +230,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
-            <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}</div>
+            <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
             <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>

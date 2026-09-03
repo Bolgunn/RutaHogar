@@ -51,6 +51,7 @@ export function buildProjectGoalInput(baseInput = {}, project = {}, ufValueClp) 
       tipo_vivienda: project.tipo_vivienda || "",
       estado: project.estado || "",
       entrega_estimada: project.entrega_estimada || "",
+      inmobiliaria: project.inmobiliaria || "",
       precio_min_uf: valorUf,
       precio_max_uf: Number(project.precio_max_uf) || valorUf,
     },
