@@ -30,12 +30,14 @@ export default function ProjectEvaluationModal({
   onClose,
   onSelectProject,
   onSetGoal,
+  onNavigate,
   onToggleFavorite,
   isFavorite,
 }) {
   const [interestStatus, setInterestStatus] = useState("");
   const [actionError, setActionError] = useState("");
   const [goalPending, setGoalPending] = useState(false);
+  const [goalSuccess, setGoalSuccess] = useState(false);
   const [confirmGoalChange, setConfirmGoalChange] = useState(false);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
@@ -88,7 +90,8 @@ export default function ProjectEvaluationModal({
     }
     setGoalPending(true);
     try {
-      await onSetGoal(project);
+      const saved = await onSetGoal(project);
+      if (saved) setGoalSuccess(true);
     } finally {
       setGoalPending(false);
       setConfirmGoalChange(false);
@@ -112,7 +115,7 @@ export default function ProjectEvaluationModal({
           {item.project.nombre} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda} · {formatProjectPrice(item.project)}
         </button>)}
       </div>}
-      {interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
+      {goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
         <button

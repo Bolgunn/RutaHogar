@@ -68,13 +68,18 @@ function getBenefitNotes(benefit) {
 }
 
 export default function Subsidios({ evaluation, onNavigate }) {
-  const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
+  const hasProjectGoal = evaluation?.input?.property_value_source === "project_selection";
+  const data = useMemo(
+    () => buildRecommendations(hasProjectGoal ? evaluation : null),
+    [evaluation, hasProjectGoal],
+  );
   const openBenefitCapsule = (academyModule) => {
     const articleId = ACADEMY_BENEFIT_CAPSULES[academyModule];
     if (articleId) onNavigate?.("academia", { articleId });
     else onNavigate?.("academia");
   };
   const goToRecommendations = () => onNavigate?.("recommendations");
+  const goToProjects = () => onNavigate?.("projects");
 
   const benefits = data?.housing_benefits?.applicable_benefits || [];
   const hasBenefitsAssessment = Array.isArray(data?.housing_benefits?.applicable_benefits);
@@ -93,6 +98,22 @@ export default function Subsidios({ evaluation, onNavigate }) {
           <strong>Aún no tienes una precalificación.</strong>
           <p>Realiza una precalificación para ver qué beneficios habitacionales podrían ser compatibles con tu perfil.</p>
           <button type="button" onClick={() => onNavigate?.("evaluate")}>Ir a precalificación</button>
+        </div>
+      </section>
+    );
+  }
+
+  if (!hasProjectGoal) {
+    return (
+      <section className="section-block simulation-panel subsidios-page">
+        <div className="section-heading">
+          <span className="eyebrow">Subsidios</span>
+          <h1>Beneficios habitacionales</h1>
+        </div>
+        <div className="empty-state">
+          <strong>Aún no tienes un proyecto seleccionado como meta.</strong>
+          <p>Selecciona un proyecto del catálogo y úsalo como meta para revisar qué beneficios podrían ser compatibles con el valor y la condición de esa vivienda.</p>
+          <button type="button" onClick={goToProjects}>Explorar proyectos</button>
         </div>
       </section>
     );

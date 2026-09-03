@@ -219,6 +219,6 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
         </ProjectsCarousel>
       </section>}
     </>}
-    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} />}
+    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} />}
   </section>;
 }

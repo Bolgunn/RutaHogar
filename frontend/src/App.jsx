@@ -1340,14 +1340,14 @@ export default function App() {
         channel: "project_selection",
       });
 
-      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-      sessionStorage.removeItem("scoreleads_selected_plan_type");
-      navigateToPage("tracking");
-      alert("¡Meta financiera actualizada al nuevo proyecto! Revisa cómo se ajustaron tus proyecciones.");
-    } catch (err) {
-      console.error(err);
-      alert("Error al fijar el proyecto como meta.");
-    }
+       setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+       sessionStorage.removeItem("scoreleads_selected_plan_type");
+       return true;
+     } catch (err) {
+       console.error(err);
+       alert("Error al fijar el proyecto como meta.");
+       return false;
+     }
   };
 
   const handleLogout = async () => {

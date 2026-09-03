@@ -42,6 +42,9 @@ export function buildProjectGoalInput(baseInput = {}, project = {}, ufValueClp) 
     property_value_uf: roundCurrency(valorUf),
     property_value_clp: valorClp,
     property_value_source: "project_selection",
+    // Un proyecto en construcción corresponde a vivienda nueva para los
+    // requisitos que dependen de esa condición, como FOGAES y Ley 21.748.
+    vivienda_nueva: project.estado === "en_construccion",
     dividendo_estimado: dividendoEstimado,
     dividendo_esperado: dividendoEstimado,
     dividendo_estimado_origen: dividend == null ? baseInput.dividendo_estimado_origen : "calculado",

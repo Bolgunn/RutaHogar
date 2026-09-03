@@ -134,7 +134,7 @@ export const ACADEMY_ARTICLES = [
     topic: "credito",
     title: "¿Qué evalúa una institución financiera?",
     summary:
-      "Conoce por qué una evaluación hipotecaria considera más que tu ingreso mensual.",
+      "Fortalecer tus ingresos, deudas y respaldos puede ayudarte a llegar mejor preparado a una evaluación hipotecaria.",
     level: "Básico",
     minutes: 4,
     tags: [
@@ -144,7 +144,7 @@ export const ACADEMY_ARTICLES = [
       "capacidad de pago",
     ],
     body:
-      "Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito. La evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación.\n\nPor eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario. La decisión corresponde a la institución financiera y depende de sus políticas de evaluación y de las características concretas de la operación.\n\nEn RutaHogar, la calificación sirve como una referencia orientativa para identificar fortalezas y posibles bloqueadores del perfil. No reemplaza la evaluación formal de una institución financiera.",
+      "Entender qué se evalúa te ayuda a detectar con anticipación qué aspectos de tu perfil puedes ordenar o respaldar mejor antes de solicitar financiamiento. Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito.\n\nLa evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación. Por eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario.\n\nRevisar tus deudas, la continuidad de tus ingresos y tus antecedentes con tiempo puede ayudarte a iniciar el proceso con menos incertidumbre. La decisión corresponde a la institución financiera y depende de sus políticas y de las características concretas de la operación. En RutaHogar, la calificación es una referencia orientativa y no reemplaza esa evaluación formal.",
     sources: [
       {
         institution: "SERNAC",
@@ -227,12 +227,12 @@ export const ACADEMY_ARTICLES = [
     topic: "endeudamiento",
     title: "¿Cómo afectan tus otras deudas a un hipotecario?",
     summary:
-      "Un crédito automotriz, tarjetas u otras obligaciones pueden reducir el margen disponible para una nueva deuda.",
+      "Ordenar tus otras cuotas puede darte más margen para un dividendo y hacer más sostenible tu presupuesto.",
     level: "Básico",
     minutes: 4,
     tags: ["deuda", "carga financiera", "tarjetas"],
     body:
-      "Cuando solicitas un nuevo crédito, tus obligaciones financieras existentes forman parte del contexto que puede utilizarse para evaluar tu capacidad de pago.\n\nPor ejemplo, una cuota de crédito automotriz o compromisos derivados de otros productos financieros pueden disminuir el margen disponible para asumir un dividendo hipotecario.\n\nPor eso, antes de buscar una vivienda es útil elaborar un presupuesto que incluya todas tus cuotas y obligaciones, en lugar de considerar solamente el futuro dividendo.",
+      "Revisar tus otras deudas antes de buscar vivienda te permite saber si el dividendo cabe de verdad en tu presupuesto y qué podrías ajustar con anticipación.\n\nCuando solicitas un nuevo crédito, tus obligaciones financieras existentes forman parte del contexto que puede utilizarse para evaluar tu capacidad de pago. Por ejemplo, una cuota de crédito automotriz o compromisos derivados de otros productos financieros pueden disminuir el margen disponible para asumir un dividendo hipotecario.\n\nPor eso, antes de buscar una vivienda es útil elaborar un presupuesto que incluya todas tus cuotas y obligaciones, en lugar de considerar solamente el futuro dividendo.",
     sources: [
       {
         institution: "SERNAC",
@@ -269,7 +269,7 @@ export const ACADEMY_ARTICLES = [
     topic: "endeudamiento",
     title: "Cómo ordenar tus deudas antes de buscar vivienda",
     summary:
-      "Una estrategia sencilla para conocer tu situación financiera antes de comprometerte con una nueva deuda.",
+      "Ordenar tus deudas te ayuda a identificar margen real, priorizar decisiones y buscar una vivienda acorde a tu presupuesto.",
     level: "Básico",
     minutes: 4,
     tags: ["deuda", "presupuesto", "carga financiera"],
@@ -294,7 +294,7 @@ export const ACADEMY_ARTICLES = [
     topic: "carga",
     title: "¿Qué es la carga financiera?",
     summary:
-      "Aprende a relacionar tus ingresos con las obligaciones que ya tienes antes de asumir una nueva deuda.",
+      "Conocer tu carga financiera te ayuda a proteger tu margen mensual antes de sumar un dividendo.",
     level: "Básico",
     minutes: 4,
     tags: ["carga financiera", "deuda", "ingresos"],
@@ -316,7 +316,7 @@ export const ACADEMY_ARTICLES = [
     topic: "carga",
     title: "RCI: Relación Carga / Ingreso",
     summary:
-      "Entiende cómo leer la relación entre tus cuotas mensuales y tus ingresos antes de evaluar una vivienda.",
+      "Usar la RCI como referencia te ayuda a detectar si conviene ordenar deudas, ajustar la vivienda o revisar el plazo.",
     level: "Básico",
     minutes: 3,
     tags: ["RCI", "relación carga ingreso", "deuda/ingreso", "carga financiera", "dividendo"],
@@ -335,12 +335,12 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "¿Qué es el pie de una vivienda?",
     summary:
-      "Entiende qué parte del valor de una propiedad debes financiar con recursos propios según las condiciones de tu operación.",
+      "Planificar el pie te ayuda a reducir lo que necesitas financiar y a construir una compra más viable para tu presupuesto.",
     level: "Básico",
     minutes: 3,
     tags: ["pie", "ahorro", "vivienda"],
     body:
-      "El pie corresponde a la parte del valor de la vivienda que no se financia mediante el crédito hipotecario y que debe cubrirse con recursos propios u otras fuentes permitidas por la operación.\n\nNo existe un único porcentaje de pie que se aplique de manera universal a todos los créditos hipotecarios. El porcentaje financiado depende de las condiciones de la institución, del producto y de las características de la operación.\n\nUn mayor aporte propio puede reducir el monto que necesitas financiar, pero no debe interpretarse automáticamente como una garantía de aprobación o de una determinada tasa de interés.",
+      "Trabajar tu pie te permite dimensionar antes cuánto necesitas reunir y reducir el monto que deberías financiar.\n\nEl pie corresponde a la parte del valor de la vivienda que no se financia mediante el crédito hipotecario y que debe cubrirse con recursos propios u otras fuentes permitidas por la operación.\n\nNo existe un único porcentaje de pie que se aplique de manera universal a todos los créditos hipotecarios. El porcentaje financiado depende de las condiciones de la institución, del producto y de las características de la operación. Un mayor aporte propio puede reducir el monto que necesitas financiar, pero no garantiza por sí solo una aprobación o una determinada tasa de interés.",
     sources: [
       {
         institution: "CMF",
@@ -356,7 +356,7 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "Cómo planificar el ahorro para una vivienda",
     summary:
-      "Convierte una meta de ahorro en un objetivo mensual que puedas seguir y revisar.",
+      "Convertir tu meta en ahorro mensual te ayuda a avanzar con un plan realista y a ajustar a tiempo tu objetivo de vivienda.",
     level: "Básico",
     minutes: 4,
     tags: ["ahorro", "pie", "presupuesto"],
@@ -398,7 +398,7 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "Pie, ahorro y fondo de emergencia",
     summary:
-      "Ahorrar para el pie es importante, pero también conviene considerar la liquidez necesaria para enfrentar imprevistos.",
+      "Separar el pie de tu fondo de emergencia te ayuda a comprar sin quedar sin respaldo ante imprevistos.",
     level: "Intermedio",
     minutes: 4,
     tags: ["pie", "ahorro", "fondo de emergencia"],
@@ -449,7 +449,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "¿Qué es la CAE?",
     summary:
-      "La Carga Anual Equivalente permite comparar alternativas financieras bajo condiciones comparables.",
+      "Comparar la CAE entre ofertas equivalentes te ayuda a elegir mirando el costo, no solo la cuota o la tasa.",
     level: "Básico",
     minutes: 4,
     tags: ["CAE", "tasa", "costo"],
@@ -470,7 +470,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "Costo Total del Crédito",
     summary:
-      "Descubre cuánto terminarías pagando considerando los pagos del crédito durante todo el plazo.",
+      "Revisar el costo total te ayuda a evitar que una cuota baja esconda un compromiso más caro en el tiempo.",
     level: "Básico",
     minutes: 4,
     tags: ["costo total", "CAE", "dividendo"],
@@ -533,7 +533,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "Cómo comparar dos créditos hipotecarios",
     summary:
-      "Una metodología simple para comparar ofertas sin quedarse solamente con la tasa.",
+      "Comparar las condiciones completas te ayuda a elegir un crédito que cuide tu presupuesto mensual y el costo total.",
     level: "Intermedio",
     minutes: 5,
     tags: ["CAE", "costo total", "tasa", "comparación"],
@@ -563,7 +563,7 @@ export const ACADEMY_ARTICLES = [
     topic: "plazos",
     title: "El plazo del crédito: cuota baja no siempre es costo bajo",
     summary:
-      "El plazo influye tanto en la cuota mensual como en el costo total del crédito. Aprende a comparar alternativas mirando ambos.",
+      "Elegir bien el plazo te ayuda a equilibrar una cuota sostenible hoy con el costo que asumirás durante años.",
     level: "Básico",
     minutes: 4,
     tags: ["plazo", "cuota", "costo total"],
@@ -630,7 +630,7 @@ export const ACADEMY_ARTICLES = [
     topic: "uf",
     title: "¿Cómo afecta la UF a tu dividendo?",
     summary:
-      "Una cuota expresada en UF puede representar distintos montos en pesos a lo largo del tiempo.",
+      "Entender la UF te ayuda a preparar un presupuesto que resista cambios del dividendo en pesos.",
     level: "Intermedio",
     minutes: 4,
     tags: ["UF", "dividendo", "crédito"],
@@ -899,7 +899,7 @@ export const ACADEMY_ARTICLES = [
     topic: "vivienda",
     title: "Costos que debes considerar al comprar una vivienda",
     summary:
-      "El precio de la propiedad y el pie no representan necesariamente todos los recursos que necesitarás.",
+      "Presupuestar todos los costos de compra te ayuda a evitar que trámites y cargos desarmen tu plan de vivienda.",
     level: "Básico",
     minutes: 4,
     tags: ["gastos", "vivienda", "pie"],
@@ -920,7 +920,7 @@ export const ACADEMY_ARTICLES = [
     topic: "vivienda",
     title: "Qué revisar antes de comprometer la compra",
     summary:
-      "Antes de firmar una promesa o asumir una obligación importante, revisa la vivienda, el financiamiento y las condiciones del contrato.",
+      "Revisar la operación completa antes de firmar te ayuda a evitar compromisos que no calzan con tu presupuesto o condiciones.",
     level: "Intermedio",
     minutes: 5,
     tags: ["promesa", "contrato", "vivienda"],
@@ -1865,7 +1865,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "credito",
     title: "¿Por qué te evalúan más allá del sueldo?",
     description:
-      "Deudas actuales, codeudores y continuidad de ingresos también pesan en la decisión.",
+      "Qué puedes revisar antes para llegar con más respaldo a una evaluación hipotecaria.",
     minutes: 2,
     takeaways: [
       "La evaluación considera tus obligaciones financieras existentes.",
@@ -1880,7 +1880,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "endeudamiento",
     title: "El máximo aprobado no es tu meta",
     description:
-      "Cómo decidir cuánto pedir mirando tu presupuesto real, no el techo del banco.",
+      "Cómo proteger tu presupuesto eligiendo un monto sostenible, no solo el máximo posible.",
     minutes: 2,
     takeaways: [
       "El monto máximo que te aprueban puede exceder lo conveniente para ti.",
@@ -1895,7 +1895,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "carga",
     title: "Cuánto de tus ingresos ya está comprometido",
     description:
-      "La carga financiera explicada sin fórmulas mágicas ni porcentajes universales.",
+      "Detecta si te queda margen para un dividendo, gastos cotidianos e imprevistos.",
     minutes: 2,
     takeaways: [
       "Mide qué parte de tus ingresos ya se va en cuotas y obligaciones.",
@@ -1911,7 +1911,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "carga",
     title: "RCI: deuda e ingreso en una sola lectura",
     description:
-      "Una forma simple de entender cuánto margen queda antes de asumir un dividendo.",
+      "Una señal para decidir si ordenar deudas, ajustar la vivienda o revisar el plazo.",
     minutes: 2,
     takeaways: [
       "Compara obligaciones mensuales con ingresos disponibles.",
@@ -1927,7 +1927,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "ahorro",
     title: "El pie: tu primera meta de ahorro",
     description:
-      "Qué es el pie, cuánto juntar y cómo no descuidar tu fondo de emergencia.",
+      "Cómo convertir el pie en una meta viable sin quedarte sin respaldo para imprevistos.",
     minutes: 2,
     takeaways: [
       "El pie es la parte del valor que pagas con recursos propios.",
@@ -1942,7 +1942,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "costos",
     title: "Tasa, CAE y costo total: no son lo mismo",
     description:
-      "Los tres números que debes mirar antes de firmar cualquier crédito.",
+      "Las tres cifras que te ayudan a comparar el costo real antes de elegir un crédito.",
     minutes: 3,
     takeaways: [
       "La tasa es solo uno de los componentes del costo.",
@@ -1957,7 +1957,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "plazos",
     title: "Plazo largo: cuota menor, costo mayor",
     description:
-      "El trade-off entre lo que pagas cada mes y lo que pagas en total.",
+      "Cómo equilibrar una cuota que puedas sostener con el costo que asumirás a largo plazo.",
     minutes: 2,
     takeaways: [
       "A mayor plazo, la cuota baja pero pagas intereses por más tiempo.",
@@ -1972,7 +1972,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "uf",
     title: "UF: por qué tu dividendo cambia en pesos",
     description:
-      "Cómo funciona la reajustabilidad y qué significa para tu presupuesto mensual.",
+      "Cómo anticipar cambios en pesos y proteger el margen de tu presupuesto mensual.",
     minutes: 6,
     takeaways: [
       "La UF se reajusta diariamente según la variación del IPC.",
@@ -2018,7 +2018,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "vivienda",
     title: "Los gastos que vienen con la vivienda",
     description:
-      "Tasación, estudio de títulos, escritura: el precio no es el único desembolso.",
+      "Cómo incluir los costos de la operación para que la compra no desordene tu plan.",
     minutes: 4,
     takeaways: [
       "La compra puede incluir tasación, estudio de títulos y escritura.",

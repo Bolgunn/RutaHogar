@@ -97,6 +97,25 @@ describe("buildProjectGoalInput", () => {
     expect(result.property_value_uf).toBe(4000);
   });
 
+  it("marca vivienda nueva al fijar un proyecto en construccion", () => {
+    const result = buildProjectGoalInput(baseInput, {
+      precio_min_uf: 4000,
+      estado: "en_construccion",
+    }, UF);
+
+    expect(result.vivienda_nueva).toBe(true);
+  });
+
+  it("marca vivienda usada para proyectos sin estado de construccion", () => {
+    const result = buildProjectGoalInput(
+      { ...baseInput, vivienda_nueva: true },
+      { precio_min_uf: 4000, estado: "disponible" },
+      UF,
+    );
+
+    expect(result.vivienda_nueva).toBe(false);
+  });
+
   it("cae al uf_value_clp del input si no se pasa uno", () => {
     const result = buildProjectGoalInput(baseInput, project);
     expect(result.property_value_clp).toBe(5000 * UF);
