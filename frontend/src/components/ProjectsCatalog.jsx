@@ -4,6 +4,7 @@ import { buildSimulationContext, DEFAULT_UF_CLP } from "../lib/simulation/compat
 import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
+import { propertyLabels } from "../constants";
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -117,6 +118,19 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
   const ufValueClp = Number(context?.uf_value_clp) || DEFAULT_UF_CLP;
+  const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
+    ? evaluationBase.input.project_goal
+    : null;
+  const currentGoalProject = useMemo(() => {
+    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
+    if (currentGoal) return projects.find((project) => project.id === currentGoal.id) || currentGoal;
+
+    // Las metas previas a project_goal no tenían identificador. Solo se
+    // recuperan si el valor UF identifica de forma única al proyecto actual.
+    const valueUf = Number(evaluationBase.input.property_value_uf) || Number(evaluationBase.input.property_value);
+    const matches = projects.filter((project) => Number(project.precio_min_uf) === valueUf);
+    return matches.length === 1 ? matches[0] : null;
+  }, [currentGoal, evaluationBase?.input?.property_value, evaluationBase?.input?.property_value_source, evaluationBase?.input?.property_value_uf, projects]);
   const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
   const communes = useMemo(() => [...new Set(projects.map((project) => project.comuna).filter(Boolean))].sort(), [projects]);
   const visibleProjects = useMemo(() => {
@@ -158,6 +172,20 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
     ) : !projects.length ? (
       <div className="admin-compact-empty"><strong>No hay proyectos disponibles.</strong><p>Vuelve más tarde para revisar nuevas alternativas.</p></div>
     ) : <>
+      {currentGoalProject && <section className="projects-current-goal" aria-labelledby="current-goal-title">
+        <div className="projects-current-goal__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></div>
+        <div className="projects-current-goal__content">
+          <span className="eyebrow">Tu meta actual</span>
+          <h2 id="current-goal-title">{currentGoalProject.nombre}</h2>
+          <p>{currentGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(currentGoalProject)}</p>
+          <div className="projects-current-goal__details">
+            <span>{propertyLabels[currentGoalProject.tipo_vivienda] || currentGoalProject.tipo_vivienda || "Vivienda"}</span>
+            <span>{availabilityLabel(currentGoalProject.estado)}</span>
+            {formatDeliveryMonth(currentGoalProject.entrega_estimada) && <span>Entrega {formatDeliveryMonth(currentGoalProject.entrega_estimada)}</span>}
+          </div>
+        </div>
+        {projects.some((project) => project.id === currentGoalProject.id) && <button type="button" className="secondary-button compact-button" onClick={() => setSelectedProjectId(currentGoalProject.id)}>Ver compatibilidad</button>}
+      </section>}
       <section className="projects-catalog-discovery" aria-label="Filtros de proyectos">
         <div className="projects-catalog-discovery__top">
           <div className="projects-catalog-type-tabs" role="group" aria-label="Tipo de vivienda">
@@ -180,10 +208,11 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
 
         </div>
         <ProjectsCarousel>
-          {visibleProjects.map((project) => {
-            const isFavorite = favorites.includes(project.id);
-            return (
-          <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""}`} key={project.id}>
+           {visibleProjects.map((project) => {
+             const isFavorite = favorites.includes(project.id);
+             const isCurrentGoal = currentGoalProject?.id === project.id;
+             return (
+          <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
           {userId && (
             <button
               type="button"
@@ -196,7 +225,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
           )}
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span></div>
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong>Meta actual</strong>}</div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
@@ -219,6 +248,6 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
         </ProjectsCarousel>
       </section>}
     </>}
-    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} />}
+    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} />}
   </section>;
 }

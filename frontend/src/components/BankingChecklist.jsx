@@ -69,8 +69,8 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
   };
 
   return (
-    <section className="section-block banking-checklist-minimal">
-      <div className="section-heading compact banking-checklist-minimal__heading">
+    <>
+      <header className="banking-checklist-heading-card">
         <div>
           <span className="eyebrow">Preparación Bancaria</span>
           <h2>Checklist Referencial de Antecedentes</h2>
@@ -78,7 +78,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </div>
         {onNavigate && (
           <div className="academy-action-wrapper">
-            <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
+            <button type="button" className="checklist-academy-button" onClick={handleOpenAcademia}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
                 <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
@@ -90,8 +90,9 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
             </span>
           </div>
         )}
-      </div>
+      </header>
 
+      <section className="banking-checklist-minimal">
       {/* Criterio E3: Safeguards S1, S5, S7, S8 Banner Consolidado */}
       <div className="minimal-disclaimer-banner" role="alert">
         <div className="disclaimer-body">
@@ -163,6 +164,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </ul>
       </div>
 
-    </section>
+      </section>
+    </>
   );
 }

@@ -1317,13 +1317,12 @@ export default function App() {
 
     try {
       const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const payload = buildFinancialInput(
-        buildProjectGoalInput(
-          currentEvaluation.input,
-          project,
-          currentEvaluation.input?.uf_value_clp,
-        ),
+      const goalInput = buildProjectGoalInput(
+        currentEvaluation.input,
+        project,
+        currentEvaluation.input?.uf_value_clp,
       );
+      const payload = buildFinancialInput(goalInput);
 
       const res = await fetch(`${apiBase.replace(/\/$/, "")}/score`, {
         method: "POST",
@@ -1335,7 +1334,9 @@ export default function App() {
       const newEval = await createEvaluation(profile.id, {
         email: profile.email || "sin-email",
         onboarding: userOnboarding || null,
-        input: payload,
+        // La metadata de la meta se persiste con la evaluación, pero no se
+        // envía a /score para mantener el contrato del motor financiero.
+        input: { ...payload, project_goal: goalInput.project_goal },
         result: buildResultSnapshot(await res.json()),
         channel: "project_selection",
       });
