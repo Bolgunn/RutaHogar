@@ -1,7 +1,7 @@
 import { supabase } from "../utils/supabase";
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
-const SCORING_HISTORY_KEY = "scoreleads_scoring_history";
+const SCORING_HISTORY_KEY = "RutaHogar_scoring_history";
 const HISTORY_CLASSIFICATIONS = new Set(["Alto", "Medio", "Bajo"]);
 
 function readLocalScoringHistory() {

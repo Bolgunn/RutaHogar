@@ -141,7 +141,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <span className="eyebrow">Privacidad y datos personales</span>
           <h1>Autorización de Tratamiento de Datos Personales</h1>
           <p>
-            Antes de realizar tu pre-evaluación financiera, necesitamos que
+            Antes de realizar tu precalificación financiera, necesitamos que
             autorices el tratamiento de tus datos personales de acuerdo con la
             legislación chilena.
           </p>
@@ -152,7 +152,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <p>
             <strong>RutaHogar</strong> es la plataforma responsable del
             tratamiento de tus datos personales. Actuamos como encargados del
-            tratamiento para la evaluación de factibilidad de compra de
+            tratamiento para la calificación de factibilidad de compra de
             vivienda.
           </p>
           <p>
@@ -187,8 +187,8 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <h3>3. Finalidad del tratamiento</h3>
           <p>
             Tus datos serán utilizados <strong>exclusivamente</strong> para
-            evaluar la factibilidad de compra de una vivienda mediante un score
-            financiero orientativo.
+            la calificación de factibilidad de compra de una vivienda mediante
+            un score financiero orientativo.
           </p>
           <p>
             Conforme al principio de finalidad establecido en la{" "}
@@ -237,7 +237,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
           <p>
             Tus datos personales serán conservados por un período máximo de{" "}
             <strong>12 meses</strong> contados desde la fecha de tu última
-            evaluación. Transcurrido ese plazo, los datos serán eliminados de
+            calificación. Transcurrido ese plazo, los datos serán eliminados de
             nuestros sistemas activos, salvo que exista una obligación legal que
             requiera su retención por un período adicional.
           </p>
@@ -258,7 +258,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
             </div>
           ) : (
             <>
-              <label className="check-row" style={{ marginTop: "12px" }}>
+              <label className="check-row consent-check-row">
                 <input
                   type="checkbox"
                   checked={arcoOpen}
@@ -273,8 +273,7 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
               {arcoOpen && (
                 <form
                   onSubmit={handleArcoSubmit}
-                  className="arco-form"
-                  style={{ marginTop: "16px" }}
+                  className="arco-form consent-form-margin"
                 >
                   <label>
                     Tipo de solicitud
@@ -339,14 +338,14 @@ export default function DataConsent({ profile, onAccept, onBack, readonly }) {
                 He leído y acepto los términos de esta autorización de
                 tratamiento de datos personales, y reconozco que los datos
                 proporcionados serán utilizados exclusivamente para la
-                evaluación de factibilidad de compra de vivienda.
+                calificación de factibilidad de compra de vivienda.
               </span>
             </label>
             <div className="consent-actions">
               <button className="secondary-button" onClick={onBack}>
                 Volver
               </button>
-              <button disabled={!accepted} onClick={handleAccept}>
+              <button className="consent-accept-btn" disabled={!accepted} onClick={handleAccept}>
                 Aceptar y continuar
               </button>
             </div>

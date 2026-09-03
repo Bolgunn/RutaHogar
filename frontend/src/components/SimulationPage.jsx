@@ -6,6 +6,7 @@ import {
   evaluateScenario,
   getMaxValueRange,
   getScenarioFromManualValue,
+  projectToScenario,
 } from "../lib/simulation/compatibility";
 import {
   catalogProjectsToSimulation,
@@ -17,6 +18,8 @@ import { CLP_FORMATTER } from "../services/financialTracking";
 import { plazoLabels, propertyLabels } from "../constants";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
+const MAX_MANUAL_UF_VALUE = 9999999;
+const MAX_MANUAL_UF_DIGITS = String(MAX_MANUAL_UF_VALUE).length;
 
 const statusClass = {
   Compatible: "compatible",
@@ -71,17 +74,7 @@ function getProjectLabel(project) {
 
 function projectToComparable(project, context, ufValueClp) {
   if (!project) return null;
-  const scenario = {
-    id: project.id,
-    source: "project",
-    label: project.nombre,
-    comuna: project.comuna,
-    tipo_vivienda: project.tipo_vivienda,
-    valueUf: Number(project.valor_uf) || 0,
-    valueClp: Number(project.valor_clp) || Math.round((Number(project.valor_uf) || 0) * ufValueClp),
-    project,
-  };
-  return evaluateScenario(context, scenario);
+  return evaluateScenario(context, projectToScenario(project, ufValueClp));
 }
 
 function getScenarioName(result) {
@@ -90,6 +83,7 @@ function getScenarioName(result) {
 
 function getScenarioChartName(result) {
   const name = getScenarioName(result);
+  if (/referencial$/i.test(name.trim())) return name;
   if (result?.project || result?.scenario?.source === "project") return `${name} Referencial`;
   return name;
 }
@@ -123,14 +117,61 @@ function formatMetricValue(value, unit) {
   return Math.round(number).toLocaleString("es-CL");
 }
 
-function getRecommendationLabel(recommendation) {
-  const labels = {
-    escenario_actual: "Escenario actual",
-    alternativa: "Alternativa",
-    similar: "Similares",
-    sin_datos_suficientes: "Sin datos suficientes",
+function getMetricDeltaMeta(metric) {
+  const delta = Number(metric.alternative) - Number(metric.current);
+  const hasDelta = Number.isFinite(delta);
+  const isNeutral = !hasDelta || Math.abs(delta) < 0.5;
+  const improves = metric.lowerIsBetter ? delta < 0 : delta > 0;
+  const tone = isNeutral ? "neutral" : improves ? "good" : "bad";
+
+  if (metric.currentLabel || metric.alternativeLabel) {
+    return {
+      tone,
+      value: `${metric.currentLabel || metric.current} -> ${metric.alternativeLabel || metric.alternative}`,
+      caption: isNeutral ? "Sin cambio" : improves ? "Mejora" : "Empeora",
+    };
+  }
+
+  const displayDelta = isNeutral ? 0 : delta;
+  const sign = displayDelta > 0 ? "+" : "";
+  return {
+    tone,
+    value: `${sign}${formatMetricValue(displayDelta, metric.unit)}`,
+    caption: isNeutral ? "Sin cambio" : improves ? "Mejora" : "Empeora",
   };
-  return labels[recommendation] || "Referencial";
+}
+
+function buildScenarioChecks(result) {
+  if (!result) return [];
+  const hasBaseData = Number(result.income) > 0 && Number(result.valueClp) > 0;
+  const hasDeclaredDividend = Number(result.dividend) > 0;
+  return [
+    {
+      label: "Pie mínimo",
+      value: result.gapMinimo > 0 ? `Brecha ${formatUf(result.gapMinimoUf)}` : "Cubierto",
+      state: result.gapMinimo > 0 ? "review" : "ok",
+    },
+    {
+      label: "Pie recomendado",
+      value: result.gapRecomendado > 0 ? `Brecha ${formatUf(result.gapRecomendadoUf)}` : "Cubierto",
+      state: result.gapRecomendado > 0 ? "review" : "ok",
+    },
+    {
+      label: "Deuda mensual",
+      value: formatPercent(result.debtRatio),
+      state: result.debtRatio > 0.4 ? "review" : "ok",
+    },
+    {
+      label: "Dividendo",
+      value: hasDeclaredDividend ? formatClp(result.dividend) : "No declarado",
+      state: hasDeclaredDividend ? (result.dividend > result.prudentDividend ? "review" : "ok") : "neutral",
+    },
+    {
+      label: "Datos base",
+      value: hasBaseData ? "Completos" : "Incompletos",
+      state: hasBaseData ? "ok" : "review",
+    },
+  ];
 }
 
 function AdvantageList({ title, items }) {
@@ -146,76 +187,190 @@ function AdvantageList({ title, items }) {
   );
 }
 
-const chartViews = [
-  { id: "bars", label: "Barras" },
-  { id: "deltas", label: "Diferencias" },
-  { id: "cards", label: "Resumen" },
-];
+function AlternativesCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
 
-function ChartViewIcon({ type }) {
+  const updateArrows = () => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
   return (
-    <span className={`chart-view-icon ${type}`} aria-hidden="true">
-      <i />
-      <i />
-      <i />
+    <div className={`simulation-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Anterior"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="simulation-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="simulation-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Siguiente"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function ComparisonQuickRead({ insights }) {
+  const usefulAlternative = (insights.advantages?.alternative || []).find((item) => !item.startsWith("No presenta"));
+  const usefulCurrent = (insights.advantages?.current || []).find((item) => !item.startsWith("No presenta"));
+  const usefulConsideration = (insights.considerations || []).find((item) => !item.startsWith("No se detecta"));
+  const items = [
+    usefulAlternative ? `Alternativa: ${usefulAlternative}` : null,
+    usefulCurrent ? `Actual: ${usefulCurrent}` : null,
+    usefulConsideration ? `A considerar: ${usefulConsideration}` : "No hay una diferencia dominante entre ambos escenarios.",
+  ].filter(Boolean).slice(0, 3);
+
+  return (
+    <div className="comparison-quick-read">
+      <div>
+        <span className="eyebrow">LECTURA RÁPIDA</span>
+        <strong>{insights.title}</strong>
+      </div>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function getMetricVisualPosition(metric, key) {
+  const value = Number(metric[key]);
+  const current = Number(metric.current);
+  const alternative = Number(metric.alternative);
+  const maxScale = Number(metric.max) || Math.max(current, alternative, 1);
+  if (!Number.isFinite(value) || !Number.isFinite(current) || !Number.isFinite(alternative)) return 50;
+
+  if (metric.id === "compatibilidad" || metric.id === "preferencias") {
+    return Math.max(8, Math.min(96, (value / Math.max(maxScale, 1)) * 88 + 8));
+  }
+
+  const min = Math.min(current, alternative);
+  const max = Math.max(current, alternative);
+  if (Math.abs(max - min) < 0.5) {
+    if (metric.id === "brecha-pie" && max <= 0) return 96;
+    return 52;
+  }
+
+  const normalized = metric.lowerIsBetter ? (max - value) / (max - min) : (value - min) / (max - min);
+  return 8 + Math.max(0, Math.min(1, normalized)) * 88;
+}
+
+function getMetricGuide(metric) {
+  if (metric.id === "compatibilidad") return "Mejor estado conviene";
+  if (metric.id === "preferencias") return "Más coincidencias conviene";
+  return metric.lowerIsBetter ? "Menor conviene" : "Mayor conviene";
+}
+
+function getMetricShortDelta(metric) {
+  const current = Number(metric.current);
+  const alternative = Number(metric.alternative);
+  const delta = alternative - current;
+
+  if (metric.id === "compatibilidad") {
+    return metric.currentLabel === metric.alternativeLabel ? "Mismo estado" : "Cambia estado";
+  }
+  if (metric.id === "preferencias") {
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.5) return "Mismas preferencias";
+    const value = Math.round(delta);
+    const suffix = Math.abs(value) === 1 ? "coincidencia" : "coincidencias";
+    return `${value > 0 ? "+" : ""}${value} ${suffix}`;
+  }
+  if (metric.id === "brecha-pie" && current <= 0 && alternative <= 0) return "Sin brecha";
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.5) return "Sin diferencia";
+  return `${delta > 0 ? "+" : ""}${formatMetricValue(delta, metric.unit)}`;
+}
+
+function ComparisonMetricValue({ tone, label, value, metric }) {
+  return (
+    <span className={`comparison-dumbbell-value ${tone}`}>
+      <i className={tone} />
+      <small>{label}</small>
+      <b className={metric.id === "compatibilidad" ? "status-metric-value" : ""}>{value}</b>
     </span>
   );
 }
 
-function ComparisonViewToggle({ value, onChange }) {
+function ComparisonDumbbell({ metrics, currentName, alternativeName }) {
   return (
-    <div className="comparison-chart-toggle" aria-label="Cambiar visualización de comparación">
-      {chartViews.map((view) => (
-        <button
-          className={value === view.id ? "is-active" : ""}
-          key={view.id}
-          type="button"
-          title={view.label}
-          aria-label={`Ver ${view.label.toLowerCase()}`}
-          aria-pressed={value === view.id}
-          onClick={() => onChange(view.id)}
-        >
-          <ChartViewIcon type={view.id} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ComparisonBars({ metrics, currentName, alternativeName }) {
-  return (
-    <div className="comparison-bars" aria-label="Visualización comparativa de escenarios">
+    <div className="comparison-dumbbell-card" aria-label="Gráfico comparativo de indicadores">
+      <div className="comparison-dumbbell-legend">
+        <span><i className="current" />{currentName}</span>
+        <span><i className="alternative" />{alternativeName}</span>
+        <small>Más a la derecha = mejor condición referencial.</small>
+      </div>
       {metrics.map((metric) => {
-        const currentWidth = metric.max > 0 ? Math.max(4, Math.min(100, (metric.current / metric.max) * 100)) : 4;
-        const alternativeWidth = metric.max > 0 ? Math.max(4, Math.min(100, (metric.alternative / metric.max) * 100)) : 4;
-        const currentBetter = metric.lowerIsBetter ? metric.current < metric.alternative : metric.current > metric.alternative;
-        const alternativeBetter = metric.lowerIsBetter ? metric.alternative < metric.current : metric.alternative > metric.current;
+        const currentPosition = getMetricVisualPosition(metric, "current");
+        const alternativePosition = getMetricVisualPosition(metric, "alternative");
+        const start = Math.min(currentPosition, alternativePosition);
+        const width = Math.abs(currentPosition - alternativePosition);
+        const deltaMeta = getMetricDeltaMeta(metric);
+        const deltaLabel = getMetricShortDelta(metric);
+        const currentValue = metric.currentLabel || formatMetricValue(metric.current, metric.unit);
+        const alternativeValue = metric.alternativeLabel || formatMetricValue(metric.alternative, metric.unit);
 
         return (
-          <article className="comparison-bar-row" key={metric.id}>
-            <div className="comparison-bar-heading">
+          <article className="comparison-dumbbell-row" key={metric.id}>
+            <div className="comparison-dumbbell-meta">
               <strong>{metric.label}</strong>
-              <span>{metric.lowerIsBetter ? "Menor es mejor" : "Mayor es mejor"}</span>
+              <span>{getMetricGuide(metric)}</span>
             </div>
-            <div className="comparison-bar-pair">
-              <span className="comparison-scenario-name">{currentName}</span>
-              <div className="comparison-bar-track">
-                <i
-                  className={`is-current ${currentBetter ? "is-better" : ""}`}
-                  style={{ width: `${currentWidth}%` }}
-                />
-              </div>
-              <strong>{metric.currentLabel || formatMetricValue(metric.current, metric.unit)}</strong>
+
+            <div className="comparison-dumbbell-values">
+              <ComparisonMetricValue tone="current" label="Actual" value={currentValue} metric={metric} />
+              <ComparisonMetricValue tone="alternative" label="Alternativa" value={alternativeValue} metric={metric} />
             </div>
-            <div className="comparison-bar-pair">
-              <span className="comparison-scenario-name">{alternativeName}</span>
-              <div className="comparison-bar-track">
-                <i
-                  className={`is-alternative ${alternativeBetter ? "is-better" : ""}`}
-                  style={{ width: `${alternativeWidth}%` }}
-                />
-              </div>
-              <strong>{metric.alternativeLabel || formatMetricValue(metric.alternative, metric.unit)}</strong>
+
+            <div className="comparison-dumbbell-track" aria-hidden="true">
+              <i
+                className="comparison-dumbbell-connector"
+                style={{ left: `${start}%`, width: `${width}%` }}
+              />
+              <span className="comparison-dumbbell-point current" style={{ left: `${currentPosition}%` }} />
+              <span className="comparison-dumbbell-point alternative" style={{ left: `${alternativePosition}%` }} />
+            </div>
+
+            <div className="comparison-dumbbell-result">
+              <b className={`delta-value ${deltaMeta.tone}`}>{deltaLabel}</b>
             </div>
           </article>
         );
@@ -224,77 +379,35 @@ function ComparisonBars({ metrics, currentName, alternativeName }) {
   );
 }
 
-function getMetricDelta(metric) {
-  if (metric.currentLabel || metric.alternativeLabel) {
-    return `${metric.currentLabel || metric.current} / ${metric.alternativeLabel || metric.alternative}`;
-  }
-  const delta = Number(metric.alternative) - Number(metric.current);
-  const sign = delta > 0 ? "+" : "";
-  return `${sign}${formatMetricValue(delta, metric.unit)}`;
-}
-
-function ComparisonDeltas({ metrics, currentName, alternativeName }) {
+function ComparisonVisual({ metrics, currentName, alternativeName, insights }) {
   return (
-    <div className="comparison-delta-grid" aria-label="Diferencias principales entre escenarios">
-      {metrics.map((metric) => {
-        const currentBetter = metric.lowerIsBetter ? metric.current < metric.alternative : metric.current > metric.alternative;
-        const alternativeBetter = metric.lowerIsBetter ? metric.alternative < metric.current : metric.alternative > metric.current;
-        return (
-          <article key={metric.id}>
-            <span>{metric.label}</span>
-            <strong>{getMetricDelta(metric)}</strong>
-            <small>
-              {currentBetter && `${currentName} queda mejor en este indicador.`}
-              {alternativeBetter && `${alternativeName} queda mejor en este indicador.`}
-              {!currentBetter && !alternativeBetter && "Ambos escenarios quedan parecidos en este indicador."}
-            </small>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
-
-function ComparisonCards({ metrics, currentName, alternativeName }) {
-  return (
-    <div className="comparison-card-visual" aria-label="Resumen visual de escenarios">
-      {[{ name: currentName, key: "current" }, { name: alternativeName, key: "alternative" }].map((scenario) => (
-        <article key={scenario.key}>
-          <strong>{scenario.name}</strong>
-          {metrics.map((metric) => (
-            <p key={metric.id}>
-              <span>{metric.label}</span>
-              <b>{metric[`${scenario.key}Label`] || formatMetricValue(metric[scenario.key], metric.unit)}</b>
-            </p>
-          ))}
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function ComparisonVisual({ metrics, currentName, alternativeName, view, onViewChange }) {
-  return (
-    <div className="comparison-visual">
-      <div className="comparison-visual-heading">
-        <div>
+    <details className="comparison-visual-details" open>
+      <summary>
+        <span>
           <span className="eyebrow">Vista comparativa</span>
           <h4>Indicadores principales</h4>
-        </div>
-        <ComparisonViewToggle value={view} onChange={onViewChange} />
+        </span>
+        <span className="comparison-visual-summary-actions">
+          <i className="ti ti-chevron-down" aria-hidden="true" />
+        </span>
+      </summary>
+      <div className="comparison-visual">
+        <ComparisonQuickRead insights={insights} />
+        <ComparisonDumbbell metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
       </div>
-      {view === "deltas" ? (
-        <ComparisonDeltas metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-      ) : view === "cards" ? (
-        <ComparisonCards metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-      ) : (
-        <ComparisonBars metrics={metrics} currentName={currentName} alternativeName={alternativeName} />
-      )}
-    </div>
+    </details>
   );
 }
 
 function ConceptHelpCta({ onNavigate }) {
+  const handleAcademiaClick = () => {
+    onNavigate("academia");
+    if (typeof window === "undefined") return;
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  };
+
   return (
     <section className="simulation-academy-cta" aria-labelledby="simulation-academy-title">
       <div>
@@ -303,7 +416,7 @@ function ConceptHelpCta({ onNavigate }) {
         <p>Entra a la Academia e infórmate antes de decidir qué escenario quieres mirar con más detalle.</p>
       </div>
       {onNavigate ? (
-        <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("academia")}>
+        <button className="secondary-button compact-button" type="button" onClick={handleAcademiaClick}>
           Ir a Academia
         </button>
       ) : (
@@ -321,18 +434,18 @@ function RecommendationEmpty({ onStartEvaluation }) {
       <div className="section-heading">
         <span className="eyebrow">Simulación</span>
         <h1>Simulación de compatibilidad</h1>
-        <p>Necesitas una preevaluación guardada para comparar escenarios con tu perfil financiero actual.</p>
+        <p>Necesitas una precalificación guardada para comparar escenarios con tu perfil financiero actual.</p>
       </div>
       <div className="empty-state">
-        <strong>Aún no tienes una evaluación disponible.</strong>
-        <p>Completa la preevaluación para activar simulaciones referenciales de vivienda.</p>
+        <strong>Aún no tienes una calificación disponible.</strong>
+        <p>Completa la precalificación para activar simulaciones referenciales de vivienda.</p>
         <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
       </div>
     </section>
   );
 }
 
-export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate }) {
+export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate, initialProjectId }) {
   const context = useMemo(
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
@@ -345,8 +458,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [compareProjectId, setCompareProjectId] = useState("");
   const [manualUf, setManualUf] = useState("");
+  const [manualUfError, setManualUfError] = useState("");
   const [comparison, setComparison] = useState(null);
-  const [comparisonView, setComparisonView] = useState("bars");
   const [targetProject, setTargetProject] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(TARGET_PROJECT_KEY)) || null;
@@ -355,6 +468,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     }
   });
   const comparisonRef = useRef(null);
+  const resultRef = useRef(null);
 
   // El catálogo (HU 7) es la única fuente de proyectos. Antes se leía un
   // arreglo hardcodeado en el bundle, que quedó fuera de sincronía con lo que
@@ -387,6 +501,14 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     );
   }, [projects]);
 
+  useEffect(() => {
+    if (!initialProjectId || !projects.some((project) => project.id === initialProjectId)) return;
+    setMode("project");
+    setSelectedProjectId(initialProjectId);
+    setCompareProjectId("");
+    setComparison(null);
+  }, [initialProjectId, projects]);
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
@@ -404,16 +526,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const scenario = useMemo(() => {
     if (mode === "manual") return manualScenario;
     if (!selectedProject) return null;
-    return {
-      id: selectedProject.id,
-      source: "project",
-      label: selectedProject.nombre,
-      comuna: selectedProject.comuna,
-      tipo_vivienda: selectedProject.tipo_vivienda,
-      valueUf: Number(selectedProject.valor_uf) || 0,
-      valueClp: Number(selectedProject.valor_clp) || Math.round((Number(selectedProject.valor_uf) || 0) * ufValueClp),
-      project: selectedProject,
-    };
+    return projectToScenario(selectedProject, ufValueClp);
   }, [manualScenario, mode, selectedProject, ufValueClp]);
 
   const scenarioResult = useMemo(
@@ -425,14 +538,13 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     [context, onboarding, projects],
   );
   const maxRange = useMemo(() => getMaxValueRange(context), [context]);
-  const hasManualValue = mode !== "manual" || Number(manualUf) > 0;
+  const hasManualValue = mode !== "manual" || (Number(manualUf) > 0 && !manualUfError);
   const currentComparable = scenarioResult && hasManualValue ? scenarioResult : null;
   const targetProjectId = targetProject?.id || "";
   const compareProjectResult = useMemo(
     () => projectToComparable(compareProject, context, ufValueClp),
     [compareProject, context, ufValueClp],
   );
-  const hasDeclaredDividend = Number(context.dividendo_estimado) > 0;
   const comparisonPreferences = useMemo(
     () => ({
       comuna_objetivo: onboarding?.comuna_interes || context.comuna_objetivo,
@@ -445,26 +557,77 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     () => buildComparisonInsights(comparison?.current || currentComparable, comparison?.alternative, comparisonPreferences),
     [comparison, comparisonPreferences, currentComparable],
   );
+  const isSelfProjectComparison = mode === "project" && compareProjectId && compareProjectId === selectedProjectId;
+  const comparisonAlternativeProjectId = comparison?.alternative?.project?.id || comparison?.alternative?.scenario?.id || "";
+  const isComparisonAgainstCurrentProject =
+    mode === "project" && comparisonAlternativeProjectId && comparisonAlternativeProjectId === selectedProjectId;
 
   useEffect(() => {
-    if (comparison && comparisonRef.current) {
-      comparisonRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!comparison) return;
+    if (isComparisonAgainstCurrentProject) {
+      setComparison(null);
+      return;
     }
-  }, [comparison]);
+    if (resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [comparison, isComparisonAgainstCurrentProject]);
 
   useEffect(() => {
-    if (comparison?.source === "project-selector" && currentComparable && compareProjectResult) {
+    if (comparison?.source !== "project-selector") return;
+    if (!currentComparable || !compareProjectResult || isSelfProjectComparison) {
+      setComparison(null);
+      return;
+    }
+    if (comparison?.source === "project-selector") {
       setComparison({
         source: "project-selector",
         current: currentComparable,
         alternative: compareProjectResult,
       });
     }
-  }, [comparison?.source, compareProjectResult, currentComparable]);
+  }, [comparison?.source, compareProjectResult, currentComparable, isSelfProjectComparison]);
+
+  const handleSelectedProjectChange = (projectId) => {
+    setSelectedProjectId(projectId);
+    if (compareProjectId === projectId) {
+      setComparison((prev) => (prev?.source === "project-selector" ? null : prev));
+    }
+  };
+
+  const handleManualUfChange = (event) => {
+    const rawValue = event.target.value;
+    const digits = rawValue.replace(/\D/g, "");
+
+    if (!rawValue) {
+      setManualUf("");
+      setManualUfError("");
+      return;
+    }
+
+    if (rawValue !== digits) {
+      setManualUf(digits.slice(0, MAX_MANUAL_UF_DIGITS));
+      setManualUfError("Ingresa solo números en UF.");
+      return;
+    }
+
+    if (digits.length > MAX_MANUAL_UF_DIGITS || Number(digits) > MAX_MANUAL_UF_VALUE) {
+      setManualUf(digits.slice(0, MAX_MANUAL_UF_DIGITS));
+      setManualUfError("Ingresa un valor de hasta 9.999.999 UF.");
+      return;
+    }
+
+    setManualUf(digits);
+    setManualUfError("");
+  };
 
   const handleCompareProjectChange = (projectId) => {
     setCompareProjectId(projectId);
     if (!projectId) {
+      setComparison((prev) => (prev?.source === "project-selector" ? null : prev));
+      return;
+    }
+    if (mode === "project" && projectId === selectedProjectId) {
       setComparison((prev) => (prev?.source === "project-selector" ? null : prev));
       return;
     }
@@ -509,9 +672,16 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   };
 
   const handleCompareAlternative = (item) => {
+    if (mode === "project" && item?.project?.id === selectedProjectId) {
+      setComparison((prev) => (prev?.source === "accessible-option" ? null : prev));
+      return;
+    }
     if (!currentComparable) {
       setComparison({ error: true });
       return;
+    }
+    if (item?.project?.id) {
+      setCompareProjectId(item.project.id);
     }
     setComparison({
       source: "accessible-option",
@@ -546,27 +716,72 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
 
   return (
     <section className="section-block simulation-page">
-      <div className="section-heading">
-        <span className="eyebrow">Simulación</span>
-        <h1>Compatibilidad y alternativas</h1>
-        <p>
-          Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última preevaluación.
-        </p>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Simulación</span>
+          <h1>Compatibilidad y alternativas</h1>
+          <p>
+            Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última precalificación.
+          </p>
+        </div>
       </div>
 
       <div className="simulation-disclaimer">
+        <i className="ti ti-info-circle"></i>
         Esta simulación es referencial y se basa en datos declarados. No corresponde a aprobación bancaria, preaprobación, tasación ni cotización formal.
       </div>
 
       <div className="simulation-layout">
-        <div className="simulator-panel">
+        <div className="simulation-config-stack">
+          <div className="simulation-preferences simulation-preferences-card is-prominent">
+            <div className="simulation-preferences-header">
+              <span className="eyebrow">Preferencias consideradas</span>
+              {onNavigate ? (
+                <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("profile")}>
+                  Editar perfil
+                </button>
+              ) : null}
+            </div>
+            <div className="simulation-preference-list">
+              <article className="simulation-preference-item">
+                <i className="ti ti-map-pin" aria-hidden="true" />
+                <div>
+                  <span>Comuna objetivo</span>
+                  <strong>{targetCommune}</strong>
+                </div>
+              </article>
+              <article className="simulation-preference-item">
+                <i className="ti ti-building" aria-hidden="true" />
+                <div>
+                  <span>Tipo preferido</span>
+                  <strong>{typePreference}</strong>
+                </div>
+              </article>
+              <article className="simulation-preference-item">
+                <i className="ti ti-calendar" aria-hidden="true" />
+                <div>
+                  <span>Horizonte</span>
+                  <strong>{horizon}</strong>
+                </div>
+              </article>
+              <article className="simulation-preference-item">
+                <i className="ti ti-target-arrow" aria-hidden="true" />
+                <div>
+                  <span>Objetivo</span>
+                  <strong>{targetGoal}</strong>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div className="simulation-base-card">
           <div className="simulation-panel-heading">
             <span className="eyebrow">Escenario base</span>
-            <h2>Elige qué quieres evaluar</h2>
+            <h2 className="recommendation-section-title"><i className="ti ti-settings"></i> Elige qué quieres evaluar</h2>
           </div>
 
           <div className="simulation-actions">
-            <div className="segmented-control simulation-mode">
+            <div className="regime-segmented-toggle simulation-mode">
               <button className={mode === "project" ? "is-active" : ""} type="button" onClick={() => setMode("project")}>
                 Proyecto referencial
               </button>
@@ -583,7 +798,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                 <select
                   value={selectedProjectId}
                   disabled={!hasProjects}
-                  onChange={(event) => setSelectedProjectId(event.target.value)}
+                  onChange={(event) => handleSelectedProjectChange(event.target.value)}
                 >
                   {hasProjects ? null : <option value="">Sin proyectos disponibles</option>}
                   {projects.map((project) => (
@@ -592,23 +807,20 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                     </option>
                   ))}
                 </select>
-                <span className="field-help">
-                  {catalogNotice ||
-                    "Los proyectos mostrados son referenciales para simulación y pueden no representar disponibilidad real. El precio parte en la unidad más económica del proyecto."}
-                </span>
               </label>
             ) : (
               <label className="simulator-field">
                 Valor de vivienda en UF
                 <input
-                  min="0"
                   inputMode="numeric"
-                  type="number"
+                  type="text"
                   value={manualUf}
-                  onChange={(event) => setManualUf(event.target.value)}
+                  onChange={handleManualUfChange}
+                  aria-invalid={manualUfError ? "true" : "false"}
+                  aria-describedby={manualUfError ? "manual-uf-error" : undefined}
                   placeholder="Ej: 2800"
                 />
-                <span className="field-help">Se mostrará su equivalente aproximado en CLP usando la UF referencial disponible.</span>
+                {manualUfError && <span id="manual-uf-error" className="simulator-field-error">{manualUfError}</span>}
               </label>
             )}
 
@@ -622,190 +834,51 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                 <option value="">
                   {hasProjects ? "Selecciona proyecto para comparar" : "Sin proyectos disponibles"}
                 </option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {getProjectLabel(project)}
-                  </option>
-                ))}
+                {projects.map((project) => {
+                  const isCurrentProject = mode === "project" && project.id === selectedProjectId;
+                  return (
+                    <option disabled={isCurrentProject} key={project.id} value={project.id}>
+                      {isCurrentProject ? `${getProjectLabel(project)} · Escenario actual` : getProjectLabel(project)}
+                    </option>
+                  );
+                })}
               </select>
-              <span className="field-help">
-                Este selector compara el escenario base contra cualquier proyecto referencial.
-              </span>
             </label>
           </div>
 
-          <div className="simulation-preferences">
-            <div className="simulation-panel-heading compact">
-              <span className="eyebrow">Preferencias consideradas</span>
-              <div className="simulation-preferences-copy">
-                <p>
-                  Estamos usando tus respuestas preliminares para comuna, tipo, horizonte y objetivo. Si quieres cambiarlas, actualízalas desde tu Perfil.
-                </p>
-                {onNavigate ? (
-                  <button className="secondary-button compact-button" type="button" onClick={() => onNavigate("profile")}>
-                    Editar en Perfil
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div className="simulation-preference-list">
-              <article>
-                <span>Comuna objetivo</span>
-                <strong>{targetCommune}</strong>
-              </article>
-              <article>
-                <span>Tipo preferido</span>
-                <strong>{typePreference}</strong>
-              </article>
-              <article>
-                <span>Horizonte</span>
-                <strong>{horizon}</strong>
-              </article>
-              <article>
-                <span>Objetivo</span>
-                <strong>{targetGoal}</strong>
-              </article>
+          <div className="simulation-range-details simulation-range-details--compact simulation-range-details--static">
+            <div className="simulation-range-summary-row">
+              <span className="simulation-range-summary-title"><i className="ti ti-chart-line"></i> Rango referencial por ahorro</span>
+              <span className="simulation-range-summary-values">
+                <span>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  <small>Valor máximo vivienda con pie recomendado</small>
+                  <strong>{formatUf(maxRange.minUf)}</strong>
+                  <em>{formatClp(maxRange.minClp)}</em>
+                </span>
+                <span>
+                  <i className="ti ti-point-filled" aria-hidden="true" />
+                  <small>Valor máximo vivienda con pie mínimo</small>
+                  <strong>{formatUf(maxRange.maxUf)}</strong>
+                  <em>{formatClp(maxRange.maxClp)}</em>
+                </span>
+              </span>
             </div>
           </div>
-        </div>
-
-        <div className="simulator-panel simulation-range-panel">
-          <h2>Rango referencial por ahorro</h2>
-          <p>
-            Este rango estima valores de vivienda según tu ahorro disponible. No es el pie requerido del proyecto ni representa financiamiento aprobado.
-          </p>
-          <p className="simulation-formula-note">
-            Pie mínimo del escenario = 10% del valor. Pie recomendado = 20% del valor.
-          </p>
-          <div className="simulation-range">
-            <article>
-              <span>Vivienda estimada con pie recomendado</span>
-              <strong>{formatUf(maxRange.minUf)}</strong>
-              <small>{formatClp(maxRange.minClp)}</small>
-            </article>
-            <article>
-              <span>Vivienda estimada con pie mínimo</span>
-              <strong>{formatUf(maxRange.maxUf)}</strong>
-              <small>{formatClp(maxRange.maxClp)}</small>
-            </article>
           </div>
-        </div>
-      </div>
-
-      <div className="simulation-comparison comparison-summary-panel" ref={comparisonRef}>
-        <div className="section-heading compact">
-          <span className="eyebrow">Comparación</span>
-          <h2>Comparación de escenarios</h2>
-          <p>
-            {comparison?.current && comparison?.alternative
-              ? comparisonInsights.summary
-              : "Selecciona un proyecto en el comparador o usa una opción accesible para contrastarla con tu escenario actual."}
-          </p>
-        </div>
-
-        {comparison?.error || !currentComparable ? (
-          <div className="warning-box">
-            Primero selecciona un proyecto o ingresa un valor manual para comparar.
-          </div>
-        ) : null}
-
-        <div className="comparison-overview" aria-label="Resumen de escenarios comparados">
-          <article>
-            <span>Escenario actual</span>
-            {currentComparable ? (
-              <>
-                <ProjectImagePlaceholder result={currentComparable} compact />
-                <strong>{getScenarioName(currentComparable)}</strong>
-                <small>{formatUfClp(currentComparable.valueUf, currentComparable.valueClp)} · {currentComparable.status}</small>
-              </>
-            ) : (
-              <small>Primero selecciona un proyecto o ingresa un valor manual.</small>
-            )}
-          </article>
-          <article>
-            <span>Alternativa</span>
-            {comparison?.alternative ? (
-              <>
-                <ProjectImagePlaceholder result={comparison.alternative} compact />
-                <strong>{getScenarioName(comparison.alternative)}</strong>
-                <small>{formatUfClp(comparison.alternative.valueUf, comparison.alternative.valueClp)} · {comparison.alternative.status}</small>
-              </>
-            ) : (
-              <small>Selecciona un proyecto para comparar o usa una opción accesible.</small>
-            )}
-          </article>
-        </div>
-
-        {comparison?.current && comparison?.alternative ? (
-          <div className="comparison-analysis">
-            <div className="comparison-recommendation">
-              <span>Recomendación referencial</span>
-              <strong>{comparisonInsights.title}</strong>
-              <small>{getRecommendationLabel(comparisonInsights.recommendation)}</small>
-            </div>
-
-            <div className="comparison-insight-grid">
-              <AdvantageList title="Ventajas del escenario actual" items={comparisonInsights.advantages.current} />
-              <AdvantageList title="Ventajas de la alternativa" items={comparisonInsights.advantages.alternative} />
-              <AdvantageList title="Puntos a considerar" items={comparisonInsights.considerations} />
-            </div>
-
-            <ComparisonVisual
-              metrics={comparisonInsights.metrics}
-              currentName={getScenarioChartName(comparison.current)}
-              alternativeName={getScenarioChartName(comparison.alternative)}
-              view={comparisonView}
-              onViewChange={setComparisonView}
-            />
-          </div>
-        ) : null}
-
-        <div className="comparison-grid">
-          {[{ label: "Escenario A", data: comparison?.current || currentComparable }, { label: "Escenario B", data: comparison?.alternative }].map((item) => (
-            <article className={!item.data ? "comparison-empty" : ""} key={item.label}>
-              <span className="eyebrow">{item.label}</span>
-              {item.data ? (
-                <>
-                  <h3>{getScenarioName(item.data)}</h3>
-                  <dl>
-                    <dt>Valor vivienda</dt>
-                    <dd>{formatUfClp(item.data.valueUf, item.data.valueClp)}</dd>
-                    <dt>Comuna</dt>
-                    <dd>{getScenarioPlace(item.data)}</dd>
-                    <dt>Tipo vivienda</dt>
-                    <dd>{getScenarioType(item.data)}</dd>
-                    <dt>Estado</dt>
-                    <dd>{item.data.status}</dd>
-                    <dt>Pie mínimo requerido</dt>
-                    <dd>{formatUfClp(item.data.pieMinimoUf, item.data.pieMinimo)}</dd>
-                    <dt>Pie recomendado</dt>
-                    <dd>{formatUfClp(item.data.pieRecomendadoUf, item.data.pieRecomendado)}</dd>
-                    <dt>Ahorro disponible</dt>
-                    <dd>{formatUfClp(item.data.savingsUf, item.data.savings)}</dd>
-                    <dt>Brecha de pie</dt>
-                    <dd>{formatUfClp(item.data.gapMinimoUf, item.data.gapMinimo)}</dd>
-                    <dt>Brecha principal</dt>
-                    <dd>{getGapLabel(item.data.mainGap)}</dd>
-                  </dl>
-                </>
-              ) : (
-                <p>Selecciona una alternativa para compararla con tu escenario actual.</p>
-              )}
-            </article>
-          ))}
         </div>
       </div>
 
       {scenarioResult && hasManualValue ? (
-        <div className="simulation-result-card">
+        <div className="simulation-result-card compatibility-summary-card" ref={resultRef}>
           <div className="result-header">
             <div>
-              <span className="eyebrow">Escenario evaluado</span>
-              <h2>{scenario.label}</h2>
-              <p>{scenario.comuna || "Valor ingresado manualmente"} · {scenario.tipo_vivienda || "Tipo no especificado"}</p>
+              <span className="eyebrow">Resultado</span>
+              <h2 className="tracking-goal-title">{scenario.label}</h2>
+              <p className="tracking-goal-desc">{scenario.comuna || "Valor ingresado manualmente"} · {scenario.tipo_vivienda || "Tipo no especificado"}</p>
               {scenario.project ? (
                 <>
-                  <p>
+                  <p className="tracking-goal-desc">
                     {formatProjectPrice(scenario.project)}
                     {scenario.project.entrega_estimada
                       ? ` · Entrega estimada: ${formatDeliveryMonth(scenario.project.entrega_estimada)}`
@@ -822,54 +895,83 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
             </span>
           </div>
 
-          <p className="simulation-message">{scenarioResult.message}</p>
-          <p className="simulation-message"><strong>Recomendación:</strong> {scenarioResult.recommendation}</p>
-          {!hasDeclaredDividend ? (
-            <p className="simulation-estimate-note">
-              La compatibilidad se estima con los datos disponibles, principalmente ahorro, deuda e ingreso declarado. El dividendo exacto dependería de condiciones bancarias formales.
-            </p>
-          ) : null}
-          <p className="simulation-horizon">{scenarioResult.horizonMessage}</p>
+          <div className="compatibility-summary-main">
+            <article>
+              <span>Brecha principal</span>
+              <strong>{getGapLabel(scenarioResult.mainGap)}</strong>
+            </article>
+          </div>
 
-          <div className="sim-metrics">
+          <div className="scenario-checklist">
+            {buildScenarioChecks(scenarioResult).map((check) => (
+              <article className={`scenario-check ${check.state}`} key={check.label}>
+                <i className={`ti ${check.state === "ok" ? "ti-check" : check.state === "review" ? "ti-alert-circle" : "ti-minus"}`} aria-hidden="true" />
+                <span>{check.label}</span>
+                <strong>{check.value}</strong>
+              </article>
+            ))}
+          </div>
+
+          <div className="housing-metrics compact">
             <div className="metric metric-highlight">
-              <span>Valor escenario</span>
+              <span>Valor</span>
               <strong>{formatUfClp(scenarioResult.valueUf, scenarioResult.valueClp)}</strong>
             </div>
             <div className="metric">
-              <span>Pie mínimo requerido</span>
+              <span>Pie mínimo</span>
               <strong>{formatUfClp(scenarioResult.pieMinimoUf, scenarioResult.pieMinimo)}</strong>
-              <small>Brecha: {formatUfClp(scenarioResult.gapMinimoUf, scenarioResult.gapMinimo)}</small>
             </div>
             <div className="metric">
               <span>Pie recomendado</span>
               <strong>{formatUfClp(scenarioResult.pieRecomendadoUf, scenarioResult.pieRecomendado)}</strong>
-              <small>Brecha: {formatUfClp(scenarioResult.gapRecomendadoUf, scenarioResult.gapRecomendado)}</small>
             </div>
             <div className="metric">
-              <span>Ahorro disponible</span>
+              <span>Ahorro</span>
               <strong>{formatUfClp(scenarioResult.savingsUf, scenarioResult.savings)}</strong>
-              <small>UF referencial: {formatClp(scenarioResult.ufValueClp)}</small>
             </div>
             <div className="metric">
-              <span>Brecha principal</span>
-              <strong>{getGapLabel(scenarioResult.mainGap)}</strong>
-              <small>Deuda/ingreso: {formatPercent(scenarioResult.debtRatio)}</small>
+              <span>Deuda/ingreso</span>
+              <strong>{formatPercent(scenarioResult.debtRatio)}</strong>
             </div>
           </div>
         </div>
       ) : (
-        <div className="warning-box">
+        <div className="warning-note">
+          <i className="ti ti-alert-triangle"></i>
           {mode === "project"
             ? catalogNotice || "Selecciona un proyecto para calcular el escenario."
             : "Ingresa un valor de vivienda en UF para calcular el escenario manual."}
         </div>
       )}
 
+      {comparison?.current && comparison?.alternative ? (
+        <div className="simulation-comparison comparison-summary-panel" ref={comparisonRef}>
+          <div className="section-heading compact">
+            <span className="eyebrow">Comparación</span>
+            <h2 className="recommendation-section-title"><i className="ti ti-arrows-left-right"></i> Comparación de escenarios</h2>
+          </div>
+
+          <div className="comparison-analysis">
+            <ComparisonVisual
+              metrics={comparisonInsights.metrics}
+              currentName={getScenarioChartName(comparison.current)}
+              alternativeName={getScenarioChartName(comparison.alternative)}
+              insights={comparisonInsights}
+            />
+
+            <div className="comparison-insight-grid">
+              <AdvantageList title="Ventajas del escenario actual" items={comparisonInsights.advantages.current} />
+              <AdvantageList title="Ventajas de la alternativa" items={comparisonInsights.advantages.alternative} />
+              <AdvantageList title="Puntos a considerar" items={comparisonInsights.considerations} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="alternatives-block">
         <div className="section-heading compact">
           <span className="eyebrow">Alternativas referenciales</span>
-          <h2>Opciones más accesibles</h2>
+          <h2 className="recommendation-section-title"><i className="ti ti-home-search"></i> Opciones más accesibles</h2>
           <p>
             Ordenadas por compatibilidad, menor brecha, comuna y tipo de vivienda preferidos. El horizonte ajusta mensajes, no cambia el score.
           </p>
@@ -891,12 +993,13 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         ) : null}
 
         {hasProjects ? null : (
-          <div className="warning-box">
+          <div className="warning-note">
+            <i className="ti ti-alert-triangle"></i>
             {catalogNotice}
           </div>
         )}
 
-        <div className="alternative-grid">
+        <AlternativesCarousel>
           {alternatives.map((item) => (
             <article className="alternative-card simulation-alternative" key={item.project.id}>
               <ProjectImagePlaceholder result={item} compact />
@@ -918,9 +1021,11 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                 <button
                   className="secondary-button compact-button"
                   type="button"
+                  disabled={mode === "project" && item.project.id === selectedProjectId}
+                  title={mode === "project" && item.project.id === selectedProjectId ? "Este es el escenario actual." : undefined}
                   onClick={() => handleCompareAlternative(item)}
                 >
-                  Comparar con escenario actual
+                  {mode === "project" && item.project.id === selectedProjectId ? "Escenario actual" : "Comparar con escenario actual"}
                 </button>
                 <button
                   className={`compact-button target-project-button ${targetProjectId === item.project.id ? "is-selected" : ""}`}
@@ -932,7 +1037,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               </div>
             </article>
           ))}
-        </div>
+        </AlternativesCarousel>
       </div>
 
       <ConceptHelpCta onNavigate={onNavigate} />

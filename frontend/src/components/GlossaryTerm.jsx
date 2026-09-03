@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ACADEMY_GLOSSARY } from "../constants/academyContent";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ACADEMY_ARTICLES, ACADEMY_GLOSSARY } from "../constants/academyContent";
 
 /**
  * HU12 - E3 "Enlaces contextuales"
@@ -15,33 +16,94 @@ export default function GlossaryTerm({ term, onOpenArticle }) {
   const entry =
     ACADEMY_GLOSSARY[term] || ACADEMY_GLOSSARY[term.toLowerCase()];
   const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState({});
+  const [placement, setPlacement] = useState("top");
   const ref = useRef(null);
+  const popoverRef = useRef(null);
+  const triggerRef = useRef(null);
 
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (!open) return;
     const handleClickOutside = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) close();
+      const clickedTrigger = ref.current?.contains(event.target);
+      const clickedPopover = popoverRef.current?.contains(event.target);
+      if (!clickedTrigger && !clickedPopover) close();
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, close]);
 
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current || !popoverRef.current) return;
+
+    const MARGIN = 12;
+    const GAP = 10;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popover = popoverRef.current.getBoundingClientRect();
+    const width = Math.min(300, window.innerWidth - MARGIN * 2);
+    const left = Math.max(
+      MARGIN,
+      Math.min(rect.left, window.innerWidth - width - MARGIN),
+    );
+    const canOpenAbove = rect.top >= popover.height + GAP + MARGIN;
+    const nextPlacement = canOpenAbove ? "top" : "bottom";
+
+    setPlacement(nextPlacement);
+    setPopoverStyle({
+      width,
+      left,
+      [nextPlacement === "top" ? "bottom" : "top"]:
+        nextPlacement === "top"
+          ? window.innerHeight - rect.top + GAP
+          : rect.bottom + GAP,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, updatePosition]);
+
   if (!entry) return <span>{term}</span>;
+
+  const hasArticleTarget = Boolean(
+    entry.articleId && ACADEMY_ARTICLES.some((article) => article.id === entry.articleId),
+  );
+
+  if (!hasArticleTarget) {
+    return <span className="glossary-term-static">{entry.label}</span>;
+  }
 
   return (
     <span className="glossary-term-wrap" ref={ref}>
       <button
         type="button"
+        ref={triggerRef}
         className={`glossary-term ${open ? "is-open" : ""}`}
         onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
       >
         {entry.label}
       </button>
 
-      {open && (
-        <div className="glossary-popover" role="dialog">
+      {open && createPortal(
+        <div
+          className={`glossary-popover glossary-popover--${placement}`}
+          role="dialog"
+          ref={popoverRef}
+          style={popoverStyle}
+        >
           <p>{entry.definition}</p>
           <button
             type="button"
@@ -53,7 +115,8 @@ export default function GlossaryTerm({ term, onOpenArticle }) {
           >
             Ver artículo completo <i className="ti ti-arrow-right" />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
     </span>
   );

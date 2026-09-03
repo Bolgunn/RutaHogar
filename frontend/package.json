@@ -1,5 +1,5 @@
 {
-  "name": "scoreleads-frontend",
+  "name": "RutaHogar-frontend",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -15,7 +15,7 @@
     "playwright": "^1.60.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.30.4"
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
     "vite": "^8.0.16",

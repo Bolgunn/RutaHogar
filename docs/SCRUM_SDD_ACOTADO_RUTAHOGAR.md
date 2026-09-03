@@ -49,6 +49,11 @@ Para HUs criticas, usar una ficha breve antes de implementar:
 
 Si se trabaja scoring, usar `docs/REGLAS_SCORING.md` como documento central de reglas financieras.
 
+Para HUs complejas, la ficha puede vivir dentro del plan de la HU. Ubicaciones validas:
+
+- `docs/hus/HUxx-<nombre-corto>.md`;
+- `docs/stories/HUxx-<nombre-corto>/PLAN.md`, cuando la HU ya tenga carpeta con plan, reglas y evidencias.
+
 No crear multiples documentos ALG por ahora. El equipo podra decidir mas adelante si una HU requiere documentacion ALG separada.
 
 ## Reglas del proyecto
@@ -75,4 +80,3 @@ Una HU se considera lista cuando:
 - separa correctamente la vista del lead y del ejecutivo;
 - respeta privacidad, roles y manejo seguro de errores;
 - fue revisada por otra persona del equipo.
-

@@ -1,22 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="50 150 510 285" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="50 150 740 285" role="img" aria-labelledby="title desc">
   <title id="title">RutaHogar</title>
   <desc id="desc">Logo RutaHogar: icono vectorial original con Ruta y Hogar como texto real editable.</desc>
+  <!--
+    Wordmark editable:
+    - Cambiar font-family / font-size / font-weight / letter-spacing en #ruta-text y #hogar-text.
+    - Ruta y Hogar siguen siendo texto real (<text>), no paths.
+    - El icono se mantiene como vector.
+  -->
   <style>
-    @import url("https://fonts.googleapis.com/css2?family=Alexandria:wght@800&amp;family=Nunito:wght@400&amp;display=swap");
-
     /* EDITABLE: cambia estas propiedades para modificar la tipografía del logo. */
     #ruta-text {
-      font-family: "Alexandria", Arial, sans-serif;
-      font-size: 100px;
+      font-family: "Sora", "Inter", "Segoe UI", Arial, sans-serif;
+      font-size: 94px;
       font-weight: 800;
-      letter-spacing: -1.5px;
+      letter-spacing: -2px;
     }
     #hogar-text {
-      font-family: "Nunito", Arial, sans-serif;
-      font-size: 76px;
+      font-family: "Sora", "Inter", "Segoe UI", Arial, sans-serif;
+      font-size: 78px;
       font-weight: 400;
-      letter-spacing: -0.5px;
+      letter-spacing: -1px;
     }
   </style>
   <g xmlns="http://www.w3.org/2000/svg" id="icon">
@@ -33,10 +37,10 @@
       <g id="road" fill="#ffb700">
         <path d="M140.75,286.542c0.242,0.225 0.02,0.642 0.262,0.866c0.227,0.21 0.238,-0.008 0.546,0.021c0.654,0.063 0.69,0.142 2.005,-0.003c7.863,-0.862 15.013,-1.741 18.647,-1.27c-1.063,1.581 -7.73,2.802 -7.867,2.892c-0.828,0.54 -8.203,2.424 -13.077,6.134c-12.618,9.603 2.642,15.866 4.041,16.661c7.163,4.07 28.074,10.12 41.02,20.866c4.632,3.845 4.526,3.952 7.059,6.886c3.667,4.248 5.211,8.312 5.313,8.864c0.198,1.073 0.33,1.198 -3.552,8.86c-3.89,7.678 -5.373,9.505 -6.795,12.094c-3.349,6.099 -3.253,6.134 -7.011,11.982c-6.228,9.69 -25.173,40.177 -25.704,40.401c-1.564,0.662 -2.482,-0.954 -3.382,-2.098c-1.129,-1.434 -7.249,-9.209 -13.83,-18.14c-9.171,-12.445 -11.977,-16.055 -12.01,-17.056c-0.045,-1.397 0.539,-1.167 6.18,-5.893c47.333,-39.651 -1.104,-53.819 -12.277,-61.845c-0.588,-0.422 -11.472,-6.457 -4.187,-15.554c7.778,-9.712 21.709,-12.038 23.54,-13.611c0.357,-0.307 0.723,-0.751 1.08,-1.058Z"/>
       </g>
-  </g>
+    </g>
     
-  <g id="wordmark">
-    <text id="ruta-text" x="260" y="294" fill="#0032B9" font-family="Alexandria, Arial, sans-serif" font-size="100" font-weight="800">Ruta</text>
-    <text id="hogar-text" x="260" y="372" fill="#FFB700" font-family="Nunito, Arial, sans-serif" font-size="76" font-weight="400">Hogar</text>
+  <g id="wordmark" aria-label="RutaHogar">
+    <text id="ruta-text" x="255" y="330" fill="#0032B9">Ruta</text>
+    <text id="hogar-text" x="480" y="330" fill="#FFB700">Hogar</text>
   </g>
 </svg>

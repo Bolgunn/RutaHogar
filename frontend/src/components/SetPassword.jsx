@@ -119,13 +119,13 @@ export default function SetPassword({ onGoToLogin }) {
   return (
     <section className="section-block">
       <div className="section-heading">
-        <span className="eyebrow">Acceso a ScoreLeads</span>
+        <span className="eyebrow">Acceso a RutaHogar</span>
         <h1>Define tu contraseña</h1>
         {status === "ready" && (
           <p>
             {email
               ? `Estás configurando el acceso de ${email}.`
-              : "Elige la contraseña con la que entrarás a ScoreLeads."}
+              : "Elige la contraseña con la que entrarás a RutaHogar."}
           </p>
         )}
       </div>

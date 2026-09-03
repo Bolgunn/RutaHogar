@@ -13,6 +13,8 @@ from .scoring_engine.indicators import calculate_financial_indicators
 from .scoring_engine.improvement_plan import build_structured_improvement_plan
 from .scoring_engine.project_fit import calculate_project_fit
 from .scoring_engine.property_value import resolve_property_value_clp
+from .scoring_engine.purchase_capacity import calculate_purchase_capacity
+from .scoring_engine.housing_benefits import detect_housing_benefits
 
 
 SCORING_VERSION = "1.1.0"
@@ -294,7 +296,6 @@ def _apply_final_classification(score: float, blockers: List[Dict]) -> tuple[str
             "Requiere antecedentes",
             "La clasificación requiere antecedentes adicionales por complemento de renta incompleto.",
         )
-
     return (
         _classify_weighted_score(score),
         "La clasificación final se calculó desde el score ajustado por antecedentes detectados.",
@@ -308,183 +309,225 @@ def generate_improvement_plan(score_result: Dict, user_data: Dict) -> List[Dict[
 
     if "morosidad_alta" in risks:
         plan.append({
-            "category": "Deuda",
+            "category": "Saneamiento",
+            "title": "Regularizar morosidad vigente",
             "description": "Regulariza o aclara compromisos pendientes antes de iniciar una evaluación formal.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Mejora inmediata del score y viabilidad bancaria."
+            "expected_benefit": "Mejora inmediata del score y viabilidad bancaria.",
+            "estimated_months": 3
         })
     elif "morosidad_media" in risks:
         plan.append({
-            "category": "Deuda",
+            "category": "Saneamiento",
+            "title": "Verificar situación crediticia",
             "description": "Revisa tu situación financiera actual y confirma si existen pagos pendientes o atrasos.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Evita rechazos automáticos por deudas desconocidas."
+            "expected_benefit": "Evita rechazos automáticos por deudas desconocidas.",
+            "estimated_months": 1
         })
 
     if "ahorro_bajo" in risks:
         plan.append({
-            "category": "Ahorro",
+            "category": "Meta de Pie",
+            "title": "Aumentar ahorro para el pie",
             "description": "Define una meta mensual de ahorro y separa esos fondos apenas recibas tus ingresos.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Aumenta el pie disponible y reduce el monto de crédito a solicitar."
+            "expected_benefit": "Aumenta el pie disponible y reduce el monto de crédito a solicitar.",
+            "estimated_months": 6
         })
     else:
         plan.append({
-            "category": "Ahorro",
+            "category": "Meta de Pie",
+            "title": "Mantener fondo de ahorro",
             "description": "Mantén un fondo de ahorro separado para pie, gastos iniciales y margen de seguridad.",
             "impact_level": "Bajo",
             "impact_score": 1,
-            "expected_benefit": "Evita descapitalización ante gastos imprevistos."
+            "expected_benefit": "Evita descapitalización ante gastos imprevistos.",
+            "estimated_months": 6
         })
 
     if "deuda_alta" in risks:
         plan.append({
-            "category": "Deuda",
+            "category": "Carga Financiera",
+            "title": "Reducir deuda mensual",
             "description": "Prioriza reducir cuotas mensuales o cerrar deudas pequeñas antes de aumentar tu compromiso hipotecario.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Aumenta tu capacidad de pago (holgura financiera) para el dividendo."
+            "expected_benefit": "Aumenta tu capacidad de pago (holgura financiera) para el dividendo.",
+            "estimated_months": 6
         })
     else:
         plan.append({
-            "category": "Deuda",
+            "category": "Carga Financiera",
+            "title": "Mantener carga de deuda estable",
             "description": "Evita tomar nuevas deudas de consumo mientras preparas tu compra.",
             "impact_level": "Bajo",
             "impact_score": 1,
-            "expected_benefit": "Mantiene tu capacidad de crédito libre."
+            "expected_benefit": "Mantiene tu capacidad de crédito libre.",
+            "estimated_months": 6
         })
 
     if "contrato_plazo_fijo" in risks:
         plan.append({
-            "category": "Continuidad Laboral",
+            "category": "Estabilidad Laboral",
+            "title": "Fortalecer estabilidad contractual",
             "description": "Evalúa fortalecer tu estabilidad contractual antes de iniciar una evaluación hipotecaria formal.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Los bancos prefieren contratos indefinidos para minimizar riesgo."
+            "expected_benefit": "Los bancos prefieren contratos indefinidos para minimizar riesgo.",
+            "estimated_months": 6
         })
     elif "contrato_honorarios_variable" in risks:
         plan.append({
-            "category": "Continuidad Laboral",
+            "category": "Estabilidad Laboral",
+            "title": "Ordenar respaldos de ingresos",
             "description": "Ordena respaldos de ingresos variables, boletas, contratos o movimientos consistentes.",
-            "impact_level": "Medio",
-            "impact_score": 2,
-            "expected_benefit": "Permite promediar ingresos y demostrar estabilidad real."
+            "impact_level": "Opcional",
+            "impact_score": 1,
+            "expected_benefit": "Permite promediar ingresos y demostrar estabilidad real.",
+            "estimated_months": 3
         })
     elif "continuidad_baja" in risks or "continuidad_media" in risks or "contrato_independiente" in risks:
         plan.append({
-            "category": "Continuidad Laboral",
+            "category": "Estabilidad Laboral",
+            "title": "Aumentar continuidad laboral",
             "description": "Mantén continuidad laboral y ordena respaldos simples de ingresos, especialmente si trabajas independiente.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Aumenta el porcentaje de tus ingresos que el banco considerará."
+            "expected_benefit": "Aumenta el porcentaje de tus ingresos que el banco considerará.",
+            "estimated_months": 6
         })
     else:
         plan.append({
-            "category": "Continuidad Laboral",
+            "category": "Estabilidad Laboral",
+            "title": "Conservar estabilidad laboral",
             "description": "Conserva estabilidad laboral y evita cambios bruscos de fuente de ingreso durante la preparación.",
             "impact_level": "Bajo",
             "impact_score": 1,
-            "expected_benefit": "No afecta negativamente el tiempo de antigüedad acumulado."
+            "expected_benefit": "No afecta negativamente el tiempo de antigüedad acumulado.",
+            "estimated_months": 6
         })
 
     if "ingreso_dividendo" in risks or "precio_objetivo" in risks or score_result.get("classification") != "Alto":
         plan.append({
-            "category": "Objetivo Inmobiliario",
+            "category": "Meta de Pie",
+            "title": "Ajustar objetivo inmobiliario",
             "description": "Revisa comuna, precio esperado o dividendo objetivo para que la compra sea más sostenible.",
-            "impact_level": "Medio",
-            "impact_score": 2,
-            "expected_benefit": "Mayor probabilidad de que el dividendo cubra menos del 25% de tu ingreso."
+            "impact_level": "Opcional",
+            "impact_score": 1,
+            "expected_benefit": "Mayor probabilidad de que el dividendo cubra menos del 25% de tu ingreso.",
+            "estimated_months": 1
         })
 
     if "complemento_morosidad_alta" in risks:
         plan.append({
             "category": "Deuda Co-deudor",
+            "title": "Regularizar morosidad de co-deudor",
             "description": "Evalúa si el co-deudor puede regularizar su situación de morosidad antes de comprometerse.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Evita que la morosidad del co-deudor contamine tu solicitud."
+            "expected_benefit": "Evita que la morosidad del co-deudor contamine tu solicitud.",
+            "estimated_months": 3
         })
     elif "complemento_morosidad_media" in risks:
         plan.append({
             "category": "Deuda Co-deudor",
+            "title": "Verificar morosidad de co-deudor",
             "description": "Confirma la situación financiera actual del co-deudor y si existen pagos pendientes.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Permite identificar riesgos a tiempo antes de la firma."
+            "expected_benefit": "Permite identificar riesgos a tiempo antes de la firma.",
+            "estimated_months": 1
         })
 
     if "complemento_deuda_alta" in risks:
         plan.append({
             "category": "Deuda Co-deudor",
+            "title": "Reducir deuda de co-deudor",
             "description": "El co-deudor debería priorizar reducir sus deudas mensuales antes de asumir un nuevo compromiso.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Mejora la capacidad combinada para absorber el dividendo."
+            "expected_benefit": "Mejora la capacidad combinada para absorber el dividendo.",
+            "estimated_months": 6
         })
 
     if "complemento_tarjetas_excesivas" in risks:
         plan.append({
             "category": "Deuda Co-deudor",
+            "title": "Reducir tarjetas de co-deudor",
             "description": "El co-deudor debería reducir la cantidad de tarjetas de crédito activas para mejorar su perfil.",
             "impact_level": "Bajo",
             "impact_score": 1,
-            "expected_benefit": "Reduce el nivel de línea de crédito que los bancos asumen como deuda potencial."
+            "expected_benefit": "Reduce el nivel de línea de crédito que los bancos asumen como deuda potencial.",
+            "estimated_months": 3
         })
 
     if "complemento_continuidad_baja" in risks or "complemento_continuidad_media" in risks:
         plan.append({
             "category": "Continuidad Laboral Co-deudor",
+            "title": "Mejorar continuidad del co-deudor",
             "description": "El co-deudor debería consolidar su estabilidad laboral antes de ser considerado como apoyo.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Mayor porcentaje de los ingresos del co-deudor serán tomados en cuenta."
+            "expected_benefit": "Mayor porcentaje de los ingresos del co-deudor serán tomados en cuenta.",
+            "estimated_months": 6
         })
 
     if "complemento_contrato_independiente" in risks:
         plan.append({
             "category": "Continuidad Laboral Co-deudor",
+            "title": "Respaldar ingresos de co-deudor",
             "description": "Ordena antecedentes de ingresos del co-deudor si trabaja independiente.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Facilita la verificación formal de ingresos variables."
+            "expected_benefit": "Facilita la verificación formal de ingresos variables.",
+            "estimated_months": 3
         })
 
     if "complemento_relacion_debil" in risks:
         plan.append({
             "category": "Requisitos Co-deudor",
+            "title": "Validar relación con co-deudor",
             "description": "Valida con anticipación si la relación declarada para complementar renta sera aceptada en una evaluación formal.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Evita rechazos normativos por políticas internas del banco."
+            "expected_benefit": "Evita rechazos normativos por políticas internas del banco.",
+            "estimated_months": 1
         })
 
     if "complemento_sin_datos" in risks:
         plan.append({
             "category": "Requisitos Co-deudor",
-            "description": "Completa toda la información del co-deudor para una evaluación precisa.",
+            "title": "Completar datos de co-deudor",
+            "description": "Completa toda la información del co-deudor para una calificación precisa.",
             "impact_level": "Medio",
             "impact_score": 2,
-            "expected_benefit": "Permite una simulación más realista del potencial de aprobación."
+            "expected_benefit": "Permite una simulación más realista del potencial de aprobación.",
+            "estimated_months": 1
         })
 
     if user_data.get("complemento_renta"):
         plan.append({
             "category": "Requisitos Co-deudor",
+            "title": "Confirmar viabilidad de co-deudor",
             "description": "Ordena la información de la persona que complementará renta y valida que pueda sostener ese apoyo.",
             "impact_level": "Bajo",
             "impact_score": 1,
-            "expected_benefit": "Prepara de forma anticipada la carpeta del crédito."
+            "expected_benefit": "Prepara de forma anticipada la carpeta del crédito.",
+            "estimated_months": 1
         })
     elif score_result.get("classification") in {"Medio", "Bajo"}:
         plan.append({
             "category": "Objetivo Inmobiliario",
+            "title": "Evaluar complementar renta",
             "description": "Evalúa complementar renta con una persona de confianza si tu situación actual no alcanza para el objetivo.",
             "impact_level": "Alto",
             "impact_score": 3,
-            "expected_benefit": "Podría permitirte acceder a la propiedad deseada al sumar ingresos."
+            "expected_benefit": "Podría permitirte acceder a la propiedad deseada al sumar ingresos.",
+            "estimated_months": 1
         })
 
     # Filtrar duplicados por 'description' y ordenar por 'impact_score'
@@ -577,7 +620,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
         components["carga_financiera"] -= 20
         score -= 20
         risk_codes.append("deuda_alta")
-        riesgos.append("La carga mensual de deudas podría afectar la evaluación.")
+        riesgos.append("La carga mensual de deudas podría afectar la calificación.")
         recomendaciones.append({"text": "Reducir compromisos mensuales antes de avanzar.", "benefit": "Mejorar tu relación deuda/ingreso y aumentar tu puntaje."})
     else:
         positivos.append("Carga de deuda aceptable")
@@ -602,7 +645,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
             components["pie_disponible"] += 5
             score += 5
             positivos.append("Ahorro inicial disponible")
-            recomendaciones.append({"text": "Aumentar ahorro para acercarse a una posición más sólida.", "benefit": "Alcanzar el 20% de pie recomendado y acceder a mejor evaluación."})
+            recomendaciones.append({"text": "Aumentar ahorro para acercarse a una posición más sólida.", "benefit": "Alcanzar el 20% de pie recomendado y acceder a mejor calificación."})
         else:
             components["pie_disponible"] -= 20
             score -= 20
@@ -731,7 +774,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                 components["perfil_compra"] -= 20
                 score -= 20
                 risk_codes.append("complemento_morosidad_alta")
-                riesgos.append("La persona complementaria declara morosidad, por lo que no mejora esta preevaluación.")
+                riesgos.append("La persona complementaria declara morosidad, por lo que no mejora esta precalificación.")
                 recomendaciones.append({"text": "Considerar complementar renta con una persona sin morosidad declarada.", "benefit": "Que el co-deudor aporte realmente a tu capacidad de compra."})
 
             if comp_relacion in relaciones_debiles:
@@ -745,7 +788,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                 score -= 15
                 risk_codes.append("complemento_deuda_alta")
                 riesgos.append("El co-deudor tiene una carga de deuda elevada en relación a sus ingresos.")
-                recomendaciones.append({"text": "El co-deudor debería reducir sus deudas antes de comprometerse.", "benefit": "Mejorar la renta combinada y no perjudicar tu evaluación."})
+                recomendaciones.append({"text": "El co-deudor debería reducir sus deudas antes de comprometerse.", "benefit": "Mejorar la renta combinada y no perjudicar tu calificación."})
 
             if comp_contrato == "independiente":
                 if comp_continuidad in ("entre_1_y_3_anios", "mas_3_anios"):
@@ -754,11 +797,11 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
                     score -= 5
                     risk_codes.append("complemento_contrato_independiente")
                     riesgos.append("El co-deudor trabaja independiente con continuidad aún limitada.")
-                    recomendaciones.append({"text": "Respaldar ingresos del co-deudor con antecedentes formales.", "benefit": "Evitar descuentos en la evaluación por falta de respaldo."})
+                    recomendaciones.append({"text": "Respaldar ingresos del co-deudor con antecedentes formales.", "benefit": "Evitar descuentos en la calificación por falta de respaldo."})
             elif comp_contrato == "plazo_fijo":
                 score -= 10
                 risk_codes.append("complemento_contrato_plazo_fijo")
-                riesgos.append("El contrato a plazo fijo del co-deudor puede limitar su aporte a la evaluación.")
+                riesgos.append("El contrato a plazo fijo del co-deudor puede limitar su aporte a la calificación.")
             elif comp_contrato == "honorarios_variable":
                 score -= 6
                 risk_codes.append("complemento_contrato_variable")
@@ -812,6 +855,7 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
     )
     financial_indicators.setdefault("property_value_clp", property_value_resolution.get("property_value_clp", 0))
     financial_indicators.setdefault("property_value_uf", property_value_resolution.get("property_value_uf", 0))
+    financial_indicators.update(calculate_purchase_capacity(data, financial_indicators))
     blockers = detect_blockers(data, financial_indicators)
     component_scores = calculate_component_scores(data, financial_indicators, blockers)
     project_fit = calculate_project_fit(data, financial_indicators, blockers)
@@ -926,6 +970,8 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
         data
     )
 
+
+    result["housing_benefits"] = detect_housing_benefits(data, financial_indicators)
 
     return result
 

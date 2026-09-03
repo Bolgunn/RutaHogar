@@ -1,40 +1,35 @@
-# Las recetas necesitan bash. Si make se invoca desde PowerShell o cmd, "bash" no
-# está en el PATH y make caería a cmd.exe, que falla al parsear las recetas.
-# Se usan rutas 8.3 (PROGRA~1) porque make no tolera espacios en SHELL.
-ifeq ($(OS),Windows_NT)
-	GIT_BASH := $(firstword $(wildcard C:/PROGRA~1/Git/bin/bash.exe) $(wildcard C:/PROGRA~2/Git/bin/bash.exe))
-	ifeq ($(GIT_BASH),)
-		SHELL := bash
-	else
-		SHELL := $(GIT_BASH)
-	endif
-else
-	SHELL := /usr/bin/env bash
-endif
-
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 
-BACKEND_PORT := 8000
-FRONTEND_PORT := 5173
-BACKEND_LOG := $(BACKEND_DIR)/uvicorn.log
-STORY_GRAPH := docs/story-graph.html
-
-# En Windows venv crea Scripts/ y no bin/
+# Un venv de Windows pone los ejecutables en Scripts/ y uno POSIX en bin/.
+# El Makefile mezclaba las dos convenciones: `run-backend` usaba Scripts/ y
+# `run` e `install-backend` seguian usando bin/, asi que `make run` fallaba en
+# Windows y `make run-backend` fallaba en macOS/Linux. Se resuelve una sola vez
+# aca en vez de parchear cada receta.
+#
+# El otro problema en Windows es el shell. `/usr/bin/env` no existe ahi, asi
+# que make cae a cmd.exe y la receta de `run` revienta con ") was unexpected at
+# this time": cmd no entiende el subshell POSIX. La version de GnuWin32 es Make
+# 3.81, que NO soporta .SHELLFLAGS, asi que la unica forma de mantener UN solo
+# juego de recetas es apuntar SHELL al bash que ya trae Git. PROGRA~1 es el
+# nombre corto de "Program Files": make 3.81 no sabe citar el espacio.
 ifeq ($(OS),Windows_NT)
-	VENV_BIN := $(BACKEND_DIR)/.venv/Scripts
-	PYTHON := python
-	# En netstat de Windows la última columna es el PID
-	LIST_PORT_PIDS = netstat -ano 2>/dev/null | grep "LISTENING" | grep ":$$port " | awk '{print $$NF}' | sort -u
-	KILL_TREE = taskkill //PID $$pid //T //F >/dev/null 2>&1
+# Git no siempre esta en el mismo sitio: 64/32 bits o instalacion por usuario.
+GIT_BASH := $(firstword $(wildcard   C:/PROGRA~1/Git/bin/bash.exe   C:/PROGRA~2/Git/bin/bash.exe   $(subst \,/,$(LOCALAPPDATA))/Programs/Git/bin/bash.exe))
+ifneq ($(GIT_BASH),)
+SHELL := $(GIT_BASH)
+endif
+VENV_BIN := .venv/Scripts
+# En Windows `python3` suele ser el alias de la Microsoft Store, que abre la
+# tienda en vez de crear el venv.
+PYTHON := python
 else
-	VENV_BIN := $(BACKEND_DIR)/.venv/bin
-	PYTHON := python3
-	LIST_PORT_PIDS = lsof -ti tcp:$$port -s TCP:LISTEN 2>/dev/null | sort -u
-	KILL_TREE = kill -9 $$pid 2>/dev/null
+SHELL := /usr/bin/env bash
+VENV_BIN := .venv/bin
+PYTHON := python3
 endif
 
-.PHONY: all help install-backend install-frontend run-backend run-frontend run stop logs story-graph
+.PHONY: all help install install-backend install-frontend run-backend run-frontend run
 
 all: run
 
@@ -42,63 +37,38 @@ help:
 	@echo "Available targets:"
 	@echo "  make install-backend   - create backend venv and install Python dependencies"
 	@echo "  make install-frontend  - install frontend npm dependencies"
-	@echo "  make run-backend       - start FastAPI backend on port $(BACKEND_PORT)"
-	@echo "  make run-frontend      - start Vite frontend on port $(FRONTEND_PORT)"
+	@echo "  make run-backend       - start FastAPI backend on port 8000"
+	@echo "  make run-frontend      - start Vite frontend on port 5173"
 	@echo "  make run               - install dependencies and start both servers"
-	@echo "  make stop              - stop leftover servers on ports $(BACKEND_PORT)/$(FRONTEND_PORT)"
-	@echo "  make logs              - tail the background backend log"
-	@echo "  make story-graph       - build the HU dependency graph into $(STORY_GRAPH)"
+	@echo ""
+	@echo "En Windows 'make run' necesita el bash de Git. Si no esta instalado,"
+	@echo "usa 'make run-backend' y 'make run-frontend' en dos terminales."
 
+install: install-backend install-frontend
+
+# El venv se crea solo si no existe. Recrearlo en cada `make run` fallaba con
+# "Unable to copy venvlauncher.exe": si el venv esta activado en la terminal,
+# python.exe esta tomado y no se puede sobrescribir.
+#
+# La condicion es de make, no del shell: `[` no existe en cmd.exe, y sin el bash
+# de Git las recetas corren ahi. Asi `install-backend` y `run-backend` —el
+# camino alternativo que sugiere `help`— funcionan igual en una maquina sin Git
+# bash, que es donde se necesitan.
 install-backend:
-	@if [ ! -x "$(VENV_BIN)/python" ] && [ ! -x "$(VENV_BIN)/python.exe" ]; then \
-		echo "Creating venv in $(BACKEND_DIR)/.venv..."; \
-		$(PYTHON) -m venv $(BACKEND_DIR)/.venv; \
-	fi
-	@"$(VENV_BIN)/python" -m pip install -q -r $(BACKEND_DIR)/requirements.txt
+ifeq ($(wildcard $(BACKEND_DIR)/.venv),)
+	$(PYTHON) -m venv $(BACKEND_DIR)/.venv
+endif
+	$(BACKEND_DIR)/$(VENV_BIN)/python -m pip install -r $(BACKEND_DIR)/requirements.txt
 
 install-frontend:
 	cd $(FRONTEND_DIR) && npm install
 
-run-backend: install-backend
-	"$(VENV_BIN)/uvicorn" app.main:app --reload --port $(BACKEND_PORT) --app-dir $(BACKEND_DIR)
+run-backend:
+	cd $(BACKEND_DIR) && $(VENV_BIN)/uvicorn app.main:app --reload --port 8000
 
-run-frontend: install-frontend
+run-frontend:
 	cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
 
-# El backend corre en segundo plano; el trap lo mata al cortar el frontend con Ctrl+C.
-# Si no, el puerto queda ocupado y el siguiente `make run` fallaba en silencio.
 run: install-backend install-frontend
-	@if netstat -an 2>/dev/null | grep -Eq "LISTEN(ING)?" && netstat -an 2>/dev/null | grep -Eq ":$(BACKEND_PORT) +[^ ]+ +LISTEN"; then \
-		echo "ERROR: el puerto $(BACKEND_PORT) ya está ocupado. Corre 'make stop' primero."; \
-		exit 1; \
-	fi
-	@echo "Starting backend in the background (logs: $(BACKEND_LOG))..."
-	@"$(VENV_BIN)/uvicorn" app.main:app --reload --port $(BACKEND_PORT) --app-dir $(BACKEND_DIR) > $(BACKEND_LOG) 2>&1 & \
-	backend_pid=$$!; \
-	trap 'taskkill //PID $$backend_pid //T //F >/dev/null 2>&1 || kill $$backend_pid 2>/dev/null' EXIT INT TERM; \
-	sleep 3; \
-	if ! kill -0 $$backend_pid 2>/dev/null; then \
-		echo "ERROR: el backend no arrancó:"; cat $(BACKEND_LOG); exit 1; \
-	fi; \
-	echo "Backend listo en http://127.0.0.1:$(BACKEND_PORT)"; \
-	cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
-
-stop:
-	@for port in $(BACKEND_PORT) $(FRONTEND_PORT); do \
-		pids=$$($(LIST_PORT_PIDS)); \
-		if [ -n "$$pids" ]; then \
-			for pid in $$pids; do \
-				echo "Stopping PID $$pid on port $$port"; \
-				$(KILL_TREE); \
-			done; \
-		else \
-			echo "Nothing listening on port $$port"; \
-		fi; \
-	done
-
-logs:
-	@tail -f $(BACKEND_LOG)
-
-# El HTML es autocontenido y queda fuera de git: se comparte como archivo suelto.
-story-graph:
-	@node scripts/build-story-graph.js
+	@echo "Starting backend in the background..."
+	(cd $(BACKEND_DIR) && $(VENV_BIN)/uvicorn app.main:app --reload --port 8000 >/dev/null 2>&1 &) ; cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0

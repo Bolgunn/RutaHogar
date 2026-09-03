@@ -1,6 +1,6 @@
 // HU12 - Academia Financiera
 //
-// Contenido educativo contextual para ScoreLeads.
+// Contenido educativo contextual para RutaHogar.
 // Las afirmaciones financieras deben estar respaldadas por fuentes oficiales
 // chilenas. El contenido es estático; las condiciones de subsidios o productos
 // financieros que cambien con el tiempo deben derivar al sitio oficial.
@@ -83,6 +83,13 @@ export const ACADEMY_TOPICS = [
     icon: "ti-home",
     accent: "#6d28d9",
   },
+  {
+    id: "documentos",
+    label: "Documentación bancaria",
+    description: "Dónde y cómo obtener los antecedentes para tu evaluación.",
+    icon: "ti-file-text",
+    accent: "#475569",
+  },
 ];
 
 
@@ -127,7 +134,7 @@ export const ACADEMY_ARTICLES = [
     topic: "credito",
     title: "¿Qué evalúa una institución financiera?",
     summary:
-      "Conoce por qué una evaluación hipotecaria considera más que tu ingreso mensual.",
+      "Fortalecer tus ingresos, deudas y respaldos puede ayudarte a llegar mejor preparado a una evaluación hipotecaria.",
     level: "Básico",
     minutes: 4,
     tags: [
@@ -137,7 +144,7 @@ export const ACADEMY_ARTICLES = [
       "capacidad de pago",
     ],
     body:
-      "Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito. La evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación.\n\nPor eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario. La decisión corresponde a la institución financiera y depende de sus políticas de evaluación y de las características concretas de la operación.\n\nEn ScoreLeads, la evaluación sirve como una referencia orientativa para identificar fortalezas y posibles bloqueadores del perfil. No reemplaza la evaluación formal de una institución financiera.",
+      "Entender qué se evalúa te ayuda a detectar con anticipación qué aspectos de tu perfil puedes ordenar o respaldar mejor antes de solicitar financiamiento. Una institución financiera analiza la solvencia y capacidad de pago antes de contratar una operación de crédito.\n\nLa evaluación no depende exclusivamente del ingreso mensual: también puede considerar las obligaciones financieras existentes y la información necesaria para evaluar la operación. Por eso, tener un ingreso determinado no garantiza por sí solo la aprobación de un crédito hipotecario.\n\nRevisar tus deudas, la continuidad de tus ingresos y tus antecedentes con tiempo puede ayudarte a iniciar el proceso con menos incertidumbre. La decisión corresponde a la institución financiera y depende de sus políticas y de las características concretas de la operación. En RutaHogar, la calificación es una referencia orientativa y no reemplaza esa evaluación formal.",
     sources: [
       {
         institution: "SERNAC",
@@ -220,12 +227,12 @@ export const ACADEMY_ARTICLES = [
     topic: "endeudamiento",
     title: "¿Cómo afectan tus otras deudas a un hipotecario?",
     summary:
-      "Un crédito automotriz, tarjetas u otras obligaciones pueden reducir el margen disponible para una nueva deuda.",
+      "Ordenar tus otras cuotas puede darte más margen para un dividendo y hacer más sostenible tu presupuesto.",
     level: "Básico",
     minutes: 4,
     tags: ["deuda", "carga financiera", "tarjetas"],
     body:
-      "Cuando solicitas un nuevo crédito, tus obligaciones financieras existentes forman parte del contexto que puede utilizarse para evaluar tu capacidad de pago.\n\nPor ejemplo, una cuota de crédito automotriz o compromisos derivados de otros productos financieros pueden disminuir el margen disponible para asumir un dividendo hipotecario.\n\nPor eso, antes de buscar una vivienda es útil elaborar un presupuesto que incluya todas tus cuotas y obligaciones, en lugar de considerar solamente el futuro dividendo.",
+      "Revisar tus otras deudas antes de buscar vivienda te permite saber si el dividendo cabe de verdad en tu presupuesto y qué podrías ajustar con anticipación.\n\nCuando solicitas un nuevo crédito, tus obligaciones financieras existentes forman parte del contexto que puede utilizarse para evaluar tu capacidad de pago. Por ejemplo, una cuota de crédito automotriz o compromisos derivados de otros productos financieros pueden disminuir el margen disponible para asumir un dividendo hipotecario.\n\nPor eso, antes de buscar una vivienda es útil elaborar un presupuesto que incluya todas tus cuotas y obligaciones, en lugar de considerar solamente el futuro dividendo.",
     sources: [
       {
         institution: "SERNAC",
@@ -262,7 +269,7 @@ export const ACADEMY_ARTICLES = [
     topic: "endeudamiento",
     title: "Cómo ordenar tus deudas antes de buscar vivienda",
     summary:
-      "Una estrategia sencilla para conocer tu situación financiera antes de comprometerte con una nueva deuda.",
+      "Ordenar tus deudas te ayuda a identificar margen real, priorizar decisiones y buscar una vivienda acorde a tu presupuesto.",
     level: "Básico",
     minutes: 4,
     tags: ["deuda", "presupuesto", "carga financiera"],
@@ -287,7 +294,7 @@ export const ACADEMY_ARTICLES = [
     topic: "carga",
     title: "¿Qué es la carga financiera?",
     summary:
-      "Aprende a relacionar tus ingresos con las obligaciones que ya tienes antes de asumir una nueva deuda.",
+      "Conocer tu carga financiera te ayuda a proteger tu margen mensual antes de sumar un dividendo.",
     level: "Básico",
     minutes: 4,
     tags: ["carga financiera", "deuda", "ingresos"],
@@ -303,6 +310,22 @@ export const ACADEMY_ARTICLES = [
     reviewedAt: "2026-08",
   },
 
+
+  {
+    id: "carga-2",
+    topic: "carga",
+    title: "RCI: Relación Carga / Ingreso",
+    summary:
+      "Usar la RCI como referencia te ayuda a detectar si conviene ordenar deudas, ajustar la vivienda o revisar el plazo.",
+    level: "Básico",
+    minutes: 3,
+    tags: ["RCI", "relación carga ingreso", "deuda/ingreso", "carga financiera", "dividendo"],
+    body:
+      "La RCI, o Relación Carga / Ingreso, ayuda a mirar qué parte de tus ingresos mensuales se destina a obligaciones financieras. En una lectura simple, compara tus cuotas y compromisos de deuda con tus ingresos disponibles.\n\nEn RutaHogar se usa como referencia educativa para que entiendas si el dividendo estimado y tus deudas actuales dejan suficiente margen mensual. Si la relación se ve alta, puede ser una señal para ordenar deudas, ajustar el valor de vivienda o revisar el plazo antes de una evaluación formal.\n\nNo debe leerse como una regla única de aprobación. Cada institución financiera puede usar criterios propios, pedir antecedentes adicionales y considerar otros elementos del perfil, como continuidad laboral, ahorro disponible, historial de pagos y características de la operación.",
+    sources: [],
+    reviewedAt: "2026-09",
+  },
+
   // ===========================================================================
   // AHORRO Y PIE
   // ===========================================================================
@@ -312,12 +335,12 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "¿Qué es el pie de una vivienda?",
     summary:
-      "Entiende qué parte del valor de una propiedad debes financiar con recursos propios según las condiciones de tu operación.",
+      "Planificar el pie te ayuda a reducir lo que necesitas financiar y a construir una compra más viable para tu presupuesto.",
     level: "Básico",
     minutes: 3,
     tags: ["pie", "ahorro", "vivienda"],
     body:
-      "El pie corresponde a la parte del valor de la vivienda que no se financia mediante el crédito hipotecario y que debe cubrirse con recursos propios u otras fuentes permitidas por la operación.\n\nNo existe un único porcentaje de pie que se aplique de manera universal a todos los créditos hipotecarios. El porcentaje financiado depende de las condiciones de la institución, del producto y de las características de la operación.\n\nUn mayor aporte propio puede reducir el monto que necesitas financiar, pero no debe interpretarse automáticamente como una garantía de aprobación o de una determinada tasa de interés.",
+      "Trabajar tu pie te permite dimensionar antes cuánto necesitas reunir y reducir el monto que deberías financiar.\n\nEl pie corresponde a la parte del valor de la vivienda que no se financia mediante el crédito hipotecario y que debe cubrirse con recursos propios u otras fuentes permitidas por la operación.\n\nNo existe un único porcentaje de pie que se aplique de manera universal a todos los créditos hipotecarios. El porcentaje financiado depende de las condiciones de la institución, del producto y de las características de la operación. Un mayor aporte propio puede reducir el monto que necesitas financiar, pero no garantiza por sí solo una aprobación o una determinada tasa de interés.",
     sources: [
       {
         institution: "CMF",
@@ -333,7 +356,7 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "Cómo planificar el ahorro para una vivienda",
     summary:
-      "Convierte una meta de ahorro en un objetivo mensual que puedas seguir y revisar.",
+      "Convertir tu meta en ahorro mensual te ayuda a avanzar con un plan realista y a ajustar a tiempo tu objetivo de vivienda.",
     level: "Básico",
     minutes: 4,
     tags: ["ahorro", "pie", "presupuesto"],
@@ -375,7 +398,7 @@ export const ACADEMY_ARTICLES = [
     topic: "ahorro",
     title: "Pie, ahorro y fondo de emergencia",
     summary:
-      "Ahorrar para el pie es importante, pero también conviene considerar la liquidez necesaria para enfrentar imprevistos.",
+      "Separar el pie de tu fondo de emergencia te ayuda a comprar sin quedar sin respaldo ante imprevistos.",
     level: "Intermedio",
     minutes: 4,
     tags: ["pie", "ahorro", "fondo de emergencia"],
@@ -426,7 +449,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "¿Qué es la CAE?",
     summary:
-      "La Carga Anual Equivalente permite comparar alternativas financieras bajo condiciones comparables.",
+      "Comparar la CAE entre ofertas equivalentes te ayuda a elegir mirando el costo, no solo la cuota o la tasa.",
     level: "Básico",
     minutes: 4,
     tags: ["CAE", "tasa", "costo"],
@@ -447,7 +470,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "Costo Total del Crédito",
     summary:
-      "Descubre cuánto terminarías pagando considerando los pagos del crédito durante todo el plazo.",
+      "Revisar el costo total te ayuda a evitar que una cuota baja esconda un compromiso más caro en el tiempo.",
     level: "Básico",
     minutes: 4,
     tags: ["costo total", "CAE", "dividendo"],
@@ -510,7 +533,7 @@ export const ACADEMY_ARTICLES = [
     topic: "costos",
     title: "Cómo comparar dos créditos hipotecarios",
     summary:
-      "Una metodología simple para comparar ofertas sin quedarse solamente con la tasa.",
+      "Comparar las condiciones completas te ayuda a elegir un crédito que cuide tu presupuesto mensual y el costo total.",
     level: "Intermedio",
     minutes: 5,
     tags: ["CAE", "costo total", "tasa", "comparación"],
@@ -540,7 +563,7 @@ export const ACADEMY_ARTICLES = [
     topic: "plazos",
     title: "El plazo del crédito: cuota baja no siempre es costo bajo",
     summary:
-      "El plazo influye tanto en la cuota mensual como en el costo total del crédito. Aprende a comparar alternativas mirando ambos.",
+      "Elegir bien el plazo te ayuda a equilibrar una cuota sostenible hoy con el costo que asumirás durante años.",
     level: "Básico",
     minutes: 4,
     tags: ["plazo", "cuota", "costo total"],
@@ -607,7 +630,7 @@ export const ACADEMY_ARTICLES = [
     topic: "uf",
     title: "¿Cómo afecta la UF a tu dividendo?",
     summary:
-      "Una cuota expresada en UF puede representar distintos montos en pesos a lo largo del tiempo.",
+      "Entender la UF te ayuda a preparar un presupuesto que resista cambios del dividendo en pesos.",
     level: "Intermedio",
     minutes: 4,
     tags: ["UF", "dividendo", "crédito"],
@@ -658,7 +681,7 @@ export const ACADEMY_ARTICLES = [
     minutes: 4,
     tags: ["subsidio", "vivienda", "MINVU"],
     body:
-      "Los subsidios habitacionales son beneficios otorgados por el Estado a personas o familias que cumplen los requisitos establecidos en cada programa.\n\nLos programas pueden tener objetivos, beneficiarios, montos, requisitos de ahorro y tipos de vivienda diferentes. Por eso no existe un único conjunto de requisitos que sirva para todos los subsidios.\n\nAntes de postular, revisa siempre el programa y el llamado específico publicado por MINVU. La información de ScoreLeads es educativa y no reemplaza la postulación ni la evaluación oficial.",
+      "Los subsidios habitacionales son beneficios otorgados por el Estado a personas o familias que cumplen los requisitos establecidos en cada programa.\n\nLos programas pueden tener objetivos, beneficiarios, montos, requisitos de ahorro y tipos de vivienda diferentes. Por eso no existe un único conjunto de requisitos que sirva para todos los subsidios.\n\nAntes de postular, revisa siempre el programa y el llamado específico publicado por MINVU. La información de RutaHogar es educativa y no reemplaza la postulación ni la evaluación oficial.",
     sources: [
       {
         institution: "MINVU",
@@ -679,7 +702,7 @@ export const ACADEMY_ARTICLES = [
     minutes: 5,
     tags: ["DS1", "subsidio", "RSH", "ahorro"],
     body:
-      "El Subsidio para Sectores Medios, conocido como DS1, está destinado a familias que buscan acceder a una vivienda y cumplen las condiciones establecidas por el programa.\n\nEn el primer llamado nacional de 2026, MINVU informó tres tramos para adquisición de vivienda y requisitos diferenciados de ahorro y Registro Social de Hogares. Las condiciones concretas, fechas y montos corresponden a ese llamado y no deben interpretarse como requisitos permanentes para futuros procesos.\n\nCuando quieras postular, revisa directamente el llamado vigente de MINVU para conocer los requisitos, fechas, ahorro mínimo y condiciones de la vivienda.",
+      "El Subsidio para Sectores Medios, conocido como DS1, está destinado a familias que buscan acceder a una vivienda y cumplen las condiciones establecidas por el programa.\n\nEn el primer llamado nacional de 2026, MINVU informó tres tramos para adquisición de vivienda y requisitos diferenciados de ahorro y Registro Social de Hogares. Las condiciones concretas, fechas y montos corresponden a ese llamado y no deben interpretarse como requisitos permanentes para futuros procesos.\n\nCuando quieras postular, revisa directamente el llamado vigente de MINVU para conocer los requisitos, fechas, ahorro mínimo y condiciones de la vivienda.\n\nRecuerda: esta información es referencial. La aprobación final depende de la evaluación de la entidad correspondiente.",
     sources: [
       {
         institution: "MINVU",
@@ -721,7 +744,7 @@ export const ACADEMY_ARTICLES = [
     minutes: 3,
     tags: ["subsidio", "MINVU", "requisitos"],
     body:
-      "Los programas habitacionales tienen reglas establecidas por su normativa, pero los llamados específicos pueden establecer fechas, cupos, montos, condiciones y procedimientos determinados.\n\nPor ejemplo, el primer llamado nacional DS1 de 2026 tuvo fechas de postulación, ahorro mínimo y condiciones específicas para ese proceso.\n\nPor esta razón, una aplicación educativa no debería presentar los requisitos de un llamado antiguo como si fueran válidos para siempre. ScoreLeads debe entregar orientación general y derivar al sitio oficial de MINVU para comprobar las condiciones vigentes.",
+      "Los programas habitacionales tienen reglas establecidas por su normativa, pero los llamados específicos pueden establecer fechas, cupos, montos, condiciones y procedimientos determinados.\n\nPor ejemplo, el primer llamado nacional DS1 de 2026 tuvo fechas de postulación, ahorro mínimo y condiciones específicas para ese proceso.\n\nPor esta razón, una aplicación educativa no debería presentar los requisitos de un llamado antiguo como si fueran válidos para siempre. RutaHogar debe entregar orientación general y derivar al sitio oficial de MINVU para comprobar las condiciones vigentes.",
     sources: [
       {
         institution: "MINVU",
@@ -876,7 +899,7 @@ export const ACADEMY_ARTICLES = [
     topic: "vivienda",
     title: "Costos que debes considerar al comprar una vivienda",
     summary:
-      "El precio de la propiedad y el pie no representan necesariamente todos los recursos que necesitarás.",
+      "Presupuestar todos los costos de compra te ayuda a evitar que trámites y cargos desarmen tu plan de vivienda.",
     level: "Básico",
     minutes: 4,
     tags: ["gastos", "vivienda", "pie"],
@@ -897,7 +920,7 @@ export const ACADEMY_ARTICLES = [
     topic: "vivienda",
     title: "Qué revisar antes de comprometer la compra",
     summary:
-      "Antes de firmar una promesa o asumir una obligación importante, revisa la vivienda, el financiamiento y las condiciones del contrato.",
+      "Revisar la operación completa antes de firmar te ayuda a evitar compromisos que no calzan con tu presupuesto o condiciones.",
     level: "Intermedio",
     minutes: 5,
     tags: ["promesa", "contrato", "vivienda"],
@@ -912,8 +935,120 @@ export const ACADEMY_ARTICLES = [
     ],
     reviewedAt: "2026-08",
   },
+  {
+    id: "subsidios-fogaes",
+    topic: "subsidios",
+    title: "FOGAES: financiamiento para vivienda nueva",
+    summary: "Qué es FOGAES, quién puede postular y cómo esta garantía estatal facilita el acceso a un crédito hipotecario con menor pie.",
+    level: "Básico",
+    minutes: 4,
+    tags: ["subsidio", "pie", "vivienda"],
+    body:
+      "FOGAES (Fondo de Garantías para Empresas de Seguros) es un sistema de garantías estatales diseñado para facilitar el acceso a crédito hipotecario. Su objetivo es que más personas puedan financiar una vivienda nueva con un pie más bajo del que los bancos usualmente exigen.\n\nCómo funciona: el Estado respalda parcialmente el crédito, lo que reduce el riesgo para el banco y permite ofrecer mejores condiciones al solicitante. Esto significa que puedes acceder a un crédito hipotecario con un pie mínimo del 10%, cuando normalmente los bancos piden entre 15% y 20%.\n\nRequisitos principales: la vivienda debe ser nueva (no usada), el valor de la propiedad no puede exceder las 4.000 UF, y debes contar con un pie mínimo equivalente al 10% del valor de la propiedad. El banco evaluará también tu renta, continuidad laboral y comportamiento de pago.\n\nDónde postular: los bancos adheridos al sistema FOGAES. Puedes consultar la lista de entidades autorizadas en el sitio oficial de FOGAES o preguntar directamente en tu banco.\n\nRecuerda: esta información es referencial. La aprobación final depende de la evaluación bancaria formal.",
+  },
+  {
+    id: "subsidios-ds49",
+    topic: "subsidios",
+    title: "DS49: Fondo Solidario de Elección de Vivienda",
+    summary: "El subsidio estatal para familias en situación de vulnerabilidad que buscan su primera vivienda.",
+    level: "Básico",
+    minutes: 4,
+    tags: ["subsidio", "vivienda"],
+    body:
+      "El DS49 (Decreto Supremo 49) es el Fondo Solidario de Elección de Vivienda, un subsidio estatal no reembolsable dirigido a familias en situación de vulnerabilidad socioeconómica.\n\nQuién puede postular: personas mayores de 18 años, inscritas en el Registro Social de Hogares (RSH) con un tramo de vulnerabilidad de hasta el 40% (o hasta el 100% si eres adulto mayor de 60 años), que no sean propietarias de otra vivienda, que cuenten con un ahorro mínimo de 10 UF en una cuenta de ahorro para la vivienda, y que postulen con un grupo familiar acreditado.\n\nEl monto del subsidio varía según el tramo de vulnerabilidad y la zona geográfica. Es un aporte estatal directo que reduce el monto que necesitas financiar con crédito.\n\nProceso de postulación: se realiza a través del SERVIU (Servicio de Vivienda y Urbanismo). Es importante reunir la documentación requerida (certificado de RSH, comprobante de ahorro, certificado de grupo familiar) antes de iniciar el proceso.\n\nRecuerda: esta información es referencial. La aprobación final depende de la evaluación del SERVIU.",
+  },
+  {
+    id: "subsidios-padhi",
+    topic: "subsidios",
+    title: "PADHI: Acompañamiento a Deudores Hipotecarios",
+    summary: "Programa de orientación para personas con deuda hipotecaria vigente que fueron beneficiarias previas de subsidios.",
+    level: "Intermedio",
+    minutes: 3,
+    tags: ["subsidio", "morosidad"],
+    body:
+      "PADHI (Programa de Acompañamiento a Deudores Hipotecarios) no es un subsidio nuevo, sino un programa de orientación y acompañamiento para personas que ya tienen una deuda hipotecaria vigente y que anteriormente fueron beneficiarias de un subsidio habitacional.\n\nQuién puede acceder: debes contar con una deuda hipotecaria activa y haber sido beneficiario previo de un subsidio habitacional (como DS49, DS1 u otro programa similar).\n\nQué ofrece el programa: orientación financiera para reestructurar deudas, asesoría sobre opciones de pago, y acompañamiento durante el proceso de normalización de la deuda. El objetivo es ayudarte a salir de la morosidad y recuperar la estabilidad financiera.\n\nEste programa es parte del conjunto de herramientas que el Estado ofrece para proteger a las familias que ya accedieron a una vivienda con apoyo estatal.\n\nSi no cumples con los requisitos de PADHI pero tienes deuda hipotecaria, te recomendamos revisar la sección de Crédito Hipotecario en la Academia Financiera para entender tus opciones.\n\nRecuerda: esta información es referencial. El acceso al programa depende de la entidad administradora.",
+  },
+  {
+    id: "subsidios-ds1",
+    topic: "subsidios",
+    title: "DS1: Subsidio Clase Media para compra de vivienda",
+    summary: "El subsidio para la clase media que busca facilitar la compra de una primera vivienda con ahorro previo.",
+    level: "Intermedio",
+    minutes: 4,
+    tags: ["subsidio", "ahorro", "vivienda"],
+    body:
+      "El DS1 (Decreto Supremo 1) es el Subsidio Clase Media para Compra de Viviendas, dirigido a personas que desean adquirir su primera vivienda y que cuentan con un ahorro acumulado.\n\nEl subsidio se organiza en tres tramos, cada uno con requisitos distintos de ahorro, valor de propiedad y tramo RSH:\n\nTramo I: ahorro mínimo de 30 UF, valor de propiedad hasta 1.100 UF, RSH hasta el 60% (o hasta 90% si eres adulto mayor).\n\nTramo II: ahorro mínimo de 40 UF, valor de propiedad hasta 1.600 UF, RSH hasta el 80% (o hasta 90% si eres adulto mayor).\n\nTramo III: ahorro mínimo de 80 UF, valor de propiedad hasta 2.200 UF, con inscripción en el RSH.\n\nRequisitos comunes: no ser propietario de otra vivienda, contar con antigüedad mínima de 12 meses en la cuenta de ahorro para la vivienda, y cumplir con los requisitos del tramo al que postulas.\n\nEl monto del subsidio varía según el tramo y se entrega como aporte estatal no reembolsable que complementa tu pie o reduce el monto del crédito.\n\nRecuerda: esta información es referencial. La aprobación final depende de la evaluación del SERVIU.",
+  },
+  {
+    id: "subsidios-leasing",
+    topic: "subsidios",
+    title: "Leasing Habitacional: arrendamiento con promesa de compraventa",
+    summary: "Una alternativa al crédito hipotecario que te permite arrendar una vivienda con la opción de comprarla eventualmente.",
+    level: "Intermedio",
+    minutes: 3,
+    tags: ["subsidio", "vivienda"],
+    body:
+      "El Leasing Habitacional es un subsidio que funciona como arrendamiento con promesa de compraventa de vivienda. En lugar de obtener un crédito hipotecario convencional, arriendas la vivienda con la opción de comprarla en el futuro.\n\nCómo funciona: pagas una cuota mensual por el arrendamiento, y una parte de esa cuota se acumula como descuento del precio de compra. Al final del plazo, tienes la opción de comprar la vivienda con el descuento acumulado.\n\nRequisitos: ser mayor de 18 años, estar inscrito en el Registro Único de Inscritos (RUI), no ser propietario de otra vivienda, y no haber sido beneficiario previo de un subsidio habitacional.\n\nVentajas: es una alternativa para quienes no califican para un crédito hipotecario convencional pero tienen la capacidad de pagar una cuota mensual. También permite acumular ahorro para el pie mientras habitas la vivienda.\n\nEl leasing habitacional es gestionado por entidades autorizadas por el Estado. Consulta las opciones disponibles en tu zona.\n\nRecuerda: esta información es referencial. Las condiciones específicas dependen de la entidad administradora.",
+  },
+  {
+    id: "subsidios-ley21748",
+    topic: "subsidios",
+    title: "Ley 21.748: reducción de tasa para vivienda nueva",
+    summary: "Beneficio que reduce la tasa de interés en 0.60 puntos porcentuales para créditos de vivienda nueva.",
+    level: "Básico",
+    minutes: 3,
+    tags: ["subsidio", "tasa", "vivienda"],
+    body:
+      "La Ley N° 21.748 establece una reducción de la tasa de interés de 0.60 puntos porcentuales para créditos hipotecarios destinados a la compra de vivienda nueva.\n\nQué significa en la práctica: si tu tasa de interés es de, por ejemplo, 3.50%, con la Ley 21.748 pasaría a 2.90%. Esto reduce directamente tu dividendo mensual durante toda la vida del crédito, lo que puede representar un ahorro significativo.\n\nRequisitos: la vivienda debe ser nueva (no usada), debes ser persona natural (no empresa), y el valor de la propiedad no puede exceder las 4.000 UF.\n\nCómo se aplica: el banco aplica la reducción automáticamente cuando el crédito cumple con los requisitos de la ley. No necesitas realizar un trámite adicional; el banco verifica que la vivienda sea nueva y que el valor esté dentro del tope.\n\nEste beneficio es acumulable con otros subsidios habitacionales, lo que puede mejorar significativamente las condiciones de tu crédito.\n\nRecuerda: esta información es referencial. La aplicación efectiva de la reducción depende de la entidad bancaria.",
+  },
+
+  // ===========================================================================
+  // DOCUMENTACIÓN
+  // ===========================================================================
+
+  {
+    id: "docs-1",
+    topic: "documentos",
+    title: "Guía: Dónde obtener tus documentos para la evaluación hipotecaria",
+    summary:
+      "Aprende dónde y cómo conseguir cada uno de los antecedentes necesarios para tu evaluación bancaria.",
+    level: "Básico",
+    minutes: 6,
+    tags: ["documentos", "requisitos", "evaluación"],
+    body:
+      "Reunir los antecedentes para tu evaluación hipotecaria es un paso clave. A continuación, te detallamos dónde puedes obtener cada uno de los documentos habituales:\n\n" +
+      "• Cédula de identidad vigente: Se obtiene directamente en las oficinas del Registro Civil. Asegúrate de que no esté vencida ni bloqueada.\n\n" +
+      "• Certificado de residencia o Boleta de servicios: El certificado de residencia se solicita en tu Junta de Vecinos o mediante una Notaría Digital. Como alternativa, los bancos suelen aceptar una boleta de servicios básicos (luz, agua, gas) a tu nombre emitida por las respectivas empresas de servicios (idealmente con menos de 3 meses de antigüedad).\n\n" +
+      "• Comprobante de ahorro o pie: Puedes descargar la cartola de tu cuenta de ahorro para la vivienda, fondos mutuos o depósitos directamente desde los canales digitales de tu institución financiera (por ejemplo, BancoEstado, Coopeuch, u otra entidad bancaria).\n\n" +
+      "• Últimas liquidaciones de sueldo (3 a 6): Solicítalas a tu Empleador o al departamento de Recursos Humanos (RRHH) de tu empresa. Generalmente se piden 3 si tienes renta fija y 6 si tienes renta variable.\n\n" +
+      "• Certificado de cotizaciones previsionales: Se descarga desde el sitio web de tu AFP utilizando tu ClaveÚnica o tu Clave AFP. Suele solicitarse el historial de los últimos 12 a 24 meses con el RUT de tu empleador.\n\n" +
+      "• Certificado de antigüedad laboral: Es emitido por tu Empleador. Debe ser un documento oficial que especifique tu cargo, tipo de contrato y fecha de ingreso.\n\n" +
+      "• Certificados de aclaración, regularización y deuda al día: En caso de morosidades previas, puedes obtener estos certificados a través de Equifax Dicom o el Boletín Comercial, presentando la documentación que acredite el pago.\n\n" +
+      "• Certificados de pago total o finiquitos de deudas liquidadas: Si prepagaste un crédito de consumo o cerraste una tarjeta, debes solicitar el certificado de deuda saldada directamente a tu Banco o Acreedor.",
+    sources: [
+      {
+        institution: "RutaHogar",
+        title: "Guía de Documentación Hipotecaria",
+        url: "#",
+      },
+    ],
+    reviewedAt: "2026-09",
+  },
 ];
 
+// Mapeo academy_module (backend) → articleId (frontend) para deep-link
+// desde tarjetas de beneficios directamente a la cápsula educativa.
+export const ACADEMY_BENEFIT_CAPSULES = {
+  fogaes: "subsidios-fogaes",
+  ds49: "subsidios-ds49",
+  padhi: "subsidios-padhi",
+  ds1: "subsidios-ds1",
+  leasing: "subsidios-leasing",
+  ley_21748: "subsidios-ley21748",
+};
+
+// Glosario contextual (HU12 - E3): términos que aparecen en Resultado, Plan de
+// mejora o Mapa y que deben ofrecer acceso directo a contenido de la Academia.
 
 // -----------------------------------------------------------------------------
 // GLOSARIO
@@ -960,6 +1095,28 @@ export const ACADEMY_GLOSSARY = {
     definition:
       "Medida utilizada para analizar qué parte de los ingresos está comprometida con obligaciones financieras.",
     articleId: "carga-1",
+  },
+
+
+  RCI: {
+    label: "RCI",
+    definition:
+      "Relación Carga / Ingreso: referencia para comparar obligaciones mensuales con ingresos disponibles.",
+    articleId: "carga-2",
+  },
+
+  "relación carga ingreso": {
+    label: "Relación Carga / Ingreso",
+    definition:
+      "Comparación entre carga mensual e ingresos que ayuda a entender el margen disponible antes de asumir nuevas cuotas.",
+    articleId: "carga-2",
+  },
+
+  "deuda/ingreso": {
+    label: "deuda/ingreso",
+    definition:
+      "Lectura referencial de cuánto pesan las obligaciones mensuales frente a los ingresos.",
+    articleId: "carga-2",
   },
 
   dividendo: {
@@ -1708,7 +1865,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "credito",
     title: "¿Por qué te evalúan más allá del sueldo?",
     description:
-      "Deudas actuales, codeudores y continuidad de ingresos también pesan en la decisión.",
+      "Qué puedes revisar antes para llegar con más respaldo a una evaluación hipotecaria.",
     minutes: 2,
     takeaways: [
       "La evaluación considera tus obligaciones financieras existentes.",
@@ -1723,7 +1880,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "endeudamiento",
     title: "El máximo aprobado no es tu meta",
     description:
-      "Cómo decidir cuánto pedir mirando tu presupuesto real, no el techo del banco.",
+      "Cómo proteger tu presupuesto eligiendo un monto sostenible, no solo el máximo posible.",
     minutes: 2,
     takeaways: [
       "El monto máximo que te aprueban puede exceder lo conveniente para ti.",
@@ -1738,7 +1895,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "carga",
     title: "Cuánto de tus ingresos ya está comprometido",
     description:
-      "La carga financiera explicada sin fórmulas mágicas ni porcentajes universales.",
+      "Detecta si te queda margen para un dividendo, gastos cotidianos e imprevistos.",
     minutes: 2,
     takeaways: [
       "Mide qué parte de tus ingresos ya se va en cuotas y obligaciones.",
@@ -1748,12 +1905,29 @@ export const ACADEMY_CAPSULES = [
     articleId: "carga-1",
     videoUrl: null,
   },
+
+  {
+    id: "cap-carga-2",
+    topicId: "carga",
+    title: "RCI: deuda e ingreso en una sola lectura",
+    description:
+      "Una señal para decidir si ordenar deudas, ajustar la vivienda o revisar el plazo.",
+    minutes: 2,
+    takeaways: [
+      "Compara obligaciones mensuales con ingresos disponibles.",
+      "Sirve para detectar si el presupuesto queda demasiado ajustado.",
+      "Es una referencia, no una aprobación bancaria.",
+    ],
+    articleId: "carga-2",
+    videoUrl: null,
+  },
+
   {
     id: "cap-ahorro-1",
     topicId: "ahorro",
     title: "El pie: tu primera meta de ahorro",
     description:
-      "Qué es el pie, cuánto juntar y cómo no descuidar tu fondo de emergencia.",
+      "Cómo convertir el pie en una meta viable sin quedarte sin respaldo para imprevistos.",
     minutes: 2,
     takeaways: [
       "El pie es la parte del valor que pagas con recursos propios.",
@@ -1768,7 +1942,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "costos",
     title: "Tasa, CAE y costo total: no son lo mismo",
     description:
-      "Los tres números que debes mirar antes de firmar cualquier crédito.",
+      "Las tres cifras que te ayudan a comparar el costo real antes de elegir un crédito.",
     minutes: 3,
     takeaways: [
       "La tasa es solo uno de los componentes del costo.",
@@ -1783,7 +1957,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "plazos",
     title: "Plazo largo: cuota menor, costo mayor",
     description:
-      "El trade-off entre lo que pagas cada mes y lo que pagas en total.",
+      "Cómo equilibrar una cuota que puedas sostener con el costo que asumirás a largo plazo.",
     minutes: 2,
     takeaways: [
       "A mayor plazo, la cuota baja pero pagas intereses por más tiempo.",
@@ -1798,7 +1972,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "uf",
     title: "UF: por qué tu dividendo cambia en pesos",
     description:
-      "Cómo funciona la reajustabilidad y qué significa para tu presupuesto mensual.",
+      "Cómo anticipar cambios en pesos y proteger el margen de tu presupuesto mensual.",
     minutes: 6,
     takeaways: [
       "La UF se reajusta diariamente según la variación del IPC.",
@@ -1844,7 +2018,7 @@ export const ACADEMY_CAPSULES = [
     topicId: "vivienda",
     title: "Los gastos que vienen con la vivienda",
     description:
-      "Tasación, estudio de títulos, escritura: el precio no es el único desembolso.",
+      "Cómo incluir los costos de la operación para que la compra no desordene tu plan.",
     minutes: 4,
     takeaways: [
       "La compra puede incluir tasación, estudio de títulos y escritura.",

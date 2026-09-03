@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
-import BankingChecklist from "./BankingChecklist";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildRecommendations } from "../services/recommendationService";
+import { displayItemBenefit, displayItemText } from "../utils/text";
 
 import {
   formatBooleanText,
@@ -11,7 +11,70 @@ import {
   getUserResultFactors,
 } from "../utils/helpers";
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
+import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 import AiExplanationBlock from "./AiExplanationBlock";
+
+
+function PlanCarousel({ children }) {
+  const stripRef = useRef(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+
+  const updateArrows = () => {
+    const el = stripRef.current;
+    if (!el) return;
+    setCanPrev(el.scrollLeft > 4);
+    setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateArrows();
+    const el = stripRef.current;
+    if (!el) return undefined;
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    window.addEventListener("resize", updateArrows);
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateArrows);
+      window.removeEventListener("resize", updateArrows);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollByPage = (direction) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
+    el.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`plan-carousel ${canPrev ? "has-prev" : ""} ${canNext ? "has-next" : ""}`}>
+      <button
+        type="button"
+        className="plan-carousel-arrow is-left"
+        onClick={() => scrollByPage(-1)}
+        disabled={!canPrev}
+        aria-label="Anterior"
+      >
+        <i className="ti ti-chevron-left" aria-hidden="true" />
+      </button>
+      <div className="plan-carousel-strip" ref={stripRef}>
+        {children}
+      </div>
+      <button
+        type="button"
+        className="plan-carousel-arrow is-right"
+        onClick={() => scrollByPage(1)}
+        disabled={!canNext}
+        aria-label="Siguiente"
+      >
+        <i className="ti ti-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
 
 function hasObjectData(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
@@ -31,20 +94,18 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
-
-  // HU12 - E3: los términos financieros detectados en el texto abren la Academia.
   const openInAcademy = () => onNavigate?.("academia");
 
   if (!data) {
     return (
       <section className="section-block recommendations-panel">
         <div className="section-heading">
-          <span className="eyebrow">Recomendaciones inteligentes</span>
-          <h1>Orientación personalizada</h1>
+          <span className="eyebrow">Resultados de tu calificación</span>
+          <h1>Resultados de tu precalificación</h1>
         </div>
         <div className="empty-state">
-          <strong>Aún no tienes una preevaluación.</strong>
-          <p>Realiza una preevaluación para generar recomendaciones personalizadas.</p>
+          <strong>Aún no tienes una precalificación.</strong>
+          <p>Realiza una precalificación para generar recomendaciones personalizadas.</p>
           <button type="button" onClick={onStartEvaluation}>Ir a precalificación</button>
         </div>
       </section>
@@ -53,152 +114,113 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
 
   return (
     <section className="section-block recommendations-panel">
-      <div className="section-heading">
-        <span className="eyebrow">Recomendaciones inteligentes</span>
-        <h1>Orientación personalizada</h1>
-        <p>Resumen basado en tu última preevaluación, incluyendo compatibilidad, factores principales y recomendaciones generales.</p>
-      </div>
-
-      <div className="recommendation-summary">
-        <div className={`score-badge-wrap ${getScoreBadgeClass(data.classification)}`}>
-          <span>Score financiero</span>
-          <strong>{formatScore(data.score, "Sin score")}</strong>
-          <small>Clasificación final: {data.classification || "Sin clasificación"}</small>
-        </div>
+      <div className="page-head">
         <div>
-          <p>{data.summary}</p>
-          {adjustment ? (
-            <div className="score-adjustment-note">
-              <strong>{adjustment.message}</strong>
-              {adjustment.detail ? <p>{adjustment.detail}</p> : null}
-            </div>
-          ) : null}
+          <span className="eyebrow">Resultados de tu calificación</span>
+          <h1>Orientación personalizada</h1>
+          <p>Lee tu resultado, identifica los factores principales y define el siguiente paso con información referencial.</p>
         </div>
       </div>
 
-      {data.user_explanation_deterministic ? (
-        <section className="recommendation-ai" style={{ marginBottom: "1.5rem" }}>
-          <strong>Explicación orientativa</strong>
-          <p>{data.user_explanation_deterministic}</p>
+      <div className="recommendation-hero-row">
+        <section className="recommendation-score-ai-card">
+          <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
+            <span>Score financiero</span>
+            <strong>{formatScore(data.score, "Sin score")}</strong>
+            <small>{data.classification || "Sin clasificación"}</small>
+          </div>
+          <div className="recommendation-score-ai-card__explanation">
+            <strong><i className="ti ti-sparkles"></i> Explicación con IA</strong>
+            <AiExplanationBlock text={evaluation?.result?.ai_explanation} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation} />
+          </div>
         </section>
-      ) : null}
 
-      <section className="recommendation-ai" style={{ marginBottom: "1.5rem" }}>
-        <strong>Explicación mejorada con IA</strong>
+        <div className="recommendation-hero-explanations">
+          <div className="recommendation-summary">
+            <p>{data.summary}</p>
+            {adjustment ? (
+              <div className="score-adjustment-note">
+                <strong>{adjustment.message}</strong>
+                {adjustment.detail ? <p>{adjustment.detail}</p> : null}
+              </div>
+            ) : null}
+          </div>
 
-        <AiExplanationBlock
-          text={evaluation?.result?.ai_explanation}
-          renderText={(t) => (
-            <p>
-              <LinkedText text={t} onOpenArticle={openInAcademy} />
-            </p>
-          )}
-          onRetry={onRetryExplanation}
-        />
-      </section>
-
-      {(factors.length || hasObjectData(data.project_fit)) && (
-        <div className="recommendation-grid">
-          {factors.length ? (
+          <div className="recommendation-summary-lists">
             <section>
-              <strong>Factores determinantes de tu resultado</strong>
-              <ul>
+              <h2 className="recommendation-section-title"><i className="ti ti-bulb"></i> Recomendaciones personalizadas</h2>
+              <ul>{data.recommendations.map((item, index) => <li key={`${displayItemText(item)}-${index}`}><i className="ti ti-circle-check recommendation-icon"></i><div>{displayItemText(item)}{displayItemBenefit(item) ? <p className="benefit"><b>Beneficio esperado: </b>{displayItemBenefit(item)}</p> : null}</div></li>)}</ul>
+            </section>
+            <section>
+              <h2 className="recommendation-section-title"><i className="ti ti-checkbox"></i> Acciones sugeridas</h2>
+              <ul>{data.actions.map((item) => <li key={item}><i className="ti ti-arrow-right recommendation-icon"></i><span className="action-text"><LinkedText text={item} onOpenArticle={openInAcademy} /></span></li>)}</ul>
+            </section>
+          </div>
+
+        </div>
+      </div>
+
+      {factors.length > 0 && (
+        <div className="recommendation-metrics-row">
+          {factors.length ? (
+            <section className="recommendation-metrics-card">
+              <h2 className="recommendation-section-title"><i className="ti ti-chart-bar"></i> Factores determinantes</h2>
+              <ul className="factor-list">
                 {factors.map((factor, index) => (
-                  <li key={`${factor.title}-${index}`}>
-                    <strong>{factor.title}</strong>
-                    {factor.description ? <p>{factor.description}</p> : null}
+                  <li className="factor-item" key={`${factor.title}-${index}`}>
+                    <span className={`factor-dot ${Number(factor.score) >= 70 ? "ok" : Number(factor.score) >= 40 ? "warn" : "bad"}`} />
+                    <div className="factor-info">
+                      <span className="factor-name">{factor.title}</span>
+                      {factor.description ? <span className="factor-desc">{factor.description}</span> : null}
+                    </div>
+                    {Number.isFinite(Number(factor.score)) && (
+                      <span className="factor-score">{factor.score}</span>
+                    )}
                   </li>
                 ))}
               </ul>
             </section>
           ) : null}
 
-          {hasObjectData(data.project_fit) ? (
-            <section>
-              <strong>Compatibilidad con tu objetivo inmobiliario</strong>
-              <ul>
-                <li>Estado: {data.project_fit.classification || data.project_fit.status || "Sin dato"}</li>
-                <li>Brecha de ingreso: {formatClp(data.project_fit.income_gap)}</li>
-                <li>Brecha de pie: {formatClp(data.project_fit.down_payment_gap)}</li>
-                <li>Compatible actualmente: {formatBooleanText(data.project_fit.compatible)}</li>
-              </ul>
-            </section>
-          ) : null}
         </div>
       )}
 
-      <div className="recommendation-grid">
-        <section>
-          <strong>Recomendaciones personalizadas</strong>
-          <ul>
-            {data.recommendations.map((item) => (
-              <li key={item.text}>
-                {item.text}
-                {item.benefit && <p className="benefit"><b>Beneficio esperado: </b>{item.benefit}</p>}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section>
-          <strong>Acciones sugeridas</strong>
-          <ul>
-            {data.actions.map((item) => (
-              <li key={item}><LinkedText text={item} onOpenArticle={openInAcademy} /></li>
-            ))}
-          </ul>
-        </section>
-      </div>
-
-      {evaluation?.result?.improvement_plan?.length > 0 && (
-        <div className="improvement-plan-section" style={{ marginTop: "2rem", marginBottom: "2rem" }}>
-          <h2 style={{ fontSize: "1.4rem", color: "var(--color-neutral-900)" }}>Plan de Mejora Estratégico</h2>
-          <p style={{ marginBottom: "1rem", color: "var(--color-neutral-700)" }}>Priorizado por impacto según tu perfil actual.</p>
-          <div className="plan-grid" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {evaluation.result.improvement_plan.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="plan-card" 
-                style={{ 
-                  padding: "1.2rem", 
-                  borderRadius: "8px", 
-                  border: `1px solid ${item.impact_level === 'Alto' ? '#ffcccc' : item.impact_level === 'Medio' ? '#fff2cc' : '#cce5ff'}`,
-                  backgroundColor: `${item.impact_level === 'Alto' ? '#fff0f0' : item.impact_level === 'Medio' ? '#fffdf0' : '#f0f8ff'}`,
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                  <strong style={{ fontSize: "1.1rem", color: "var(--color-neutral-900)" }}>{item.category}</strong>
-                  <span style={{ 
-                    fontWeight: "600", 
-                    padding: "4px 10px", 
-                    borderRadius: "12px", 
-                    backgroundColor: item.impact_level === 'Alto' ? '#ef4444' : item.impact_level === 'Medio' ? '#eab308' : '#3b82f6',
-                    color: item.impact_level === 'Medio' ? '#000' : '#fff',
-                    fontSize: "0.85rem"
-                  }}>
-                    Impacto: {item.impact_level}
-                  </span>
-                </div>
-                <p style={{ margin: "0 0 0.75rem 0", lineHeight: "1.5", color: "var(--color-neutral-800)" }}>{item.description}</p>
-                {item.expected_benefit && (
-                  <div style={{ fontSize: "0.95rem", color: "var(--color-neutral-700)", marginTop: "0.5rem", borderTop: "1px dashed rgba(0,0,0,0.1)", paddingTop: "0.75rem" }}>
-                    <strong>Beneficio esperado:</strong> {item.expected_benefit}
-                  </div>
-                )}
-              </div>
-            ))}
+      {data.housing_benefits?.applicable_benefits?.some((b) => b.eligible) && (
+        <div className="simulation-teaser">
+          <strong>Subsidios habitacionales</strong>
+          <p>
+            Descubre qu&#233; beneficios como FOGAES, DS49, DS1 o Ley 21.748 podr&#237;an ser compatibles con tu perfil.
+          </p>
+          <div className="simulation-teaser-actions">
+            <button type="button" className="secondary-button" onClick={() => onNavigate?.("subsidios")}>
+              Ver subsidios en detalle
+            </button>
+            {data.housing_benefits.applicable_benefits
+              .filter((b) => b.eligible)
+              .slice(0, 1)
+              .map((b) => {
+                const capsuleId = ACADEMY_BENEFIT_CAPSULES[b.academy_module];
+                return capsuleId ? (
+                  <button
+                    key={b.type}
+                    type="button"
+                    className="text-button"
+                    onClick={() => onNavigate?.("academia", { articleId: capsuleId })}
+                  >
+                    Explorar c&#225;psula: {b.name}
+                  </button>
+                ) : null;
+              })}
           </div>
         </div>
       )}
 
-      {evaluation && <BankingChecklist evaluation={evaluation} />}
-
       <div className="warning-note">
+        <i className="ti ti-alert-triangle"></i>
         Esta orientación no reemplaza una evaluación bancaria formal.
       </div>
 
-      <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+      <div className="recommendations-cta">
         <button className="primary-button" type="button" onClick={() => onNavigate?.("tracking")}>
           Ir al plan de mejora
         </button>

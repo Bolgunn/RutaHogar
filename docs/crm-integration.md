@@ -13,7 +13,7 @@ se administran a mano desde `AdminProjectCatalog.jsx`. Cuando una inmobiliaria y
 mantiene su cartera en un CRM, duplicar esa carga es un costo de adopción evitable:
 el CRM debería poder empujar sus proyectos y sus asignaciones de ejecutivos.
 
-**Dirección de sincronización — fase 1: solo lectura (pull desde el CRM).** ScoreLeads
+**Dirección de sincronización — fase 1: solo lectura (pull desde el CRM).** RutaHogar
 no escribe de vuelta en el CRM. Los proyectos con `source = 'crm'` se consideran
 gestionados por el CRM; la edición manual sigue disponible pero puede ser sobrescrita
 por la siguiente sincronización.
@@ -72,7 +72,7 @@ syncAssignmentsFromCrm(payload) -> { vinculados, pendientes, rechazados, errores
 
 ### Proyecto CRM → `public.proyectos`
 
-| Campo CRM | Columna ScoreLeads | Notas |
+| Campo CRM | Columna RutaHogar | Notas |
 | :-------- | :----------------- | :---- |
 | `crm_id` | — (clave de correlación) | No se persiste en HU 7. Si Spike 2 necesita idempotencia por id externo, agregar `proyectos.crm_id text` + índice único `(inmobiliaria_id, crm_id)`. |
 | `nombre` | `nombre` | Único por inmobiliaria e insensible a mayúsculas (`proyectos_nombre_por_inmobiliaria_idx`). Es la clave natural de correlación mientras no exista `crm_id`. |
@@ -86,7 +86,7 @@ syncAssignmentsFromCrm(payload) -> { vinculados, pendientes, rechazados, errores
 
 Los CRM inmobiliarios normalmente manejan inventario **a nivel de unidad**
 (tipologías 1D/2D/3D, deptos individuales, lotes), no un rango por proyecto.
-ScoreLeads hoy modela el proyecto con un rango, así que el adaptador **colapsa las
+RutaHogar hoy modela el proyecto con un rango, así que el adaptador **colapsa las
 unidades al escribir**:
 
 ```
@@ -115,18 +115,18 @@ adaptador y pasa a derivarse en la base — el payload del CRM no cambia.
 
 ### Ejecutivo CRM → `public.proyecto_ejecutivos`
 
-| Campo CRM | Columna ScoreLeads | Notas |
+| Campo CRM | Columna RutaHogar | Notas |
 | :-------- | :----------------- | :---- |
 | `ejecutivo_email` | `ejecutivo_email` | Se normaliza a minúsculas. Es la mitad de la PK `(proyecto_id, ejecutivo_email)`. |
 | `crm_executive_id` | — | No se persiste en HU 7. El correo es el identificador de correlación. |
-| — | `ejecutivo_id` | `NULL` mientras el ejecutivo no tenga cuenta en ScoreLeads. |
+| — | `ejecutivo_id` | `NULL` mientras el ejecutivo no tenga cuenta en RutaHogar. |
 | — | `source` | **`'crm'`** para todo lo que entre por esta vía (`'manual'` para la UI de admin). Permite distinguir qué gestiona el CRM. |
 | — | `estado` | `'pendiente'` si el correo no tiene cuenta de ejecutivo; `'vinculado'` si sí. |
 
 ## Flujo de la unión tolerante a pendientes
 
 El join `proyecto_ejecutivos` fue diseñado para aceptar ejecutivos que **todavía no
-existen** en ScoreLeads, que es el caso normal cuando el CRM es la fuente de verdad:
+existen** en RutaHogar, que es el caso normal cuando el CRM es la fuente de verdad:
 
 1. El CRM envía `ejecutivo_email`. El adaptador llama al RPC `assign_executive(proyecto_id, email)`
    (o inserta con `source = 'crm'` si la ingesta ocurre server-side con la service key).
@@ -142,7 +142,7 @@ existen** en ScoreLeads, que es el caso normal cuando el CRM es la fuente de ver
    inmobiliaria y pasa la fila a `'vinculado'`.
 
 Esto significa que el CRM puede enviar su cartera completa **antes** de que el equipo
-comercial se registre en ScoreLeads, sin perder información.
+comercial se registre en RutaHogar, sin perder información.
 
 ## Endpoint de ingesta propuesto
 
@@ -196,7 +196,7 @@ adicional en cada función de `projectService.js` que devuelva la misma forma co
 
 ## Fuera de alcance de este documento
 
-- Escritura de ScoreLeads hacia el CRM (leads calificados, resultados de matching).
+- Escritura de RutaHogar hacia el CRM (leads calificados, resultados de matching).
   Eso es HU 5 / HU 4 y no toca el catálogo.
 - Credenciales, rotación de secretos y contratos concretos por proveedor de CRM.
 - Cualquier consulta de datos financieros externos: requiere consentimiento explícito

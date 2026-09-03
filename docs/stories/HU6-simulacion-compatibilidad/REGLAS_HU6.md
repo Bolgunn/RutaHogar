@@ -258,29 +258,28 @@ El horizonte de compra no debe aumentar el score ni convertir un escenario incom
 
 El escenario actual es el proyecto referencial o valor manual que el usuario esta evaluando. Cada alternativa accesible puede incluir una accion `Comparar` o `Comparar con escenario actual` para contrastarse directamente contra ese escenario actual.
 
-Al comparar, la interfaz debe desplazar la vista hacia el bloque de comparacion para que el usuario vea el resultado generado. La comparacion debe identificar explicitamente:
+La vista debe mostrar primero el resultado del escenario actual, antes de la comparacion. Ese resultado debe responder que ocurre con el proyecto referencial o valor manual elegido por el usuario, incluyendo estado, valor, brecha principal e indicadores relevantes.
 
-- `Escenario A`: escenario actual;
-- `Escenario B`: alternativa seleccionada.
+Al comparar, la interfaz debe desplazar la vista hacia el bloque de comparacion visual para que el usuario vea el resultado generado. La comparacion visual reemplaza las tarjetas numericas `Escenario A` y `Escenario B`; no debe duplicar los mismos datos en cards separadas. No debe usar radar chart o pentagono.
 
 La comparacion debe mostrar:
 
 - valor vivienda;
 - pie minimo;
 - pie recomendado;
-- ahorro disponible;
 - brecha de pie;
 - estado de compatibilidad;
 - brecha principal;
 - comuna;
 - tipo de vivienda;
+- coincidencia con preferencias cuando aplique;
 - analisis breve de cual alternativa parece mas conveniente.
 
 Si no hay escenario actual, la UI debe mostrar un mensaje controlado: `Primero selecciona un proyecto o ingresa un valor manual para comparar`.
 
-La comparacion es referencial y no crea un score nuevo; reutiliza los indicadores calculados para cada escenario.
+La comparacion es referencial y no crea un score nuevo; reutiliza los indicadores calculados para cada escenario. Tampoco reemplaza la evaluacion bancaria formal ni modifica el scoring principal.
 
-La comparacion no debe limitarse a mostrar dos columnas de valores. Debe derivar, usando solo indicadores ya calculados por HU6:
+La comparacion no debe limitarse a mostrar dos columnas de valores. Debe incluir lectura rapida, visualizacion principal tipo barras comparativas o dumbbell y tradeoffs. Debe derivar, usando solo indicadores ya calculados por HU6:
 
 - diferencias de valor de vivienda en UF;
 - diferencias de pie minimo;
@@ -312,7 +311,9 @@ El resultado de comparacion solo puede ser:
 - `similar`;
 - `sin_datos_suficientes`.
 
-Este resultado no es una decision financiera formal ni una recomendacion bancaria. La comparacion puede usar barras simples HTML/CSS para visualizar diferencias, sin librerias externas ni calculos hipotecarios avanzados.
+Este resultado no es una decision financiera formal ni una recomendacion bancaria. La comparacion puede usar barras simples o dumbbell HTML/CSS para visualizar diferencias, sin librerias externas ni calculos hipotecarios avanzados. En esa visualizacion, la mejor condicion referencial debe leerse siempre hacia el mismo lado; si una metrica mejora cuando baja, como valor, pie o brecha, la UI debe normalizarla visualmente para que menor tambien se vea mejor.
+
+La seccion de Academia debe mantenerse como CTA final de la pantalla. Su objetivo es apoyar la comprension de conceptos, no alterar calculos, comparaciones ni estados de compatibilidad.
 
 ## Regla de presentacion y ayudas conceptuales
 
