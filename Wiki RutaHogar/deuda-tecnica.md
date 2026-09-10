@@ -42,7 +42,7 @@ desarrollador.
 
 **Acción pendiente:** Escribir los ALG. El handbook lo asigna a una persona, no a una sesión
 agéntica, y exige que se escriban **antes** del código que los implementa. Historias que van a
-tocar números y necesitan su ALG primero: [[UserStories/HU18-simulador-escenarios-hipotecarios\|HU 18]]
+tocar números y necesitan su ALG primero: [[UserStories/HU17-simulacion-financiamiento\|HU 18]]
 (umbral prudente de dividendo), [[UserStories/HU28-gastos-iniciales\|HU 28]] (porcentajes de gastos
 iniciales) y [[UserStories/HU23-parametros-scoring\|HU 23]] (edición de los tunables).
 

@@ -56,4 +56,4 @@
 ## Notas
 
 - E6 depende de [[RNF3-roles-y-permisos|RNF 3]]: la vista móvil no puede relajar los permisos.
-- E4 se conecta con [[../UserStories/HU17-reporte-leads-inconsistentes|HU 17]] para la acción de reportar inconsistencia.
+- E4 se conecta con [[../UserStories/HU16-gestion-leads-inconsistentes|HU 17]] para la acción de reportar inconsistencia.
