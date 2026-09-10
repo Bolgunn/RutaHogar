@@ -46,7 +46,7 @@
 
 - Plan de implementación: `docs/stories/HU6-simulacion-compatibilidad/PLAN.md` y `REGLAS_HU6.md`.
 - El primitivo `capacidad_compra_estimada` está especificado en [Spike 1 - E4](../../docs/research/spike1-e4-lead-project-matching-criteria.md); reutilizarlo en vez de definir una segunda fórmula de capacidad.
-- Alimenta el mapa de accesibilidad ([[HU21-mapa-accesibilidad|HU 21]]) y complementa [[HU18-simulador-escenarios-hipotecarios|HU 18]], [[HU26-simulacion-subsidios|HU 26]] y [[HU29-comparador-costo-credito|HU 29]].
+- Alimenta el mapa de accesibilidad ([[HU31-mapa-accesibilidad|HU 31]]) y complementa [[HU17-simulacion-financiamiento|HU 17]], [[HU26-simulacion-subsidios|HU 26]] y [[HU29-comparador-costo-credito|HU 29]].
 
 ---
 

@@ -3,12 +3,16 @@
 Backlog aprobado para los Sprints 1 a 3. Cada historia tiene su propia página con la descripción y
 los criterios de aceptación transcritos del documento fuente del backlog.
 
-**Estado:** ✅ Implementada · ⚠️ Parcial o pendiente de merge · 🗓 Planificada · 📌 Reservada
+**Estado:** ✅ Implementada · ⚠️ Parcial o pendiente de merge · 🗓 Planificada · 💡 Propuesta sin numerar
 
 > El estado refleja lo que el código hace hoy en `develop`, verificado criterio por criterio con citas a
 > `archivo:línea` en la sección **Estado frente al código** de cada página. Un criterio sin
 > evidencia citable es un criterio no verificado. Cuando una historia está construida pero su PR
 > sigue abierto, su página lo dice y cita la rama.
+
+> **Los Sprints 2 y 3 se renumeraron** con el documento *HUs para Sprint 2* acordado por el equipo.
+> Ese documento es la fuente de verdad y reemplaza la numeración anterior; el detalle de qué cambió
+> está en [Advertencias del backlog](#advertencias-del-backlog). Sprint 1 y el PMV no se tocaron.
 
 ---
 
@@ -32,27 +36,38 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 
 | ID | Historia | Categoría | SP | Actor | Estado |
 | :- | :------- | :-------- | :-: | :---- | :----- |
-| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, documentos e integraciones externas | Spike | 13 | Equipo | 🗓 |
-| [[HU12-derivacion-comercial\|HU 12]] | Sistema de derivación e integración comercial | Importante | 8 | Funcionario de inmobiliaria | 🗓 |
-| [[HU13-seguimiento-mensual\|HU 13]] | Seguimiento mensual del plan de mejora | Importante | 8 | Lead | ⚠️ |
-| [[HU14-mapa-accesibilidad\|HU 14]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | Lead | 🗓 |
-| [[HU15-evolucion-financiera-lead\|HU 15]] | Evolución financiera del lead | Deseable | 5 | Ejecutivo comercial | 🗓 |
-| [[HU16-dashboard-conversion\|HU 16]] | Dashboard de tasas de conversión de ventas | Deseable | 5 | Administrador / Ejecutivo | 🗓 |
-| [[HU17-reporte-leads-inconsistentes\|HU 17]] | Reportar leads inconsistentes o fraudulentos | Deseable | 5 | Ejecutivo comercial | 🗓 |
-| [[HU18-simulador-escenarios-hipotecarios\|HU 18]] | Simulador de escenarios hipotecarios referenciales | Importante | 5 | Lead | 🗓 |
-| [[HU19-ranking-proyectos-brecha\|HU 19]] | Ranking de proyectos por brecha mínima | Importante | 5 | Lead | 🗓 |
-| [[HU20-TBD\|HU 20]] | Por definir | — | *(8 reservados)* | — | 📌 |
+| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | Spike | 13 | Equipo | 🗓 |
+| [[HU12-derivacion-comercial\|HU 12]] | Sistema de Derivación e Integración Comercial | Importante | 5 | Ejecutivo · Administrador inmobiliario | 🗓 |
+| [[HU13-seguimiento-mensual\|HU 13]] | Seguimiento plan de mejora | Importante | 3 | Lead | ⚠️ |
+| [[HU14-analisis-evolucion-comercial-lead\|HU 14]] | Análisis y evolución comercial del lead | Deseable | 5 | Ejecutivo comercial | 🗓 |
+| [[HU15-dashboard-conversion-tiempos\|HU 15]] | Dashboard de conversión y tiempos del proceso comercial | Deseable | 8 | Administrador · Ejecutivo | 🗓 |
+| [[HU16-gestion-leads-inconsistentes\|HU 16]] | Gestión de leads inconsistentes o sospechosos | Deseable | 8 | Ejecutivo comercial | 🗓 |
+| [[HU17-simulacion-financiamiento\|HU 17]] | Simulación configurable de financiamiento hipotecario | Importante | 3 | Lead | 🗓 |
+| [[HU18-participacion-consentimiento-codeudor\|HU 18]] | Participación y consentimiento del co-deudor | Importante | 3 | Lead · Co-deudor | 🗓 |
+| [[HU19-portal-inmobiliario-rag\|HU 19]] | Portal Inmobiliario Inteligente (RAG) | Importante | 8 | Lead | 🗓 |
+| [[HU20-retorno-por-cambio\|HU 20]] | Lo que cambió desde tu última visita | Deseable | 5 | Lead | 🗓 |
+| [[HU21-carga-proyectos-por-unidad\|HU 21]] | Carga de proyectos por unidad y tipología | Importante | *(sin definir)* | Administrador inmobiliario | 🗓 |
 
-> **HU 20** está reservada en el documento fuente sin contenido definido. Sus 8 SP **no** están
-> incluidos en los 62 SP del sprint; con ella, el sprint sumaría 70 SP.
+> **Los SP declarados suman 61, no 62.** El documento fuente cierra el sprint en 62 SP y deja
+> [[HU21-carga-proyectos-por-unidad|HU 21]] sin puntos asignados. La diferencia no se reparte aquí:
+> la asigna el equipo.
+>
+> **[[HU20-retorno-por-cambio|HU 20]] no se puede planificar todavía.** Sus criterios en el
+> documento fuente son un duplicado exacto de los de HU 21 — hablan de tipologías, no de detectar
+> cambios en la situación del lead. Se transcribieron sin corregir y la página lo dice; el equipo
+> debe corregir el documento.
+>
+> **[[HU19-portal-inmobiliario-rag|HU 19]] es una historia nueva** sin antecedente en este wiki, y
+> la única con cinco criterios. Introduce búsqueda vectorial y un origen de propiedades externo al
+> catálogo de [[HU7-catalogo-de-proyectos|HU 7]]; de dónde salen esas propiedades y con qué permiso
+> es una decisión previa a estimarla.
 
 ---
 
-## Sprint 3 — 46 SP
+## Sprint 3 — 38 SP
 
 | ID | Historia | Categoría | SP | Actor | Estado |
 | :- | :------- | :-------- | :-: | :---- | :----- |
-| [[HU21-mapa-accesibilidad\|HU 21]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | 8 | Lead | 🗓 |
 | [[HU22-actualizacion-mapa-accesibilidad\|HU 22]] | Actualización dinámica del mapa de accesibilidad | Opcional | 5 | Lead | 🗓 |
 | [[HU23-parametros-scoring\|HU 23]] | Configuración de parámetros de scoring | Opcional | 5 | Administrador inmobiliario | 🗓 |
 | [[HU24-carga-documentos\|HU 24]] | Carga de documentos respaldatorios | Deseable | 5 | Ejecutivo comercial | 🗓 |
@@ -61,10 +76,16 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 | [[HU27-revision-antecedentes\|HU 27]] | Revisión referencial de antecedentes declarados | Deseable | 5 | Ejecutivo comercial | 🗓 |
 | [[HU28-gastos-iniciales\|HU 28]] | Estimador de gastos iniciales de compra | Importante | 5 | Lead | 🗓 |
 | [[HU29-comparador-costo-credito\|HU 29]] | Comparador de costo total referencial del crédito | Importante | 5 | Lead | 🗓 |
-| [[HU30-TBD\|HU 30]] | Por definir | — | *(4 reservados)* | — | 📌 |
+| [[HU30-ranking-proyectos-brecha\|HU 30]] | Ranking de proyectos por brecha mínima | Importante | *(sin definir)* | Lead | 🗓 |
+| [[HU31-mapa-accesibilidad\|HU 31]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | *(sin definir)* | Lead | 🗓 |
 
-> **HU 30** está reservada en el documento fuente sin contenido definido. Sus 4 SP **no** están
-> incluidos en los 46 SP del sprint; con ella, el sprint sumaría 50 SP.
+> Los 38 SP del sprint son la suma de las ocho historias con puntos asignados.
+> [[HU30-ranking-proyectos-brecha|HU 30]] y [[HU31-mapa-accesibilidad|HU 31]] quedan sin puntos en
+> el documento fuente, que sobre la primera anota *"Falta HU30 4 SP"*.
+>
+> **[[HU31-mapa-accesibilidad|HU 31]] está fuera de orden a propósito.** El documento fuente asigna
+> el número 21 a dos historias distintas — el mapa de accesibilidad en Sprint 3 y la carga por
+> tipología en Sprint 2. El equipo resolvió la colisión moviendo el mapa a HU 31.
 
 ---
 
@@ -81,13 +102,60 @@ números y criterios se mantienen sin cambios.
 
 ---
 
+## Propuestas sin numerar
+
+Hallazgos **detectados durante la ejecución de otras historias**, con página escrita y origen
+citado, que el documento del equipo no incorporó al backlog. **No tienen número de HU** — así no
+compiten con la numeración aprobada — y no suman SP a ningún sprint. Entran al backlog el día que el
+equipo las priorice y les asigne número.
+
+| Propuesta | Categoría | Actor | Origen |
+| :-------- | :-------- | :---- | :----- |
+| [[propuesta-primera-vivienda-fogaes\|Primera vivienda / FOGAES]] | Importante | Lead | Spike 1 E4 §10.5 — vía HU 10 |
+| [[propuesta-captura-solicitud-contacto\|Captura de solicitudes de contacto]] | Esencial | Ejecutivo comercial | CATALOGO-UNICO-HU9 — vía HU 9 |
+| [[propuesta-matching-nivel-unidad\|Matching a nivel de unidad]] | Deseable | Lead | UNIDADES-PROYECTO — vía HU 10 |
+| [[propuesta-importacion-masiva-catalogo\|Importación masiva del catálogo]] | Deseable | Administrador inmobiliario | Detectada con HU 21 — vía HU 7 |
+| [[propuesta-transparencia-complemento-renta\|Transparencia del complemento de renta]] | Importante | Lead | Spike 1 E4 §10.1 — vía HU 1 / HU 3 |
+| [[propuesta-complemento-vista-ejecutivo\|Complemento en la vista del ejecutivo]] | Importante | Ejecutivo comercial | Spike 1 E4 §10.1 — vía HU 2 |
+
+> **Tres propuestas de este grupo sí entraron al backlog** y por eso ya no figuran aquí: la carga por
+> tipología es [[HU21-carga-proyectos-por-unidad|HU 21]], el retorno por cambio es
+> [[HU20-retorno-por-cambio|HU 20]] y la participación del co-deudor es
+> [[HU18-participacion-consentimiento-codeudor|HU 18]].
+>
+> **[[propuesta-matching-nivel-unidad|Matching a nivel de unidad]] quedó bloqueada por su
+> precondición.** Necesita las tipologías de [[HU21-carga-proyectos-por-unidad|HU 21]], que sí entró
+> a Sprint 2. Es la propuesta que más cerca está de poder priorizarse.
+>
+> **Dos de ellas comparten una precondición de correctitud que ninguna historia numerada recogió:**
+> el defecto §10.1 del Spike 1 — `indicators.py` suma la renta del co-deudor e ignora su deuda, así
+> que toda capacidad con complemento está sobreestimada hoy. Afecta también a
+> [[HU18-participacion-consentimiento-codeudor|HU 18]], que sí está comprometida en Sprint 2.
+
+---
+
 ## Advertencias del backlog
 
-- **HU 14 y HU 21 son la misma historia.** Aparecen con texto idéntico en el documento fuente, una
-  en Sprint 2 y otra en Sprint 3. Ambas se documentan tal como están y ninguna suma o resta SP.
-  Pendiente de confirmación del equipo.
-- **HU 20 y HU 30 están reservadas** sin contenido definido. Sus páginas existen para que los
-  totales sigan siendo legibles, no para implementarse.
+- **Los Sprints 2 y 3 fueron renumerados** por el documento *HUs para Sprint 2* del equipo. El
+  documento es la fuente de verdad: donde difería del wiki, se impuso el documento. Sprint 1, el PMV
+  y los RNF no cambiaron.
+- **La duplicación HU 14 / HU 21 quedó resuelta.** El backlog anterior traía el mapa de accesibilidad
+  dos veces con texto idéntico, una en Sprint 2 y otra en Sprint 3. El documento nuevo lo deja una
+  sola vez, en Sprint 3, y esa página es [[HU31-mapa-accesibilidad|HU 31]]. La página duplicada de
+  Sprint 2 se eliminó.
+- **Los cupos reservados HU 20 y HU 30 dejaron de estar vacíos.** HU 20 pasó a ser "Lo que cambió
+  desde tu última visita" y HU 30 el ranking de proyectos por brecha mínima, que además se movió de
+  Sprint 2 a Sprint 3.
+- **El número 21 está asignado a dos historias en el documento fuente.** Se resolvió dejando la carga
+  por tipología como HU 21 en Sprint 2 y moviendo el mapa de accesibilidad a HU 31 en Sprint 3.
+- **Los criterios de HU 20 en el documento fuente son incorrectos** — un copy-paste de los de HU 21.
+  Se transcribieron literalmente, sin corregir y con la advertencia visible en la página, porque un
+  criterio no se inventa. La historia no es planificable hasta que el equipo corrija el documento.
+- **Tres historias no traen puntos de historia** en el documento fuente: HU 21, HU 30 y HU 31. Los
+  totales de sprint se calculan sin ellas y las páginas lo declaran.
+- **Ninguna historia de seguimiento genera retorno por sí sola.** HU 4, HU 13 y HU 20 se leen juntas:
+  HU 4 produce el plan, HU 13 la mecánica de registro y proyección, HU 20 el motivo para volver.
+  Comprometer HU 13 sin HU 20 deja el ciclo abierto por el lado del usuario ausente.
 
 ---
 
@@ -99,6 +167,8 @@ roles y permisos, auditoría técnica, historial inmutable, experiencia móvil d
 móvil del ejecutivo, disponibilidad y escalabilidad, manejo seguro de errores y validación de
 entradas.
 
+El documento del equipo confirma esta lista y la mantiene fuera de las historias numeradas.
+
 ---
 
 ## Spikes
@@ -106,9 +176,17 @@ entradas.
 | Spike | Nombre | SP | Sprint |
 | :---- | :----- | :-: | :----- |
 | Spike 1 | Investigación financiera, scoring, educación financiera y criterios de priorización comercial | 13 | Sprint 1 |
-| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, documentos e integraciones externas | 13 | Sprint 2 |
+| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | 13 | Sprint 2 |
 
 **Entregable de Spike 1:** [E4 — Criterios de matching lead-proyecto](../../docs/research/spike1-e4-lead-project-matching-criteria.md) — modelo de capacidad y contrato congelado para [[HU10-matching-lead-proyecto|HU 10]].
+
+**Spike 2** cubre seis frentes en el documento nuevo: permisos por rol y consentimiento, auditoría e
+historial versionado, integración comercial y servicios externos, fuentes de datos externas, flujos
+y experiencia de usuario, y el ecosistema de corredores inmobiliarios.
+
+El documento anota además un frente de investigación **para Sprint 3**: validación de datos y
+viabilidad técnica para la visualización inmobiliaria, insumo de
+[[HU31-mapa-accesibilidad|HU 31]].
 
 ---
 
@@ -120,6 +198,7 @@ entradas.
 | **Ejecutivo comercial** | Profesional de venta inmobiliaria. Gestiona el dashboard priorizado de leads y cierra negocios. |
 | **Administrador inmobiliario** | Representante de la inmobiliaria contratante. Asigna roles de ejecutivo, gestiona el catálogo de proyectos y los parámetros de scoring. |
 | **Administrador desarrollador** | Miembro del equipo de desarrollo. Se hace cargo de trazabilidad, logs, seguridad y ajustes manuales de score. |
+| **Co-deudor** *(nuevo)* | Tercero cuya renta complementa la del lead. Aporta y confirma sus propios datos y otorga su propio consentimiento; no navega la plataforma. Lo introduce [[HU18-participacion-consentimiento-codeudor\|HU 18]]. |
 
 Detalle completo en [[../Actores\|Actores / Roles]].
 
