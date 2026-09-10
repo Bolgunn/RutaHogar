@@ -46,16 +46,9 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 | [[HU18-participacion-consentimiento-codeudor\|HU 18]] | Participación y consentimiento del co-deudor | Importante | 3 | Lead · Co-deudor | 🗓 |
 | [[HU19-portal-inmobiliario-rag\|HU 19]] | Portal Inmobiliario Inteligente (RAG) | Importante | 8 | Lead | 🗓 |
 | [[HU20-retorno-por-cambio\|HU 20]] | Lo que cambió desde tu última visita | Deseable | 5 | Lead | 🗓 |
-| [[HU21-carga-proyectos-por-unidad\|HU 21]] | Carga de proyectos por unidad y tipología | Importante | *(sin definir)* | Administrador inmobiliario | 🗓 |
 
-> **Los SP declarados suman 61, no 62.** El documento fuente cierra el sprint en 62 SP y deja
-> [[HU21-carga-proyectos-por-unidad|HU 21]] sin puntos asignados. La diferencia no se reparte aquí:
-> la asigna el equipo.
->
-> **[[HU20-retorno-por-cambio|HU 20]] no se puede planificar todavía.** Sus criterios en el
-> documento fuente son un duplicado exacto de los de HU 21 — hablan de tipologías, no de detectar
-> cambios en la situación del lead. Se transcribieron sin corregir y la página lo dice; el equipo
-> debe corregir el documento.
+> **Los SP declarados suman 61, no 62.** El documento fuente cierra el sprint en 62 SP. El SP que
+> falta no se reparte aquí: lo asigna el equipo.
 >
 > **[[HU19-portal-inmobiliario-rag|HU 19]] es una historia nueva** sin antecedente en este wiki, y
 > la única con cinco criterios. Introduce búsqueda vectorial y un origen de propiedades externo al
@@ -83,9 +76,10 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 > [[HU30-ranking-proyectos-brecha|HU 30]] y [[HU31-mapa-accesibilidad|HU 31]] quedan sin puntos en
 > el documento fuente, que sobre la primera anota *"Falta HU30 4 SP"*.
 >
-> **[[HU31-mapa-accesibilidad|HU 31]] está fuera de orden a propósito.** El documento fuente asigna
-> el número 21 a dos historias distintas — el mapa de accesibilidad en Sprint 3 y la carga por
-> tipología en Sprint 2. El equipo resolvió la colisión moviendo el mapa a HU 31.
+> **[[HU31-mapa-accesibilidad|HU 31]] está fuera de orden a propósito.** El documento fuente traía
+> el mapa de accesibilidad con el número 21, chocando con la carga por tipología. El equipo resolvió
+> la colisión moviendo el mapa a HU 31; después retiró la carga por tipología del backlog, así que
+> **el número 21 quedó vacante**.
 
 ---
 
@@ -114,18 +108,19 @@ equipo las priorice y les asigne número.
 | [[propuesta-primera-vivienda-fogaes\|Primera vivienda / FOGAES]] | Importante | Lead | Spike 1 E4 §10.5 — vía HU 10 |
 | [[propuesta-captura-solicitud-contacto\|Captura de solicitudes de contacto]] | Esencial | Ejecutivo comercial | CATALOGO-UNICO-HU9 — vía HU 9 |
 | [[propuesta-matching-nivel-unidad\|Matching a nivel de unidad]] | Deseable | Lead | UNIDADES-PROYECTO — vía HU 10 |
+| [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]] | Importante | Administrador inmobiliario | UNIDADES-PROYECTO — vía HU 7 |
 | [[propuesta-importacion-masiva-catalogo\|Importación masiva del catálogo]] | Deseable | Administrador inmobiliario | Detectada con HU 21 — vía HU 7 |
 | [[propuesta-transparencia-complemento-renta\|Transparencia del complemento de renta]] | Importante | Lead | Spike 1 E4 §10.1 — vía HU 1 / HU 3 |
 | [[propuesta-complemento-vista-ejecutivo\|Complemento en la vista del ejecutivo]] | Importante | Ejecutivo comercial | Spike 1 E4 §10.1 — vía HU 2 |
 
-> **Tres propuestas de este grupo sí entraron al backlog** y por eso ya no figuran aquí: la carga por
-> tipología es [[HU21-carga-proyectos-por-unidad|HU 21]], el retorno por cambio es
-> [[HU20-retorno-por-cambio|HU 20]] y la participación del co-deudor es
-> [[HU18-participacion-consentimiento-codeudor|HU 18]].
+> **Dos propuestas de este grupo sí entraron al backlog** y por eso ya no figuran aquí: el retorno
+> por cambio es [[HU20-retorno-por-cambio|HU 20]] y la participación del co-deudor es
+> [[HU18-participacion-consentimiento-codeudor|HU 18]]. La carga por unidad y tipología llegó a
+> estar en Sprint 2 y el equipo la retiró; vuelve a esta tabla.
 >
-> **[[propuesta-matching-nivel-unidad|Matching a nivel de unidad]] quedó bloqueada por su
-> precondición.** Necesita las tipologías de [[HU21-carga-proyectos-por-unidad|HU 21]], que sí entró
-> a Sprint 2. Es la propuesta que más cerca está de poder priorizarse.
+> **[[propuesta-matching-nivel-unidad|Matching a nivel de unidad]] sigue bloqueada por su
+> precondición**, que es [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]]. Ninguna de las dos
+> está en el backlog numerado, así que se priorizan juntas o no se priorizan.
 >
 > **Dos de ellas comparten una precondición de correctitud que ninguna historia numerada recogió:**
 > el defecto §10.1 del Spike 1 — `indicators.py` suma la renta del co-deudor e ignora su deuda, así
@@ -146,13 +141,14 @@ equipo las priorice y les asigne número.
 - **Los cupos reservados HU 20 y HU 30 dejaron de estar vacíos.** HU 20 pasó a ser "Lo que cambió
   desde tu última visita" y HU 30 el ranking de proyectos por brecha mínima, que además se movió de
   Sprint 2 a Sprint 3.
-- **El número 21 está asignado a dos historias en el documento fuente.** Se resolvió dejando la carga
-  por tipología como HU 21 en Sprint 2 y moviendo el mapa de accesibilidad a HU 31 en Sprint 3.
-- **Los criterios de HU 20 en el documento fuente son incorrectos** — un copy-paste de los de HU 21.
-  Se transcribieron literalmente, sin corregir y con la advertencia visible en la página, porque un
-  criterio no se inventa. La historia no es planificable hasta que el equipo corrija el documento.
-- **Tres historias no traen puntos de historia** en el documento fuente: HU 21, HU 30 y HU 31. Los
-  totales de sprint se calculan sin ellas y las páginas lo declaran.
+- **El número 21 quedó vacante.** El documento fuente lo asignaba a dos historias a la vez; el
+  equipo movió el mapa de accesibilidad a HU 31 y después retiró la carga por unidad y tipología del
+  backlog. Ningún número se reutiliza para no alterar la numeración ya acordada.
+- **Los criterios de HU 20 llegaron aparte.** El documento fuente los traía equivocados — un
+  copy-paste de los de la carga por tipología — y el equipo entregó los correctos por separado. La
+  página tiene los criterios reales y la historia es planificable.
+- **Dos historias no traen puntos de historia** en el documento fuente: HU 30 y HU 31. Los totales
+  de sprint se calculan sin ellas y las páginas lo declaran.
 - **Ninguna historia de seguimiento genera retorno por sí sola.** HU 4, HU 13 y HU 20 se leen juntas:
   HU 4 produce el plan, HU 13 la mecánica de registro y proyección, HU 20 el motivo para volver.
   Comprometer HU 13 sin HU 20 deja el ciclo abierto por el lado del usuario ausente.

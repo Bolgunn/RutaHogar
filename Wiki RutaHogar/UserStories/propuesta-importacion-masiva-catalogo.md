@@ -1,6 +1,6 @@
 # Propuesta — Importación masiva del catálogo desde CSV
 
-> **Propuesta sin numerar.** Cargar un catálogo completo desde un archivo CSV, con validación previa fila por fila y confirmación explícita antes de escribir nada. Resuelve volumen; la granularidad la resuelve [[HU21-carga-proyectos-por-unidad|HU 21]].
+> **Propuesta sin numerar.** Cargar un catálogo completo desde un archivo CSV, con validación previa fila por fila y confirmación explícita antes de escribir nada. Resuelve volumen; la granularidad la resuelve [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]].
 
 ---
 
@@ -38,14 +38,14 @@
 
 ### E4 - Tipologías en el mismo archivo
 
-**Dado** que existe el modelo de tipologías de [[HU21-carga-proyectos-por-unidad|HU 21]], **cuando** el archivo incluya filas de tipología, **entonces** deben importarse asociadas a su proyecto y el rango de precio derivarse de ellas.
+**Dado** que existe el modelo de tipologías de [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]], **cuando** el archivo incluya filas de tipología, **entonces** deben importarse asociadas a su proyecto y el rango de precio derivarse de ellas.
 
 ---
 
 ## Notas
 
 - **Resuelve volumen, no granularidad.** Es la contraparte de
-  [[HU21-carga-proyectos-por-unidad|HU 21]]: aquella hace que un proyecto pueda describirse bien;
+  [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]]: aquella hace que un proyecto pueda describirse bien;
   esta hace que describir cien no cueste cien veces.
 - **E1 más E2 son el corazón de la historia.** Una importación que escribe mientras valida deja el
   catálogo a medio migrar y sin forma de saber qué entró. La previsualización no es una comodidad de
@@ -76,7 +76,7 @@
 | Historia | Relación |
 | :------- | :------- |
 | [[HU7-catalogo-de-proyectos\|HU 7]] | Es una segunda vía de entrada al mismo catálogo. Comparte validación y contrato; no los redefine. |
-| [[HU21-carga-proyectos-por-unidad\|HU 21]] | Complementaria, no bloqueante. Con HU 21, el CSV también trae tipologías (E4). |
+| [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]] | Complementaria, no bloqueante. Con HU 21, el CSV también trae tipologías (E4). |
 | [[HU12-derivacion-comercial\|HU 12]] | Frontera explícita: importar un archivo **no** es integrarse con un sistema externo. |
 
 ---
@@ -90,4 +90,4 @@ Historia propuesta, sin implementación.
 | `E1` | ❌ | No existe plantilla ni vista de importación; `AdminProjectCatalog.jsx` solo tiene alta unitaria por formulario y `projectValidation.js` valida un proyecto, no un lote. |
 | `E2` | ❌ | Sin previsualización ni escritura transaccional de lote. |
 | `E3` | ❌ | Sin ruta de importación que forzar al tenant. |
-| `E4` | ❌ | Depende de [[HU21-carga-proyectos-por-unidad\|HU 21]]. |
+| `E4` | ❌ | Depende de [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]]. |

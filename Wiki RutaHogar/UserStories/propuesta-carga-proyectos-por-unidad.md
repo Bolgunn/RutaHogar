@@ -1,6 +1,6 @@
-# HU 21 - Carga de proyectos por unidad y tipología
+# Propuesta — Carga de proyectos por unidad y tipología
 
-> **🗓 Planificada - Sprint 2.** Hoy el administrador declara un proyecto como un rango de precio digitado a mano. Esta historia lo convierte en un inventario de tipologías reales — 1D, 2D, 3D — cada una con su precio, superficie y disponibilidad.
+> **Propuesta sin numerar.** Hoy el administrador declara un proyecto como un rango de precio digitado a mano. Esta historia lo convierte en un inventario de tipologías reales — 1D, 2D, 3D — cada una con su precio, superficie y disponibilidad.
 
 ---
 
@@ -9,10 +9,10 @@
 | Campo | Valor |
 | :---- | :---- |
 | **Categoría** | Importante |
-| **Puntos de Historia** | *(sin definir en el documento)* |
+| **Puntos de Historia** | *(sin estimar)* |
 | **Actor** | Administrador inmobiliario |
-| **Sprint** | Sprint 2 |
-| **Estado** | 🗓 Planificada |
+| **Sprint** | — *(fuera del backlog numerado)* |
+| **Estado** | Propuesta |
 
 ---
 
@@ -70,8 +70,8 @@
 | Historia | Relación |
 | :------- | :------- |
 | [[HU7-catalogo-de-proyectos\|HU 7]] | La extiende. Esta historia es la granularidad que HU 7 dejó anticipada en la nota 3 del contrato. |
-| [[propuesta-matching-nivel-unidad\|Matching a nivel de unidad]] | **Es su precondición.** HU 21 captura las tipologías; la propuesta las usa para matchear. HU 21 entrega valor por sí sola; la propuesta no existe sin HU 21. |
-| [[propuesta-importacion-masiva-catalogo\|Importación masiva del catálogo]] | Complementaria. HU 21 hace que un proyecto pueda describirse bien; la propuesta hace que describir cien no cueste cien veces. Ninguna bloquea a la otra. |
+| [[propuesta-matching-nivel-unidad\|Matching a nivel de unidad]] | **Es su precondición.** Esta propuesta captura las tipologías; aquella las usa para matchear. Esta entrega valor por sí sola; aquella no existe sin esta. |
+| [[propuesta-importacion-masiva-catalogo\|Importación masiva del catálogo]] | Complementaria. Esta propuesta hace que un proyecto pueda describirse bien; aquella hace que describir cien no cueste cien veces. Ninguna bloquea a la otra. |
 | [[HU9-cotizacion-orientativa\|HU 9]] | La cotización pasa a poder citar una tipología concreta en vez del precio de entrada. |
 | [[HU6-simulacion-compatibilidad\|HU 6]] | Hoy la simulación evalúa el proyecto a su precio de entrada (`valor_uf := precio_min_uf`) y declara compatible a quien solo alcanza la unidad más barata. Con tipologías, esa afirmación deja de ser engañosa. |
 
