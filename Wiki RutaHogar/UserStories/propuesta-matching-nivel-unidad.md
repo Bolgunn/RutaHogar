@@ -51,7 +51,7 @@
 - **Es un cambio real de algoritmo, no de UI.** Pasar la holgura de `ALG-10` de "interpolar dentro del
   rango" a "encontrar la mejor unidad asequible" toca pesos que el propio spike reconoce como **no
   calibrados** (§5.2, ítem 3 de §11, asignado a [[HU27-revision-antecedentes|HU 27]]). De ahí E4.
-- **Precondición: [[HU21-carga-proyectos-por-unidad|HU 21]]**, que es quien captura las tipologías.
+- **Precondición: [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]]**, que es quien captura las tipologías.
   Sin ella no hay unidades contra las cuales matchear.
 - Depende del modelo de unidades de `docs/stories/UNIDADES-PROYECTO/PLAN.md`: tabla hija de
   `proyectos`, con `precio_min_uf`/`precio_max_uf` mantenidos por trigger para no romper el contrato
@@ -65,7 +65,7 @@
 
 ## Estado frente al código
 
-Propuesta sin implementación. Bloqueada por [[HU21-carga-proyectos-por-unidad|HU 21]], que sí entró a Sprint 2.
+Propuesta sin implementación. Bloqueada por [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]], que tampoco está en el backlog numerado.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |

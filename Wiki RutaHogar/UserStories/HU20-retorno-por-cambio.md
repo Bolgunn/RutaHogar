@@ -20,12 +20,6 @@
 
 ## Historia de usuario
 
-> **El documento fuente deja la descripción de esta historia en blanco.** No se transcribe ninguna,
-> porque no hay ninguna que transcribir.
-
-La formulación que traía la propuesta previa, conservada aquí como antecedente y **no** como
-criterio aprobado:
-
 > **Como** lead que ya se evaluó una vez, **quiero** enterarme cuando algo relevante cambia en mi
 > situación o en lo que puedo alcanzar, **para** volver a la plataforma cuando hay una novedad real
 > y no solo cuando alguien me lo recuerda.
@@ -34,48 +28,52 @@ criterio aprobado:
 
 ## Criterios de aceptación
 
-> **⚠️ Los criterios que siguen son los del documento fuente, transcritos literalmente, y no
-> corresponden a esta historia.** Son un duplicado exacto de los criterios de
-> [[HU21-carga-proyectos-por-unidad|HU 21]] — hablan de tipologías, dormitorios, baños y superficie,
-> no de detectar y comunicar cambios en la situación del lead. Se transcriben sin corregir porque el
-> documento del equipo es la fuente de verdad y un criterio no se inventa. **Esta historia no se
-> puede planificar hasta que el equipo corrija el documento.**
+### E1 - Cambio detectado sin acción del usuario
 
-### E1
+**Dado** que un lead tiene una evaluación previa, **cuando** cambia una condición que afecta su
+situación sin que él intervenga — antigüedad laboral cumplida, variación de UF, proyectos nuevos
+compatibles en el catálogo —, **entonces** el sistema debe recalcular su situación y **registrar el
+cambio como un evento asociado al lead**, sin requerir ninguna acción de su parte.
 
-**Dado** que el administrador edita un proyecto de su catálogo, **cuando** agregue, modifique, marque como no disponible o elimine una tipología, **entonces** debe poder declarar su nombre, dormitorios, baños, superficie en m², precio en UF y disponibilidad, y el rango del proyecto debe recalcularse sin intervención manual.
+> **Valor:** produce la novedad. Sin evento no hay nada que contar, y sin algo que contar el resto
+> de la historia no tiene insumo. Es el único CA que genera valor mientras el usuario está ausente.
 
-### E2
+### E2 - Motivo de retorno entregado fuera de la plataforma
 
-**Dado** que un proyecto tiene al menos una tipología disponible, **cuando** se consulte el proyecto, **entonces** su precio mínimo y máximo deben derivarse de las tipologías disponibles y dejar de ser campos digitados; y dado que un proyecto no tiene tipologías cargadas, cuando el administrador lo edite o un consumidor lo lea, entonces debe seguir funcionando exactamente como hoy, con su rango de precio ingresado a mano.
+**Dado** que se registró un evento relevante — el score cambió de tramo, se desbloqueó un proyecto
+compatible, la fecha estimada se adelantó o atrasó, o se cumplió un mes del plan —, **cuando** el
+sistema lo notifique, **entonces** el mensaje debe contener **el dato concreto que cambió y el
+proyecto objetivo por su nombre**, y no un recordatorio genérico de que la plataforma existe;
+además debe respetar un tope de frecuencia, **omitir el envío cuando el cambio no sea materialmente
+distinto del ya comunicado**, y permitir que el lead desactive los avisos.
 
-### E3
+> **Valor:** es el único criterio que efectivamente trae al usuario de vuelta. **De él depende la
+> meta del sprint**; los demás son la recompensa de haber vuelto. El tope de frecuencia no es un
+> detalle de implementación sino parte del valor: notificar de más enseña al usuario a ignorarnos y
+> destruye este criterio de forma permanente. La preferencia de desactivación es también lo que
+> mantiene la historia dentro de lo que el lead consintió en [[HU1-ingreso-datos-financieros|HU 1]].
 
-**Dado** que un administrador accede a las tipologías, **cuando** consulte o modifique cualquiera, **entonces** solo debe alcanzar las de proyectos de su propia inmobiliaria.
+### E3 - Aterrizaje que muestra el delta, no el estado
 
-### E4
+**Dado** que el lead entra desde una notificación, **cuando** abra la plataforma, **entonces** lo
+primero que debe ver es **qué cambió desde su última visita** y qué significa eso para su proyecto
+objetivo, antes que cualquier pantalla de estado general.
 
-**Dado** que un proyecto tiene tipologías cargadas, **cuando** el lead revise el proyecto, **entonces** debe ver el desglose de tipologías con su precio, y no solo el rango agregado.
+> **Valor:** confirma que valió la pena abrir. Sin este criterio, E2 gasta la confianza del usuario
+> una sola vez y el segundo mensaje ya no se abre.
 
----
+### E4 - Actualización en un tap
 
-## Antecedente — criterios de la propuesta original
+**Dado** que el lead está viendo lo que cambió, **cuando** quiera reportar su propio avance,
+**entonces** debe poder hacerlo ingresando **un solo dato** desde esa misma pantalla, sin pasar por
+el formulario completo de evaluación ni por la gestión de hitos.
 
-Los criterios que la propuesta traía antes de entrar al documento del equipo. **No son el contrato
-vigente**; se conservan porque son el material con el que el equipo puede corregir el documento.
-
-| # | Criterio propuesto |
-| :- | :----------------- |
-| E1 | Cambio detectado sin acción del usuario — el sistema recalcula y registra el cambio como evento asociado al lead, sin que el lead intervenga. |
-| E2 | Motivo de retorno entregado fuera de la plataforma — el aviso lleva el dato concreto que cambió y el proyecto objetivo por su nombre, con tope de frecuencia y opción de desactivar. |
-| E3 | Aterrizaje que muestra el delta, no el estado — al volver, lo primero es qué cambió desde la última visita. |
-| E4 | Actualización en un tap — reportar el avance propio con un solo dato desde esa misma pantalla. |
+> **Valor:** cierra el ciclo. Alimenta E1 con datos reales del lead y no solo con cambios del
+> entorno, de modo que el próximo evento sea más específico que el anterior.
 
 ---
 
 ## Por qué existe esta historia
-
-*Análisis de la propuesta original, previo al documento del equipo.*
 
 El objetivo del sprint es que el lead **vuelva** después de crear su cuenta y ver su score por
 primera vez. Las historias de seguimiento existentes ([[HU4-plan-de-mejora|HU 4]],
@@ -105,7 +103,7 @@ más barato que tiene el producto.
 
 ---
 
-## Notas de la propuesta original
+## Notas
 
 - **El bucle completo es:** el mundo cambia → E1 genera el evento → E2 lo entrega con un número →
   E3 muestra el delta al volver → E4 recoge un dato nuevo → vuelve a E1. La propuesta original de
@@ -130,8 +128,6 @@ más barato que tiene el producto.
 ---
 
 ## Relación con otras historias
-
-*Las referencias `E1`–`E4` de esta sección y de las anteriores son a los criterios del **antecedente**.*
 
 | Historia | Relación |
 | :------- | :------- |
@@ -158,9 +154,7 @@ más barato que tiene el producto.
 
 ## Estado frente al código
 
-Historia sin implementación. **La tabla verifica los criterios del antecedente, no los del documento
-fuente**, porque los del documento pertenecen a [[HU21-carga-proyectos-por-unidad|HU 21]] y ya se
-verifican en esa página.
+Historia sin implementación.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
