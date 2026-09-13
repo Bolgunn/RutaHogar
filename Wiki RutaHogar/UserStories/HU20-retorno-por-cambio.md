@@ -135,7 +135,7 @@ más barato que tiene el producto.
 | [[HU4-plan-de-mejora\|HU 4]] | El plan es el contenido del que hablan los eventos. Sin plan activo, E1 solo puede reportar cambios del entorno. |
 | [[HU5-academia-financiera\|HU 5]] | Fuente natural del contenido de un evento cuando no hay cambio financiero que contar. |
 | [[HU10-matching-lead-proyecto\|HU 10]] | "Se desbloqueó un proyecto compatible" (E1, E2) es matching corriendo de nuevo sobre un catálogo o una capacidad que cambió. |
-| [[HU14-analisis-evolucion-comercial-lead\|HU 14]] | El mismo hecho contado al otro actor: HU 15 E3 pide detectar el avance del lead como oportunidad de contacto comercial. **Los eventos de E1 son la fuente de ambas.** |
+| [[HU14-analisis-evolucion-comercial-lead\|HU 14]] | El mismo hecho contado al otro actor: HU 14 E2 pide detectar el avance del lead como oportunidad de contacto comercial. **Los eventos de E1 son la fuente de ambas.** |
 
 ---
 
