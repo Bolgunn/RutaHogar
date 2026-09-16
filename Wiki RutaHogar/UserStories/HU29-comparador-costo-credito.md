@@ -44,4 +44,4 @@
 
 ## Notas
 
-- Comparte el motor de calculo de dividendo con [[HU18-simulador-escenarios-hipotecarios|HU 18]]; debe existir una sola fórmula, no dos.
+- Comparte el motor de calculo de dividendo con [[HU17-simulacion-financiamiento|HU 17]]; debe existir una sola fórmula, no dos.
