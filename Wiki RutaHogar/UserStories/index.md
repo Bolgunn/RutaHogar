@@ -36,7 +36,7 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 
 | ID | Historia | Categoría | SP | Actor | Estado |
 | :- | :------- | :-------- | :-: | :---- | :----- |
-| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | Spike | 13 | Equipo | 🗓 |
+| [[spike2-validacion-tecnica\|Spike 2]] | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | Spike | 13 | Equipo | 🗓 |
 | [[HU12-derivacion-comercial\|HU 12]] | Sistema de Derivación e Integración Comercial | Importante | 5 | Ejecutivo · Administrador inmobiliario | 🗓 |
 | [[HU13-seguimiento-mensual\|HU 13]] | Seguimiento plan de mejora | Importante | 3 | Lead | ⚠️ |
 | [[HU14-analisis-evolucion-comercial-lead\|HU 14]] | Análisis y evolución comercial del lead | Deseable | 5 | Ejecutivo comercial | 🗓 |
@@ -172,13 +172,15 @@ El documento del equipo confirma esta lista y la mantiene fuera de las historias
 | Spike | Nombre | SP | Sprint |
 | :---- | :----- | :-: | :----- |
 | Spike 1 | Investigación financiera, scoring, educación financiera y criterios de priorización comercial | 13 | Sprint 1 |
-| Spike 2 | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | 13 | Sprint 2 |
+| [[spike2-validacion-tecnica\|Spike 2]] | Validación técnica de privacidad, roles, trazabilidad, datos e integraciones externas | 13 | Sprint 2 |
 
 **Entregable de Spike 1:** [E4 — Criterios de matching lead-proyecto](../../docs/research/spike1-e4-lead-project-matching-criteria.md) — modelo de capacidad y contrato congelado para [[HU10-matching-lead-proyecto|HU 10]].
 
-**Spike 2** cubre seis frentes en el documento nuevo: permisos por rol y consentimiento, auditoría e
-historial versionado, integración comercial y servicios externos, fuentes de datos externas, flujos
-y experiencia de usuario, y el ecosistema de corredores inmobiliarios.
+**[[spike2-validacion-tecnica|Spike 2]]** cubre seis frentes, transcritos con sus criterios en su
+propia página: permisos por rol y consentimiento, auditoría e historial versionado, integración
+comercial y servicios externos, fuentes de datos externas, flujos y experiencia de usuario, y el
+ecosistema de corredores inmobiliarios. Su formulación vigente (13 SP, seis criterios) reemplaza la
+del documento [[../informes_entregas/E4 - GPI Plan de Proyecto 2026|E4]] (20 SP, siete criterios).
 
 El documento anota además un frente de investigación **para Sprint 3**: validación de datos y
 viabilidad técnica para la visualización inmobiliaria, insumo de
