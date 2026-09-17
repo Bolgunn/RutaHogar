@@ -1,5 +1,3 @@
-\---
-
 # Especificación Técnica - Spike 2: Privacidad, Roles y Trazabilidad Legal
 
 **Proyecto:** Ruta Hogar - Plataforma de Precalificación Financiera Inmobiliaria
@@ -14,8 +12,7 @@ Definir e implementar una arquitectura segura para la gestión de datos financie
 El modelo de negocio requiere generar un *scoring* de alta fiabilidad para derivar leads a las inmobiliarias. Para obtener esta información sin incurrir en contingencias legales bajo la **Ley 21.719 (Protección de Datos Personales)** y la normativa de la CMF, se han tomado las siguientes decisiones:
 
 * **Validación Estricta de Identidad:** No se realizarán consultas a burós de crédito o a la CMF utilizando únicamente el RUT. Consultar datos financieros de terceros mediante un identificador público sin validar la identidad constituye una vulneración grave de privacidad (riesgo de "suplantación exploratoria").
-* **Manejo del Número de Documento (Carnet de Identidad):** Si se utiliza el modelo de consulta tradicional, se solicitará el RUT y el Número de Documento en el frontend exclusivamente como segundo factor de autenticación biométrica/documental. **Decisión Técnica:** El backend (FastAPI/Node.js) consumirá el dato, validará contra la API del proveedor, y lo **desechará inmediatamente** de la memoria. No será persistido en Supabase para minimizar la superficie de exposición ante brechas de seguridad.
-* **Alternativa Recomendada (Open Banking):** Para obtener datos de mayor calidad (cartolas, ingresos reales) con menor riesgo de manejo de credenciales, se priorizará la integración con proveedores del Sistema de Finanzas Abiertas (Ley Fintec) como Fintoc o Floid. El widget del proveedor manejará la autenticación bancaria, traspasando a Ruta Hogar únicamente el JSON con el perfil comercial.**Posible TO DO**
+* **Manejo del Número de Documento (Carnet de Identidad):** Si se utiliza el modelo de consulta tradicional, se solicitará el RUT y el Número de Documento en el frontend  **Decisión Técnica:** El backend (FastAPI/Node.js) consumirá el dato, validará contra la API del proveedor, y lo **desechará inmediatamente** de la memoria. No será persistido en Supabase para minimizar la superficie de exposición ante brechas de seguridad.
 
 ## 3\. Matriz de Control de Acceso Basado en Roles (RBAC)
 
@@ -59,7 +56,9 @@ Para asegurar la "Responsabilidad Proactiva", el sistema no dependerá de logs a
 
 * **Paso 1 (DB - Supabase):** Crear migraciones SQL para estructurar la tabla `audit\\\\\\\_logs`, `user\\\\\\\_consents` y configurar los Triggers de base de datos.
 * **Paso 2 (DB - Supabase):** Habilitar RLS (*Row Level Security*) para restringir el acceso a los datos financieros basándose en el rol contenido en el JWT.
-* **Paso 3 (Backend - FastAPI/Node):** Desarrollar la integración con la API de validación de identidad o proveedor de Open Banking, asegurando que el número de serie (si se solicita) no se persista.
+* **Paso 3 (Backend - FastAPI/Node):** Desarrollar la integración con la API de validación de identidad, asegurando que el número de serie (si se solicita) no se persista.
 * **Paso 4 (Backend - FastAPI/Node):** Programar los endpoints de los derechos ARCO (`/export`, `/account` con lógica de *Soft Delete*).
 * **Paso 5 (Frontend - Vercel):** Implementar la UI de captura de consentimiento en el Onboarding y el panel de configuración de Privacidad en el Dashboard del Lead.
 
+## 7\. Posibles mejoras a futuro
+* **Validación de identidad con Open Banking:** Para obtener datos de mayor calidad (cartolas, ingresos reales) con menor riesgo de manejo de credenciales, se priorizará la integración con proveedores del Sistema de Finanzas Abiertas (Ley Fintec) como Fintoc o Floid. El widget del proveedor manejará la autenticación bancaria, traspasando a Ruta Hogar únicamente el JSON con el perfil comercial.
