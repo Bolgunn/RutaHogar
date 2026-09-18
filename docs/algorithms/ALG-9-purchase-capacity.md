@@ -1,307 +1,309 @@
-# ALG-9 — Capacidad de compra (preference-independent purchase capacity)
+# ALG-9 — Snapshot-based purchase capacity
 
 | Field | Value |
 | :---- | :---- |
-| **Version** | `capacidad_supuestos.version = "e4-matching-v1"` — **deliberately not** `ALGORITHM_VERSION` (see Purpose) |
-| **Runs on / implemented in** | backend · `scoring_engine/purchase_capacity.py` |
-| **Cases** | `docs/algorithms/ALG-9-cases.json` — asserted by `backend/tests/test_purchase_capacity.py` (pytest) |
-| **Open assumptions** | 7 — see the log below |
-| **Last changed** | 2026-08-31 · HU 10 · created |
-
-> **Provisional citations.** `ALG-2` (blockers) and `ALG-5` (project fit) do not exist yet. Where
-> this document needs their codes or verdicts it cites `backend/app/scoring_engine/blockers.py` and
-> `project_fit.py` **by file and line**. Replace the citation with the ALG number when those
-> documents are written; do not restate their rules here.
+| **Version** | Design draft; implementation baseline MATCHING_VERSION = `e4-matching-v1`. New runtime version pending implementation alongside ALG-1. |
+| **Runs on / implemented in** | Backend pure layer · `scoring_engine/purchase_capacity.py`; snapshot contract not implemented |
+| **Cases** | `ALG-9-cases.json` · 10 scenarios plus 7 branch variants; current runner requires later adaptation |
+| **Open assumptions** | 0 business decisions · closed log and PLAN handoff below |
+| **Last changed** | 2026-09-18 · close BCCh sources, controlled failure, zero-capacity and shared debt decisions |
 
 ## Purpose
 
-**What it computes.** The maximum property price a lead could buy, in UF, derived only from their
-finances — income, existing debt, savings, age and term. It is the answer to *"what can this person
-afford?"*, deliberately **independent of what they said they wanted**.
+Compute maximum mortgage principal, income-supported property value, savings-supported property
+value and their minimum. Supply the income-supported value to [ALG-1](ALG-1.md) as its savings
+reference. BCCh is a market data source, never a new score component.
 
-**When it runs.** Once per evaluation, inside the `/score` orchestrator, immediately after
-`calculate_financial_indicators`. Its keys are merged additively into `financial_indicators` and
-therefore persist inside `public.evaluations.financial_data` with no schema change.
+ALG-9 receives a resolved snapshot. It never calls APIs, reads a cache/database, consults a clock
+or chooses a newer snapshot. Both comunas are catalog/matching preferences only. No comuna,
+average price or target property price enters initial capacity or savings scoring.
+`dividendo_estimado` still feeds ALG-1 payment ratios but does not constrain ALG-9.
 
-**What depends on it.** `ALG-10` (lead–project affinity) consumes every key it emits; the executive
-dashboard's evidence card renders six of them; the HU 6 recommender ranks on them.
-
-**Why it is this way.** The engine already had a compatibility model — `project_fit.py` — but that
-model scores the lead *against their declared objective*. It cannot answer "could this person buy
-something else?", because a model that only evaluates the stated target has no opinion about
-anything else. HU 10 E4 ("show a lead who can buy a project other than their declared objective as
-a re-orientable opportunity") is not implementable on top of it. ALG-9 exists to supply the missing
-preference-free number.
-
-Two things were rejected and should stay rejected:
-
-- **Reusing `PRECIOS_REFERENCIA_UF` / `property_value.py`.** Those resolve *the objective's* price.
-  Feeding them into capacity would reintroduce the preference dependency this algorithm exists to
-  remove (and is forbidden by guardrail #7).
-- **Emitting a capacity *band* instead of a point.** Spike §9.3 measured it: across the plausible
-  rate/term grid the renta side moves ±6% while the choice of down-payment ratio moves the answer
-  **2×**. A band would imply precision that self-declared inputs do not support, and a ranked list
-  needs a total order anyway — a band just relocates the collapse into the UI, undocumented.
-
-**Why its version is separate from `ALGORITHM_VERSION`.** These keys are additive: no weight,
-threshold, blocker or classification cutoff changes, so no existing rule moved and the engine
-version does not advance (handbook: "`ALGORITHM_VERSION` moves when a rule changes"). Matching
-criteria will be retuned once HU 16 supplies conversion data; `capacidad_supuestos.version` lets
-that happen without forcing a scoring-engine bump.
+This future specification changes no product code, endpoint, frontend, database or migration.
+No backfill or recalculation of historical evaluations is authorized.
 
 ## Inputs → outputs
 
-### Inputs
+### Financial inputs
 
-Read from the request `data` dict and from the `indicators` dict produced by `indicators.py`.
+| Field | Type · unit | Rule |
+| :---- | :---------- | :--- |
+| `ingreso_total` | number · CLP/month, from indicators | Principal plus validated complementary income; retain `indicators.py::_valid_complement_income` |
+| `deuda_mensual` | number · CLP/month | Principal debt |
+| `deuda_mensual_complementario` / `complemento_deuda_mensual` | number · CLP/month | First nonempty alias; include only when complementary income is considered, using the same decision as ALG-1 |
+| `ahorro_disponible` | number · CLP | Missing/nonpositive becomes 0, as current code |
+| `edad` | number · years | Positive age activates cap; absent/nonpositive means unverified |
+| `plazo_credito_hipotecario` | number · years | Positive declared value wins; otherwise use snapshot term |
+| `market_snapshot` | object | Complete resolved bundle, immutable for this evaluation |
 
-| Field | Source | Type · unit | Notes |
-| :---- | :----- | :---------- | :---- |
-| `ingreso_total` | `indicators` | float · CLP/month | Principal + validated complementary income (`_valid_complement_income`) |
-| `deuda_mensual` | `data` | float · CLP/month | |
-| `deuda_mensual_complementario` (alias `complemento_deuda_mensual`) | `data` | float · CLP/month | **Read here, not from `indicators`** — see Assumption A3 |
-| `ahorro_disponible` | `data` | float · CLP | |
-| `edad` | `data` | int · years | May be absent in stored snapshots read by the backfill script |
-| `plazo_credito_hipotecario` | `data` | int · years | May be absent in stored snapshots |
-| `uf_value_clp` | `indicators` | float · CLP per UF | Falls back to `VALOR_UF_CLP` |
+Retain existing `_positive_float` and complementary-alias semantics for finite financial inputs.
+Reject nonfinite financial inputs at the boundary. Snapshot validation never substitutes a
+hardcoded market value.
 
-**Not read:** `comuna_objetivo`, `property_value*`, `dividendo_estimado`, `tipo_contrato`,
-`morosidad_actual`. Capacity is preference-independent and blocker-independent by construction; the
-blockers are applied later, by `ALG-10`'s gates.
+### Required snapshot
+
+| Field | Type · unit | Validity / interpretation |
+| :---- | :---------- | :------------------------ |
+| `uf_value_clp` | finite number · CLP/UF | > 0 |
+| `tasa_anual_uf` | finite number · annual ratio | ≥ 0; nominal convention, monthly rate = annual / 12 |
+| `ltv_referencial` | finite number · loan/property ratio | Strictly between 0 and 1 |
+| `plazo_referencial_anios` | positive finite number · years | BCCh term percentile 50 in months / 12; do not truncate fractional years; required even with declared term |
+| `effective_date` | string · ISO calendar date | As-of cutoff used to resolve the bundle; preserve individual observation dates in source |
+| `fetched_at` | string · ISO timestamp with timezone | Retrieval time, not evaluation time |
+| `source` | object with four field keys | Per-field BCCh dataset/series, units, observation effective_date and fetched_at; see mapping below |
+
+### Closed BCCh source mapping
+
+| Snapshot field | BCCh series / selector | Source-unit conversion |
+| :------------- | :--------------------- | :--------------------- |
+| `uf_value_clp` | `F073.UFF.PRE.Z.D` · Unidad de Fomento | CLP/UF unchanged |
+| `tasa_anual_uf` | `F022.VIV.TIP.MA03.UF.Z.M` · tasa vivienda >3 años, UF | Annual percentage / 100; preserve existing monthly convention annual ratio / 12 |
+| `ltv_referencial` | `F034.RPV.PPO.BCCH.Z.Z.T` · LTV promedio ponderado | Percentage / 100 |
+| `plazo_referencial_anios` | “Plazo de créditos hipotecarios para la vivienda”, selector “Percentil 50” | Published months / 12, without rounding to integer years |
+
+The choice is a user decision, not a configurable fallback to other series or percentiles.
+Official references: [UF series code](https://si3.bcentral.cl/estadisticas/Principal1/Web_Services/ayuda_soporte.html),
+[housing rate](https://si3.bcentral.cl/siete/ES/Siete/Cuadro/CAP_TASA_INTERES/MN_TASA_INTERES_09/TSF_27?idSerie=F022.VIV.TIP.MA03.UF.Z.M),
+[weighted LTV](https://si3.bcentral.cl/siete/ES/Siete/Cuadro/CAP_ESTADIST_EXPERIM/MN_EXPERIM01/IVM_ECRED_02?idSerie=F034.RPV.PPO.BCCH.Z.Z.T)
+and [term table, percentile 50](https://si3.bcentral.cl/Siete/ES/Siete/Cuadro/CAP_IND_VIVIENDA/MN_IND_VIVIENDA/IVM_ECRED_01/638290046022543847).
+The term table publishes months. LTV is a weighted market observation, not a bank's guaranteed
+offer. Source mappings were checked on 2026-09-18; fixture values are not quotations.
+
+`source` has keys `uf_value_clp`, `tasa_anual_uf`, `ltv_referencial`,
+`plazo_referencial_anios`. Each entry records provider `BCCh BDE`, series (the exact code above,
+or the exact term dataset name), statistic (`Percentil 50` for term), original unit,
+`effective_date` and timezone-aware `fetched_at`. Term source also records the table URL;
+the connector must bind that row, not guess a series identifier.
+
+For each source, infrastructure chooses the latest published available observation on or before
+the bundle's as-of cutoff. Record each actual observation date separately because frequencies
+differ; for period-valued observations also retain the published period label (e.g. quarter).
+Do not relabel a quarterly LTV as daily. Bundle `fetched_at` is successful bundle retrieval/
+resolution time; individual retrieval times remain in source. Those are audit facts, not a clock
+read inside ALG-9. Missing provenance or required values makes a candidate snapshot invalid.
+The PLAN must specify connector mechanics and normalized period-date representation against
+the BCCh metadata without changing these source selections.
+
+Values are ratios: 0.04 means 4%, not 4. 100 converts percentages, 12 converts months/years;
+neither is a new risk threshold. Zero/one are domain boundaries. No maximum rate or freshness
+cutoff is introduced. Snapshot LTV and fallback term are observations, never local constants.
 
 ### Outputs
 
-Nine additive keys inside `financial_indicators`. No existing key is removed, renamed or retyped.
+| Key | Type · unit | Meaning |
+| :-- | :---------- | :------ |
+| `principal_maximo_uf` | number · UF, 1 decimal, or null | Maximum mortgage principal |
+| `principal_maximo_clp` | integer · CLP, or null | Same principal, rounded for output |
+| `capacidad_por_renta_uf` | number · UF, 1 decimal, or null | Principal / LTV, unrounded operands |
+| `valor_vivienda_soportable_por_renta_clp` | number · CLP, unrounded, or null | Reference V for ALG-1 |
+| `pie_ratio` | number · ratio, unrounded, or null | Savings / V |
+| `capacidad_por_pie_uf` | number · UF, 1 decimal, or null | Savings-supported ceiling |
+| `capacidad_compra_estimada_uf` | number · UF, 1 decimal, or null | Minimum of both ceilings |
+| `capacidad_compra_estimada_clp` | integer · CLP, or null | Minimum converted before rounding UF |
+| `capacidad_asistida_uf` | number · UF, 1 decimal, or null | Existing assisted annotation; never initial score or ranking capacity |
+| `restriccion_vinculante` | renta / pie / null | Ties choose renta before rounding |
+| `dividendo_maximo_sostenible_clp` | integer · CLP/month, or null | Sustainable payment |
+| `capacidad_status` | ok / sin_capacidad / requires_info | Existing vocabulary |
+| `capacidad_supuestos` | object, always emitted | Audit information below |
 
-| Key | Type · unit | Values |
-| :-- | :---------- | :----- |
-| `capacidad_compra_estimada_uf` | float · UF, 1 dp · **or `null`** | `min(por_renta, por_pie)` |
-| `capacidad_compra_estimada_clp` | int · CLP · **or `null`** | Display conversion at `uf_value_clp` |
-| `capacidad_por_renta_uf` | float · UF, 1 dp · or `null` | The income-side ceiling |
-| `capacidad_por_pie_uf` | float · UF, 1 dp · or `null` | The savings-side ceiling |
-| `capacidad_asistida_uf` | float · UF, 1 dp · or `null` | FOGAES annotation only — **never ranked** |
-| `restriccion_vinculante` | str · or `null` | `"renta"` · `"pie"` |
-| `dividendo_maximo_sostenible_clp` | int · CLP/month · or `null` | |
-| `capacidad_status` | str | `"ok"` · `"sin_capacidad"` · `"requires_info"` |
-| `capacidad_supuestos` | dict | Always emitted, even when status is `requires_info` |
+Retain supuestos keys `tasa_anual_uf`, `plazo_anios`, `plazo_origen` (declarado/default/
+capado_por_edad), `pie_ratio`, `ratio_dividendo_max`, `ratio_dividendo_saludable`,
+`fogaes_tope_uf`, `fogaes_tope_con_subsidio_uf`, `fogaes_pie_ratio`, `uf_value_clp`,
+`uf_fecha`, `age_term_verified`, `plazo_bajo_minimo`, `version`.
+Add `market_snapshot` (exact resolved bundle) and `snapshot_valid` (boolean).
 
-`capacidad_supuestos`:
+Here `supuestos.pie_ratio=1-LTV` is the **required financing pie**, distinct from output
+`pie_ratio=ahorro/V`. `uf_fecha` comes from `source.uf_value_clp.effective_date`, not the
+bundle cutoff or a hardcoded date. Effective `plazo_anios` preserves a fractional declared
+term without current code's integer truncation in audit metadata.
 
-| Key | Type · unit | Values |
-| :-- | :---------- | :----- |
-| `tasa_anual_uf` | float · ratio | `TASA_REFERENCIA_UF_ANUAL` |
-| `plazo_anios` | int · years | The effective term actually used |
-| `plazo_origen` | str | `"declarado"` · `"default"` · `"capado_por_edad"` |
-| `pie_ratio` | float · ratio | `PIE_RATIO_BASE` |
-| `ratio_dividendo_max` | float · ratio | `RATIO_DIVIDENDO_MAX` — **added beyond spike §8.1**, see below |
-| `ratio_dividendo_saludable` | float · ratio | `RATIO_DIVIDENDO_SALUDABLE` — **added beyond spike §8.1**; `ALG-10`'s holgura peak is derived from `ratio_dividendo_max / ratio_dividendo_saludable` |
-| `fogaes_tope_uf` | int · UF | `FOGAES_MAX_PROPERTY_UF` (`ALG-8`) — **added beyond spike §8.1** |
-| `fogaes_tope_con_subsidio_uf` | int · UF | `FOGAES_MAX_UF_CON_SUBSIDIO` (`ALG-8`) — **added beyond spike §8.1** |
-| `fogaes_pie_ratio` | float · ratio | `FOGAES_MIN_PIE_RATIO` (`ALG-8`) — **added beyond spike §8.1**; `ALG-10` re-tests this condition per project |
-| `uf_value_clp` | float · CLP | The value actually used |
-| `uf_fecha` | str · `YYYY-MM-DD` | Date the UF value was sourced |
-| `age_term_verified` | bool | `false` when `edad` was absent |
-| `plazo_bajo_minimo` | bool | `true` when `plazo_efectivo < PLAZO_MINIMO_VIABLE_ANIOS` — a **flag, not a refusal**; see R2 |
-| `version` | str | `MATCHING_VERSION` |
+For an invalid snapshot, preserve the supplied snapshot (or null when absent), set
+`snapshot_valid=false`, and set effective market/term assumptions to null. Retain internal
+policy constants and version. For valid snapshot but missing income, retain valid assumptions.
+On either `requires_info` path all numeric results and binding side are null.
 
-**`capacidad_supuestos` travels with the number, by design.** A capacity persisted in June and read
-in December is uninterpretable without it — you cannot tell whether it is low because the lead is
-weak or because the rate moved. One dict is what makes RNF 4 / RNF 5 auditability real.
-
-**Five keys are added beyond spike §8.1**, all for one reason. Spike §8.3 forbids the frontend from
-re-declaring any capacity constant, yet `ALG-10` needs several of them: §6.1's pair-scoped
-`brecha_recurso_clp` needs `RATIO_DIVIDENDO_MAX`; its holgura peak is derived from
-`RATIO_DIVIDENDO_SALUDABLE`; and its per-project FOGAES test needs all three `ALG-8` caps plus the
-assisted pie ratio. Shipping them inside `capacidad_supuestos` means `ALG-10` re-declares **only the
-affinity weights**, exactly as §8.3 requires, and every value is audited alongside the number it
-produced. Recorded as Assumption A6.
-
-**`ALG-10` also reads `vivienda_nueva` directly off the request snapshot**, not from here — it is a
-declared intake field, not a calculation assumption, and it does not belong in a dict describing how
-a number was computed.
+These are pure-layer names, not additions to the frozen `POST /score` contract. A future build
+must define compatible transport/persistence before exposing fields.
 
 ## Rules
 
-Every number below lives in `backend/app/scoring_engine/constants.py`. No literal may appear inside
-a function.
+### R1 — Sustainable dividend (unchanged ratios; consistent financial scope)
 
-### R1 — Maximum sustainable dividend
+`deuda_total = deuda_mensual + deuda_complementaria_considerada`.
+Use ALG-1's unchanged complementary-income eligibility: if its income is accepted, its normalized
+monthly debt is included; otherwise neither contributes. Missing complementary debt prevents
+accepting its income; zero debt is valid. ALG-1 ratios/blockers and ALG-9 use this same total.
+No change to complement component penalties or eligibility thresholds is authorized.
+`D = max(0, min(0.30*ingreso_total, 0.45*ingreso_total-deuda_total))`.
 
-| Condition | Effect | Source |
-| :-------- | :----- | :----- |
-| always | `deuda_total = deuda_mensual + deuda_mensual_complementario` | spike §4.1 |
-| always | `dividendo_maximo_sostenible_clp = max(0, min(RATIO_DIVIDENDO_MAX × ingreso_total, RATIO_CARGA_TOTAL_MAX × ingreso_total − deuda_total))` | spike §4.1 |
-| `RATIO_DIVIDENDO_MAX` | `0.30` | **RutaHogar policy.** Internal consistency with `blockers.py:95` (`dividendo_exigente` fires *above* 0.30) + Bci published FAQ |
-| `RATIO_CARGA_TOTAL_MAX` | `0.45` | **Regulator.** [CMF Educa](https://www.cmfchile.cl/educa/621/w3-article-27502.html) + `blockers.py:106` (`carga_total_alta`) |
-| `RATIO_DIVIDENDO_SALUDABLE` | `0.25` | **Regulator / bank published criteria.** CMF Educa, BancoEstado, Scotiabank. **UX copy only — never used in calculation** (see the band table below) |
+| Parameter / condition | Effect | Source |
+| :-------------------- | :----- | :----- |
+| RATIO_DIVIDENDO_MAX = 0.30 | Calculation ceiling | Existing `constants.py`, `_dividendo_maximo_sostenible` |
+| RATIO_CARGA_TOTAL_MAX = 0.45 | Total burden ceiling | same |
+| RATIO_DIVIDENDO_SALUDABLE = 0.25 | Prudential label, not a third minimum | Existing constants / prior ALG-9 |
+| Debt ratio > 0.40 | No additional ALG-9 minimum | Current implementation; blockers separate |
 
-`deuda_actual_alta` (deuda/ingreso > 0.40, `blockers.py:117`) is deliberately **not** a third
-`min()`. Between 40% and 45% a small residual capacity genuinely exists under the total-burden rule;
-that condition surfaces as a commercial warning, not as a capacity cut.
-
-**The 25% / 30% question, resolved** (spike §3.4). 25% is the published prudential norm and is what
-`project_fit.py:80`'s `required_income = dividendo_estimado * 4` implies; 30% is what `blockers.py`
-actually enforces. A ceiling built at 25% would declare leads unable to afford projects the engine's
-own blockers consider unproblematic — two thresholds inside one engine disagreeing about the same
-ratio. **Resolution: `0.30` calculates, `0.25` speaks.**
-
-| Band on `dividendo / ingreso_total` | Label shown |
-| :---------------------------------- | :---------- |
-| ≤ 0.25 | Holgado |
-| 0.25 – 0.30 | Viable pero exigente |
-| > 0.30 | Fuera de política RutaHogar |
-| `(deuda + dividendo) / ingreso_total` > 0.45 | No avanzar sin revisión |
+Labels remain Holgado at ≤25%, Viable pero exigente at >25% and ≤30%, Fuera de política RutaHogar
+at >30%; total burden >45% remains No avanzar sin revisión.
+25% has numeric uses in ALG-1; its label-only role here is local to ALG-9.
 
 ### R2 — Effective term
 
-| Condition | Effect | `plazo_origen` | Source |
-| :-------- | :----- | :------------- | :----- |
-| `plazo_credito_hipotecario` declared | `base = plazo_credito_hipotecario` | `"declarado"` | spike §4.2 |
-| not declared | `base = PLAZO_REFERENCIA_ANIOS` = `30` | `"default"` | **Bank published criteria.** Most commonly offered term (Bci, Scotiabank, BancoEstado 8–30) |
-| `EDAD_MAX_FIN_CREDITO − edad < base` | `base = EDAD_MAX_FIN_CREDITO − edad` | `"capado_por_edad"` | spike §4.2 |
-| `EDAD_MAX_FIN_CREDITO` | `70` | — | **RutaHogar policy.** `blockers.py:173` + HU 29 E2. More conservative than the market (Scotiabank up to 79 with insurance) — deliberately kept (spike §10.3) |
-| `0 < plazo_efectivo < PLAZO_MINIMO_VIABLE_ANIOS` = `5` | compute normally at that term; set `plazo_bajo_minimo = true` | unchanged | **Developer judgment.** A warning threshold, **not a gate** — see below |
-| `plazo_efectivo <= 0` (edad ≥ `EDAD_MAX_FIN_CREDITO`) | `capacidad_por_renta_uf = 0`, so capacity is `0` and status is `sin_capacidad` | `"capado_por_edad"` | You cannot hold a zero-year mortgage. The pie side is still reported |
-| `edad` absent | term is not capped; `age_term_verified = false` | unchanged | spike §4.2 — degrade data quality, do not block |
+| Condition | Effect | Source |
+| :-------- | :----- | :----- |
+| Positive declared term | Use it; origin declarado | Existing `_plazo_efectivo` |
+| Otherwise | Snapshot reference term; origin default | User decision replacing fixed 30 |
+| Positive age and shorter `max(0,70-edad)` | Cap term; origin capado_por_edad | EDAD_MAX_FIN_CREDITO = 70 |
+| Age absent/nonpositive | No cap; age_term_verified=false | Current implementation |
+| Effective term < 5 | plazo_bajo_minimo=true; warning, not missing information | PLAZO_MINIMO_VIABLE_ANIOS = 5 |
+| Effective term = 0 | Principal and renta ceiling 0; pie still computed | Current implementation |
 
-A declared term wins over the default because it reflects what the lead is actually asking for. The
-age cap already supplies the conservatism, so the default is not additionally discounted.
+### R3 — Annuity and savings reference
 
-**`PLAZO_MINIMO_VIABLE_ANIOS` is a flag, not a gate — and this is a deliberate change from spike
-§4.5**, which routes `plazo_efectivo < 5` to `requires_info` with a null capacity. Three reasons:
+Let U = snapshot UF, L = snapshot LTV, r = snapshot annual rate / 12,
+n = effective term * 12, S = normalized savings. 12 is months per year
+(current MESES_POR_ANIO), not a new policy threshold.
 
-1. **It is not a data gap.** Every field is present; we computed a term and disliked it.
-   `requires_info` tells the executive to go collect information that already exists.
-2. **The spike contradicts itself.** §10.3 says the copy for the age/term overrun should read
-   *"requiere revisión de plazo/seguro"* rather than *"no viable"* — soft and actionable. §4.5 makes
-   the same fact a hard null.
-3. **It creates a one-year cliff the engine does not share.** `blockers.py:173` raises
-   `edad_plazo_riesgoso` at severity **medium** for this exact condition. A lead of 65 asking 30
-   years is capped to 5, computes, and ranks normally; a lead of 66 is capped to 4 and, under §4.5,
-   becomes invisible on every project. Same medium blocker, opposite outcomes, one birthday apart.
+```text
+annuity_factor = (1 - (1+r)^(-n)) / r      if r > 0
+annuity_factor = n                        if r = 0
+principal_maximo_clp_raw = D * annuity_factor
+principal_maximo_uf_raw = principal_maximo_clp_raw / U
+V = principal_maximo_clp_raw / L
+por_renta_uf = V / U
+pie_financiamiento = 1 - L
+por_pie_uf = S / pie_financiamiento / U
+capacidad_uf = min(por_renta_uf, por_pie_uf)
+pie_ratio = S / V                         if V > 0
+pie_ratio = 0                             if V <= 0 and calculation is valid
+```
 
-The number stays honest rather than flattering: a 66-year-old with $3,0M income and $30M saved
-computes **1.224 UF** at a 4-year term, against 3.686 UF if the term were not capped. They will
-usually still fall out at `ALG-10`'s G2 — but as `capacidad_insuficiente`, **with a number on the
-card**, instead of in a bucket that asks the executive to chase data that is already there.
+UF, rate, LTV (formerly 1-PIE_RATIO_BASE) and fallback term are snapshot inputs.
+Internal 25/30/45% ratios, age/term policy and assisted rules stay unchanged.
+No insurance, fee, inflation, stress or subsidy adjustment is added.
+When income capacity <=0, the mortgage pie_ratio is 0 even if nominal savings are positive.
+Keep ahorro_disponible intact: this rule changes neither the savings declaration nor the
+term-independent savings ceiling. With valid inputs V cannot be negative; invalid data is
+not reclassified as zero capacity.
 
-Note also that `capacidad_por_pie_uf` is entirely term-independent (`ahorro / PIE_RATIO_BASE / uf`),
-so for a savings-bound lead a short term changes nothing about their binding constraint. Refusing to
-compute discards a number the term never touched.
+V precedes the savings minimum: dividing by final capacity would make savings scoring circular.
+ALG-1 retains its 10/15/20% thresholds even when snapshot LTV changes. Financing feasibility
+and the existing scoring thresholds are different rules.
 
-**Consequence the UI must carry:** leads are ranked under different term assumptions. The lead card
-**must** display `plazo_anios` and `plazo_origen` so an executive never compares invisibly different
-numbers. This is not an optional field.
+Keep full precision for intermediate calculations and V/pie_ratio. Only round output UF to
+one decimal and displayed CLP amounts to integers, with current Python round semantics.
+Binding side and status use unrounded values: tiny positive capacity may display 0.0 yet be ok.
 
-### R3 — Capacity ceiling
+### R4 — Assisted annotation (unchanged)
 
-| Step | Formula | Source |
-| :--- | :------ | :----- |
-| Monthly rate | `tasa_mensual = TASA_REFERENCIA_UF_ANUAL / 12` (nominal convention, matching Chilean public calculators) | spike §4.3 |
-| `TASA_REFERENCIA_UF_ANUAL` | `0.040` | **Market.** [Banco Central serie F022.VIV.TIP.MA03.UF.Z.M](https://si3.bcentral.cl/siete/ES/Siete/Cuadro/CAP_TASA_INTERES/MN_TASA_INTERES_09/TSF_27?idSerie=F022.VIV.TIP.MA03.UF.Z.M) — jul-2026 = 4,00%. Consulted 2026-08-16 · **review quarterly** |
-| Periods | `n = plazo_efectivo × 12` | — |
-| Annuity factor | `(1 − (1 + tasa_mensual)^(−n)) / tasa_mensual`; if `tasa_mensual == 0`, fall back to `n` | spike §4.3 |
-| Max principal | `principal_maximo_uf = (dividendo_maximo_sostenible_clp / uf_value_clp) × annuity_factor` | spike §4.3 |
-| Income ceiling | `capacidad_por_renta_uf = principal_maximo_uf / (1 − PIE_RATIO_BASE)` | spike §4.3 |
-| Savings ceiling | `capacidad_por_pie_uf = (ahorro_disponible / PIE_RATIO_BASE) / uf_value_clp` | spike §4.3 |
-| `PIE_RATIO_BASE` | `0.20` | **Bank published criteria.** LTV 80% is the standard, unconditional path across Chilean banks · review annually |
-| Capacity | `capacidad_compra_estimada_uf = min(capacidad_por_renta_uf, capacidad_por_pie_uf)` | spike §4.3 |
-| Binding side | `restriccion_vinculante = "renta" if capacidad_por_renta_uf <= capacidad_por_pie_uf else "pie"` | spike §4.3 |
+`capacidad_asistida_uf = min(principal_maximo_uf_raw/(1-0.10), S/0.10/U)`.
 
-**Why 20% and not 10% as the base anchor.** 20% is unconditional — it does not depend on the
-property being new, on a subsidy, on FOGAES, on a first-home profile, or on a bank campaign. 10% is
-real but conditional, and **the intake form captures no `primera_vivienda` field**, so eligibility is
-unverifiable from current data. A matching engine's cost function is asymmetric: recommending a lead
-who cannot actually buy burns an executive's time and the client's trust, while under-recommending
-still surfaces the lead as `Cercano` or re-orientable. Encoding an unverified 2× multiplier into a
-ranked list is the failure mode that discredits the whole feature. Logged as A1.
+Reuse FOGAES_MIN_PIE_RATIO=0.10, FOGAES_MAX_PROPERTY_UF=6000 and
+FOGAES_MAX_UF_CON_SUBSIDIO=3000 from existing constants, owned by benefits logic.
+These are inherited code values, not a new legal-eligibility claim.
+They travel in supuestos for ALG-10; ALG-9 does not cap the annotation at those property prices.
+It neither grants eligibility nor increases initial score. With variable base LTV, assistance
+does not necessarily double savings capacity, contrary to the old fixed-base explanation.
 
-### R4 — Assisted route (FOGAES flag, not capacity)
+### R5 — Validation, infrastructure fallback and history
 
-**These constants are not ours — they belong to `ALG-8` (HU 8, `housing_benefits.py`). Reuse them;
-do not redeclare.** An earlier draft of this document specified `PIE_RATIO_ASISTIDO` and
-`FOGAES_PRECIO_MAX_UF`, which would have been exact duplicates of `FOGAES_MIN_PIE_RATIO` and
-`FOGAES_MAX_PROPERTY_UF`. Two constants for one regulatory number is how they drift apart when the
-law changes.
-
-> ⚠️ **Prerequisite — they are not on this branch yet.** `feature/sprint1/HU10` is cut from a
-> `develop` that predates PR #80, so `backend/app/scoring_engine/constants.py` here contains **no
-> FOGAES constants at all**. R4 and `ALG-10`'s R1/R5 do not compile against this branch as it
-> stands. **`develop` must be merged into `feature/sprint1/HU10` before step 2 of the plan**, and
-> the build session must confirm the three names exist before writing `purchase_capacity.py`. Do
-> **not** resolve this by declaring local copies — that is exactly the duplication A7 exists to
-> prevent.
-
-| Step | Formula | Source |
-| :--- | :------ | :----- |
-| Assisted ceiling | `capacidad_asistida_uf = min(principal_maximo_uf / 0.90, (ahorro_disponible / FOGAES_MIN_PIE_RATIO) / uf_value_clp)` | spike §4.4 |
-| `FOGAES_MIN_PIE_RATIO` | `0.10` | **Regulator**, owned by `ALG-8`. [FOGAES — requisitos](https://fogaes.cl/sitio/requisitos/): 90% LTV, primera vivienda · review on legal change |
-| `FOGAES_MAX_PROPERTY_UF` | `6000` | **Regulator**, owned by `ALG-8`. Bill approved ago-2026 raises the cap from UF 4.500 to UF 6.000, +30.000 cupos, valid to 31-may-2028 |
-| `FOGAES_MAX_UF_CON_SUBSIDIO` | `3000` | **Regulator**, owned by `ALG-8`. **The cap halves when FOGAES is combined with a subsidio habitacional** — load-bearing here, because most of the demo catalog (2.100–4.200 UF) straddles that line |
-
-`capacidad_asistida_uf` **never enters the ranking.** The pair-scoped flag
-`desbloqueable_con_fogaes` is computed by `ALG-10`, which reads all three caps and the assisted pie
-ratio out of `capacidad_supuestos` — see the contract note below on why they travel.
-
-Note the shape: because `principal / 0.90 < principal / 0.80`, the assisted route **lowers** the
-income-side ceiling and **doubles** the savings-side one. That is correct — FOGAES relieves the down
-payment, not the income test — and it means the flag only ever fires for pie-bound leads. This is
-load-bearing rather than an edge case: at 20% pie the savings side binds for most realistic profiles
-(spike §9), so the flag is often the difference between an empty panel and a usable one.
+1. Infrastructure resolves and validates the complete snapshot before evaluation.
+2. If BCCh retrieval fails or yields invalid data, infrastructure selects the last valid
+   complete snapshot. Preserve original values, effective_date, fetched_at and source.
+   Do not fabricate a new retrieval time, mix a partial update or substitute constants.
+3. ALG-9 validates deterministically. Invalid/missing snapshot or nonpositive income returns
+   requires_info with all numeric outputs and binding side null; supuestos is always present.
+   Invalidity takes precedence even when age would give term zero. ALG-9 never fetches a fallback.
+4. With valid inputs, zero headroom, zero savings or zero effective term gives sin_capacidad;
+   otherwise ok. Positive terms below 5 still compute.
+5. Every evaluation preserves the exact used snapshot, effective term, assumptions, algorithm
+   version and result. Reading an old evaluation never fetches/recomputes. Only a new evaluation
+   may use a newer snapshot. Historical backfill/recalculation is prohibited.
+6. If no valid snapshot has ever existed, return a controlled market-data failure. The pure
+   ALG-9 diagnostic remains requires_info with null numeric results and snapshot_valid=false.
+   Orchestration stops before ALG-1 aggregation and does not manufacture any market-dependent
+   component, base/adjusted/final score or classification, including zero or Requiere antecedentes.
+   That classification still belongs only to its existing scoring rule, not upstream outage.
+   Do not replace market-dependent weights with a score from the other components.
+7. Do not persist this failed attempt as a completed scored evaluation. Preserve user financial
+   declarations (including nominal savings) for an explicit later retry/new evaluation.
+   Record a diagnostic reason distinguishing missing market reference from missing income.
+   A failure diagnostic is not a new score status/classification or a successful API response.
+   Suggested user message: “No fue posible obtener una referencia de mercado válida para completar
+   la evaluación. Intenta nuevamente más tarde.” This does not blame the user's financial profile.
+8. The PLAN must map this failure onto the existing error-handling path and decide storage/
+   observability wiring. This task changes no HTTP status, endpoint contract or database schema.
+   The fallback/failure behavior itself is closed; transport is an implementation-planning detail.
 
 ## Invariants and edge cases
 
-**Invariants** — asserted as invariants by the test suite, not as fixture values:
-
-1. `capacidad_compra_estimada_uf` is `null` or `>= 0`. **It is never negative.**
-2. When `capacidad_status == "ok"`, `capacidad_compra_estimada_uf == min(capacidad_por_renta_uf, capacidad_por_pie_uf)` exactly.
-3. When capacity computes at all (status `ok` or `sin_capacidad`), `restriccion_vinculante` is set to `"renta"` or `"pie"`. It is `null` only under `requires_info`.
-4. `capacidad_status == "requires_info"` ⟺ **every** capacity value is `null`. A `requires_info` row never carries a number.
-4b. `capacidad_supuestos.plazo_bajo_minimo == true` ⟹ status is `ok` or `sin_capacidad`, **never** `requires_info`. A term problem is a finding, not a data gap.
-5. `capacidad_supuestos` is emitted on every path, including `requires_info`.
-6. Capacity does not depend on `comuna_objetivo`, `property_value*` or `dividendo_estimado`: changing only those fields leaves every output byte-identical. (This is what "preference-independent" means, expressed as a test.)
-7. Same input always yields the same output — no clock, no randomness, no AI in the path.
-8. The existing `POST /score` keys are unchanged. A golden-fixture case asserts byte-identity against the pre-HU-10 response.
-
-**Edge cases:**
-
-| Condition | `capacidad_status` | Values | Why that is right |
-| :-------- | :----------------- | :----- | :---------------- |
-| `ingreso_total <= 0` or missing | `requires_info` | all `null` | **Never `0`.** `0` must mean "enough data, no residual capacity"; conflating the two would show a lead who never answered as a lead who cannot buy |
-| `0 < plazo_efectivo < 5` | `ok` or `sin_capacidad` — **never `requires_info`** | computed at that term, `plazo_bajo_minimo = true` | We have every field; this is a **finding**, not a missing input. The commercial message is `edad_plazo_riesgoso` (`blockers.py:173`, medium) plus spike §10.3's "requiere revisión de plazo/seguro" |
-| `plazo_efectivo <= 0` | `sin_capacidad` | capacity `0`, `capacidad_por_pie_uf` still reported | No zero-year mortgage exists |
-| `deuda_total >= 0.45 × ingreso_total` | `sin_capacidad` | capacity `0` | R1 yields `0` naturally. Route to the improvement plan, not to projects |
-| `deuda_total > ingreso_total` | `sin_capacidad` | capacity `0` | Subsumed by the row above; also raises `deuda_actual_alta` + `carga_total_alta` |
-| `ahorro_disponible == 0` | `sin_capacidad` | capacity `0`, **`capacidad_por_renta_uf` still computed** | Correct for an *immediate* purchase, and the income ceiling is what shows the lead their future potential once they save |
-| `edad` absent | `ok` | computed, `age_term_verified = false` | Unreachable through the API (`edad` is required at `main.py:65`); reachable from stored snapshots the backfill script reads |
-| `plazo_credito_hipotecario` absent | `ok` | computed, `plazo_origen = "default"` | Same — required at `main.py:72`, reachable only from old snapshots |
-| Complemento declared but incomplete | per `indicators.py` | computed without the complement | `_valid_complement_income()` already returns `0.0` unless fully validated |
-
-**Ordering of the status checks matters and is fixed:** data-quality (`requires_info`) is evaluated
-before capacity (`sin_capacidad`). After this change `requires_info` has exactly **two** causes —
-`ingreso_total <= 0`, and a stored snapshot the backfill cannot complete. Term problems are never
-among them.
+- Same financial input plus same resolved snapshot yields identical complete output.
+- Changing, adding or removing either comuna or changing a target property price has no effect.
+- Computed capacities, principal and savings ratio are nonnegative; zero is distinct from null.
+- Rounded capacity equals the minimum of rounded ceilings. Ties bind renta before rounding.
+- Zero savings still computes renta and ratio 0; zero income yields nulls.
+- Zero renta with positive savings gives mortgage pie_ratio=0 and preserves nominal savings.
+- BCCh outage with a previous valid snapshot preserves the full snapshot and deterministic result;
+  without one, no completed score/classification is produced.
+- Rate 0 uses annuity limit n; LTV 0 or 1 is invalid, avoiding division by zero.
+- Missing age degrades verification, not arithmetic. A short term is a finding, not missing data.
+- Supuestos always travels with the number. No clock, randomness, AI or I/O enters this function.
+- No new output or golden-fixture compatibility is claimed for the current endpoint.
 
 ## Assumptions log
 
-| # | Assumption | Made by | Date | Would be wrong if | Status |
-| :- | :--------- | :------ | :--- | :---------------- | :----- |
-| A1 | `PIE_RATIO_BASE = 0.20` is the base anchor; the 10% assisted route is a flag, not a multiplier | Spike 1 · E4 | 2026-08-16 | The client's catalog sits mostly under UF 6.000, making FOGAES the norm rather than the exception. Then adding a `primera_vivienda` field to HU 1's form (spike §10.5) and branching capacity on `FOGAES_MIN_PIE_RATIO` (`ALG-8`) is the correct fix — not raising the base ratio | open · blocked on team open item 1 (commercial: real UF range of Echeverría Izquierdo's projects) |
-| A2 | `0.30` is the calculation ceiling and `0.25` is UX copy only | Spike 1 · E4 | 2026-08-16 | The client's underwriting partner enforces 25% as a hard gate. Then `blockers.py:95` must move with it — the two cannot disagree | confirmed (spike §3.4) |
-| A3 | `deuda_total` includes the complementary side, **diverging from `indicators.py`** | Spike 1 · E4 | 2026-08-16 | Complementary debt should genuinely be excluded from the burden test. `indicators.py` adds validated complementary *income* to `ingreso_total` but leaves `deuda` as `deuda_mensual` alone, even though `_valid_complement_income()` requires the complementary debt to be declared and then discards it — so every ratio for a lead with a complemento is currently **overstated**. ALG-9 implements spike §4.1 as specified rather than inheriting the inflation; `indicators.py` is HU 3 / HU 15's to fix (spike §10.1) | open · **divergence is intentional and must not be "corrected" to match `indicators.py`** |
-| A4 | `PLAZO_MINIMO_VIABLE_ANIOS = 5` is a **warning threshold**, not a gate: below it capacity is still computed and flagged `plazo_bajo_minimo` | HU 10 build (amending Spike 1 · E4) | 2026-08-31 | No Chilean bank sells a 4-year mortgage, making the annuity correct for a product nobody offers — the real case for the spike's `requires_info`. Answered: the arithmetic is right regardless, whether a bank sells it is a product question owned by `edad_plazo_riesgoso` and spike §10.3's copy, and refusing to compute does not make the lead more callable — it makes them invisible. **The spike's own §10.3 already says this condition is soft** | open · **amends spike §4.5** |
-| A5 | `VALOR_UF_CLP = 40695` is hardcoded and stale (0,39% low on 2026-08-16) | inherited (`constants.py:8`) | 2026-08-16 | Matching were computed in CLP. It is computed entirely in UF, so this is display precision only (spike §3.3). It still drifts and should eventually be injected daily with its date | open · not HU 10's to fix |
-| A6 | Five constants are added to `capacidad_supuestos` beyond spike §8.1 (`ratio_dividendo_max`, `ratio_dividendo_saludable`, `fogaes_tope_uf`, `fogaes_tope_con_subsidio_uf`, `fogaes_pie_ratio`) | HU 10 build | 2026-08-31 | The frontend were allowed to re-declare capacity constants. Spike §8.3 forbids exactly that, and `ALG-10`'s pair-scoped math needs all five — shipping them with the number is the only route that keeps `ALG-10` free of capacity constants | open · additive, breaks no consumer |
-| A7 | The FOGAES constants are **`ALG-8`'s**, reused rather than redeclared | HU 10 build | 2026-08-31 | `ALG-8`'s values were wrong or scoped differently from what capacity needs. They are the same regulatory numbers, already sourced and already in `constants.py`; duplicating them is how two copies of one law drift apart. If `ALG-8` retunes them, capacity must move with it — that coupling is intentional | confirmed |
+| ID | Assumption | Made by | Date | Would be wrong if | Status |
+| :-- | :--------- | :------ | :--- | :---------------- | :----- |
+| A1 | Keep annual ratio/12 convention and existing annuity, without fees/insurance | User instruction to keep other rules; existing code | 2026-09-18 | A future task changes the annuity convention | confirmed |
+| A2 | Complementary income and its debt share the same acceptance decision in ALG-1/ALG-9 | User decision | 2026-09-18 | Paths use different financial scopes | closed; replaces old discrepancy |
+| A3 | Preserve age cap 70 and short-term warning 5, not a refusal | User instruction / existing constants | 2026-09-18 | A future task changes term policy | confirmed |
+| A4 | Income capacity <=0 gives mortgage pie_ratio=0; nominal savings stay intact | User decision | 2026-09-18 | Invalid snapshot is incorrectly treated as zero capacity | confirmed |
+| A5 | Use the three exact BCCh series and term percentile 50 above; keep per-field source/effective_date/fetched_at and bundle provenance; convert months without truncation | User source selection; Codex provenance specification | 2026-09-18 | Connector selects another statistic or misstates observation dates/units | closed |
+| A6 | No last valid snapshot means controlled failure: no fabricated capacity or completed score/classification | User decision | 2026-09-18 | Integration silently substitutes market defaults or persists a successful score | closed; transport belongs in PLAN |
+| A7 | On BCCh failure, use the unchanged last valid complete snapshot; no invented freshness cutoff | User decision | 2026-09-18 | A future task explicitly approves a different freshness policy | confirmed |
+| A8 | Fixtures are synthetic, not live market quotes; legacy amounts and rates remain branch probes. Fractional term probes derive from months/12; financial-scope variants change only debt acceptance | Codex fixture author | 2026-09-18 | Fixtures are used as production defaults | documented; not a policy assumption |
 
-## Known discrepancies in the source spike
+Earlier fixed-20%-base, unspecified-source, stale-UF and inconsistent-debt assumptions are superseded.
+Weights, risk thresholds, annuity convention, 30% calculation / 25% label and assisted rules remain.
 
-Recorded rather than silently reconciled. Neither changes a rule.
+## PLAN handoff
 
-1. **§8.1's example block mixes two UF values.** Its numbers (`capacidad_por_pie_uf = 3059.6`,
-   `capacidad_asistida_uf = 4272.0`) are computed at UF = 40.854, while the same block records
-   `uf_value_clp: 40695`. `ALG-9-cases.json` resolves this by passing `uf_value_clp` explicitly in
-   every case input, so each case is reproducible from its own fixture.
-2. **§8.1 shows `capacidad_compra_estimada_uf = 3060.4` beside `capacidad_por_pie_uf = 3059.6`.**
-   Invariant 2 requires them to be equal when the pie side binds; the 0,8 UF gap is a rounding
-   artifact in the illustrative block, not a rule. The invariant governs.
+No business-rule blocker remains for writing the PLAN. Plan the BCCh adapter (including binding the
+named percentile-50 row and preserving original period metadata), snapshot storage/reuse, shared
+income/debt normalization, controlled-error transport, test-runner changes and new runtime versions.
+The exact term API identifier is an adapter lookup, not an undecided statistical choice; do not
+invent it. These implementation details do not authorize product changes in this documentary task.
+No historical evaluation is recalculated and no PLAN is written here.
+
+## Contradictions with current code and test migration
+
+- ALG-1 currently ignores complementary debt; ALG-9 includes it unconditionally. Neither matches
+  the shared accepted financial scope defined here.
+- Current signature accepts only data/indicators. Rate, base pie and fallback term are constants;
+  UF silently falls back to a constant. No full snapshot validation/provenance exists there.
+- Supuestos uses hardcoded uf_fecha even with injected UF. Maximum principal and ALG-1 pie_ratio
+  are not emitted. Current term metadata truncates fractional years while arithmetic does not.
+- Orchestration resolves target price before indicators and merges ALG-9 afterwards. ALG-1
+  still uses target-price savings ratios; legacy initial paths also read comuna prices.
+- The old claim that UF drift affects display only was incorrect: dividing CLP income/savings
+  by UF changes UF capacity and therefore matching.
+- The additive-only version rationale no longer applies when ALG-9 feeds initial scoring.
+  A future build must assign new runtime versions while preserving historical evaluations.
+- `backend/tests/test_purchase_capacity.py` passes no snapshot and asserts the old key set.
+  These target fixtures intentionally require later runner/implementation changes; the existing
+  suite is not expected to pass against them today. No test/product code is edited here.
+
+## Case contract
+
+Each input contains an explicit resolved market_snapshot; a future runner passes it to the
+pure algorithm. This is not an authorized public request field. Expected objects are recursive
+partial assertions. repeat_of and same_result_as require complete equality (the latter after
+preference changes). Snapshots are duplicated so cases are self-contained.
+Cases with `scope=infrastructure_fallback` first resolve the supplied last-valid snapshot and
+then assert the pure result. `expect_integration` describes control-flow assertions, not new
+public response fields. Nested `variants` are additional branch probes attached to a scenario;
+each input is complete and has its own expectations. All scenarios remain documentary targets.
+
+Rounded outputs use exact comparison. Unrounded V and both pie_ratio fields use fixture tolerances
+1e-6 CLP and 1e-12 ratio, respectively: test-precision assumptions, not business thresholds.
+All dates/amounts are synthetic fixtures or reused old examples, never live BCCh observations.
