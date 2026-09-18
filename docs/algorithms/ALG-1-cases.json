@@ -1,0 +1,688 @@
+{
+  "algorithm": "ALG-1",
+  "version": "initial-scoring-snapshot-draft",
+  "status": "documentary_not_implemented",
+  "note": "Documentary target; financial-only completeness uses 100*n/9, penalty 35 and unchanged weight .05. Normal component cases presuppose a valid resolved snapshot. Explicit synthetic V is an ALG-9 reference, never a property preference. Nested variants have complete inputs and own expectations. expect_financial_scope verifies shared normalization; expect_integration verifies control flow, neither adds public API fields. Amounts are synthetic or inherited fixture values. segunda_comuna denotes the second preference.",
+  "cases": [
+    {
+      "name": "pie_20_perfil_solido",
+      "why": "Exact recommended threshold; seven current weights.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.2,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 100.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 95.5,
+        "adjusted_score": 95.5,
+        "score": 95.5,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      }
+    },
+    {
+      "name": "comunas_distintas_no_puntuan",
+      "why": "Neither comuna nor any target-price representation adds completeness points; equal to the financial-only baseline.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false,
+          "comuna_objetivo": "Las Condes",
+          "segunda_comuna": "Buin",
+          "property_value_clp": 200000000,
+          "property_value_uf": 5000,
+          "property_value": 5000
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.2,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 100.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 95.5,
+        "adjusted_score": 95.5,
+        "score": 95.5,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      },
+      "same_result_as": "pie_20_perfil_solido"
+    },
+    {
+      "name": "pie_175_interpolado",
+      "why": "Upper interpolation; 88.5 points.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 35000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.175,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 88.5,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 93.2,
+        "adjusted_score": 93.2,
+        "score": 93.2,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      }
+    },
+    {
+      "name": "pie_15_umbral",
+      "why": "Exact 15% jump remains 82.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 30000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.15,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 82.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 91.9,
+        "adjusted_score": 91.9,
+        "score": 91.9,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      }
+    },
+    {
+      "name": "calidad_financiera_incompleta",
+      "why": "Missing declared term reduces completeness to 8/9; preferences and target prices cannot fill the gap.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": null,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false,
+          "comuna_objetivo": "Las Condes",
+          "segunda_comuna": "Buin",
+          "property_value_clp": 200000000,
+          "property_value_uf": 5000,
+          "property_value": 5000
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.2,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 100.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 88.9
+        },
+        "base_score": 94.9,
+        "adjusted_score": 94.9,
+        "score": 94.9,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      }
+    },
+    {
+      "name": "pie_10_umbral",
+      "why": "Exact minimum threshold remains 58.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 20000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.1,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": []
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 58.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 87.1,
+        "adjusted_score": 87.1,
+        "score": 87.1,
+        "original_classification": "Alto",
+        "classification": "Alto"
+      }
+    },
+    {
+      "name": "pie_05_y_cap",
+      "why": "Below minimum; preserve savings blocker cap.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 10000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.05,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": [
+          {
+            "code": "pie_insuficiente",
+            "severity": "high"
+          }
+        ]
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 37.5,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 83.0,
+        "adjusted_score": 74,
+        "score": 74,
+        "original_classification": "Alto",
+        "classification": "Medio"
+      }
+    },
+    {
+      "name": "renta_cero_con_ahorro_nominal",
+      "why": "Debt exhausts 45% headroom. Valid zero renta sets mortgage pie_ratio=0 while preserving 40000000 CLP nominal savings.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 1125000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": false
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.45,
+          "ratio_carga_total": 0.67,
+          "pie_ratio": 0,
+          "valor_vivienda_soportable_por_renta_clp": 0
+        },
+        "blockers": [
+          {
+            "code": "carga_total_alta",
+            "severity": "high"
+          }
+        ]
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 5.0,
+          "pie_ahorro": 0.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 50.0,
+          "calidad_datos": 100
+        },
+        "base_score": 58.5,
+        "adjusted_score": 58.5,
+        "score": 58.5,
+        "original_classification": "Medio",
+        "classification": "Medio"
+      },
+      "expect_integration": {
+        "ahorro_disponible_preservado": 40000000,
+        "market_snapshot_valid": true
+      },
+      "variants": [
+        {
+          "name": "sin_snapshot_ni_historial_no_score",
+          "why": "Missing market data is not computed zero renta; stop before aggregation even though the user has savings.",
+          "scope": "evaluation_precondition",
+          "input": {
+            "data": {
+              "ingreso_mensual": 2500000,
+              "deuda_mensual": 200000,
+              "ahorro_disponible": 40000000,
+              "dividendo_estimado": 550000,
+              "edad": 35,
+              "plazo_credito_hipotecario": 30,
+              "tipo_contrato": "indefinido",
+              "continuidad_laboral": "mas_3_anios",
+              "morosidad_actual": "no",
+              "complemento_renta": false
+            },
+            "market_snapshot": null,
+            "bcch_fetch": "failed",
+            "last_valid_snapshot": null
+          },
+          "expect": {
+            "result": null
+          },
+          "expect_integration": {
+            "outcome": "controlled_market_data_failure",
+            "aggregation_executed": false,
+            "completed_evaluation_persisted": false,
+            "score_produced": false,
+            "classification_produced": false,
+            "ahorro_disponible_preservado": 40000000
+          }
+        }
+      ]
+    },
+    {
+      "name": "complemento_incompleto",
+      "why": "Early complement return and quality penalty; existing classification override.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": true
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.22,
+          "ratio_deuda_ingreso": 0.08,
+          "ratio_carga_total": 0.3,
+          "pie_ratio": 0.2,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": [
+          {
+            "code": "complemento_incompleto",
+            "severity": "high"
+          }
+        ]
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 90.0,
+          "pie_ahorro": 100.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 20.0,
+          "calidad_datos": 65.0
+        },
+        "base_score": 92.2,
+        "adjusted_score": 92.2,
+        "score": 92.2,
+        "original_classification": "Alto",
+        "classification": "Requiere antecedentes"
+      }
+    },
+    {
+      "name": "complemento_ingreso_y_deuda_consistentes",
+      "why": "Accepted complementary income also contributes its debt: combined income 5000000, debt 2200000; unchanged debt/burden bands.",
+      "input": {
+        "data": {
+          "ingreso_mensual": 2500000,
+          "deuda_mensual": 200000,
+          "ahorro_disponible": 40000000,
+          "dividendo_estimado": 550000,
+          "edad": 35,
+          "plazo_credito_hipotecario": 30,
+          "tipo_contrato": "indefinido",
+          "continuidad_laboral": "mas_3_anios",
+          "morosidad_actual": "no",
+          "complemento_renta": true,
+          "ingreso_mensual_complementario": 2500000,
+          "deuda_mensual_complementario": 2000000,
+          "morosidad_complementario": "no",
+          "tipo_contrato_complementario": "indefinido",
+          "continuidad_laboral_complementario": "mas_3_anios",
+          "relacion_complementario": "conyuge"
+        },
+        "indicators": {
+          "ratio_dividendo_ingreso": 0.11,
+          "ratio_deuda_ingreso": 0.44,
+          "ratio_carga_total": 0.55,
+          "pie_ratio": 0.2,
+          "valor_vivienda_soportable_por_renta_clp": 200000000
+        },
+        "blockers": [
+          {
+            "code": "carga_total_alta",
+            "severity": "high"
+          }
+        ]
+      },
+      "expect": {
+        "component_scores": {
+          "capacidad_pago": 100.0,
+          "endeudamiento": 5.0,
+          "pie_ahorro": 100.0,
+          "estabilidad_laboral": 100.0,
+          "historial_pago": 100.0,
+          "complemento_renta": 70.0,
+          "calidad_datos": 100
+        },
+        "base_score": 79.5,
+        "adjusted_score": 59,
+        "score": 59,
+        "original_classification": "Alto",
+        "classification": "Medio"
+      },
+      "scope": "financial_scope",
+      "expect_financial_scope": {
+        "ingreso_total": 5000000,
+        "deuda_total": 2200000,
+        "ingreso_complementario_considerado": 2500000,
+        "deuda_complementaria_considerada": 2000000
+      },
+      "variants": [
+        {
+          "name": "complemento_deuda_cero",
+          "why": "Zero declared debt is complete and valid, not missing.",
+          "input": {
+            "data": {
+              "ingreso_mensual": 2500000,
+              "deuda_mensual": 200000,
+              "ahorro_disponible": 40000000,
+              "dividendo_estimado": 550000,
+              "edad": 35,
+              "plazo_credito_hipotecario": 30,
+              "tipo_contrato": "indefinido",
+              "continuidad_laboral": "mas_3_anios",
+              "morosidad_actual": "no",
+              "complemento_renta": true,
+              "ingreso_mensual_complementario": 2500000,
+              "deuda_mensual_complementario": 0,
+              "morosidad_complementario": "no",
+              "tipo_contrato_complementario": "indefinido",
+              "continuidad_laboral_complementario": "mas_3_anios",
+              "relacion_complementario": "conyuge"
+            },
+            "indicators": {
+              "ratio_dividendo_ingreso": 0.11,
+              "ratio_deuda_ingreso": 0.04,
+              "ratio_carga_total": 0.15,
+              "pie_ratio": 0.2,
+              "valor_vivienda_soportable_por_renta_clp": 200000000
+            },
+            "blockers": []
+          },
+          "expect": {
+            "component_scores": {
+              "capacidad_pago": 100.0,
+              "endeudamiento": 100.0,
+              "pie_ahorro": 100.0,
+              "estabilidad_laboral": 100.0,
+              "historial_pago": 100.0,
+              "complemento_renta": 95.0,
+              "calidad_datos": 100
+            },
+            "base_score": 99.8,
+            "adjusted_score": 99.8,
+            "score": 99.8,
+            "original_classification": "Alto",
+            "classification": "Alto"
+          },
+          "scope": "financial_scope",
+          "expect_financial_scope": {
+            "ingreso_total": 5000000,
+            "deuda_total": 200000,
+            "ingreso_complementario_considerado": 2500000,
+            "deuda_complementaria_considerada": 0
+          }
+        },
+        {
+          "name": "complemento_deuda_ausente",
+          "why": "Missing debt excludes complementary income and preserves incomplete-complement penalties.",
+          "input": {
+            "data": {
+              "ingreso_mensual": 2500000,
+              "deuda_mensual": 200000,
+              "ahorro_disponible": 40000000,
+              "dividendo_estimado": 550000,
+              "edad": 35,
+              "plazo_credito_hipotecario": 30,
+              "tipo_contrato": "indefinido",
+              "continuidad_laboral": "mas_3_anios",
+              "morosidad_actual": "no",
+              "complemento_renta": true,
+              "ingreso_mensual_complementario": 2500000,
+              "deuda_mensual_complementario": null,
+              "morosidad_complementario": "no",
+              "tipo_contrato_complementario": "indefinido",
+              "continuidad_laboral_complementario": "mas_3_anios",
+              "relacion_complementario": "conyuge"
+            },
+            "indicators": {
+              "ratio_dividendo_ingreso": 0.22,
+              "ratio_deuda_ingreso": 0.08,
+              "ratio_carga_total": 0.3,
+              "pie_ratio": 0.2,
+              "valor_vivienda_soportable_por_renta_clp": 200000000
+            },
+            "blockers": [
+              {
+                "code": "complemento_incompleto",
+                "severity": "high"
+              }
+            ]
+          },
+          "expect": {
+            "component_scores": {
+              "capacidad_pago": 100.0,
+              "endeudamiento": 90.0,
+              "pie_ahorro": 100.0,
+              "estabilidad_laboral": 100.0,
+              "historial_pago": 100.0,
+              "complemento_renta": 20.0,
+              "calidad_datos": 65.0
+            },
+            "base_score": 92.2,
+            "adjusted_score": 92.2,
+            "score": 92.2,
+            "original_classification": "Alto",
+            "classification": "Requiere antecedentes"
+          },
+          "scope": "financial_scope",
+          "expect_financial_scope": {
+            "ingreso_total": 2500000,
+            "deuda_total": 200000,
+            "ingreso_complementario_considerado": 0,
+            "deuda_complementaria_considerada": 0
+          }
+        },
+        {
+          "name": "complemento_no_considerado",
+          "why": "Rejected relation excludes both complementary income and debt from combined financial ratios.",
+          "input": {
+            "data": {
+              "ingreso_mensual": 2500000,
+              "deuda_mensual": 200000,
+              "ahorro_disponible": 40000000,
+              "dividendo_estimado": 550000,
+              "edad": 35,
+              "plazo_credito_hipotecario": 30,
+              "tipo_contrato": "indefinido",
+              "continuidad_laboral": "mas_3_anios",
+              "morosidad_actual": "no",
+              "complemento_renta": true,
+              "ingreso_mensual_complementario": 2500000,
+              "deuda_mensual_complementario": 2000000,
+              "morosidad_complementario": "no",
+              "tipo_contrato_complementario": "indefinido",
+              "continuidad_laboral_complementario": "mas_3_anios",
+              "relacion_complementario": "amigo"
+            },
+            "indicators": {
+              "ratio_dividendo_ingreso": 0.22,
+              "ratio_deuda_ingreso": 0.08,
+              "ratio_carga_total": 0.3,
+              "pie_ratio": 0.2,
+              "valor_vivienda_soportable_por_renta_clp": 200000000
+            },
+            "blockers": [
+              {
+                "code": "complemento_debil",
+                "severity": "medium"
+              }
+            ]
+          },
+          "expect": {
+            "component_scores": {
+              "capacidad_pago": 100.0,
+              "endeudamiento": 90.0,
+              "pie_ahorro": 100.0,
+              "estabilidad_laboral": 100.0,
+              "historial_pago": 100.0,
+              "complemento_renta": 50.0,
+              "calidad_datos": 100
+            },
+            "base_score": 95.5,
+            "adjusted_score": 95.5,
+            "score": 95.5,
+            "original_classification": "Alto",
+            "classification": "Alto"
+          },
+          "scope": "financial_scope",
+          "expect_financial_scope": {
+            "ingreso_total": 2500000,
+            "deuda_total": 200000,
+            "ingreso_complementario_considerado": 0,
+            "deuda_complementaria_considerada": 0
+          }
+        }
+      ]
+    }
+  ]
+}
