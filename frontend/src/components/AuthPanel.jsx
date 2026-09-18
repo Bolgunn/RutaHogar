@@ -1118,7 +1118,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
                     <option value={roles.user}>{roleLabels[roles.user]}</option>
                     <option value={roles.sales}>{roleLabels[roles.sales]}</option>
-                    <option value={roles.admin}>{roleLabels[roles.admin]}</option>
                   </select>
                 </div>
               )}
