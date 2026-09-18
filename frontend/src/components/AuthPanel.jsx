@@ -1114,7 +1114,15 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                 </div>
               )}
 
-              
+              {mode === "signup" && (
+                <div className="auth-field">
+                  <label className="auth-field-label" htmlFor="auth-role">Tipo de usuario</label>
+                  <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
+                    <option value={roles.user}>{roleLabels[roles.user]}</option>
+                    <option value={roles.sales}>{roleLabels[roles.sales]}</option>
+                  </select>
+                </div>
+              )}
 
               {error && (
                 <div className="auth-error" role="alert">
