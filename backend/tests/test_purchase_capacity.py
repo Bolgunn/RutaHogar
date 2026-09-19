@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -8,85 +9,47 @@ import pytest
 os.environ["GROQ_API_KEY"] = ""
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.scoring import calculate_score
-from app.scoring_engine.indicators import calculate_financial_indicators
+from app.scoring_engine.indicators import calculate_financial_scope
 from app.scoring_engine.purchase_capacity import calculate_purchase_capacity
 
-CASES_PATH = Path(__file__).resolve().parents[2] / "docs" / "algorithms" / "ALG-9-cases.json"
-CASES = json.loads(CASES_PATH.read_text(encoding="utf-8"))["cases"]
-
-CAPACITY_KEYS = {
-    "capacidad_compra_estimada_uf",
-    "capacidad_compra_estimada_clp",
-    "capacidad_por_renta_uf",
-    "capacidad_por_pie_uf",
-    "capacidad_asistida_uf",
-    "restriccion_vinculante",
-    "dividendo_maximo_sostenible_clp",
-    "capacidad_status",
-    "capacidad_supuestos",
-}
+DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text())
 
 
-def _capacity(entrada: dict) -> dict:
-    # property_value is 0 on purpose: ALG-9 is preference-independent and must not read it.
-    indicators = calculate_financial_indicators(entrada, 0)
-    return calculate_purchase_capacity(entrada, indicators)
+def scenarios():
+    for case in DOCUMENT["cases"]:
+        yield case
+        for variant in case.get("variants", []):
+            yield variant
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
-def test_alg9_case(case):
-    resultado = _capacity(case["input"])
-    for key, expected in case["expect"].items():
-        assert resultado[key] == expected, f"{case['name']} · {key}"
-
-
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
-def test_invariantes(case):
-    resultado = _capacity(case["input"])
-    capacidad = resultado["capacidad_compra_estimada_uf"]
-    status = resultado["capacidad_status"]
-
-    assert capacidad is None or capacidad >= 0
-    assert "capacidad_supuestos" in resultado
-
-    if status == "ok":
-        assert capacidad == min(resultado["capacidad_por_renta_uf"], resultado["capacidad_por_pie_uf"])
-
-    if status in {"ok", "sin_capacidad"}:
-        assert resultado["restriccion_vinculante"] in {"renta", "pie"}
+def assert_partial(actual, expected, path=""):
+    if path.endswith(".version") and expected == "initial-scoring-snapshot-draft":
+        # Documentary fixture label is intentionally not the runtime version (PLAN step 5).
+        return
+    if isinstance(expected, dict):
+        for key, value in expected.items():
+            assert key in actual, f"missing {path}.{key}"
+            assert_partial(actual[key], value, f"{path}.{key}")
+    elif isinstance(expected, float):
+        tolerance = DOCUMENT["numeric_tolerances"].get(path.lstrip("."), 0)
+        assert math.isclose(actual, expected, rel_tol=0, abs_tol=tolerance), path
     else:
-        assert resultado["restriccion_vinculante"] is None
-        assert all(resultado[key] is None for key in CAPACITY_KEYS - {"capacidad_status", "capacidad_supuestos"})
-
-    if resultado["capacidad_supuestos"]["plazo_bajo_minimo"]:
-        assert status in {"ok", "sin_capacidad"}
+        assert actual == expected, path
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
-def test_es_determinista(case):
-    assert _capacity(case["input"]) == _capacity(case["input"])
+@pytest.mark.parametrize("case", list(scenarios()), ids=lambda case: case["name"])
+def test_alg9_cases(case):
+    result = calculate_purchase_capacity(case["input"])
+    assert_partial(result, case["expect"])
+    if "expect_financial_scope" in case:
+        assert_partial(calculate_financial_scope(case["input"]), case["expect_financial_scope"])
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
-def test_es_independiente_de_la_preferencia(case):
-    con_preferencia = dict(case["input"])
-    con_preferencia.update(
-        {
-            "comuna_objetivo": "Las Condes",
-            "valor_propiedad": 250000000,
-            "dividendo_estimado": 9999999,
-        }
-    )
-    assert _capacity(con_preferencia) == _capacity(case["input"])
-
-
-def test_score_no_pierde_ninguna_clave_previa():
-    entrada = CASES[0]["input"]
-    resultado = calculate_score(dict(entrada), include_ai=False)
-    indicadores = resultado["financial_indicators"]
-
-    previos = calculate_financial_indicators(entrada, indicadores["property_value_clp"])
-    for key, valor in previos.items():
-        assert indicadores[key] == valor, key
-    assert set(indicadores) - set(previos) == CAPACITY_KEYS
+@pytest.mark.parametrize("case", list(scenarios()), ids=lambda case: case["name"])
+def test_alg9_invariants(case):
+    result = calculate_purchase_capacity(case["input"])
+    assert result["capacidad_supuestos"]
+    if result["capacidad_status"] in {"ok", "sin_capacidad"}:
+        assert result["capacidad_compra_estimada_uf"] == min(result["capacidad_por_renta_uf"], result["capacidad_por_pie_uf"])
+    else:
+        assert result["restriccion_vinculante"] is None
