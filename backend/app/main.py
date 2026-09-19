@@ -1,8 +1,11 @@
+import asyncio
 import os
 from typing import Any, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
+from .market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot
+from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
 from .ai import (
     generate_commercial_guidance,
@@ -80,7 +83,7 @@ class ScoreRequest(BaseModel):
     property_value_uf: Optional[float] = None
     property_value_clp: Optional[float] = None
     uf_value_clp: Optional[float] = None
-    plazo_credito_hipotecario: int
+    plazo_credito_hipotecario: Optional[int] = None
     tipo_contrato: str  # 'indefinido', 'plazo_fijo', 'independiente'
     continuidad_laboral: str
     morosidad_actual: str
@@ -178,7 +181,7 @@ class ScoreRequest(BaseModel):
     @field_validator("plazo_credito_hipotecario")
     @classmethod
     def validate_mortgage_term(cls, value):
-        if value not in VALID_MORTGAGE_TERMS:
+        if value is not None and value not in VALID_MORTGAGE_TERMS:
             raise ValueError("Plazo de crédito hipotecario inválido")
         return value
 
@@ -285,13 +288,23 @@ class ScoreRequest(BaseModel):
 
 @app.post("/score")
 async def score_endpoint(payload: ScoreRequest):
-    result = calculate_score(payload.model_dump())
-    return result
+    # The request never calls BCCh or starts a refresh: it only resolves storage.
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return calculate_score(payload.model_dump(), market_snapshot=snapshot)
 
 
-class ExplainRequest(ScoreRequest):
-    # "user": solo la explicación del usuario. "all": incluye también los
-    # textos del ejecutivo (resumen y guía comercial).
+def resolve_market_snapshot() -> dict:
+    """Small injectable boundary used by the endpoint and its contract tests."""
+    return resolve_latest_valid_snapshot(repository_from_environment())
+
+
+class ExplainRequest(BaseModel):
+    """Narrative retry input. It deliberately contains a saved result, not score inputs."""
+    result_context: dict
+    consentimiento: bool
     scope: str = "user"
 
     @field_validator("scope")
@@ -301,18 +314,28 @@ class ExplainRequest(ScoreRequest):
             raise ValueError("Scope inválido")
         return value
 
+    @field_validator("consentimiento")
+    @classmethod
+    def validate_explain_consent(cls, value):
+        if not value:
+            raise ValueError("El consentimiento es obligatorio")
+        return value
+
+    @field_validator("result_context")
+    @classmethod
+    def validate_result_context(cls, value):
+        if not isinstance(value, dict) or not isinstance(value.get("score"), (int, float)) or not isinstance(value.get("classification"), str):
+            raise ValueError("Se requiere el contexto histórico de resultado para regenerar la explicación")
+        return value
+
 
 @app.post("/score/explain")
 async def explain_endpoint(payload: ExplainRequest):
     """
-    Regenera los textos de IA para una precalificación ya calculada.
-    Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
-    y devuelve únicamente los textos generados. Si un texto no pudo
-    generarse, su campo llega en null: el detalle del fallo nunca se expone
-    al cliente.
+    Regenera textos desde el contexto ya guardado. No calcula score ni resuelve
+    mercado; score/clasificación de respuesta son copias de dicho contexto.
     """
-    data = payload.model_dump(exclude={"scope"})
-    base = calculate_score(data, include_ai=False)
+    base = payload.result_context
 
     response = {
         "score": base.get("score"),
@@ -323,25 +346,21 @@ async def explain_endpoint(payload: ExplainRequest):
     }
 
     response["ai_explanation"] = generate_user_explanation(
-        classification=base["classification"],
-        score=base["score"],
-        positive_indicators=base["positive_indicators"],
-        risks=base["risks"],
+        classification=base["classification"], score=base["score"],
+        positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
     )
 
     if payload.scope == "all":
         response["executive_summary"] = generate_executive_summary(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
         )
         response["commercial_guidance"] = generate_commercial_guidance(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
-            recommendations=base["recommendations"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
+            recommendations=base.get("recommendations", []),
         )
 
     return response

@@ -162,6 +162,18 @@ de un tenant ajeno. Una migración de scoping sólo debe **estrechar** lecturas,
 
 Sólo 4 de las 15 migraciones tienen rollback. Las nuevas lo traen; las viejas son deuda.
 
+## Market snapshots (SCORING-BCCH)
+
+`public.market_snapshots` is an append-only cache of complete, validated BCCh
+bundles. It has no tenant or personal data, but RLS is enabled and both `anon`
+and `authenticated` are explicitly denied read/write access. Only the backend
+service credential used by the out-of-band refresh and resolver accesses it.
+
+Apply `20260918000000_market_snapshots.sql` to the hosted project before
+enabling `/score`, then run the backend refresh command once to seed a valid
+bundle. The matching rollback drops only this cache table; exported cache rows
+and evaluation-embedded snapshots must be retained before using it.
+
 ---
 
 ## Lo que no se puede verificar en local

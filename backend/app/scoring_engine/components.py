@@ -189,17 +189,8 @@ def _score_data_quality(data: dict, blockers: set) -> float:
         "continuidad_laboral",
         "morosidad_actual",
     ]
-    optional_fields = [
-        "property_value_clp",
-        "property_value_uf",
-        "property_value",
-        "comuna_objetivo",
-    ]
-
     completed_key_fields = sum(1 for field in key_fields if data.get(field) not in (None, ""))
-    completed_optional_fields = sum(1 for field in optional_fields if data.get(field) not in (None, ""))
-    score = (completed_key_fields / len(key_fields)) * 80.0
-    score += min(completed_optional_fields, 2) * 10.0
+    score = 100.0 * completed_key_fields / len(key_fields)
 
     if "complemento_incompleto" in blockers:
         score -= 35

@@ -44,7 +44,7 @@ function resolveCalculationReason(evaluationPayload) {
   return evaluationPayload.calculation_reason || evaluationPayload.calculationReason || evaluationPayload.reason || "new_evaluation";
 }
 
-function buildFinancialDataSnapshot(evaluationPayload) {
+export function buildFinancialDataSnapshot(evaluationPayload) {
   const input = cloneJson(evaluationPayload.input, {});
   const result = cloneJson(evaluationPayload.result, {});
   const calculationReason = resolveCalculationReason(evaluationPayload);

@@ -585,12 +585,16 @@ export default function App() {
   // El resumen y la guía comercial quedan disponibles para la mesa de leads.
   async function handleRetryAiExplanation(evaluationToRetry = currentEvaluation) {
     const evaluation = evaluationToRetry;
-    if (!evaluation?.id || !evaluation?.input) return false;
+    if (!evaluation?.id || !evaluation?.result) return false;
 
     try {
       const response = await axios.post(
         `${resolveApiBase()}/score/explain`,
-        { ...evaluation.input, scope: "all" },
+        {
+          result_context: evaluation.result,
+          consentimiento: evaluation.input?.consentimiento === true,
+          scope: "all",
+        },
         { timeout: 45000 },
       );
 
