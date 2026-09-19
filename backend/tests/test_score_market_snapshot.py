@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app.main as main
 import app.scoring as scoring_module
 from app.market_data.service import MarketSnapshotUnavailable
+from app.scoring import calculate_score
 
 scoring_module.generate_user_explanation = lambda **_kwargs: None
 scoring_module.generate_executive_summary = lambda **_kwargs: None
@@ -60,3 +61,14 @@ def test_explain_copies_saved_numbers_without_market_or_calculation(monkeypatch)
     monkeypatch.setattr(main, "calculate_score", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not score")))
     response = asyncio.run(main.explain_endpoint(main.ExplainRequest(result_context={"score": 77.5, "classification": "Alto", "positive_indicators": [], "risks": []}, consentimiento=True)))
     assert response["score"] == 77.5 and response["classification"] == "Alto"
+
+
+def test_initial_score_is_independent_of_comunas_and_declared_property_price():
+    baseline = calculate_score(payload(), include_ai=False, market_snapshot=snapshot())
+    changed = calculate_score(
+        payload(comuna_objetivo="Las Condes", segunda_comuna="Buin", property_value_clp=900_000_000),
+        include_ai=False,
+        market_snapshot=snapshot(),
+    )
+    for key in ("score", "classification", "component_scores", "blockers"):
+        assert changed[key] == baseline[key]
