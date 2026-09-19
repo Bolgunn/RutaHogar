@@ -96,7 +96,9 @@ or scheduler. Build adds a separate workflow that:
 1. runs once per day via GitHub Actions `schedule` (UTC cron, documented in
    the workflow), and also supports `workflow_dispatch` for initial seeding or
    operator recovery;
-2. installs the backend dependencies and invokes the same refresh command;
+2. configures Python 3.12 and invokes the same refresh command. The refresh
+   path uses only the Python standard library, so it deliberately does not
+   install the application's or test suite's dependency sets;
 3. supplies `BCCH_API_KEY_TOKEN`, `SUPABASE_URL`, and the configured backend
    Supabase service credential only from GitHub Actions secrets;
 4. fails visibly if acquisition, validation or persistence fails, while the

@@ -5,16 +5,26 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt
-      - run: python scripts/refresh_market_snapshot.py
+      # The refresh path imports only Python's standard library; do not install
+      # the application, test, or frontend dependency sets in this job.
+      - name: Refresh persisted BCCh snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/refresh_market_snapshot.py
         working-directory: backend
         env:
           BCCH_API_KEY_TOKEN: ${{ secrets.BCCH_API_KEY_TOKEN }}
