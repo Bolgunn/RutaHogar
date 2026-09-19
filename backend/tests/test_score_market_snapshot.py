@@ -42,6 +42,17 @@ def test_server_snapshot_wins_and_no_client_market_value_overrides(monkeypatch):
     assert result["financial_indicators"]["uf_value_clp"] == snapshot()["uf_value_clp"]
 
 
+def test_score_endpoint_resolves_the_persisted_dev_snapshot_when_explicitly_enabled(monkeypatch):
+    class Repository:
+        def list_candidates(self):
+            return [{"id": "dev-fixture", "snapshot": snapshot(), "effective_date": snapshot()["effective_date"], "fetched_at": snapshot()["fetched_at"]}]
+
+    monkeypatch.setattr(main, "repository_from_environment", lambda: Repository())
+    monkeypatch.setenv("MARKET_SNAPSHOT_ALLOW_FIXTURE", "true")
+    result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
+    assert result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"] == snapshot()
+
+
 def test_omitted_term_is_accepted_and_uses_snapshot_fallback(monkeypatch):
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
     result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(plazo_credito_hipotecario=None))))

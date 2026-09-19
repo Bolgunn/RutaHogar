@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -34,3 +35,11 @@ def test_snapshot_rejects_missing_provenance():
     del candidate["source"]["ltv_referencial"]["period"]
     with pytest.raises(SnapshotValidationError):
         validate_snapshot(candidate)
+
+
+def test_dev_seed_reads_the_existing_alg9_fixture_without_redefining_values():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "seed_dev_market_snapshot.py"
+    spec = importlib.util.spec_from_file_location("seed_dev_market_snapshot", script_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.fixture_snapshot() == snapshot()

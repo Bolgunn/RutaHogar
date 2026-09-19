@@ -22,3 +22,14 @@ def test_repository_orders_resolution_and_persists_embedded_metadata():
     assert parse_qs(urlsplit(calls[0][1]).query)["order"] == ["effective_date.desc,fetched_at.desc,id.desc"]
     assert calls[1][2]["snapshot"] == snapshot()
     assert calls[1][2]["effective_date"] == snapshot()["effective_date"]
+
+
+def test_repository_deletes_only_explicit_fixture_rows():
+    calls = []
+    def transport(method, url, body=None, headers=None):
+        calls.append((method, url, body, headers))
+        return []
+    repository = MarketSnapshotRepository("https://example.test", "secret", transport)
+    assert repository.delete_fixture_snapshots() == []
+    assert calls[0][0] == "DELETE"
+    assert parse_qs(urlsplit(calls[0][1]).query)["snapshot->>fixture_only"] == ["eq.true"]

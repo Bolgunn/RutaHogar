@@ -23,10 +23,17 @@ def test_resolver_skips_corrupt_newest_row_and_uses_older_valid_bundle():
     result = resolve_latest_valid_snapshot(Repository([
         {"id": "b", "snapshot": corrupt, "effective_date": corrupt["effective_date"], "fetched_at": corrupt["fetched_at"]},
         {"id": "a", "snapshot": valid, "effective_date": valid["effective_date"], "fetched_at": valid["fetched_at"]},
-    ]))
+    ]), allow_fixture=True)
     assert result == valid
 
 
 def test_resolver_has_controlled_error_when_no_valid_bundle_exists():
     with pytest.raises(MarketSnapshotUnavailable):
         resolve_latest_valid_snapshot(Repository([]))
+
+
+def test_fixture_row_is_not_a_production_fallback_without_explicit_opt_in():
+    rows = [{"id": "fixture", "snapshot": snapshot(), "effective_date": snapshot()["effective_date"], "fetched_at": snapshot()["fetched_at"]}]
+    with pytest.raises(MarketSnapshotUnavailable):
+        resolve_latest_valid_snapshot(Repository(rows), allow_fixture=False)
+    assert resolve_latest_valid_snapshot(Repository(rows), allow_fixture=True) == snapshot()

@@ -58,6 +58,34 @@ It reads local backend environment variables and performs the same fetch,
 validation and atomic persistence as production. It has no HTTP exposure and
 is run deliberately by the developer for local seeding/recovery.
 
+#### Temporary local fixture seed (BCCh unavailable)
+
+When BCCh is unavailable, a developer may deliberately seed the first existing
+`ALG-9-cases.json` snapshot. It retains `fixture_only: true`; its values are
+not quotations and it is never selected by a normal production resolver.
+
+From `backend/`, first export the local backend environment in the shell, then
+opt in only for the DEV command/process:
+
+```text
+set -a
+. ./.env
+set +a
+export MARKET_SNAPSHOT_ALLOW_FIXTURE=true
+python scripts/seed_dev_market_snapshot.py seed --confirm-dev
+```
+
+Use the same explicit opt-in in the local `/score` process. To remove all rows
+explicitly marked `fixture_only` from that development database:
+
+```text
+python scripts/seed_dev_market_snapshot.py delete --confirm-dev
+```
+
+Do not set `MARKET_SNAPSHOT_ALLOW_FIXTURE=true` in GitHub Actions, production
+deployment configuration, or shared secrets. Without it, fixture rows are
+ignored; a store containing only fixture rows yields the normal controlled 503.
+
 ### Production
 
 The selected mechanism is a **GitHub Actions scheduled workflow**. This fits

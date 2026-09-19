@@ -22,13 +22,22 @@ def repository_from_environment() -> MarketSnapshotRepository:
     return MarketSnapshotRepository(os.getenv("SUPABASE_URL", ""), _backend_secret())
 
 
-def resolve_latest_valid_snapshot(repository: MarketSnapshotRepository) -> dict:
+def _fixture_snapshots_allowed() -> bool:
+    """Fixture bundles require an explicit local-development opt-in."""
+    return os.getenv("MARKET_SNAPSHOT_ALLOW_FIXTURE") == "true"
+
+
+def resolve_latest_valid_snapshot(repository: MarketSnapshotRepository, allow_fixture: bool | None = None) -> dict:
+    if allow_fixture is None:
+        allow_fixture = _fixture_snapshots_allowed()
     try:
         candidates = repository.list_candidates()
     except MarketRepositoryError as exc:
         raise MarketSnapshotUnavailable("No fue posible resolver una referencia de mercado válida.") from exc
     for row in candidates:
         candidate = row.get("snapshot") if isinstance(row, dict) else None
+        if isinstance(candidate, dict) and candidate.get("fixture_only") is True and not allow_fixture:
+            continue
         try:
             snapshot = validate_snapshot(candidate)
         except SnapshotValidationError:

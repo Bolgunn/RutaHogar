@@ -57,3 +57,16 @@ class MarketSnapshotRepository:
             {"Prefer": "return=representation"},
         )
         return rows[0] if isinstance(rows, list) and rows else row
+
+    def delete_fixture_snapshots(self):
+        """Remove only explicitly marked fixture rows from a development store."""
+        query = urlencode({"snapshot->>fixture_only": "eq.true"})
+        rows = self.transport(
+            "DELETE",
+            f"{self.base_url}/rest/v1/market_snapshots?{query}",
+            None,
+            {"Prefer": "return=representation"},
+        )
+        if rows is not None and not isinstance(rows, list):
+            raise MarketRepositoryError("market snapshot storage returned an invalid response")
+        return rows or []
