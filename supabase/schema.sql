@@ -28,6 +28,7 @@ alter table public.profiles
 add column if not exists onboarding_data jsonb,
 add column if not exists last_lead_seen_at timestamptz,
 add column if not exists phone text,
+add column if not exists rut text,
 add column if not exists birth_date date;
 
 alter table public.profiles
