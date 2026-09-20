@@ -52,3 +52,6 @@ backend/vercel.json
 docs/.obsidian/
 
 Makefile
+
+# Antigravity artifacts
+install.cmd
