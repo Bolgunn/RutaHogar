@@ -1,6 +1,6 @@
 {
   "algorithm": "ALG-12",
-  "version": "hu13-goal-progress-v1",
+  "version": "hu13-goal-progress-v2",
   "note": "Contract fixtures for progress against the frozen HU13 baseline. Percentages are clamped to [0,100]; temporal tolerance is inclusive at exactly ±5 percentage points.",
   "cases": [
     {
@@ -17,7 +17,7 @@
         "calculation_status": "ok",
         "action_status": "cumplida",
         "percentage": 100,
-        "remaining_value": null,
+        "remaining_value": 0,
         "temporal_status": "adelantado"
       }
     },
@@ -224,6 +224,114 @@
         ]
       },
       "expect": { "action_status": "cumplida", "percentage": 100, "ever_completed": true, "currently_regressed": false }
+    },
+    {
+      "name": "reduccion_baseline_satisfecho_con_inicial_menor_al_objetivo",
+      "why": "The existing reduce_debt action can already satisfy its comparator; its direction and frozen values must remain unchanged.",
+      "input": {
+        "goal": { "id": "g15", "type": "numeric", "direction": "reduce", "initial_value": 200000, "target_value": 300000, "verifiable": true, "source": "deuda_mensual" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-01-01T00:00:00Z",
+        "current_value": 200000
+      },
+      "expect": { "calculation_status": "ok", "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "initial_value": 200000, "target_value": 300000, "temporal_status": "adelantado" }
+    },
+    {
+      "name": "reduccion_baseline_satisfecho_sigue_cumpliendo_en_target",
+      "why": "A real debt increase up to the frozen target still fulfills the reduction comparator and must not create partial progress.",
+      "input": {
+        "goal": { "id": "g15", "type": "numeric", "direction": "reduce", "initial_value": 200000, "target_value": 300000, "verifiable": true, "source": "deuda_mensual" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-02-20T00:00:00Z",
+        "current_value": 300000,
+        "prior_goal_events": [ { "event_id": "r-baseline", "action_status": "cumplida", "active": true } ]
+      },
+      "expect": { "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "ever_completed": true, "completion_event_ids": ["r-baseline"], "currently_regressed": false }
+    },
+    {
+      "name": "reduccion_baseline_satisfecho_regresa_por_encima_del_target",
+      "why": "Debt above the target reopens an initially fulfilled goal at zero percent while retaining its completion evidence.",
+      "input": {
+        "goal": { "id": "g15", "type": "numeric", "direction": "reduce", "initial_value": 200000, "target_value": 300000, "verifiable": true, "source": "deuda_mensual" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-03-12T00:00:00Z",
+        "current_value": 400000,
+        "prior_goal_events": [ { "event_id": "r-baseline", "action_status": "cumplida", "active": true } ]
+      },
+      "expect": { "action_status": "pendiente", "percentage": 0, "remaining_value": 100000, "ever_completed": true, "completion_event_ids": ["r-baseline"], "currently_regressed": true, "temporal_status": "atrasado" }
+    },
+    {
+      "name": "reduccion_baseline_satisfecho_retorna_al_cumplimiento",
+      "why": "Returning below the unchanged target restores fulfillment without deleting the intervening regression.",
+      "input": {
+        "goal": { "id": "g15", "type": "numeric", "direction": "reduce", "initial_value": 200000, "target_value": 300000, "verifiable": true, "source": "deuda_mensual" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-03-22T00:00:00Z",
+        "current_value": 250000,
+        "prior_goal_events": [
+          { "event_id": "r-baseline", "action_status": "cumplida", "active": true },
+          { "event_id": "r-regression", "action_status": "pendiente", "active": true }
+        ]
+      },
+      "expect": { "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "initial_value": 200000, "target_value": 300000, "ever_completed": true, "completion_event_ids": ["r-baseline"], "currently_regressed": false }
+    },
+    {
+      "name": "aumento_baseline_satisfecho_con_inicial_mayor_al_objetivo",
+      "why": "An increase goal already above target preserves its original direction and quantitative baseline.",
+      "input": {
+        "goal": { "id": "g16", "type": "numeric", "direction": "increase", "initial_value": 400000, "target_value": 300000, "verifiable": true, "source": "ahorro_disponible" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-01-01T00:00:00Z",
+        "current_value": 400000
+      },
+      "expect": { "calculation_status": "ok", "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "initial_value": 400000, "target_value": 300000, "temporal_status": "adelantado" }
+    },
+    {
+      "name": "aumento_baseline_satisfecho_sigue_cumpliendo_en_target",
+      "why": "A decrease to the exact target remains fulfilled and must not invert the increase goal.",
+      "input": {
+        "goal": { "id": "g16", "type": "numeric", "direction": "increase", "initial_value": 400000, "target_value": 300000, "verifiable": true, "source": "ahorro_disponible" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-02-20T00:00:00Z",
+        "current_value": 300000,
+        "prior_goal_events": [ { "event_id": "i-baseline", "action_status": "cumplida", "active": true } ]
+      },
+      "expect": { "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "ever_completed": true, "completion_event_ids": ["i-baseline"], "currently_regressed": false }
+    },
+    {
+      "name": "aumento_baseline_satisfecho_regresa_por_debajo_del_target",
+      "why": "Savings below target reopen the goal at zero percent, reporting the actual missing amount.",
+      "input": {
+        "goal": { "id": "g16", "type": "numeric", "direction": "increase", "initial_value": 400000, "target_value": 300000, "verifiable": true, "source": "ahorro_disponible" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-03-12T00:00:00Z",
+        "current_value": 200000,
+        "prior_goal_events": [ { "event_id": "i-baseline", "action_status": "cumplida", "active": true } ]
+      },
+      "expect": { "action_status": "pendiente", "percentage": 0, "remaining_value": 100000, "ever_completed": true, "completion_event_ids": ["i-baseline"], "currently_regressed": true, "temporal_status": "atrasado" }
+    },
+    {
+      "name": "aumento_baseline_satisfecho_retorna_al_cumplimiento",
+      "why": "Renewed fulfillment uses the original target and retains previous completion and regression records.",
+      "input": {
+        "goal": { "id": "g16", "type": "numeric", "direction": "increase", "initial_value": 400000, "target_value": 300000, "verifiable": true, "source": "ahorro_disponible" },
+        "baseline_at": "2026-01-01T00:00:00Z",
+        "target_at": "2026-04-11T00:00:00Z",
+        "as_of": "2026-03-22T00:00:00Z",
+        "current_value": 350000,
+        "prior_goal_events": [
+          { "event_id": "i-baseline", "action_status": "cumplida", "active": true },
+          { "event_id": "i-regression", "action_status": "pendiente", "active": true }
+        ]
+      },
+      "expect": { "action_status": "cumplida", "percentage": 100, "remaining_value": 0, "initial_value": 400000, "target_value": 300000, "ever_completed": true, "completion_event_ids": ["i-baseline"], "currently_regressed": false }
     }
   ]
 }

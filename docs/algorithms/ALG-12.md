@@ -2,11 +2,11 @@
 
 | Field | Value |
 | :---- | :---- |
-| **Version** | `hu13-goal-progress-v1` |
+| **Version** | `hu13-goal-progress-v2` |
 | **Runs on / implemented in** | HU13 pure progress layer · not implemented yet |
 | **Cases** | `docs/algorithms/ALG-12-cases.json` |
 | **Open assumptions** | 0 |
-| **Last changed** | 2026-09-20 · HU13 · created |
+| **Last changed** | 2026-09-20 · HU13 · define already-satisfied quantitative baselines |
 
 ## Purpose
 
@@ -93,7 +93,26 @@ campos. Una meta cumplida continúa visible y su evidencia histórica nunca se e
 
 ### R2 — Numeric progress
 
-Para una meta de aumento (`target > initial`):
+**Already-satisfied baseline takes precedence.** Evaluate the comparator from the frozen
+`direction`: `current <= target` for reduction, `current >= target` for increase. If the
+initial value already satisfies that comparator, preserve the original direction, initial value,
+and target, even when they do not form a normal progress interval. Do not correct, invert, or
+regenerate the goal.
+
+| Frozen direction | Baseline already satisfied | Current fulfillment | Percentage | Remaining value |
+| :--------------- | :------------------------- | :------------------ | :--------- | :-------------- |
+| `reduce` | `initial <= target` | `current <= target` | `100` if fulfilled, otherwise `0` | `max(current - target, 0)` |
+| `increase` | `initial >= target` | `current >= target` | `100` if fulfilled, otherwise `0` | `max(target - current, 0)` |
+
+This includes equality and requires no division. A later loss of fulfillment reopens the
+effective action to `pendiente`; subsequent fulfillment returns it to `cumplida`. R8 preserves
+earlier completion evidence. Missing data still follows R5 and does not fabricate a percentage.
+For example, `reduce_debt` with `initial = 200000` and `target = 300000` stays at `100%`
+while `current <= 300000`; at `current = 400000` it has `0%` progress and `100000` remaining.
+
+Only when the baseline does **not** already satisfy the comparator, use the normal interval:
+
+Para una meta de aumento (`direction = increase`, `target > initial`):
 
 ```text
 raw_percentage = 100 × (current - initial) / (target - initial)
@@ -101,7 +120,7 @@ remaining_value = max(target - current, 0)
 fulfilled = current >= target
 ```
 
-Para una meta de reducción (`target < initial`):
+Para una meta de reducción (`direction = reduce`, `target < initial`):
 
 ```text
 raw_percentage = 100 × (initial - current) / (initial - target)
@@ -118,8 +137,8 @@ percentage = clamp(raw_percentage, 0, 100)
 El valor actual no se clampa: un empeoramiento real sigue visible aunque el porcentaje mostrado sea
 `0`, y un sobrecumplimiento sigue visible aunque el porcentaje sea `100`.
 
-Si `target == initial`, no se divide por cero. El progreso es `100` cuando el valor actual cumple
-el comparador congelado de la meta, y `0` en caso contrario.
+Si `target == initial`, aplica la tabla de baseline ya satisfecho, incluido el restante numérico
+`0` cuando se cumple; no se sustituye por `null`.
 
 ### R3 — Boolean and categorical progress
 
@@ -210,11 +229,15 @@ sigue visible en la auditoría completa.
 7. Igual baseline, snapshot, fecha de corte y eventos producen igual resultado; no intervienen IA,
    aleatoriedad ni reloj implícito.
 8. Ninguna regla o threshold de scoring se redefine en este algoritmo.
+9. An already-satisfied quantitative baseline preserves its original direction and values and
+   yields only `0%` or `100%` when calculable, even after regression and renewed fulfillment.
 
 **Edge cases:** meta cumplida en baseline; objetivo igual al valor inicial; aumento y reducción;
 progreso parcial; sobrecumplimiento; regresión; metas booleanas y categóricas; dato insuficiente;
 confirmación manual contradictoria; meta no verificable; desaparición y reaparición de una
 condición; límites exactos de tolerancia `±5 pp`; fecha objetivo ausente o no posterior al baseline.
+Also: reduction with `initial < target` and increase with `initial > target`; continued
+fulfillment at the exact target, regression across it, and return to fulfillment.
 
 ## Dependencies and non-dependencies
 
@@ -235,3 +258,7 @@ condición; límites exactos de tolerancia `±5 pp`; fecha objetivo ausente o no
 
 No open assumptions. The linear trajectory and `±5` percentage-point tolerance are explicit HU13
 Grill decisions, not developer judgments.
+
+The `v2` already-satisfied baseline rule was explicitly confirmed by the user on 2026-09-20
+after reproducing a `reduce_debt` action with initial `200000` and target `300000` from the
+existing structured plan generator. It changes no generator or scoring rule.
