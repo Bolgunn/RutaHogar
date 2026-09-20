@@ -1,0 +1,270 @@
+{
+  "algorithm": "ALG-11",
+  "version": "hu13-lineage-v1",
+  "note": "Contract fixtures for the future pure HU13 lineage implementation. Every input event is append-only. `active_line` expectations describe the replayed effective view; `audit_line` retains every supplied record.",
+  "cases": [
+    {
+      "name": "primera_evaluacion_fija_baseline",
+      "why": "The first valid evaluation creates the complete initial state and the only logical baseline.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history": [],
+        "event": {
+          "event_id": "e1",
+          "event_kind": "baseline",
+          "effective_at": "2026-01-01T12:00:00Z",
+          "recorded_at": "2026-01-01T12:00:01Z",
+          "reason": "first_evaluation",
+          "patch": { "ingreso_mensual": 1000000, "deuda_mensual": 200000, "ahorro_disponible": 3000000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "baseline_event_id": "e1",
+        "active_event_ids": ["e1"],
+        "latest_effective_snapshot": { "ingreso_mensual": 1000000, "deuda_mensual": 200000, "ahorro_disponible": 3000000 }
+      }
+    },
+    {
+      "name": "parche_de_un_campo_conserva_el_resto",
+      "why": "An omitted field retains its last effective value and the new active snapshot remains complete.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "event": {
+          "event_id": "e2",
+          "event_kind": "data_update",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-02-01T12:00:01Z",
+          "reason": "monthly_update",
+          "previous": "e1",
+          "patch": { "ahorro_disponible": 3500000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "active_event_ids": ["e1", "e2"],
+        "latest_effective_snapshot": { "ingreso_mensual": 1000000, "deuda_mensual": 200000, "ahorro_disponible": 3500000 }
+      }
+    },
+    {
+      "name": "empeoramientos_reales_son_validos",
+      "why": "Tracking records reality and is not restricted to improvements.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "event": {
+          "event_id": "e2-worse",
+          "event_kind": "data_update",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-02-01T12:00:01Z",
+          "reason": "monthly_update",
+          "previous": "e1",
+          "patch": { "ingreso_mensual": 900000, "deuda_mensual": 260000, "ahorro_disponible": 2500000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "latest_effective_snapshot": { "ingreso_mensual": 900000, "deuda_mensual": 260000, "ahorro_disponible": 2500000 }
+      }
+    },
+    {
+      "name": "correccion_del_ultimo_registro",
+      "why": "The correction replaces the last logical slot while the original stays in audit and out of metrics.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "e1_then_e2_savings_3500000",
+        "event": {
+          "event_id": "c2",
+          "event_kind": "correction",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-02-03T09:00:00Z",
+          "reason": "typing_error",
+          "correction_of": "e2",
+          "correction_effect": "replace",
+          "patch": { "ahorro_disponible": 3200000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "active_event_ids": ["e1", "c2"],
+        "audit_event_ids": ["e1", "e2", "c2"],
+        "excluded_from_metrics": ["e2"],
+        "latest_ahorro_disponible": 3200000
+      }
+    },
+    {
+      "name": "correccion_intermedia_reconstruye_descendientes",
+      "why": "Later patches are replayed over the corrected intermediate state without rewriting their stored snapshots.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "e1_baseline_e2_savings_3500000_e3_debt_150000",
+        "event": {
+          "event_id": "c2",
+          "event_kind": "correction",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-04-01T09:00:00Z",
+          "reason": "bank_statement_correction",
+          "correction_of": "e2",
+          "correction_effect": "replace",
+          "patch": { "ahorro_disponible": 3300000 }
+        }
+      },
+      "expect": {
+        "active_event_ids": ["e1", "c2", "e3"],
+        "latest_effective_snapshot": { "ingreso_mensual": 1000000, "deuda_mensual": 150000, "ahorro_disponible": 3300000 },
+        "stored_snapshot_of_e3_unchanged": true,
+        "excluded_from_metrics": ["e2"]
+      }
+    },
+    {
+      "name": "anulacion_intermedia_omite_su_parche",
+      "why": "An annulled slot disappears only from the effective replay; all records remain auditable.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "e1_baseline_e2_savings_3500000_e3_debt_150000",
+        "event": {
+          "event_id": "a2",
+          "event_kind": "correction",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-04-01T09:00:00Z",
+          "reason": "duplicate_historical_update",
+          "correction_of": "e2",
+          "correction_effect": "annul",
+          "patch": {}
+        }
+      },
+      "expect": {
+        "active_event_ids": ["e1", "e3"],
+        "audit_event_ids": ["e1", "e2", "e3", "a2"],
+        "latest_ahorro_disponible": 3000000,
+        "latest_deuda_mensual": 150000,
+        "excluded_from_metrics": ["e2", "a2"]
+      }
+    },
+    {
+      "name": "multiples_correcciones_gana_la_ultima_registrada",
+      "why": "All corrections share one logical slot and resolve by the documented total order.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "e1_e2_c2a_savings_3200000",
+        "event": {
+          "event_id": "c2b",
+          "event_kind": "correction",
+          "effective_at": "2026-02-01T12:00:00Z",
+          "recorded_at": "2026-02-05T09:00:00Z",
+          "reason": "final_verified_amount",
+          "correction_of": "c2a",
+          "correction_effect": "replace",
+          "patch": { "ahorro_disponible": 3250000 }
+        }
+      },
+      "expect": {
+        "active_event_ids": ["e1", "c2b"],
+        "excluded_from_metrics": ["e2", "c2a"],
+        "latest_ahorro_disponible": 3250000
+      }
+    },
+    {
+      "name": "timestamps_iguales_usan_event_id",
+      "why": "Equal effective and recorded timestamps still have a deterministic order independent of database read order.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "events_unordered": [
+          { "event_id": "e3", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "patch": { "deuda_mensual": 180000 } },
+          { "event_id": "e2", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "patch": { "ahorro_disponible": 3500000 } }
+        ]
+      },
+      "expect": {
+        "active_event_ids": ["e1", "e2", "e3"],
+        "latest_ahorro_disponible": 3500000,
+        "latest_deuda_mensual": 180000
+      }
+    },
+    {
+      "name": "reintento_identico_es_idempotente",
+      "why": "A network retry with the same logical id and canonical request must not create a duplicate.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "contains_event_e2",
+        "event_fixture": "exact_canonical_copy_of_e2"
+      },
+      "expect": {
+        "outcome": "idempotent_replay",
+        "records_appended": 0,
+        "returned_event_id": "e2"
+      }
+    },
+    {
+      "name": "doble_envio_mismo_id_distinto_payload_es_conflicto",
+      "why": "An idempotency key cannot silently identify two semantic events.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "contains_e2_savings_3500000",
+        "event": { "event_id": "e2", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "reason": "monthly_update", "patch": { "ahorro_disponible": 3600000 } }
+      },
+      "expect": {
+        "outcome": "idempotency_conflict",
+        "records_appended": 0
+      }
+    },
+    {
+      "name": "omitido_y_null_explicito_son_distintos",
+      "why": "A nullable field can be cleared explicitly while omitted fields retain their value.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "latest_has_comuna_alternativa_maipu_and_income_1000000",
+        "field_contract": { "comuna_alternativa": { "nullable": true }, "ingreso_mensual": { "nullable": false } },
+        "event": { "event_id": "e2", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "reason": "clear_optional_preference", "patch": { "comuna_alternativa": null } }
+      },
+      "expect": {
+        "outcome": "appended",
+        "latest_comuna_alternativa": null,
+        "latest_ingreso_mensual": 1000000
+      }
+    },
+    {
+      "name": "null_en_campo_obligatorio_rechaza_todo",
+      "why": "Explicit null is only meaningful where the domain contract permits it.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "field_contract": { "ingreso_mensual": { "nullable": false } },
+        "event": { "event_id": "e2", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "reason": "invalid_clear", "patch": { "ingreso_mensual": null } }
+      },
+      "expect": {
+        "outcome": "rejected",
+        "error": "invalid_patch",
+        "records_appended": 0
+      }
+    },
+    {
+      "name": "usuario_no_puede_operar_sobre_otro_usuario",
+      "why": "Ownership applies to both the subject and every referenced event.",
+      "input": {
+        "actor_user_id": "u2",
+        "subject_user_id": "u1",
+        "history_fixture": "u1_baseline_e1",
+        "event": { "event_id": "e2", "event_kind": "data_update", "effective_at": "2026-02-01T12:00:00Z", "recorded_at": "2026-02-01T12:00:01Z", "reason": "unauthorized_update", "previous": "e1", "patch": { "ahorro_disponible": 4000000 } }
+      },
+      "expect": {
+        "outcome": "rejected",
+        "error": "owner_mismatch",
+        "records_appended": 0
+      }
+    }
+  ]
+}
