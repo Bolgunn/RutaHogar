@@ -24,6 +24,21 @@ alongside.
 | ALG-7 | improvement plan generation | `improvement_plan.py` |
 | ALG-8 | housing benefits detector (FOGAES, DS49, PADHI, DS1, Leasing, Ley 21.748) | `housing_benefits.py`, `constants.py` |
 
+Written since, outside the seeded set:
+
+| ID | Covers | Module |
+| :- | :----- | :----- |
+| ALG-9 | preference-independent purchase capacity | `purchase_capacity.py`, `constants.py` |
+| ALG-10 | lead–project affinity | **frontend** `src/lib/matching/leadProjectMatching.js` |
+
+**ALG-8 is claimed by HU 8** — `housing_benefits.py`, the housing-benefits detector (FOGAES, DS49,
+PADHI, DS1, Leasing, Ley 21.748), merged to `develop` in PR #80. Its row is deliberately **not**
+added here: HU 8 adds it to the seeded table above, and duplicating it would conflict on merge. HU 10
+renumbered off ALG-8 rather than colliding with it.
+
+ALG-10 is the first ALG whose cases are asserted by **vitest** rather than pytest, because it governs
+frontend code. The runner follows the module, not the tier.
+
 ## Writing one
 
 1. **Start from the code, then decide what it *should* say.** Read the module and write down what

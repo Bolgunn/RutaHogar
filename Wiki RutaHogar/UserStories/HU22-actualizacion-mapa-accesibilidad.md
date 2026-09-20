@@ -36,4 +36,4 @@
 
 ## Notas
 
-- Depende del mapa base ([[HU21-mapa-accesibilidad|HU 21]] / [[HU14-mapa-accesibilidad|HU 14]]).
+- Depende del mapa base ([[HU31-mapa-accesibilidad|HU 31]] / [[HU31-mapa-accesibilidad|HU 31]]).

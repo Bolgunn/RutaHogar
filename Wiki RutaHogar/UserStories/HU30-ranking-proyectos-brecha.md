@@ -1,6 +1,6 @@
-# HU 19 - Ranking de proyectos por brecha mínima
+# HU 30 - Ranking de proyectos por brecha mínima
 
-> **🗓 Planificada - Sprint 2.** Ordena los proyectos alternativos según qué tan cerca están de la capacidad actual del lead, para encontrar opciones realistas sin partir de cero.
+> **🗓 Planificada - Sprint 3.** Ordena los proyectos alternativos según qué tan cerca están de la capacidad actual del lead, mostrando la brecha principal de cada uno.
 
 ---
 
@@ -9,9 +9,9 @@
 | Campo | Valor |
 | :---- | :---- |
 | **Categoría** | Importante |
-| **Puntos de Historia** | 5 |
+| **Puntos de Historia** | *(sin definir en el documento)* |
 | **Actor** | Lead |
-| **Sprint** | Sprint 2 |
+| **Sprint** | Sprint 3 |
 | **Estado** | 🗓 Planificada |
 
 ---
@@ -39,8 +39,6 @@
 ### E4
 
 **Dado** que el usuario selecciona un proyecto alternativo, **cuando** lo revise, **entonces** debe poder compararlo con su objetivo inicial.
-
----
 
 ## Notas
 

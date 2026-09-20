@@ -2,16 +2,16 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import { formatFormValue } from "../constants";
+import {
+  calculateMortgageDividend,
+  REFERENTIAL_MORTGAGE_ANNUAL_RATE,
+  roundCurrency,
+} from "../lib/mortgage";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
 
 const FALLBACK_UF_VALUE_CLP = 40695;
-const FALLBACK_MORTGAGE_ANNUAL_RATE = 0.049;
-const configuredMortgageRate = Number(import.meta.env.VITE_REFERENTIAL_MORTGAGE_RATE);
-const REFERENTIAL_MORTGAGE_ANNUAL_RATE =
-  Number.isFinite(configuredMortgageRate) && configuredMortgageRate > 0
-    ? configuredMortgageRate
-    : FALLBACK_MORTGAGE_ANNUAL_RATE;
 const DEBUG_SCORE_REQUESTS =
   import.meta.env.DEV && import.meta.env.VITE_DEBUG_SCORE === "true";
 
@@ -169,10 +169,6 @@ const integerFormattedFields = new Set([
   "property_value",
 ]);
 
-function roundCurrency(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
-
 function formatPercent(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return null;
@@ -226,36 +222,6 @@ function buildReferencePropertyValues(commune, ufValueClp) {
     property_value_source: referencePropertyValuesUf[commune]
       ? "referencia_comuna"
       : "referencia_general",
-  };
-}
-
-function calculateMortgageDividend({ propertyValueClp, savingsClp, termYears, annualRate }) {
-  const propertyValue = Number(propertyValueClp) || 0;
-  const principal = Math.max(0, propertyValue - (Number(savingsClp) || 0));
-  const months = Number(termYears) * 12;
-  const monthlyRate = Number(annualRate) / 12;
-
-  if (!Number.isFinite(months) || months <= 0 || propertyValue <= 0) {
-    return { dividend: null, principalClp: principal };
-  }
-
-  if (principal <= 0) {
-    return { dividend: 0, principalClp: principal };
-  }
-
-  if (!Number.isFinite(monthlyRate) || monthlyRate <= 0) {
-    return {
-      dividend: Math.round(principal / months),
-      principalClp: principal,
-    };
-  }
-
-  const compound = Math.pow(1 + monthlyRate, months);
-  const dividend = principal * ((monthlyRate * compound) / (compound - 1));
-
-  return {
-    dividend: Math.round(dividend),
-    principalClp: Math.round(principal),
   };
 }
 
@@ -321,21 +287,26 @@ export default function ScoreForm({
   onConsentAccept,
   onViewConsent,
   onBirthDateSave,
+  onBack,
+  initialDraft,
+  onDraftChange,
 }) {
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
   const storedBirthDate = normalizeBirthDate(
     birthDate || profile?.birth_date || profile?.fecha_nacimiento || "",
   );
-  const needsBirthDate = !storedBirthDate;
+  // La fecha de nacimiento pertenece al perfil autenticado; el flujo anónimo
+  // la solicita antes de la precalificación y luego se migra al crear la cuenta.
+  const needsBirthDate = isAnon && !storedBirthDate;
   const contextCompleted = Boolean(onboardingData);
-  const [birthFields, setBirthFields] = useState({ birth_day: "", birth_month: "", birth_year: "" });
+  const [birthFields, setBirthFields] = useState(() => initialDraft?.birthFields || { birth_day: "", birth_month: "", birth_year: "" });
   const [activeDateDropdown, setActiveDateDropdown] = useState(null);
   const effectiveBirthDate = needsBirthDate ? buildBirthDateIso(birthFields) : storedBirthDate;
   const declaredAge = useMemo(() => calculateAge(effectiveBirthDate), [effectiveBirthDate]);
   const asksPropertyValue = buyerObjectives.has(objective);
 
-  const [form, setForm] = useState({
+  const defaultScoreForm = {
     ingreso_mensual: "",
     deuda_mensual: "",
     ahorro_disponible: "",
@@ -360,11 +331,16 @@ export default function ScoreForm({
     valor_vehiculos: "",
     valor_inmuebles: "",
     patrimonio_unit: "clp",
-  });
+  };
+
+  const [form, setForm] = useState(() => ({
+    ...defaultScoreForm,
+    ...(initialDraft?.form || {}),
+  }));
 
   // Estado paralelo solo para mostrar los valores formateados en pantalla
-  const [displayValues, setDisplayValues] = useState({});
-  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(false);
+  const [displayValues, setDisplayValues] = useState(() => initialDraft?.displayValues || {});
+  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(Boolean(initialDraft?.dividendWasManuallyEdited));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -372,7 +348,12 @@ export default function ScoreForm({
   const [ufStatus, setUfStatus] = useState("fallback");
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
-  const [currentStep, setCurrentStep] = useState(contextCompleted ? 2 : (needsBirthDate ? 1 : 2));
+  const [incomeTipVisible, setIncomeTipVisible] = useState(true);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const draftStep = Number(initialDraft?.currentStep);
+    if (Number.isFinite(draftStep) && draftStep >= 1 && draftStep <= 4) return draftStep;
+    return contextCompleted ? 2 : (needsBirthDate ? 1 : 2);
+  });
 
   const consentDate = consentTimestamp
     ? new Date(consentTimestamp).toLocaleDateString("es-CL", {
@@ -381,6 +362,16 @@ export default function ScoreForm({
       day: "numeric",
     })
     : null;
+
+  useEffect(() => {
+    onDraftChange?.({
+      form,
+      displayValues,
+      dividendWasManuallyEdited,
+      birthFields,
+      currentStep,
+    });
+  }, [birthFields, currentStep, displayValues, dividendWasManuallyEdited, form, onDraftChange]);
 
   const debtExceedsIncome =
     form.ingreso_mensual !== "" &&
@@ -710,14 +701,14 @@ export default function ScoreForm({
 
     if (form.complemento_renta && complementFieldsIncomplete) {
       setError(
-        "Completa los datos del complementario antes de calcular tu preevaluación.",
+        "Completa los datos del complementario antes de calcular tu precalificación.",
       );
       return false;
     }
 
     if (form.declara_patrimonio && patrimonioFieldsIncomplete) {
       setError(
-        "Completa la información de patrimonio antes de calcular tu preevaluación.",
+        "Completa la información de patrimonio antes de calcular tu precalificación.",
       );
       return false;
     }
@@ -1051,12 +1042,18 @@ export default function ScoreForm({
   };
 
   const goBack = () => {
-    if (currentStep > 1 && !(currentStep === 2 && !needsBirthDate)) {
+    if (currentStep === 2 && !needsBirthDate) {
+      onBack?.();
+      return;
+    }
+    if (currentStep > 1) {
       setError(null);
       setCurrentStep((s) => s - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  const showFinancialBackButton = currentStep !== 2 || needsBirthDate || onBack;
 
   return (
     <form onSubmit={submit} className="pre-wizard">
@@ -1092,7 +1089,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Información personal</div>
-            <h1 className="pre-wizard-card-title">¿Cuándo naciste?</h1>
+            <h2 className="pre-wizard-card-title">¿Cuándo naciste?</h2>
             <p className="pre-wizard-card-desc">
               Tu edad se usa para calcular el plazo máximo del crédito hipotecario.
             </p>
@@ -1163,18 +1160,27 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Datos financieros</div>
-            <h1 className="pre-wizard-card-title">Tu situación financiera</h1>
+            <h2 className="pre-wizard-card-title">Tu situación financiera</h2>
             <p className="pre-wizard-card-desc">
               Usa montos aproximados. No pedimos claves, documentos ni información bancaria privada.
             </p>
           </div>
 
-          <div className="tip" style={{ marginBottom: '1.25rem' }}>
+          {incomeTipVisible && <div className="tip" style={{ marginBottom: '1.25rem' }}>
             <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
             <div className="tip__text">
               <strong>Consejo:</strong> Usa tu ingreso líquido real. No incluyas propinas o bonos variables.
             </div>
-          </div>
+            <button
+              type="button"
+              className="tip__toggle"
+              onClick={() => setIncomeTipVisible(false)}
+              aria-label="Cerrar consejo"
+              title="Cerrar consejo"
+            >
+              x
+            </button>
+          </div>}
 
           {/* ── Datos financieros ── */}
           <div className="pre-wizard-grid-2">
@@ -1338,10 +1344,12 @@ export default function ScoreForm({
           </div>
 
           <div className="pre-wizard-nav">
-            <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Volver
-            </button>
+            {showFinancialBackButton ? (
+              <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Volver
+              </button>
+            ) : <div />}
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
               <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -1354,7 +1362,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Trabajo y antecedentes</div>
-            <h1 className="pre-wizard-card-title">Situación laboral</h1>
+            <h2 className="pre-wizard-card-title">Situación laboral</h2>
             <p className="pre-wizard-card-desc">
               La morosidad es autodeclarada y sólo se usa como señal orientativa.
             </p>
@@ -1588,7 +1596,7 @@ export default function ScoreForm({
         <div className="pre-wizard-card">
           <div className="pre-wizard-card-header">
             <div className="pre-wizard-card-eyebrow">Último paso</div>
-            <h1 className="pre-wizard-card-title">Autorización y cálculo</h1>
+            <h2 className="pre-wizard-card-title">Autorización y cálculo</h2>
             <p className="pre-wizard-card-desc">
               Revisa tu información y acepta la autorización de tratamiento de datos para obtener tu precalificación.
             </p>
@@ -1620,11 +1628,11 @@ export default function ScoreForm({
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Tipo de contrato</span>
-              <span className="pre-wizard-summary-value">{form.tipo_contrato || "—"}</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.tipo_contrato, "—")}</span>
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Continuidad laboral</span>
-              <span className="pre-wizard-summary-value">{form.continuidad_laboral || "—"}</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.continuidad_laboral, "—")}</span>
             </div>
             <div className="pre-wizard-summary-row">
               <span className="pre-wizard-summary-label">Morosidad</span>

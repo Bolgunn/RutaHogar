@@ -93,6 +93,30 @@ export function filterAvailable(projects = []) {
     }));
 }
 
+// El ejecutivo comercial solo trabaja los proyectos donde está asignado.
+// La regla vinculante vive en la policy "Proyectos select tenant" (migración
+// 20260831090000); esto la replica en el cliente para el proveedor local, que
+// no tiene RLS, y como segunda barrera contra Supabase.
+//
+// El predicado debe ser el MISMO que el de la policy — id O correo — o el
+// cliente terminaría escondiendo proyectos que la base sí autoriza: una
+// asignación ya vinculada conserva el ejecutivo_email con que se creó, que no
+// tiene por qué seguir siendo el correo actual de la cuenta.
+// Se acepta el vínculo 'pendiente': una asignación recién creada aún no tiene
+// ejecutivo_id, y el proyecto ya es suyo desde que el admin lo asigna.
+export function filterAssignedTo(projects = [], ejecutivo = {}) {
+  const correo = String(ejecutivo?.email || "").trim().toLowerCase();
+  const id = ejecutivo?.id || null;
+  if (!correo && !id) return projects || [];
+  return (projects || []).filter((project) =>
+    (project?.ejecutivos || []).some(
+      (exec) =>
+        (id && exec?.ejecutivo_id === id) ||
+        (correo && String(exec?.email || "").trim().toLowerCase() === correo),
+    ),
+  );
+}
+
 // E3: decisión pura que replica assign_executive en la base de datos.
 export function decideExecutiveBinding({ execInmobiliariaId, projectInmobiliariaId }) {
   if (!execInmobiliariaId) return "bind";

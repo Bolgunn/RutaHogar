@@ -26,7 +26,7 @@ Tentative distribution of user stories and research spikes across the three spri
 
 | ID | Name | Category | SP | Page |
 | :- | :--- | :------- | :-: | :--- |
-| Spike 2 | Technical validation: privacy & consent, roles, auditing & versioning, documents, CRM/CMF integrations, reports & dossier | Spike / Research | 13 | — |
+| Spike 2 | Technical validation: privacy & consent, roles, auditing & versioning, CRM/external services, external data sources, user flows, real-estate brokers | Spike / Research | 13 | [[UserStories/spike2-validacion-tecnica\|Spike 2]] |
 | HU 12 | Commercial derivation & CRM integration | Important | 8 | [[UserStories/HU12-CommercialDerivation\|HU 12]] |
 | HU 13 | Monthly improvement-plan tracking | Important | 8 | [[UserStories/HU13-MonthlyPlanTracking\|HU 13]] |
 | HU 14 | Real estate accessibility map visualization | Optional | 8 | [[UserStories/HU14-AccessibilityMap\|HU 14]] |

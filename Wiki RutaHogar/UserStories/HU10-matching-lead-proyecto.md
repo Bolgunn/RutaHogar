@@ -1,6 +1,6 @@
 # HU 10 - Matching lead-proyecto para ejecutivos comerciales
 
-> **⚠️ Parcial - Sprint 1.** El sistema sugiere al ejecutivo comercial los leads compatibles con los proyectos que vende, ordenados por afinidad y capacidad de compra.
+> **✅ Implementada - Sprint 1.** El sistema sugiere al ejecutivo comercial los leads compatibles con los proyectos que vende, ordenados por afinidad y capacidad de compra.
 
 ---
 
@@ -12,7 +12,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Ejecutivo comercial |
 | **Sprint** | Sprint 1 |
-| **Estado** | ⚠️ Parcial |
+| **Estado** | ✅ Implementada |
 
 ---
 
@@ -44,7 +44,7 @@
 
 ## Notas
 
-- Los criterios de matching (capacidad estimada, comuna, rango de precio, pie, clasificación, bloqueador principal) están definidos en [Spike 1 - E4](../../docs/research/spike1-e4-lead-project-matching-criteria.md), que lleva el contrato congelado contra el que se debe programar.
+- Los criterios de matching (capacidad estimada, comuna, rango de precio, pie, clasificación, bloqueador principal) los gobiernan **[ALG-9](../../docs/algorithms/ALG-9-purchase-capacity.md)** (capacidad) y **[ALG-10](../../docs/algorithms/ALG-10-lead-project-affinity.md)** (afinidad), que llevan cada número con su procedencia y sus casos versionados. El [Spike 1 - E4](../../docs/research/spike1-e4-lead-project-matching-criteria.md) explica **por qué** los criterios son los que son y vale leerlo para eso, pero HU 10 lo enmendó en nueve secciones: **donde el spike y un ALG discrepen, manda el ALG** — lo dice el propio spike.
 - Requiere el catálogo de [[HU7-catalogo-de-proyectos|HU 7]] para saber qué proyectos están disponibles.
 - Complementa el dashboard priorizado [[HU2-priorizacion-leads|HU 2]] agregando una vista centrada en proyecto.
 
@@ -56,12 +56,20 @@ Verificación criterio por criterio contra el código entregado. ✅ implementad
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
-| `E1` | ❌ | No hay selector de proyecto en el panel del ejecutivo ni lista de leads por proyecto. |
-| `E2` | ⚠️ | `backend/app/scoring_engine/commercial_priority.py` calcula prioridad comercial a partir del ajuste por proyecto, que es la pieza que este criterio necesita, pero no se expone como recomendación por proyecto. |
-| `E3` | ⚠️ | La tarjeta del lead en `DashboardLeads.jsx` muestra clasificación y score; no muestra capacidad estimada, pie ni bloqueador principal juntos. |
-| `E4` | ❌ | No existe la noción de oportunidad reorientable en la UI. |
+| `E1` | ✅ | Selector de proyecto en `DashboardLeads.jsx`, alimentado por `getAvailableProjects({ inmobiliariaId, ejecutivo })`, con lista rankeada por afinidad y orden alternativo por capacidad. Casos de orden en `ALG-10-cases.json` y `leadRanking.test.js`. **Falta la pasada del revisor contra un entorno hosteado**: el recorte por ejecutivo es RLS y no corre en local. |
+| `E2` | ✅ | `leadProjectMatching.test.js`: un `Medio` holgado gana a un `Alto` justo — **88.6 contra 56.4**. Acotado como invariante 8 de ALG-10 para que un retuneo no lo cruce en silencio. En el panel, el filtro de clasificación cae a "todos" con proyecto seleccionado, sin lo cual la UI anulaba el criterio. |
+| `E3` | ✅ | Fila y zona 2 del modal muestran capacidad, pie disponible, clasificación, restricción vinculante y bloqueador principal con su brecha en CLP, más `plazo_anios` y `plazo_origen`, que ALG-9 R2 declara no opcionales. Números en `ALG-9-cases.json`. |
+| `E4` | ✅ | Anotación reorientable en fila y modal, con `ALG-10-cases.json` cubriendo las dos ramas de R4 y sus dos negativos. La copia distingue qué rama disparó vía `comunasDeclaradas()`, para no escribir "puede comprar en Ñuñoa aunque declaró Ñuñoa". |
 
-**Nota de dependencia.** El catálogo del que depende esta historia ya está construido en `feature/sprint1/HU7` ([PR #69](https://github.com/nonmeeeeeeeeeeeeeee/RutaHogar/pull/69)); las citas de arriba describen `develop`, donde todavía no está.
+**Motor.** `ALG-9` (capacidad de compra, `purchase_capacity.py`) y `ALG-10` (afinidad lead-proyecto,
+`lib/matching/leadProjectMatching.js`), con 30 casos versionados. `ALGORITHM_VERSION` no se movió: las
+nueve claves nuevas son aditivas dentro de `financial_indicators` y no cambian ninguna regla existente.
+
+**Pendiente de despliegue, no de código.** La migración `20260831090000` y la corrida del backfill
+contra el Supabase hosteado — ver "Still open" en
+[el plan](../../docs/stories/HU10-matching-lead-proyecto/PLAN.md).
+
+**Nota de dependencia.** El catálogo del que depende esta historia está en `develop` desde que se mergeó [PR #69](https://github.com/nonmeeeeeeeeeeeeeee/RutaHogar/pull/69), y esta rama lo trae. Las citas de arriba describen el código de la rama `feature/sprint1/HU10`, no `develop`: la historia todavía no está mergeada.
 
 > Esta tabla se revisa cuando cambia el código de la historia. Un criterio sin evidencia citable
 > es un criterio no verificado, no un criterio cumplido.

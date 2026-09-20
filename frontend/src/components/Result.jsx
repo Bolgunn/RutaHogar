@@ -11,7 +11,7 @@ import {
   getClassificationTone,
   getUserResultFactors,
 } from "../utils/helpers";
-import { normalizeDisplayList, normalizeDisplayText } from "../utils/text";
+import { displayItemBenefit, displayItemText, normalizeDisplayList, normalizeDisplayText } from "../utils/text";
 
 function isPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -72,7 +72,7 @@ function MetricItem({ label, value }) {
   );
 }
 
-export default function Result({ data, onRetryExplanation }) {
+export default function Result({ data, onNavigate, onRetryExplanation }) {
   const {
     score,
     classification,
@@ -94,8 +94,8 @@ export default function Result({ data, onRetryExplanation }) {
   const factors = getUserResultFactors(data);
   const hasProjectFit = isPlainObject(project_fit) && Object.keys(project_fit).length > 0;
   const structuredPlan = Array.isArray(structured_improvement_plan) ? structured_improvement_plan : [];
-
   const badgeClass = tone === "high" ? "alto" : tone === "medium" ? "medio" : tone === "low" ? "bajo" : "accent";
+  const scoreValue = `${Math.max(0, Math.min(100, Number(score) || 0))}%`;
 
   return (
     <div className="result-panel">
@@ -111,7 +111,7 @@ export default function Result({ data, onRetryExplanation }) {
             </div>
           ) : null}
         </div>
-        <div className={`score-badge ${tone}`}>
+        <div className={`score-badge score-visual-card score-${badgeClass} ${tone}`} style={{ "--score-value": scoreValue }}>
           <span>Score financiero</span>
           <strong>{formatScore(score, "Sin dato")}</strong>
           <small>Clasificación final: {classification || "Sin clasificación"}</small>
@@ -219,8 +219,10 @@ export default function Result({ data, onRetryExplanation }) {
             {briefRecommendations.length ? (
               briefRecommendations.map((step, i) => (
                 <li key={i}>
-                  {typeof step === "string" ? step : step.text}
-                  {typeof step !== "string" && step.benefit && <p className="benefit">Beneficio esperado: {step.benefit}</p>}
+                  {displayItemText(step)}
+                  {displayItemBenefit(step) ? (
+                    <p className="benefit">Beneficio esperado: {displayItemBenefit(step)}</p>
+                  ) : null}
                 </li>
               ))
             ) : (
@@ -230,7 +232,7 @@ export default function Result({ data, onRetryExplanation }) {
         </section>
       </div>
 
-      <BankingChecklist result={data} />
+      <BankingChecklist result={data} onNavigate={onNavigate} />
     </div>
   );
 }

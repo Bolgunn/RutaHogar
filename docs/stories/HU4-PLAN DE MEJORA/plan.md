@@ -88,3 +88,21 @@ Cada tarjeta incluye:
 Los controles se ubican a la derecha y permiten filtrar la grilla bajo dos ejes:
 *   **Prioridad:** (Todos, Bajo, Medio, Alto, Opcional).
 *   **Tema:** Las metas que en Backend se llaman "Saneamiento", en el Frontend se formatearon limpiamente para que el usuario las entienda como "Morosidad", permitiéndole enfocar su plan rápidamente.
+
+---
+
+## 5. Mejoras Recientes de Calidad y Experiencia de Usuario (UX/UI)
+
+Durante la última iteración, se introdujeron múltiples pulidos cualitativos orientados a robustecer la experiencia del usuario y evitar quiebres en la aplicación.
+
+### 5.1. Claridad Visual en `FinancialTracking.jsx`
+- **Reducción de Ruido Visual:** Se removieron los botones redundantes ("Aceptar plan de pasos sugeridos para mejorar" y "Ver plan mensual de las acciones sugeridas") que sobrecargaban la sección del Plan de Mejora.
+- **Botón Unificado de Avances:** Se retiraron los botones de "Registrar avance/Hito financiero" albergados dentro de cada tarjeta individual de pasos sugeridos, consolidando toda la lógica de actualización en el único y ya existente botón global "Ingresar Avances". Esto reduce la fricción de navegación.
+
+### 5.2. Robustez Lógica en Variables
+- Se subsanó un error de renderizado (`ReferenceError: totalSaneamientoRequerido is not defined`) que causaba la caída de la aplicación cuando el usuario actualizaba un nivel de ahorro tan alto que suprimía la brecha del pie mínimo. La métrica fue definida correctamente integrando `currentMorosidad + excedenteDeuda`.
+
+### 5.3. Mejoras en Formularios (`RegisterMilestone.jsx`)
+- **Sistema de Formateo de Dinero en Tiempo Real:** Se replicó y unificó la lógica implementada en la precalificación (`ScoreForm.jsx`) que inyecta puntos separadores de miles de forma dinámica a medida que el usuario tipea (ej: "15.000.000"). Esto se logró abstrayendo las funciones de formateo, permitiendo mostrar los separadores en la UI sin romper el parseo numérico y envío de datos puros a la API en el Back-End.
+- **Saneamiento Explícito de Morosidad:** En la pestaña "Reducción de Deuda", se introdujo una opción para que el usuario declare si mantiene atrasos/morosidades, brindándole un selector donde puede explícitamente marcar "No, estoy al día", volviendo la morosidad 0 de manera limpia.
+- **Etiquetas de Recompensa Visual:** El panel de deuda reacciona al saneamiento insertando una etiqueta verde de éxito ("✓ Sin morosidad activa") que recompensa e informa al usuario sobre el correcto balance de sus pasivos.

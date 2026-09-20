@@ -634,7 +634,9 @@ export default function LandingPage({
                     </linearGradient>
                   </defs>
                   <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" strokeLinecap="round" />
-                  <path d="M 20 100 A 80 80 0 0 1 162.5 36.5" fill="none" stroke="url(#arc-g)" strokeWidth="10" strokeLinecap="round" />
+                  {/* Mismo trazado que la pista: pathLength lo normaliza a 100, así el
+                      dash marca el score sin depender de un punto final calculado a mano. */}
+                  <path d="M 20 100 A 80 80 0 0 1 180 100" pathLength="100" strokeDasharray="74 100" fill="none" stroke="url(#arc-g)" strokeWidth="10" strokeLinecap="round" />
                 </svg>
                 <div className="lp-sc-arc-val">
                   <span className="lp-sc-arc-num">74</span>
@@ -660,7 +662,7 @@ export default function LandingPage({
         {/* Stats */}
         <div className="lp-stats">
           <div className="lp-stats-inner">
-            <div className="lp-stat"><div className="lp-stat-num">~30s</div><div className="lp-stat-label">Tiempo de evaluación</div></div>
+            <div className="lp-stat"><div className="lp-stat-num">~30s</div><div className="lp-stat-label">Tiempo de calificación</div></div>
             <div className="lp-stat"><div className="lp-stat-num">0</div><div className="lp-stat-label">Documentos requeridos</div></div>
             <div className="lp-stat"><div className="lp-stat-num">0–100</div><div className="lp-stat-label">Rango de score</div></div>
             <div className="lp-stat"><div className="lp-stat-num">$0</div><div className="lp-stat-label">Costo, siempre</div></div>

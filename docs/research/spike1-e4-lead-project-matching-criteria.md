@@ -2,13 +2,46 @@
 
 Reviewed: 2026-08-16
 Scope: definition of the criteria, variables, thresholds and frozen contract for matching a lead against the real estate project catalog. Chilean mortgage underwriting norms as of August 2026.
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-Deliverable status: **criteria definition + frozen contract. No production code written.** Implementation is owned by [[UserStories/HU10-LeadProjectMatching|HU 10]].
-========
 Deliverable status: **criteria definition + frozen contract. No production code written.** Implementation is owned by [[UserStories/HU10-matching-lead-proyecto\|HU 10]].
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, bank published terms) plus a parallel agent review of the existing `scoring_engine` against those norms. Where the two tracks disagreed, the divergence and its resolution are recorded in §11.
+
+---
+
+## Estado del documento
+
+| | |
+| :-- | :-- |
+| **§1–§3** | **Historia.** El razonamiento y las fuentes tal como se investigaron el 2026-08-16. No se tocan. |
+| **§4–§8** | **Enmendado.** Conserva el razonamiento; las reglas y los números viven ahora en `ALG-9` y `ALG-10`. Cada cambio está fechado y atribuido a su HU en el cuerpo. |
+| **§9–§12** | **Historia.** Ejemplos, hallazgos y fuentes originales. §9 usa la aritmética previa a las enmiendas — ver la nota al inicio de esa sección. |
+
+**Fuente normativa viva:** [`ALG-9` — capacidad de compra](../algorithms/ALG-9-purchase-capacity.md)
+y [`ALG-10` — afinidad lead–proyecto](../algorithms/ALG-10-lead-project-affinity.md), con sus
+`ALG-9-cases.json` y `ALG-10-cases.json` aseverados por el build. Donde este documento y un ALG
+discrepen, **gobierna el ALG**. Este spike es el registro de por qué se decidió lo que se decidió.
+
+> **Nota de rama.** El enlace a `ALG-8` (detector de beneficios, HU 8) resuelve recién cuando
+> `develop` se mergea a `feature/sprint1/HU10` — paso 0 del plan. Sus tres constantes FOGAES tampoco
+> existen en `constants.py` en esta rama todavía.
+
+### Registro de cambios
+
+| Fecha | HU | Sección | Qué cambió |
+| :---- | :- | :------ | :--------- |
+| 2026-08-16 | Spike 1 · E4 | — | Documento original: criterios, umbrales y contrato congelado |
+| 2026-08-31 | HU 10 | §4.4 | Las constantes FOGAES pasan a reutilizarse de `ALG-8` (HU 8, PR #80) en vez de declararse aquí; se incorpora `FOGAES_MAX_UF_CON_SUBSIDIO = 3000` |
+| 2026-08-31 | HU 10 | §4.5 | `plazo_efectivo < 5` deja de ser `requires_info` y pasa a ser el flag `plazo_bajo_minimo`; se agrega `plazo_efectivo <= 0` → `sin_capacidad` |
+| 2026-08-31 | HU 10 | §5.1 | La compuerta de asequibilidad pasa a banda de cercanía (`UMBRAL_CERCANIA = 0,80`), con inclusión por capacidad asistida condicionada a `vivienda_nueva` |
+| 2026-08-31 | HU 10 | §5.2 | La holgura pasa de rampa a U invertida de cuatro anclas; el peso de −45 estaba inerte en 8 de 10 proyectos del catálogo |
+| 2026-08-31 | HU 10 | §5.2 · §7 | La comuna se evalúa contra `comunas_declaradas` (principal ∪ alternativa), resolviendo una contradicción con el filtro ya entregado de HU 2 |
+| 2026-08-31 | HU 10 | §6.1 | Tercera regla de `precio_ref_uf` para pares en `matches` bajo `precio_min` |
+| 2026-08-31 | HU 10 | §8.1 | Seis claves nuevas en `capacidad_supuestos`; `alcanza_precio_min` en `evidencia`; se registran dos inconsistencias del bloque de ejemplo original |
+| 2026-08-31 | HU 10 | §8.2 · §8.3 | Ruta del módulo: `services/` → `lib/matching/`. Renumeración de historias: HU 13 → HU 10, HU 17 → HU 7 |
+| 2026-08-31 | HU 10 | §8.4 | Se suma HU 8 como dependencia real |
+| 2026-08-31 | HU 10 · build | — | Implementación de `ALG-9` y `ALG-10`: los 13 casos de `ALG-9-cases.json` y los 17 de `ALG-10-cases.json` pasan **sin cambiar ninguna regla**. No hubo enmienda adicional que registrar; las secciones §4–§8 siguen siendo válidas tal como quedaron arriba |
+
+---
 
 ---
 
@@ -32,15 +65,6 @@ Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, ba
 - **Scoring engine changes.** The financial score, its weights, and `classification` are untouched. E4 consumes them.
 - **The `/score` contract.** Capacity is added as *new keys inside the existing* `financial_indicators` dict — additive only. No field removed, no type changed, no endpoint added (guardrail #5).
 - **`PRECIOS_REFERENCIA_UF`.** Untouched (guardrail #7). The capacity model is preference-independent and does not read it.
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-- **Rate / UF / term scenarios.** Owned by [[UserStories/HU18-MortgageScenarioSimulator|HU 18]] and [[UserStories/HU29-CreditTotalCostComparator|HU 29]]. Matching uses one base scenario (§8.2).
-- **Subsidy eligibility rules.** Owned by Spike 1 E2 / [[UserStories/HU26-SubsidySimulation|HU 26]]. E4 only emits a flag (§4.4).
-- **UI.** The lead card layout is HU 10's.
-
-### What this document claims for reuse
-
-`capacidad_compra_estimada_uf` is defined here but is **also the primitive Spike 1 E2 needs** for [[UserStories/HU6-CompatibilitySimulation|HU 6]] ("comparar capacidad de compra, valor de vivienda, ahorro, deuda y ajustes mínimos"). Whoever writes E2 must consume this definition rather than introduce a second capacity formula.
-========
 - **Rate / UF / term scenarios.** Owned by [[UserStories/HU18-simulador-escenarios-hipotecarios\|HU 18]] and [[UserStories/HU29-comparador-costo-credito\|HU 29]]. Matching uses one base scenario (§8.2).
 - **Subsidy eligibility rules.** Owned by Spike 1 E2 / [[UserStories/HU26-simulacion-subsidios\|HU 26]]. E4 only emits a flag (§4.4).
 - **UI.** The lead card layout is HU 13's.
@@ -48,7 +72,6 @@ Research tracks: independent desk research (Banco Central, CMF Educa, FOGAES, ba
 ### What this document claims for reuse
 
 `capacidad_compra_estimada_uf` is defined here but is **also the primitive Spike 1 E2 needs** for [[UserStories/HU6-simulacion-compatibilidad\|HU 6]] ("comparar capacidad de compra, valor de vivienda, ahorro, deuda y ajustes mínimos"). Whoever writes E2 must consume this definition rather than introduce a second capacity formula.
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
 
 ---
 
@@ -63,7 +86,7 @@ preference-anchored (today):   lead + declared objective  ->  fit verdict
 preference-independent (E4):   lead                       ->  capacity ceiling  ->  ranked against N projects
 ```
 
-**Consequence:** comuna and tipo are demoted from *inputs to the target* to *soft affinity signals*. A lead is matched on what they can afford first, and on what they said they wanted second. This is also what makes HU 10 E4 (re-orientable lead) computable at all — you cannot detect "they can buy something other than what they asked for" from a model that only evaluates what they asked for.
+**Consequence:** comuna and tipo are demoted from *inputs to the target* to *soft affinity signals*. A lead is matched on what they can afford first, and on what they said they wanted second. This is also what makes HU 13 E4 (re-orientable lead) computable at all — you cannot detect "they can buy something other than what they asked for" from a model that only evaluates what they asked for.
 
 Both models coexist. `project_fit.py` keeps answering "does their own plan work", and its verdict is reused as an input to the re-orientable rule (§7).
 
@@ -90,11 +113,7 @@ Every constant carries provenance. Rows are split by **kind**, because market va
 | `RATIO_CARGA_TOTAL_MAX` | `0.45` | [CMF Educa](https://www.cmfchile.cl/educa/621/w3-article-27502.html) + `blockers.py:106` (`carga_total_alta`) | 2026-08-16 | Only with the blocker |
 | `RATIO_DIVIDENDO_SALUDABLE` | `0.25` | CMF Educa; BancoEstado/Enlace Inmobiliario; Scotiabank. **Copy only — never used in calculation** | 2026-08-16 | — |
 | `PLAZO_REFERENCIA_ANIOS` | `30` | Most commonly offered term (Bci, Scotiabank, BancoEstado 8–30). Overridable by a declared `plazo_credito_hipotecario` | 2026-08-16 | — |
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-| `EDAD_MAX_FIN_CREDITO` | `70` | RutaHogar policy: `blockers.py:173` + [[UserStories/HU29-CreditTotalCostComparator|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
-========
-| `EDAD_MAX_FIN_CREDITO` | `70` | ScoreLeads policy: `blockers.py:173` + [[UserStories/HU29-comparador-costo-credito\|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
+| `EDAD_MAX_FIN_CREDITO` | `70` | RutaHogar policy: `blockers.py:173` + [[UserStories/HU29-comparador-costo-credito\|HU 29]] E2. **More conservative than the market** (Renta Nacional 76a364d; Scotiabank up to 79 with insurance) — deliberately kept | 2026-08-16 | — |
 | `PLAZO_MINIMO_VIABLE_ANIOS` | `5` | Below this the quote is not meaningful → `requires_info` | 2026-08-16 | — |
 
 ### 3.3 Canonical unit: UF
@@ -125,288 +144,268 @@ A capacity ceiling built at 25% would declare leads unable to afford projects th
 
 ## 4. The capacity model
 
-Chilean banks underwrite against two independent gates — what you can service, and what you can put down. Capacity is the lesser of the two, and **which side binds is itself a first-class output**.
+> **⚠️ Enmendado — 2026-08-31 · HU 10.** Esta sección definía las reglas; ahora las **referencia**.
+> La fuente normativa viva es [`ALG-9`](../algorithms/ALG-9-purchase-capacity.md). Lo que sigue
+> conserva el razonamiento del spike y marca dónde HU 10 cambió una regla y por qué. Los números
+> viven en ALG-9 y en `constants.py`, no aquí — dos copias normativas del mismo número es
+> exactamente lo que se desincroniza.
 
-### 4.1 Maximum sustainable dividend
+Chilean banks underwrite against two independent gates — what you can service, and what you can put
+down. Capacity is the lesser of the two, and **which side binds is itself a first-class output**.
+Ese encuadre sobrevive intacto: es `ALG-9` R1–R3.
 
-```
-ingreso_total   = ingreso_mensual + ingreso_complementario_validado   # per indicators.py
-deuda_total     = deuda_mensual   + deuda_complementaria_declarada    # see §11.1
+| Sub-sección | Estado | Dónde vive ahora |
+| :---------- | :----- | :--------------- |
+| §4.1 Dividendo máximo sostenible | **Vigente sin cambios** | `ALG-9` R1 |
+| §4.2 Plazo efectivo | **Vigente sin cambios** | `ALG-9` R2 |
+| §4.3 Techo de capacidad | **Vigente sin cambios** | `ALG-9` R3 |
+| §4.4 Ruta asistida (FOGAES) | **Vigente**, con constantes reasignadas | `ALG-9` R4 · constantes de `ALG-8` |
+| §4.5 Casos borde | **Enmendado en una fila** | `ALG-9` "Invariants and edge cases" |
 
-dividendo_maximo_sostenible_clp = max(0, min(
-    RATIO_DIVIDENDO_MAX   * ingreso_total,                 # 0.30
-    RATIO_CARGA_TOTAL_MAX * ingreso_total - deuda_total    # 0.45 - existing burden
-))
-```
+### 4.4 — constantes reasignadas · 2026-08-31 · HU 10
 
-`deuda_actual_alta` (deuda/ingreso > 0.40) is **not** added as a third `min()`. Between 40% and 45% a small residual capacity genuinely exists under the total-burden rule; the condition surfaces as a commercial warning instead.
+El spike especificaba `PIE_RATIO_ASISTIDO` y un tope FOGAES propios. **HU 8 (PR #80) ya los tenía**:
+`FOGAES_MIN_PIE_RATIO`, `FOGAES_MAX_PROPERTY_UF` y `FOGAES_MAX_UF_CON_SUBSIDIO` viven en
+`constants.py` bajo [`ALG-8`](../algorithms/ALG-8.md). HU 10 los **reutiliza**; declarar copias
+propias habría dado dos versiones de un mismo número regulatorio. Ver `ALG-9` A7.
 
-### 4.2 Effective term
+`FOGAES_MAX_UF_CON_SUBSIDIO = 3000` es información que el spike no tenía: el tope se reduce a la
+mitad si FOGAES se combina con un subsidio habitacional. `ALG-10` lo transporta pero **no lo aplica**
+— nada en el contrato de `/score` dice si un lead tiene subsidio (`ALG-10` A9).
 
-```
-plazo_efectivo = min(plazo_credito_hipotecario or PLAZO_REFERENCIA_ANIOS,
-                     EDAD_MAX_FIN_CREDITO - edad)
+### 4.5 — `plazo_efectivo < 5` deja de ser un rechazo · 2026-08-31 · HU 10
 
-if plazo_efectivo < PLAZO_MINIMO_VIABLE_ANIOS: -> capacidad_status = "requires_info"
-if edad is missing:                            -> use the declared/default term, set age_term_verified = false
-```
+**El spike decía:** `plazo_efectivo < PLAZO_MINIMO_VIABLE_ANIOS` → `capacidad_status =
+"requires_info"`, capacidad `null`.
 
-A declared term wins over the default: it reflects what the lead is actually asking for. The age cap already supplies the conservatism, so the default is not additionally discounted.
+**Ahora:** se calcula igual, con `capacidad_supuestos.plazo_bajo_minimo = true`. `requires_info`
+queda reservado a **datos faltantes de verdad**: `ingreso_total <= 0`, o un snapshot histórico que el
+backfill no puede completar.
 
-**Consequence to surface in the UI:** leads are then ranked under slightly different term assumptions. That is correct — but the lead card must display `plazo_anios` and `plazo_origen` so an executive is never comparing invisibly-different numbers.
+Tres razones, desarrolladas en `ALG-9` R2 y A4:
 
-### 4.3 Capacity ceiling
+1. **No es una brecha de datos.** Están todos los campos; calculamos un plazo y no nos gustó.
+   `requires_info` le pide al ejecutivo que vaya a buscar información que ya existe.
+2. **El spike se contradecía.** §10.3 dice que la copia para el tope de edad debe leerse *"requiere
+   revisión de plazo/seguro"* y no *"no viable"* — o sea, blando y accionable. §4.5 lo volvía un
+   `null` duro.
+3. **Creaba un acantilado de un año que el motor no comparte.** `blockers.py:173` levanta
+   `edad_plazo_riesgoso` con severidad **media** por este mismo hecho. Un lead de 65 que pide 30 años
+   se capa a 5, calcula y rankea; uno de 66 se capa a 4 y, bajo §4.5, desaparecía de todos los
+   proyectos.
 
-```
-tasa_mensual = TASA_REFERENCIA_UF_ANUAL / 12
-n            = plazo_efectivo * 12
-
-dividendo_maximo_uf = dividendo_maximo_sostenible_clp / uf_value_clp
-
-principal_maximo_uf = dividendo_maximo_uf * (1 - (1 + tasa_mensual)^(-n)) / tasa_mensual
-                      # tasa_mensual = 0 fallback: dividendo_maximo_uf * n
-
-capacidad_por_renta_uf = principal_maximo_uf / (1 - PIE_RATIO_BASE)     # /0.80
-capacidad_por_pie_uf   = (ahorro_disponible / PIE_RATIO_BASE) / uf_value_clp
-
-capacidad_compra_estimada_uf = min(capacidad_por_renta_uf, capacidad_por_pie_uf)
-restriccion_vinculante       = "renta" if capacidad_por_renta_uf <= capacidad_por_pie_uf else "pie"
-```
-
-`tasa_mensual = tasa_anual / 12` (nominal convention) matches Chilean public calculators. If an explicitly *effective* annual rate is ever supplied, use `(1 + tasa)^(1/12) - 1` and record the rate type in metadata.
-
-**Why 20% and not 10% as the base anchor.** 20% is unconditional — it does not depend on the property being new, on a subsidy, on FOGAES, on a first-home profile, or on a specific bank's campaign. 10% is real but conditional, and the intake form captures **no `primera_vivienda` field**, so eligibility is unverifiable from current data. A matching engine's cost function is asymmetric: recommending a lead who cannot actually buy burns an executive's time and the client's trust, while under-recommending still surfaces the lead as `Cercano` or re-orientable. Encoding an unverified 2× multiplier into a ranked list is the failure mode that discredits the whole feature.
-
-### 4.4 Assisted route (FOGAES flag, not capacity)
-
-```
-capacidad_asistida_uf = min(principal_maximo_uf / 0.90,
-                            (ahorro_disponible / PIE_RATIO_ASISTIDO) / uf_value_clp)
-
-desbloqueable_con_fogaes = capacidad_compra_estimada_uf < proyecto.precio_min_uf
-                           and capacidad_asistida_uf   >= proyecto.precio_min_uf
-                           and proyecto.precio_max_uf  <= 6000        # FOGAES cap
-```
-
-This never enters the ranking. It is an annotation telling the executive "this lead is worth qualifying for FOGAES/subsidio" — the same spirit as the existing `reorient` commercial action. **It is load-bearing, not an edge case:** §9 shows that at 20% pie the savings side binds for most realistic profiles, so this flag is often the difference between an empty panel and a usable one.
-
-### 4.5 Edge cases
-
-| Condition | `capacidad_status` | Capacity value | Notes |
-| :-------- | :----------------- | :------------- | :---- |
-| `ingreso_total <= 0` or missing | `requires_info` | `null` | **Never 0** — 0 must mean "enough data, no residual capacity" |
-| `deuda_total >= 0.45 * ingreso_total` | `sin_capacidad` | `0` | Route to improvement plan, not to projects |
-| `deuda_total > ingreso_total` | `sin_capacidad` | `0` | Also raises `deuda_actual_alta` + `carga_total_alta` |
-| `ahorro_disponible = 0` | `sin_capacidad` | `0` | Correct for immediate purchase. Still compute `capacidad_por_renta_uf` to show future potential + the 10/15/20% savings gaps |
-| `plazo_efectivo < 5` | `requires_info` | `null` | Age/term conflict |
-| `edad` missing | `ok` | computed | `age_term_verified = false` — degrade data quality, do not block |
-| Complemento incomplete | per `indicators.py` | computed w/o complement | `_valid_complement_income()` already returns 0.0 unless fully validated |
+Se agrega además la fila `plazo_efectivo <= 0` (edad ≥ 70) → `capacidad_por_renta_uf = 0`, capacidad
+`0`, `sin_capacidad`. No existe hipotecario a cero años; el lado pie, que es independiente del plazo,
+se sigue reportando.
 
 ---
 
 ## 5. Matching criteria
 
-### 5.1 Gates — pair excluded outright
+> **⚠️ Enmendado — 2026-08-31 · HU 10.** Las dos sub-secciones cambiaron. Fuente normativa viva:
+> [`ALG-10`](../algorithms/ALG-10-lead-project-affinity.md) R1 y R2.
 
-Only two conditions exclude a lead–project pair. Everything else is scored, not gated.
+El reencuadre de §2 se mantiene y es lo que sostiene todo lo demás: **comuna, tipo y clasificación
+financiera nunca son compuertas.** Se puntúan.
 
-| Gate | Rule | Rationale |
-| :--- | :--- | :-------- |
-| **Affordability** | `capacidad_compra_estimada_uf < proyecto.precio_min_uf` | They cannot buy the cheapest unit. Not a ranking question. |
-| **Critical blocker** | any blocker with `severity = "critical"` (`morosidad_vigente`, `carga_total_alta`) | `commercial_priority.py` already refuses to route these (`do_not_route`). Matching must not contradict a shipped rule. |
+### 5.1 — la compuerta de asequibilidad pasa a ser una banda · 2026-08-31 · HU 10
 
-Comuna, tipo, and financial classification are **never** gates (§2).
+**El spike decía:** `capacidad_compra_estimada_uf < proyecto.precio_min_uf` → par excluido.
 
-### 5.2 Affinity — starts at 100, penalties subtract
+**Ahora** (`ALG-10` R1): el par se excluye solo bajo `UMBRAL_CERCANIA × precio_min_uf` (0,80), y la
+prueba de inclusión puede usar `capacidad_asistida_uf` cuando el lead **declaró `vivienda_nueva`** y
+el proyecto cae bajo el tope FOGAES con el pie ya cubierto. **El ranking sigue usando siempre la
+capacidad conservadora** — la ruta asistida decide *si el lead aparece*, nunca *qué tan alto*.
 
-Mirrors the shape of `calculate_project_fit` so the two are reviewable by the same reader.
+El motivo es que la capacidad de `ALG-9` es un piso, no un techo: asume 20% de pie donde el mínimo
+regulatorio con FOGAES es 10%, tope de edad 70 donde la banca llega a 76–79 con seguro, y solo el
+ahorro declarado. Un lead un UF bajo `precio_min` no es incapaz de comprar; es incapaz *bajo tres
+capas de pesimismo deliberado*. El caso concreto: perfil de entrada con capacidad 1.474 UF y
+capacidad asistida 2.574 UF frente a un proyecto de 2.100 UF — el segmento primera vivienda, que la
+compuerta dura descartaba entero.
 
-| Component | Max penalty | Rule |
-| :-------- | ----------: | :--- |
-| Holgura de capacidad | **−45** | Linear on the position of `capacidad` within `[precio_min_uf, precio_max_uf]`. At/above `precio_max` → 0. At `precio_min` → full −45. |
-| Comuna | **−15** | Applied only when `comuna_objetivo` was declared **and** ≠ `proyecto.comuna` |
-| Tipo | **−10** | Applied only on a declared mismatch |
-| Clasificación financiera | **−15** | Alto → 0 · Medio → −8 · Bajo → −15 |
-| Bloqueadores no críticos | **−15** | `high` −7 each, `medium` −4 each, capped at −15 |
+**Consecuencia que la UI debe cargar:** `matches` ahora contiene pares que el lead no puede pagar
+*bajo los supuestos declarados*. `evidencia.alcanza_precio_min` es `false` exactamente en esas filas
+y el panel **debe** distinguirlas.
 
-```
-afinidad >= 70 -> "Compatible"
-afinidad >= 45 -> "Cercano"
-afinidad <  45 -> "Marginal"
-```
+Las compuertas que sí quedan son dos: bloqueador crítico (`commercial_priority.py` ya se niega a
+derivarlos) y capacidad genuinamente fuera de alcance. Se suma una **precondición**, no una
+compuerta: `capacidad_status = "requires_info"` no es rankeable (`ALG-10` A2).
 
-**The 45-vs-15 asymmetry is the point.** Capacity carries three times the weight of classification, and that *is* HU 10 E2 ("capacity beats classification") expressed numerically: a `Medio` lead sitting comfortably above `precio_max` scores ~92 and outranks an `Alto` lead scraping `precio_min` at ~55. Weighted equally, E2 would be unimplementable and the panel would merely re-sort the existing HU 2 dashboard.
+### 5.2 — la holgura pasa de rampa a U invertida · 2026-08-31 · HU 10
 
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-**Calibration status: v1, asserted from domain reasoning, not fitted.** There is no conversion history to calibrate against. Revisit once [[UserStories/HU16-ConversionDashboard|HU 16]] produces real outcome data.
-========
-**Calibration status: v1, asserted from domain reasoning, not fitted.** There is no conversion history to calibrate against. Revisit once [[UserStories/HU16-dashboard-conversion\|HU 16]] produces real outcome data.
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
+**El spike decía:** penalización lineal desde −45 en `precio_min` hasta **0 en/sobre `precio_max`**.
+
+**El problema, medido contra el catálogo real:** de los 10 proyectos disponibles de la inmobiliaria
+demo, **8 son de precio único** (`precio_min_uf == precio_max_uf`, seed CATALOGO-UNICO). En un
+proyecto de precio único la rampa no interpola nunca: o la capacidad no alcanza y el par se excluye,
+o alcanza y la penalización es exactamente 0. **El peso de −45 — el que carga E2 — quedaba inerte en
+el 80% del catálogo**, y el ranking colapsaba a comuna + tipo + clasificación, es decir, exactamente
+el re-ordenamiento del panel de HU 2 que este spike existe para evitar.
+
+**Ahora** (`ALG-10` R2.1): cuatro anclas, continua, de un solo pico —
+`UMBRAL_CERCANIA × precio_min` → −60 · `precio_min` → −45 · `precio_max` → −12 ·
+`PEAK_RATIO × precio_max` → **0** · `≥ SOBRECALCE_SATURACION × precio_max` → −20.
+
+Tres razones que el spike no podía ver:
+
+- **El pico no va en `precio_max`.** La capacidad se calcula a `RATIO_DIVIDENDO_MAX = 0,30`, y la
+  propia tabla de bandas de §3.4 llama a 30% *"viable pero exigente"* — solo ≤25% es *"holgado"*.
+  Poner el pico ahí haría que la primera recomendación del panel en todo proyecto de precio único
+  fuera el lead que el motor mismo califica de exigente. El desplazamiento es **derivado, no
+  inventado**: `RATIO_DIVIDENDO_MAX / RATIO_DIVIDENDO_SALUDABLE = 0,30 / 0,25 = 1,20`. Le da además
+  un trabajo a `RATIO_DIVIDENDO_SALUDABLE`, que §3.2 define y luego declara "copy only".
+  **Limitación conocida:** la derivación es exacta solo para leads limitados por renta (`ALG-10` A7).
+- **`precio_max` cuesta −12, no 0.** El modelo ignora gastos operacionales (escritura, notaría,
+  conservador, tasación, impuesto al mutuo: 2–3% del precio). Un lead con margen cero llega corto a
+  la firma.
+- **La saturación va en 3,0 y no en 2,0.** Un lead con 2× el precio del proyecto no es una
+  distracción: es el perfil inversionista estándar — comprar barato, arrendar, dividendo bajo — más
+  padres comprando para un hijo. Penalizarlo como "está mirando otra cosa" descarta uno de los
+  mejores segmentos en un proyecto económico.
+
+**E2 acota el extremo superior matemáticamente:** un `Medio` saturado puntúa
+`100 − SOBRECALCE_MAX − 8` contra un `Alto` en `precio_min` que puntúa 55,0. E2 se rompe en
+`SOBRECALCE_MAX >= 37`. Queda como invariante 8 de `ALG-10` para que un re-calibrado futuro no lo
+cruce en silencio.
+
+### 5.2 / §7 — la comuna alternativa es una segunda declaración · 2026-08-31 · HU 10
+
+**El spike decía:** penalizar −15 cuando `comuna_objetivo` fue declarada y ≠ `proyecto.comuna`.
+Ignora `comuna_alternativa`.
+
+**El problema:** `DashboardLeads.jsx:225-227` — código en producción, HU 2 — filtra con
+`if (main !== filterCommune && alt !== filterCommune) return false`, y `DashboardLeads.jsx:196-204`
+arma el desplegable de comunas con **ambas**. La pantalla del ejecutivo ya trata la alternativa como
+coincidencia plena. Bajo la regla del spike, el *mismo componente* lista al lead bajo Macul y, un
+clic después, le descuenta 15 puntos por no querer Macul y lo marca "reorientable" hacia una comuna
+que el lead escribió en el formulario.
+
+**Ahora** (`ALG-10` R2.2): `comunas_declaradas = {principal} ∪ {alternativa}`. La penalización y la
+rama 3a de reorientable leen el mismo conjunto. Cero constantes nuevas. La señal que esto aplana —
+que la principal *sí* se prefiere — se recupera en `ALG-10` R6 como **desempate**, no como peso.
+
+Los pesos de comuna (−15) y tipo (−10) **no cambian**. Quedó registrada una discrepancia: la
+intuición comercial dice que el tipo es la preferencia más rígida (se transa comuna por precio todo
+el tiempo — para eso existe `reorientable` — pero una familia que quiere casa rara vez acepta
+departamento). No se invirtió porque dos fuentes independientes ya ordenan comuna > tipo: este spike
+y el desempate de `compatibility.js:545-546`. Es una pregunta barata y nítida para HU 16.
 
 ---
 
 ## 6. Bloqueador principal
 
-Pair-specific, not lead-global. A lead who clears a UF 2.500 project but is pie-blocked on a UF 4.000 one has *different* main blockers on the two cards, and showing a generic lead-level blocker on both tells the executive nothing actionable.
+> **⚠️ Enmendado — 2026-08-31 · HU 10.** Una fila nueva en §6.1. Fuente normativa viva:
+> [`ALG-10`](../algorithms/ALG-10-lead-project-affinity.md) R3.
 
-### 6.1 Reference price and shortfall
+El razonamiento se mantiene entero: el bloqueador es **por par, no por lead**. Un lead que despeja un
+proyecto de 2.500 UF pero está bloqueado por pie en uno de 4.000 tiene bloqueadores *distintos* en
+las dos tarjetas, y mostrar uno genérico a nivel de lead no le dice nada accionable al ejecutivo.
 
-`restriccion_vinculante` is a **lead-global** property — it always holds `"pie"` or `"renta"` whenever capacity computes. It therefore cannot by itself decide whether *this pair* has a blocker. The pair-scoped question is whether the lead falls short **of this project's reference price**:
+También se mantiene, sin cambios, la guarda que sostiene todo: **`brecha_valor_uf > 0` en los pasos
+2–3**. `restriccion_vinculante` siempre está definida cuando la capacidad calcula, así que sin la
+guarda los pasos 2–3 dispararían para todo par y un lead cómodamente sobre `precio_max` vería un
+`pie_insuficiente_para_proyecto` fabricado.
 
-| Case | Reference price `precio_ref_uf` | Meaning |
-| :--- | :------------------------------ | :------ |
-| Pair in `matches` (clears `precio_min`) | `precio_max_uf` | "what it takes to reach the top of this project's range" |
-| Pair in `excluidos` (below `precio_min`) | `precio_min_uf` | "what it takes to qualify at all" |
+### 6.1 — tercera regla de `precio_ref_uf` · 2026-08-31 · HU 10
 
-```
-brecha_valor_uf = max(0, precio_ref_uf - capacidad_compra_estimada_uf)
-```
-
-Because `capacidad_compra_estimada_uf = min(por_renta, por_pie)`, a positive `brecha_valor_uf` is by construction attributable to `restriccion_vinculante`. **A lead whose capacity reaches or exceeds `precio_ref_uf` has `brecha_valor_uf = 0` and therefore no pair-scoped blocker.**
-
-Translate the shortfall into the resource the lead must actually add:
-
-```
-if restriccion_vinculante == "pie":
-    brecha_recurso_clp = brecha_valor_uf * PIE_RATIO_BASE * uf_value_clp     # additional savings
-
-if restriccion_vinculante == "renta":
-    principal_req_uf   = precio_ref_uf * (1 - PIE_RATIO_BASE)
-    dividendo_req_clp  = principal_req_uf / annuity_factor * uf_value_clp
-    ingreso_req_clp    = dividendo_req_clp / RATIO_DIVIDENDO_MAX
-    brecha_recurso_clp = max(0, ingreso_req_clp - ingreso_total)             # additional monthly income
-```
-
-### 6.2 Resolution order — first match wins
-
-1. **Critical blocker present** → that blocker. (Pair is excluded anyway; this is the reason.)
-2. **`brecha_valor_uf > 0` and `restriccion_vinculante = "pie"`** → `pie_insuficiente_para_proyecto`.
-3. **`brecha_valor_uf > 0` and `restriccion_vinculante = "renta"`** → `renta_insuficiente_para_proyecto`.
-4. **Any non-critical blocker** → highest severity; ties broken by declaration order in `blockers.py`, which is already deterministic and reviewable. No new precedence table.
-5. **None** → `null`.
-
-**The `brecha_valor_uf > 0` guard on steps 2–3 is load-bearing.** Without it, `restriccion_vinculante` — which is always set — makes steps 2–3 fire for every pair, so a lead comfortably above `precio_max_uf` would be shown a fabricated `pie_insuficiente_para_proyecto`, and steps 4–5 would be unreachable. With the guard, a lead who clears the whole price range correctly falls through to their real remaining blocker (step 4) or to `null` (step 5).
-
-Steps 2–3 reuse the `main_gap` vocabulary (`"income"` / `"down_payment"`) already emitted by `project_fit.py`, so the frontend renders one concept. Steps 1 and 4 reuse `blockers.py` verbatim. Only two new codes are introduced, deliberately named so they cannot be confused with the lead-global `pie_insuficiente`.
+El spike tenía dos casos: par en `matches` → `precio_max_uf`; par en `excluidos` → `precio_min_uf`.
+La banda de cercanía de §5.1 creó un tercero: **un par en `matches` que está bajo `precio_min`**. Usa
+`precio_min_uf`. Con la regla vieja se le cotizaría la brecha hasta el *techo* del rango antes de
+haber alcanzado el piso — sobreestimando lo que necesita por el ancho completo del proyecto.
 
 ---
 
 ## 7. Re-orientable opportunity
 
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-[[UserStories/HU10-LeadProjectMatching|HU 10]] E4: *a user who can buy a project different from their declared objective must show as a re-orientable opportunity.*
-========
-[[UserStories/HU10-matching-lead-proyecto\|HU 10]] E4: *a user who can buy a project different from their declared objective must show as a re-orientable opportunity.*
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
+> **⚠️ Enmendado — 2026-08-31 · HU 10.** Solo la rama 3a, por §5.2. Fuente normativa viva:
+> [`ALG-10`](../algorithms/ALG-10-lead-project-affinity.md) R4.
 
-`commercial_priority.py` already emits a `reorient` action (`score >= 70 AND project_fit = "Fuera de alcance"`), but it is **lead-global and cannot name an alternative**. It says "reorient this person" and stops. Matching closes that gap. **`commercial_priority.py` is left untouched** — the HU 2 dashboard's behavior does not change and no shipped `/score` path needs re-verification.
+La regla se mantiene: un par es `reorientable` si pasa las compuertas, tiene `afinidad >= 45`, y hay
+al menos una divergencia. **`commercial_priority.py` sigue intacto** — el panel de HU 2 no cambia y
+ninguna ruta de `/score` ya entregada necesita re-verificación.
 
-A pair is `reorientable` when **all** hold:
+**Cambio en la rama 3a:** ahora dispara cuando `proyecto.comuna` está **fuera de
+`comunas_declaradas`** (§5.2), no solo cuando difiere de la principal. Un proyecto en una comuna que
+el lead nombró explícitamente no es una reorientación bajo ninguna lectura: ya apuntó ahí.
 
-1. it passes both gates (§5.1);
-2. `afinidad >= 45` (`Cercano` or better);
-3. **and at least one divergence:**
-   - `comuna_objetivo` was declared and ≠ `proyecto.comuna`, **or**
-   - the lead's `project_fit.status ∈ {out_of_reach, near}` against their declared objective while this pair is `Compatible`.
-
-Condition 3's second branch reuses `project_fit`'s already-computed verdict as the "their own plan doesn't work" signal — so E4 comes essentially free from data `/score` already returns. No new computation, no new intake field.
-
-**Stated consequence:** a lead with no declared `comuna_objetivo` cannot trigger branch one, and if `property_value` is unresolvable their `project_fit.status` is `requires_info` (not `out_of_reach`), so branch two cannot fire either. Such a lead is never re-orientable — only normally matched. This is intended: you cannot re-orient someone who never stated a direction. Recorded here so it is not later discovered as a bug.
+La consecuencia declarada del spike se mantiene y sigue siendo intencional: un lead sin comuna
+declarada no puede disparar la rama 3a, y si `property_value` no resuelve, su `project_fit.status` es
+`requires_info` y no `out_of_reach`, así que la rama 3b tampoco. **Nunca es reorientable.** No se
+puede reorientar a alguien que nunca declaró una dirección.
 
 ---
 
 ## 8. Frozen contract
 
-HU 10 codes against this verbatim.
+> **⚠️ Enmendado — 2026-08-31 · HU 10.** El contrato **creció de forma aditiva** y la ruta del módulo
+> frontend cambió. Fuente normativa viva: [`ALG-9`](../algorithms/ALG-9-purchase-capacity.md)
+> "Inputs → outputs" y [`ALG-10`](../algorithms/ALG-10-lead-project-affinity.md) "Inputs → outputs".
+> Ninguna clave del spike fue eliminada, renombrada ni cambió de tipo.
 
-### 8.1 Backend — additive keys inside `financial_indicators`
+### 8.1 — claves nuevas en `capacidad_supuestos` · 2026-08-31 · HU 10
 
-Computed by a new `backend/app/scoring_engine/purchase_capacity.py`. Purely additive; no existing key removed or retyped.
+Las nueve claves aditivas dentro de `financial_indicators` se mantienen exactamente como estaban.
+`capacidad_supuestos` suma seis: `ratio_dividendo_max`, `ratio_dividendo_saludable`,
+`fogaes_tope_uf`, `fogaes_tope_con_subsidio_uf`, `fogaes_pie_ratio` y `plazo_bajo_minimo`.
 
-```python
-"capacidad_compra_estimada_uf":     3060.4,
-"capacidad_compra_estimada_clp":    125_013_000,
-"capacidad_por_renta_uf":           4806.6,
-"capacidad_por_pie_uf":             3059.6,
-"capacidad_asistida_uf":            4272.0,        # FOGAES flag only, never ranked
-"restriccion_vinculante":           "pie",          # "renta" | "pie" | None
-"dividendo_maximo_sostenible_clp":  750_000,
-"capacidad_status":                 "ok",           # "ok" | "requires_info" | "sin_capacidad"
-"capacidad_supuestos": {
-    "tasa_anual_uf":  0.040,
-    "plazo_anios":    30,
-    "plazo_origen":   "default",   # "declarado" | "default" | "capado_por_edad"
-    "pie_ratio":      0.20,
-    "uf_value_clp":   40695,
-    "uf_fecha":       "2026-08-16",
-    "age_term_verified": True,
-    "version":        "e4-matching-v1"
-}
-```
+Todas por una sola razón: **§8.3 prohíbe que el frontend re-declare constantes de capacidad**, y la
+matemática por par de `ALG-10` necesita varias — `RATIO_DIVIDENDO_MAX` para la brecha de recurso,
+`RATIO_DIVIDENDO_SALUDABLE` para derivar el pico de holgura, y los tres topes FOGAES más el pie
+asistido para la prueba por proyecto. Viajando dentro de `capacidad_supuestos`, `ALG-10` re-declara
+**solo los pesos de afinidad**, que es justo el presupuesto de duplicación que §8.3 permite — y cada
+valor queda auditado junto al número que produjo. Ver `ALG-9` A6.
 
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-**`capacidad_supuestos` travels with the number, by design.** Without it, a capacity persisted in June and read in December is uninterpretable — you cannot tell whether it is low because the lead is weak or because the rate moved. This is what makes [[UserStories/NFR-EvaluationAudit|Evaluation Audit (NFR)]] / [[UserStories/NFR-ImmutableEvaluationHistory|Immutable Evaluation History (NFR)]] auditability real, and it costs one dict.
-========
-**`capacidad_supuestos` travels with the number, by design.** Without it, a capacity persisted in June and read in December is uninterpretable — you cannot tell whether it is low because the lead is weak or because the rate moved. This is what makes [[RNF/RNF4-auditoria-tecnica\|RNF 4]] / [[RNF/RNF5-historial-inmutable\|RNF 5]] auditability real, and it costs one dict.
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
+`MatchRow.evidencia` suma `alcanza_precio_min` (§5.1). `capacidad_supuestos` **no** lleva
+`vivienda_nueva`: es un campo declarado de intake, no un supuesto de cálculo, y `ALG-10` lo lee del
+snapshot.
 
-**`version` is separate from `ALGORITHM_VERSION`**, so matching criteria can be revised (once HU 16 supplies conversion data) without forcing a scoring-engine version bump.
+**Nota sobre el bloque de ejemplo original de §8.1.** Sus números estaban calculados a UF = 40.854
+mientras el mismo bloque registraba `uf_value_clp: 40695`, y mostraba
+`capacidad_compra_estimada_uf = 3060.4` junto a `capacidad_por_pie_uf = 3059.6` cuando el invariante
+2 de `ALG-9` exige que sean iguales si el pie es la restricción. Ambas son inconsistencias del
+ejemplo ilustrativo, no reglas. `ALG-9-cases.json` las resuelve pasando `uf_value_clp` explícito en
+cada caso.
 
-### 8.2 Frontend — `services/leadProjectMatching.js`
+### 8.2 / 8.3 — la ruta del módulo · 2026-08-31 · HU 10
 
-Pure functions, no Supabase, vitest-coverable.
+**El spike decía:** `frontend/src/services/leadProjectMatching.js`.
 
-```js
-matchLeadToProjects(evaluacion, proyectos) -> {
-  matches: [ MatchRow ],    // sorted by afinidad desc
-  excluidos: [ MatchRow ]   // gate failures, with motivo_exclusion
-}
+**Ahora:** `frontend/src/lib/matching/leadProjectMatching.js`. El handbook reserva `lib/` para lógica
+pura y la llama "el único lugar donde puede implementarse un algoritmo". La razón que el spike daba
+para "frontend" era el guardrail #5 (sin endpoints FastAPI nuevos) — un argumento frontend/backend
+que `lib/` honra igual. Precedente: `lib/simulation/compatibility.js`.
 
-// MatchRow
-{
-  proyecto_id, proyecto_nombre, comuna, tipo, precio_min_uf, precio_max_uf,
-  afinidad,                     // 0-100
-  clasificacion,                // 'Compatible' | 'Cercano' | 'Marginal'
-  motivo_exclusion,             // null on matches
-  reorientable,                 // bool
-  bloqueador_principal: {       // null when the lead clears precio_ref and has no
-    codigo, titulo,             // remaining non-critical blocker -- see §6.2
-    brecha_valor_uf,            // property-value shortfall vs precio_ref_uf (> 0)
-    brecha_recurso_clp,         // savings (pie) or monthly income (renta) to add
-    brecha_recurso_tipo         // 'ahorro' | 'ingreso' | null (steps 1 & 4)
-  } | null,
-  evidencia: {                  // HU 10 E3 lead card
-    capacidad_uf, pie_disponible_uf, clasificacion_financiera,
-    restriccion_vinculante, plazo_anios, plazo_origen,
-    desbloqueable_con_fogaes
-  }
-}
-```
+El resto de §8.3 se mantiene: el backend calcula la capacidad, el frontend hace el join contra el
+catálogo, y el costo conocido — dos fuentes de constantes — sigue confinado a los pesos de afinidad.
 
-Two separate arrays rather than one array with an `excluido` flag — a single array returns rows the UI must remember to filter, which is easy to get wrong. `excluidos` is still returned so HU 10 can offer a "ver descartados" toggle and so exclusions stay debuggable.
+**Corrección de numeración.** Este documento fue escrito cuando las historias tenían otra numeración.
+Donde §8 decía "HU 13" léase **HU 10**; donde decía "HU 17" léase **HU 7**.
 
-`matchLeadToProjects` takes a project array rather than fetching, keeping it pure and letting HU 10 decide whether to feed it `getAvailableProjects()` or a filtered subset.
+### 8.4 Dependency status — actualizado · 2026-08-31 · HU 10
 
-### 8.3 Architecture seam
+HU 7 sigue siendo prerrequisito y su contrato congelado se consume tal cual (`precio_min_uf`,
+`precio_max_uf`, `comuna`, `tipo`, `estado`, `ejecutivos`). Se suma **HU 8 (PR #80, mergeado)** como
+dependencia real: HU 10 reutiliza sus tres constantes FOGAES y la forma de su regla `_detect_fogaes`,
+re-evaluada por proyecto en lugar de contra el objetivo declarado (`ALG-10` R5).
 
-| Layer | Owns | Why |
-| :---- | :--- | :-- |
-| **Backend** `scoring_engine/purchase_capacity.py` | Capacity math | Pure financial computation belonging beside `indicators.py`; versioned under `ALGORITHM_VERSION`; persisted per evaluation → auditable (HU 16 / HU 33) |
-<<<<<<<< HEAD:Wiki RutaHogar/research/spike1-e4-lead-project-matching-criteria.md
-| **Frontend** `services/leadProjectMatching.js` | Affinity join | The catalog lives in the frontend + Supabase ([[UserStories/HU7-ProjectCatalog|HU 7]]); guardrail #5 forbids new FastAPI endpoints, so the backend cannot see `proyectos` |
-========
-| **Frontend** `services/leadProjectMatching.js` | Affinity join | The catalog lives in the frontend + Supabase ([[UserStories/HU7-catalogo-de-proyectos\|HU 7]]); guardrail #5 forbids new FastAPI endpoints, so the backend cannot see `proyectos` |
->>>>>>>> 61edf059b53d671e1959b37170de16c1fa94aac7:docs/research/spike1-e4-lead-project-matching-criteria.md
+Las dos notas de consumo del contrato siguen siendo determinantes, y la segunda más que antes:
 
-**Known cost — two sources of truth.** Constants would be defined in Python and could drift if re-declared in JS. Mitigation: this document is **normative**; both constant blocks must carry a comment naming it; and the frontend re-declares **only the affinity weights** (§5.2), never the capacity constants — capacity arrives pre-computed from the backend. Duplication is therefore confined to a table the backend never uses.
-
-### 8.4 Dependency status
-
-HU 7 is **planned but not merged** (`story-work/HU17/PLAN.md` — folder name from the E4 numbering). `matchLeadToProjects` consumes its frozen contract (`precio_min_uf`, `precio_max_uf`, `comuna`, `tipo`, `estado`, `ejecutivos`). HU 10 cannot ship before HU 7.
+- **`getAvailableProjects()` excluye solo `agotado`.** `en_construccion` sigue en el feed y `estado`
+  viaja; no es una tercera compuerta.
+- **`precio_min_uf == precio_max_uf` es válido.** Ya no es solo un caso borde a no romper: es la
+  forma de **8 de los 10 proyectos disponibles** del catálogo demo, y fue lo que dejó inerte la
+  rampa de holgura del spike (§5.2).
 
 ---
 
 ## 9. Worked examples
+
+> **Historia — aritmética previa a las enmiendas de 2026-08-31 (HU 10).** Los perfiles de capacidad
+> de §9.1 siguen siendo válidos (§4.1–§4.3 no cambiaron). Los de afinidad de §9.2 **ya no** — usan la
+> rampa de holgura anterior y la regla de comuna anterior. Los equivalentes vigentes, recalculados y
+> aseverados por el build, están en `ALG-10-cases.json`. Se conservan porque muestran el
+> razonamiento con el que se eligieron los pesos originales.
 
 UF = $40.854,01 (2026-08-16) · tasa 4,0% · pie 20% · LTV 80%
 
@@ -498,7 +497,7 @@ The lead clears this project's entire price range, so no pair-scoped shortfall i
 
 `capacidad_por_pie_uf` = **3.060 UF** in every cell. Since capacity is the `min()`, **Perfil 2's capacity is 3.060 UF regardless of rate or term.** For Perfil 3 (income-bound) the same grid moves capacity 8.636–9.791 UF, about ±6%.
 
-So the rate assumption is worth ~0–6% while the pie ratio choice (10% vs 20%) is worth **2×**. A displayed band would imply precision the self-declared inputs do not support, and ranking needs a total order anyway — collapsing a band back to one number just relocates the decision into HU 10 undocumented. Scenarios belong to HU 18; matching uses one base case.
+So the rate assumption is worth ~0–6% while the pie ratio choice (10% vs 20%) is worth **2×**. A displayed band would imply precision the self-declared inputs do not support, and ranking needs a total order anyway — collapsing a band back to one number just relocates the decision into HU 13 undocumented. Scenarios belong to HU 20; matching uses one base case.
 
 ---
 
@@ -510,7 +509,7 @@ Raised by this research, **outside E4's scope to fix**. Recorded so they are dec
 
 `indicators.py` adds validated complementary *income* to `ingreso_total`, but `deuda` remains `deuda_mensual` alone. `_valid_complement_income()` **requires** `deuda_mensual_complementario` to be declared, then discards it.
 
-Every ratio and every capacity figure for a lead with a complemento is therefore **overstated**. §4.1 specifies `deuda_total` including the complementary side; if `indicators.py` is not corrected, the capacity model inherits the inflation. **Recommend routing to HU 3 / HU 23 as a defect.**
+Every ratio and every capacity figure for a lead with a complemento is therefore **overstated**. §4.1 specifies `deuda_total` including the complementary side; if `indicators.py` is not corrected, the capacity model inherits the inflation. **Recommend routing to HU 3 / HU 15 as a defect.**
 
 ### 10.2 `project_fit.py` vs `blockers.py` — 25% vs 30%
 
@@ -518,7 +517,7 @@ Not a bug; two policies. Resolved in §3.4 (30% calculates, 25% speaks). If `pro
 
 ### 10.3 `edad_fin_credito > 70` is conservative — intentionally
 
-The market allows 76–79 with insurance. HU 29 E2 independently specifies 70. **Keep it**, but the commercial copy should read *"requiere revisión de plazo/seguro"* rather than *"no viable"*.
+The market allows 76–79 with insurance. HU 26 E2 independently specifies 70. **Keep it**, but the commercial copy should read *"requiere revisión de plazo/seguro"* rather than *"no viable"*.
 
 ### 10.4 `VALOR_UF_CLP` hardcoded
 
@@ -535,9 +534,9 @@ FOGAES eligibility cannot be verified from current intake, which is why §4.4 em
 | # | Item | Owner | Blocking? |
 | - | :--- | :---- | :-------- |
 | 1 | UF price range of the client's real projects (Echeverría Izquierdo) — decides whether FOGAES is edge case or norm (§10.5) | Commercial | No — changes a default, not the model |
-| 2 | Complementary-debt defect (§10.1) | HU 3 / HU 23 | No — capacity spec already accounts for it |
-| 3 | Affinity weights are uncalibrated (§5.2) | HU 16 | No — v1 ships, revisit with data |
-| 4 | HU 7 not merged (§8.4) | HU 7 | **Yes for HU 10** |
+| 2 | Complementary-debt defect (§10.1) | HU 3 / HU 15 | No — capacity spec already accounts for it |
+| 3 | Affinity weights are uncalibrated (§5.2) | HU 27 | No — v1 ships, revisit with data |
+| 4 | HU 17 implemented on branch `HU17`, not merged (§8.4) | HU 17 | **Yes for HU 13** |
 | 5 | Spike 1 E5 consolidation must reference this document rather than restate it | Spike 1 | No |
 
 ---
@@ -560,4 +559,4 @@ FOGAES eligibility cannot be verified from current intake, which is why §4.4 em
 **Internal**
 - `backend/app/scoring_engine/` — `indicators.py`, `project_fit.py`, `blockers.py`, `commercial_priority.py`, `constants.py`
 - [[research/scoring_improvement_recommendations|Scoring Improvement Recommendations]] · [[research/competitor_prequalification_audit|Competitor Prequalification Audit]]
-- `story-work/HU17/PLAN.md` — project catalog frozen contract (folder name from the E4 numbering; the story is now HU 7)
+- `docs/project-catalog-contract.md` — project catalog frozen contract (HU 17)

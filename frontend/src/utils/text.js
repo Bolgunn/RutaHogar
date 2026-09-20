@@ -8,8 +8,8 @@ function preserveCase(match, replacement) {
 const WORD_FIXES = [
   [/\bAun\b/g, "Aún"],
   [/\baun\b/g, "aún"],
-  [/\bpreevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "preevaluaciones" : "preevaluación")],
-  [/\bevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "evaluaciones" : "evaluación")],
+  [/\bpre-?evaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "precalificaciones" : "precalificación")],
+  [/\bevaluacion(es)?\b(?!\s+(?:bancaria|formal|hipotecaria|crediticia|oficial)\b)(?!\s+(?:del?|para\s+el)\s+(?:MINVU|SERVIU)\b)/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "calificaciones" : "calificación")],
   [/\bsituacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "situaciones" : "situación")],
   [/\binformacion\b/gi, (match) => preserveCase(match, "información")],
   [/\bantiguedad\b/gi, (match) => preserveCase(match, "antigüedad")],
@@ -61,6 +61,19 @@ export function normalizeDisplayList(items) {
       return item;
     })
     .filter(Boolean);
+}
+
+// normalizeDisplayList conserva los objetos {text, benefit} que el motor emite
+// desde HU 4, asi que sus listas son mixtas: strings en evaluaciones antiguas,
+// objetos en las nuevas. Un objeto renderizado como hijo de React tumba el arbol
+// entero, asi que todo consumidor tiene que leerlas por aca.
+export function displayItemText(item) {
+  if (typeof item === "string") return item;
+  return item?.text || "";
+}
+
+export function displayItemBenefit(item) {
+  return typeof item === "string" ? null : item?.benefit || null;
 }
 
 export function normalizeImprovementPlan(items) {
