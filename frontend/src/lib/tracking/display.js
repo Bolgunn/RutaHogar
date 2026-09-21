@@ -32,6 +32,34 @@ export function activeSeries(activeLine) {
   }));
 }
 
+const evolutionPeriodMonths = { "3m": 3, "6m": 6, "12m": 12 };
+
+function subtractUtcMonthsClamped(value, months) {
+  const boundary = new Date(value);
+  const day = boundary.getUTCDate();
+  boundary.setUTCDate(1);
+  boundary.setUTCMonth(boundary.getUTCMonth() - months);
+  const lastDay = new Date(Date.UTC(boundary.getUTCFullYear(), boundary.getUTCMonth() + 1, 0)).getUTCDate();
+  boundary.setUTCDate(Math.min(day, lastDay));
+  return boundary;
+}
+
+// Presentation-only range: source history remains untouched and available.
+export function filterSeriesByPeriod(series, period = "all", asOf) {
+  const source = Array.isArray(series) ? series : [];
+  const months = evolutionPeriodMonths[period];
+  if (!months) return [...source];
+  const explicitCutoff = new Date(asOf);
+  const datedRows = source.map((row) => ({ row, at: new Date(row.at) }))
+    .filter(({ at }) => Number.isFinite(at.getTime()));
+  const cutoff = Number.isFinite(explicitCutoff.getTime())
+    ? explicitCutoff
+    : datedRows.reduce((latest, item) => !latest || item.at > latest ? item.at : latest, null);
+  if (!cutoff) return [...source];
+  const boundary = subtractUtcMonthsClamped(cutoff, months);
+  return datedRows.filter(({ at }) => at >= boundary && at <= cutoff).map(({ row }) => row);
+}
+
 export function belongsToSlot(row, rootEventId, auditLine) {
   const byId = new Map(auditLine.map((event) => [event.event_id, event]));
   let current = row;
@@ -65,7 +93,7 @@ export const projectName = (project) => project?.nombre || project?.name || proj
 
 export const projectionCauses = {
   insufficient_data: "Aún faltan observaciones en al menos dos fechas distintas.",
-  missing_project_goal: "El baseline no tiene un proyecto objetivo.",
+  missing_project_goal: "La evaluación inicial no tiene un proyecto objetivo.",
   incomplete_state: "Faltan antecedentes para ejecutar las reglas.",
   non_projectable_blocker: "Una condición que no se puede proyectar impide la compatibilidad.",
   no_favorable_trend: "No existe una tendencia favorable observada.",

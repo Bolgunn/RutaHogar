@@ -10,7 +10,7 @@ import AuthPanel from "./components/AuthPanel";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
-import ProgressPage from "./features/tracking/ProgressPage";
+import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
@@ -33,7 +33,7 @@ import SignupOffer from "./components/SignupOffer";
 import { createEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
-import { resolveTrackingRoute, trackingRoutePaths } from "./lib/trackingRoutes";
+import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
 import { useLeads } from "./hooks/useLeads";
@@ -253,6 +253,8 @@ const normalizePathname = (pathname = "/") => {
 };
 
 const getPrivatePathForPage = (page) => {
+  const trackingPath = trackingPathForPage(page);
+  if (trackingPath) return trackingPath;
   if (page === "home") return "/inicio";
   if (page === "evaluate" || page === "onboarding" || page === "dataconsent") return "/precalificacion";
   if (page === "recommendations") return "/recomendaciones";
@@ -260,8 +262,8 @@ const getPrivatePathForPage = (page) => {
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
   if (page === "projects") return "/proyectos";
-  if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
-  if (page === "progress" || page === "register-milestone") return "/plan-mejora/progreso";
+  if (page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
+  if (page === "register-milestone") return "/plan-mejora/progreso";
   if (page === "profile") return "/perfil";
   if (page === "sales-profile") return "/perfil";
   if (page === "leads") return "/dashboard";
@@ -1581,8 +1583,12 @@ export default function App() {
         />
       ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
         <ProgressPage
-          onBack={() => navigateToPage("tracking")}
+          onOpenHistory={() => navigateToPage("progress-history")}
           onStartEvaluation={startEvaluation}
+          onChanged={refreshTracking}
+        />
+      ) : page === "progress-history" && profile.role === roles.user ? (
+        <TrackingHistoryPage
           onChanged={refreshTracking}
         />
       ) : page === "housing-plan" && profile.role === roles.user ? (

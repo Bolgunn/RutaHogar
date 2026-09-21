@@ -43,7 +43,7 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
     finally { setBusy(false); }
   };
   return <form className="tracking-update" onSubmit={submit}>
-    <h3>{correction ? "Corrección del registro" : "Actualizar mis antecedentes"}</h3>
+    <h3>{correction ? "Corregir registro" : "Actualizar mis antecedentes"}</h3>
     <p>Solo se cambian los campos que edites. Puedes registrar aumentos o disminuciones reales.</p>
     <fieldset disabled={busy}>
       <div className="tracking-grid">{primaryFields.map(([name, label, type, nullable, options]) =>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { activeSeries, belongsToSlot, isUpdateDue, projectName, projectionCauses, serializePatch, trackingProjectContext } from "../display";
+import {
+  activeSeries, belongsToSlot, filterSeriesByPeriod, isUpdateDue,
+  projectName, projectionCauses, serializePatch, trackingProjectContext,
+} from "../display";
 
 describe("HU13 presence-preserving updates", () => {
   it("omits untouched controls and accepts genuine worsening including zero", () => {
@@ -78,6 +81,34 @@ describe("HU13 active history and update-due indicator", () => {
       "insufficient_data", "missing_project_goal", "incomplete_state",
       "non_projectable_blocker", "no_favorable_trend", "objective_unreachable",
     ]) expect(projectionCauses[cause]).toBeTruthy();
+  });
+});
+
+describe("HU13 evolution period filter", () => {
+  const series = [
+    { id: "old", at: "2025-05-30T12:00:00Z" },
+    { id: "year", at: "2025-06-30T12:00:00Z" },
+    { id: "six", at: "2025-12-01T12:00:00Z" },
+    { id: "three-boundary", at: "2026-02-28T12:00:00Z" },
+    { id: "latest", at: "2026-05-31T12:00:00Z" },
+  ];
+  const cutoff = "2026-05-31T12:00:00Z";
+
+  it.each([
+    ["3m", ["three-boundary", "latest"]],
+    ["6m", ["six", "three-boundary", "latest"]],
+    ["12m", ["year", "six", "three-boundary", "latest"]],
+    ["all", ["old", "year", "six", "three-boundary", "latest"]],
+  ])("filters %s relative to the explicit cutoff", (period, expected) => {
+    expect(filterSeriesByPeriod(series, period, cutoff).map((row) => row.id)).toEqual(expected);
+  });
+
+  it("defaults to all, keeps sparse periods, and never mutates the source", () => {
+    const before = structuredClone(series);
+
+    expect(filterSeriesByPeriod(series).map((row) => row.id)).toEqual(series.map((row) => row.id));
+    expect(filterSeriesByPeriod([{ id: "only", at: cutoff }], "3m", cutoff)).toHaveLength(1);
+    expect(series).toEqual(before);
   });
 });
 
