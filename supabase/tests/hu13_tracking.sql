@@ -38,7 +38,8 @@ declare
 begin
   command := jsonb_build_object('event_id', event_id_value, 'patch', '{"ahorro_disponible":0}'::jsonb);
   records := jsonb_build_object(
-    'plan', null, 'goals', '[]'::jsonb, 'result', jsonb_build_object('event_id', event_id_value),
+    'plan', null, 'target_project_snapshot', '{"id":"project-1"}'::jsonb,
+    'goals', '[]'::jsonb, 'result', jsonb_build_object('event_id', event_id_value),
     'evaluations', jsonb_build_array(jsonb_build_object(
       'id', evaluation_id_value, 'snapshot', '{}'::jsonb, 'provenance', '{}'::jsonb,
       'result', '{"score":50.5,"classification":"Medio","component_scores":{},"algorithm_version":"1.1.0"}'::jsonb)),
@@ -68,6 +69,12 @@ begin
   if (select financial_data->'result'->>'score' from evaluations where id = evaluation_id_value) <> '50.5' then
     raise exception 'original score precision lost';
   end if;
+  if (select target_project_snapshot->>'id' from tracking_plans where user_id = owner_id) <> 'project-1' then
+    raise exception 'first later project was not frozen';
+  end if;
+  if (select recorded_complete_snapshot ? 'project_goal' from tracking_events where event_id = baseline_id) then
+    raise exception 'baseline history was rewritten';
+  end if;
   begin
     perform hu13_commit(owner_id, command || '{"reason":"different"}', event_id_value, records);
     raise exception 'conflict unexpectedly succeeded';
@@ -96,6 +103,12 @@ begin
   begin
     delete from public.tracking_events;
     raise exception 'DELETE unexpectedly succeeded';
+  exception when check_violation then
+    if sqlerrm <> 'immutable_history' then raise; end if;
+  end;
+  begin
+    update public.tracking_plans set target_project_snapshot = '{"id":"project-2"}'::jsonb;
+    raise exception 'frozen target unexpectedly changed';
   exception when check_violation then
     if sqlerrm <> 'immutable_history' then raise; end if;
   end;

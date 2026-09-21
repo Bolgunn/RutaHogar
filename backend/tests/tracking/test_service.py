@@ -44,6 +44,8 @@ class MemoryRepository:
             })
         if records["plan"]:
             self.bundle["plan"] = deepcopy(records["plan"])
+        if records.get("target_project_snapshot") and not self.bundle["plan"].get("target_project_snapshot"):
+            self.bundle["plan"]["target_project_snapshot"] = deepcopy(records["target_project_snapshot"])
         self.bundle["goals"].extend({"progress_data": deepcopy(goal)} for goal in records["goals"])
         self.bundle["revision"] = records["events"][-1]["event_id"]
         return deepcopy(result)
@@ -90,6 +92,39 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
     assert app.read("u1", "2026-03-03T00:00:00Z")["update_due"]
     with pytest.raises(TrackingError, match="idempotency_conflict"):
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
+
+
+def test_first_later_project_goal_freezes_target_and_enables_projection():
+    repo, app = service()
+    baseline_snapshot = valid_snapshot()
+    baseline_snapshot.pop("project_goal")
+    first = app.execute("u1", command(baseline_snapshot))
+
+    assert repo.bundle["plan"]["target_project_snapshot"] is None
+    assert app.projection("u1")["cause"] == "missing_project_goal"
+
+    selected = app.execute("u1", command(
+        {
+            "project_goal": {"id": "p1", "nombre": "Proyecto elegido"},
+            "property_value_clp": 120000000,
+        },
+        first["event_id"], "2026-02-01T00:00:00Z",
+    ))
+
+    assert repo.bundle["plan"]["target_project_snapshot"]["id"] == "p1"
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"].get("project_goal") is None
+    projected_snapshots = []
+    real_scorer = app.scorer
+    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot))
+    assert app.projection("u1")["cause"] != "missing_project_goal"
+    assert projected_snapshots
+    assert all(snapshot["property_value_clp"] == 120000000 for snapshot in projected_snapshots)
+
+    app.execute("u1", command(
+        {"project_goal": {"id": "p2", "nombre": "Proyecto posterior"}},
+        selected["event_id"], "2026-03-01T00:00:00Z",
+    ))
+    assert repo.bundle["plan"]["target_project_snapshot"]["id"] == "p1"
 
 
 def test_idempotency_compares_equivalent_timestamps_canonically():

@@ -17,6 +17,11 @@ def canonical_command(command):
     return canonical
 
 
+def valid_project_snapshot(snapshot):
+    project_goal = (snapshot or {}).get("project_goal")
+    return deepcopy(project_goal) if isinstance(project_goal, dict) and project_goal else None
+
+
 def source_events(bundle):
     evaluations = {row["id"]: row for row in bundle["evaluations"]}
     return [
@@ -131,10 +136,15 @@ class TrackingService:
         latest = deepcopy(view.get("latest_effective_snapshot") or {})
         baseline = view.get("baseline") or {}
         target = baseline.get("target_project_snapshot")
-        # Project identity and value are frozen; financial and market context stays at cutoff.
-        root = next((row for row in view["audit_line"] if row["event_id"] == baseline.get("root_event_id")), None)
-        if root:
-            original = root["recorded_complete_snapshot"]
+        # Project identity and value come from the evaluation that froze the target.
+        # For plans born with a target this is the root; for E3 it is the first later
+        # evaluation carrying that target. Historical rows remain untouched.
+        target_source = next((
+            row for row in view["audit_line"]
+            if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
+        ), None)
+        if target_source:
+            original = target_source["recorded_complete_snapshot"]
             for field in ("property_value", "property_value_unit", "property_value_clp", "property_value_uf",
                           "property_value_source", "comuna_objetivo"):
                 if field in original:
@@ -229,14 +239,18 @@ class TrackingService:
                     "structured_improvement_plan": raw["structured_improvement_plan"],
                     "improvement_plan": raw.get("improvement_plan", []),
                 },
-                "target_project_snapshot": deepcopy(event["recorded_complete_snapshot"].get("project_goal")),
+                "target_project_snapshot": valid_project_snapshot(event["recorded_complete_snapshot"]),
                 "provenance": evaluation["provenance"],
             }
+        target_project_snapshot = None
+        if history and not target_event_id and not bundle["plan"].get("target_project_snapshot"):
+            target_project_snapshot = valid_project_snapshot(outcome["new_complete_snapshot"])
         result = {
             "event_id": command["event_id"], "evaluation_ids": [row["id"] for row in evaluations],
             "evaluation": evaluations[-1] if evaluations else None,
             "baseline_id": plan["id"] if plan else bundle["plan"]["id"],
         }
         return self.repository.commit(user_id, command, bundle.get("revision"), {
-            "plan": plan, "events": events, "evaluations": evaluations, "goals": goals, "result": result,
+            "plan": plan, "target_project_snapshot": target_project_snapshot,
+            "events": events, "evaluations": evaluations, "goals": goals, "result": result,
         })
