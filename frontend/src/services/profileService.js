@@ -9,6 +9,7 @@ const roleAliases = {
   ejecutivo_comercial: "ejecutivo",
   ejecutivo: "ejecutivo",
   admin: "admin",
+  admin_inmobiliario: "admin_inmobiliario",
 };
 
 export function normalizeRole(role) {

@@ -17,12 +17,14 @@ export const roles = {
   user: "usuario",
   sales: "ejecutivo",
   admin: "admin",
+  admin_inmo: "admin_inmobiliario",
 };
 
 export const roleLabels = {
   usuario: "Usuario",
   ejecutivo: "Ejecutivo comercial",
   admin: "Admin",
+  admin_inmobiliario: "Admin Inmobiliario",
 };
 
 function readStored(key) {
