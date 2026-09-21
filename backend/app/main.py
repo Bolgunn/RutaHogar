@@ -35,6 +35,10 @@ VALID_RELATION_TYPES = {
 
 app = FastAPI(title="RutaHogar")
 
+# HU13 has its own authenticated contract; POST /score is unchanged.
+from .tracking.routes import router as tracking_router
+app.include_router(tracking_router)
+
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
