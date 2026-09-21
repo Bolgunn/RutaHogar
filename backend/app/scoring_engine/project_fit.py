@@ -2,6 +2,8 @@
 
 from .constants import PROJECT_FIT_CLASSIFICATIONS
 
+REQUIRED_INCOME_MULTIPLIER = 4
+PROJECT_BLOCKER_CODES = frozenset({"pie_insuficiente", "dividendo_exigente", "edad_plazo_riesgoso"})
 
 def _clamp_score(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 1)
@@ -55,6 +57,18 @@ def _main_gap(income_gap: float, required_income: float, down_payment_gap: float
     return "income" if income_ratio >= down_payment_ratio else "down_payment"
 
 
+def project_fit_rule_margins(data: dict, indicators: dict) -> dict:
+    """Raw signed project gaps shared with the projection boundary adapter."""
+    safe_data, safe_indicators = data or {}, indicators or {}
+    income = _positive_float(safe_indicators.get("ingreso_total")) or _positive_float(safe_data.get("ingreso_mensual"))
+    required_income = _positive_float(safe_data.get("dividendo_estimado")) * REQUIRED_INCOME_MULTIPLIER
+    savings = _positive_float(safe_data.get("ahorro_disponible"))
+    return {
+        "income": required_income - income,
+        "down_payment": _positive_float(safe_indicators.get("pie_minimo_clp")) - savings,
+    }
+
+
 def calculate_project_fit(data: dict, indicators: dict, blockers: list) -> dict:
     safe_data = data or {}
     safe_indicators = indicators or {}
@@ -71,15 +85,16 @@ def calculate_project_fit(data: dict, indicators: dict, blockers: list) -> dict:
             score=0,
             status="requires_info",
             main_gap="data",
-            required_income=dividendo_estimado * 4 if dividendo_estimado > 0 else 0,
+            required_income=dividendo_estimado * REQUIRED_INCOME_MULTIPLIER if dividendo_estimado > 0 else 0,
             income_gap=0,
             down_payment_gap=_positive_float(safe_indicators.get("brecha_pie_minimo")),
             estimated_property_value_clp=estimated_property_value_clp,
         )
 
-    required_income = dividendo_estimado * 4
-    income_gap = max(required_income - ingreso_total, 0.0)
-    down_payment_gap = _positive_float(safe_indicators.get("brecha_pie_minimo"))
+    required_income = dividendo_estimado * REQUIRED_INCOME_MULTIPLIER
+    margins = project_fit_rule_margins(safe_data, safe_indicators)
+    income_gap = max(margins["income"], 0.0)
+    down_payment_gap = max(margins["down_payment"], 0.0)
 
     score = 100.0
     score -= _gap_ratio(income_gap, required_income) * 45.0
@@ -95,7 +110,7 @@ def calculate_project_fit(data: dict, indicators: dict, blockers: list) -> dict:
     score = _clamp_score(score)
     main_gap = _main_gap(income_gap, required_income, down_payment_gap, estimated_property_value_clp)
 
-    project_blockers = codes.intersection({"pie_insuficiente", "dividendo_exigente", "edad_plazo_riesgoso"})
+    project_blockers = codes.intersection(PROJECT_BLOCKER_CODES)
     if income_gap == 0 and down_payment_gap == 0 and not project_blockers:
         status = "compatible"
     elif score >= 50:

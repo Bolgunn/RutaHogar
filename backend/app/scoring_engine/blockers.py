@@ -2,6 +2,10 @@
 
 from .constants import BLOCKER_SEVERITIES
 
+DIVIDEND_RATIO_LIMIT = 0.30
+TOTAL_BURDEN_LIMIT = 0.45
+DEBT_RATIO_LIMIT = 0.40
+CREDIT_END_AGE_LIMIT = 70
 
 def _positive_float(value) -> float:
     try:
@@ -53,11 +57,27 @@ def _has_incomplete_complement(data: dict) -> bool:
     return any(value in (None, "") for value in required_values)
 
 
+def blocker_rule_margins(data: dict, indicators: dict) -> dict:
+    """Signed numeric margins used by both blocker decisions and ALG-13."""
+    safe_data, safe_indicators = data or {}, indicators or {}
+    income = _positive_float(safe_indicators.get("ingreso_total"))
+    dividend = _positive_float(safe_data.get("dividendo_estimado"))
+    debt = _positive_float(safe_data.get("deuda_mensual"))
+    savings = _positive_float(safe_data.get("ahorro_disponible"))
+    return {
+        "pie_insuficiente": _positive_float(safe_indicators.get("pie_minimo_clp")) - savings,
+        "dividendo_exigente": dividend - DIVIDEND_RATIO_LIMIT * income,
+        "carga_total_alta": debt + dividend - TOTAL_BURDEN_LIMIT * income,
+        "deuda_actual_alta": debt - DEBT_RATIO_LIMIT * income,
+    }
+
+
 def detect_blockers(data: dict, indicators: dict) -> list[dict]:
     safe_data = data or {}
     safe_indicators = indicators or {}
     blockers: list[dict] = []
     seen_codes = set()
+    margins = blocker_rule_margins(safe_data, safe_indicators)
 
     morosidad_actual = str(safe_data.get("morosidad_actual") or "").strip().lower()
     if morosidad_actual == "si":
@@ -81,7 +101,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score", "commercial_priority"],
         )
 
-    if _positive_float(safe_indicators.get("brecha_pie_minimo")) > 0:
+    if margins["pie_insuficiente"] > 0:
         _add_blocker(
             blockers,
             seen_codes,
@@ -92,7 +112,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["project_fit", "commercial_priority"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_dividendo_ingreso")) > 0.30:
+    if _positive_float(safe_indicators.get("ingreso_total")) > 0 and margins["dividendo_exigente"] > 0:
         _add_blocker(
             blockers,
             seen_codes,
@@ -103,7 +123,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score", "project_fit"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_carga_total")) > 0.45:
+    if _positive_float(safe_indicators.get("ingreso_total")) > 0 and margins["carga_total_alta"] > 0:
         _add_blocker(
             blockers,
             seen_codes,
@@ -114,7 +134,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score", "commercial_priority"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_deuda_ingreso")) > 0.40:
+    if _positive_float(safe_indicators.get("ingreso_total")) > 0 and margins["deuda_actual_alta"] > 0:
         _add_blocker(
             blockers,
             seen_codes,
@@ -170,7 +190,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score"],
         )
 
-    if _positive_float(safe_indicators.get("edad_fin_credito")) > 70:
+    if _positive_float(safe_indicators.get("edad_fin_credito")) > CREDIT_END_AGE_LIMIT:
         _add_blocker(
             blockers,
             seen_codes,
