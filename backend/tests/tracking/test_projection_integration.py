@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -81,3 +81,39 @@ def test_boundary_provider_delegates_to_engine_predicates(monkeypatch):
 
     assert calls["financial"] > 0
     assert calls["capacity"] > 0
+
+
+def test_capacity_boundaries_resegment_after_alg9_branch_change():
+    cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    latest = {
+        **valid_snapshot(),
+        "ingreso_mensual": 1000000,
+        "deuda_mensual": 300000,
+        "ahorro_disponible": 40000000,
+        "dividendo_estimado": 100000,
+        "property_value_clp": 1000000000,
+        "uf_value_clp": 40000,
+    }
+    models = {
+        "ingreso_mensual": {
+            "status": "projected", "slope_per_day": 50000, "intercept": 1000000,
+            "origin_at": cutoff.isoformat(), "domain": {"min": 0},
+        },
+        "ahorro_disponible": {
+            "status": "not_projectable", "cause": "zero_slope", "slope_per_day": 0,
+            "intercept": 40000000, "origin_at": cutoff.isoformat(), "domain": {"min": 0},
+        },
+    }
+    state_at = lambda at: future_snapshot(latest, models, at)
+    scorer = lambda state, _at: score_snapshot(state)
+
+    candidates = RuleBoundaryProvider().milestones(latest, models, cutoff, state_at, scorer)
+    restriction_changes = [
+        at for at in candidates
+        if scorer(state_at(at - timedelta(microseconds=1)), at)["financial_indicators"]["restriccion_vinculante"]
+        != scorer(state_at(at), at)["financial_indicators"]["restriccion_vinculante"]
+    ]
+
+    assert len(restriction_changes) == 1
+    crossing_days = (restriction_changes[0] - cutoff).total_seconds() / 86400
+    assert 44 < crossing_days < 45

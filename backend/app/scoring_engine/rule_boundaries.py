@@ -60,6 +60,9 @@ class RuleBoundaryProvider:
             ind = indicators(state)
             return financial_rule_margins(state, ind)
 
+        def canonical_day(day):
+            return ceil(day * DAY_MICROSECONDS) / DAY_MICROSECONDS
+
         def add_roots(predicate, boundaries):
             found = set()
             ordered = sorted(boundaries)
@@ -75,7 +78,7 @@ class RuleBoundaryProvider:
                     if slope:
                         root = interior - zero / slope
                         if isfinite(root) and lower <= root <= upper and root > 0:
-                            found.add(root)
+                            found.add(canonical_day(root))
             return found
 
         cuts |= add_roots(predicates, cuts)
@@ -83,7 +86,30 @@ class RuleBoundaryProvider:
         def capacity_predicates(state):
             return capacity_rule_margins(state, indicators(state))
 
-        cuts |= add_roots(capacity_predicates, cuts)
+        tick_days = 1 / DAY_MICROSECONDS
+
+        def is_actual_capacity_transition(day):
+            before_day = max(0.0, day - tick_days)
+            before = capacity_predicates(state_on_segment(before_day, before_day))
+            after = capacity_predicates(state_on_segment(day + tick_days, day + tick_days))
+            return any(
+                left != right and (left == 0 or right == 0 or (left < 0 < right) or (right < 0 < left))
+                for left, right in zip(before, after)
+            )
+
+        # ALG-9 is piecewise: discovering one branch boundary can invalidate a
+        # root extrapolated from the old segment and reveal another one. Grow
+        # the partition monotonically until no predicate produces a new
+        # representable boundary. This is a structural fixed point over the
+        # engine predicates, not a time horizon or a financial iteration cap.
+        while True:
+            discovered = add_roots(capacity_predicates, cuts)
+            new_boundaries = {
+                day for day in discovered - cuts if is_actual_capacity_transition(day)
+            }
+            if not new_boundaries:
+                break
+            cuts |= new_boundaries
         dates = {cutoff + TICK}
         for day in cuts:
             if day <= 0:
