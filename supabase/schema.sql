@@ -32,7 +32,18 @@ add column if not exists rut text,
 add column if not exists birth_date date;
 
 alter table public.profiles
-add column if not exists consent_data jsonb;
+add column if not exists consent_data jsonb,
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado'));
+
+create table if not exists public.lead_status_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  changed_by uuid references auth.users(id) on delete set null,
+  old_status text,
+  new_status text not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.evaluations (
   id uuid primary key default gen_random_uuid(),

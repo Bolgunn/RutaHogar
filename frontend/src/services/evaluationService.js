@@ -87,6 +87,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
     phone: contact.phone || null,
+    reliability_status: contact.reliability_status || "normal",
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -283,7 +284,18 @@ export async function getEvaluations(userId, role) {
     if (contactsError) {
       logSupabaseError(contactsError);
     } else if (contactsData) {
-      contactsMap = Object.fromEntries(contactsData.map((contact) => [contact.id, contact]));
+      // Fetch reliability_status separately as the RPC might not include it
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, reliability_status")
+        .in("id", userIds);
+        
+      const profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p.reliability_status]));
+      
+      contactsMap = Object.fromEntries(contactsData.map((contact) => [
+        contact.id, 
+        { ...contact, reliability_status: profilesMap[contact.id] || "normal" }
+      ]));
     }
   }
 

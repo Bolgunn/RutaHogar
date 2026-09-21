@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { roleLabels } from "../services/auth";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
+import AdminReportedLeads from "./AdminReportedLeads";
 
 function formatFecha(value) {
   if (!value) return "Sin fecha";
@@ -265,8 +266,14 @@ export default function AdminPanel({ evaluations, profile }) {
       
 
       {canSeeArco && (
-        <div className="admin-surface admin-panel-arco-surface">
+        <div className="admin-surface admin-panel-arco-surface admin-section-gap">
           <AdminArcoRequests />
+        </div>
+      )}
+
+      {canSeeArco && (
+        <div className="admin-section-gap">
+          <AdminReportedLeads profile={profile} />
         </div>
       )}
     </section>
