@@ -16,6 +16,7 @@ import {
 import { getAvailableProjects } from "../services/projectService";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { plazoLabels, propertyLabels } from "../constants";
+import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
 const MAX_MANUAL_UF_VALUE = 9999999;
@@ -727,8 +728,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       </div>
 
       <div className="simulation-disclaimer">
-        <i className="ti ti-info-circle"></i>
-        Esta simulación es referencial y se basa en datos declarados. No corresponde a aprobación bancaria, preaprobación, tasación ni cotización formal.
+        <i className="ti ti-info-circle" aria-hidden="true" />
+        <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
       </div>
 
       <div className="simulation-layout">
@@ -884,9 +885,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                       ? ` · Entrega estimada: ${formatDeliveryMonth(scenario.project.entrega_estimada)}`
                       : ""}
                   </p>
-                  {scenario.project.descripcion_corta ? (
-                    <p className="simulation-estimate-note">{scenario.project.descripcion_corta}</p>
-                  ) : null}
                 </>
               ) : null}
             </div>
@@ -972,9 +970,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         <div className="section-heading compact">
           <span className="eyebrow">Alternativas referenciales</span>
           <h2 className="recommendation-section-title"><i className="ti ti-home-search"></i> Opciones más accesibles</h2>
-          <p>
-            Ordenadas por compatibilidad, menor brecha, comuna y tipo de vivienda preferidos. El horizonte ajusta mensajes, no cambia el score.
-          </p>
         </div>
 
         {targetProject ? (
@@ -1016,7 +1011,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
               {item.project.entrega_estimada ? (
                 <p>Entrega estimada: {formatDeliveryMonth(item.project.entrega_estimada)}</p>
               ) : null}
-              <small>{item.project.descripcion_corta}</small>
               <div className="alternative-actions">
                 <button
                   className="secondary-button compact-button"

@@ -111,15 +111,12 @@ export default function ProjectEvaluationModal({
       </header>
       <div className={`project-evaluation-result ${isCompatible ? "is-compatible" : evaluation.status === "Cercano" ? "is-close" : "is-far"}`}>
         <div className="project-evaluation-result__heading"><span>Resultado referencial</span><strong className={`simulation-status ${statusClass[evaluation.status] || "adjust"}`}>{evaluation.status}</strong></div>
-        <p>{evaluation.message}</p>
         <dl className="project-evaluation-result__metrics">
           <div><dt>Valor desde</dt><dd>{formatProjectPrice(project)}</dd></div>
           <div><dt>Pie mínimo</dt><dd>{formatClp(evaluation.pieMinimo)}</dd></div>
           <div><dt>Dividendo estimado</dt><dd>{formatClp(evaluation.dividend)}</dd></div>
         </dl>
-        <p className="project-evaluation-result__recommendation">{evaluation.recommendation}</p>
       </div>
-      <p className="project-evaluation-modal__context">Esta simulación es referencial y se basa en datos declarados. No corresponde a aprobación bancaria, preaprobación, tasación ni cotización formal.</p>
       {alternatives.length > 0 && <div className="project-evaluation-modal__alternatives">
         <p>Alternativas para comparar</p>
         {alternatives.map((item) => <button key={item.project.id} type="button" className="text-button" onClick={() => onSelectProject?.(item.project.id)}>

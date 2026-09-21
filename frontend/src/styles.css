@@ -16191,7 +16191,6 @@ th {
 .project-evaluation-result__metrics div { min-width: 0; }
 .project-evaluation-result__metrics dt { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.74; }
 .project-evaluation-result__metrics dd { margin: 4px 0 0; font-family: var(--rh-font-mono); font-size: 0.84rem; font-weight: 800; line-height: 1.3; }
-.project-evaluation-result__recommendation { padding-left: 12px; border-left: 3px solid currentColor; font-weight: 650; }
 .project-evaluation-modal__alternatives { display: grid; gap: 6px; margin-top: var(--rh-space-5); padding: 14px 0; border-top: 1px solid var(--rh-border); border-bottom: 1px solid var(--rh-border); }
 .project-evaluation-modal__alternatives > p { margin: 0 0 2px; color: var(--rh-text-muted); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
 .project-evaluation-modal__alternatives .text-button { justify-self: start; margin: 0; padding: 3px 0; color: var(--rh-navy); font-size: 0.86rem; font-weight: 750; text-align: left; }

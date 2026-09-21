@@ -5,6 +5,7 @@ import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } 
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
+import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -257,7 +258,6 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
             <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
-            <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>
             {context ? (
               <div className="project-catalog-card__actions">
                 <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
@@ -273,6 +273,10 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
         </ProjectsCarousel>
       </section>}
     </>}
+    <div className="simulation-disclaimer projects-catalog-disclaimer">
+      <i className="ti ti-info-circle" aria-hidden="true" />
+      <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
+    </div>
     {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} />}
   </section>;
 }
