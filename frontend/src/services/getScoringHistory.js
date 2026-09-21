@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { annotateEvaluation } from "./trackingService";
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
 const SCORING_HISTORY_KEY = "RutaHogar_scoring_history";
@@ -180,52 +181,11 @@ function shouldSkipEvent(existingEvents, event) {
  * Registra un evento de trazabilidad en el ScoringRecord de la evaluación
  * (estado "No viable" presentado y acciones posteriores del usuario).
  */
-export async function appendScoringEvent(evaluationId, userId, event) {
+export async function appendScoringEvent(evaluationId, _userId, event) {
   if (!evaluationId) return null;
-  const payload = { type: event?.type, at: new Date().toISOString(), details: event?.details || {} };
-
-  if (!isSupabaseDataConfigured) {
-    const history = readLocalScoringHistory();
-    const target = history.find((item) => item.evaluation_id === evaluationId);
-    if (!target) return null;
-    const existingEvents = Array.isArray(target.events) ? target.events : [];
-    if (shouldSkipEvent(existingEvents, payload)) return target;
-
-    const next = history.map((item) =>
-      item.evaluation_id === evaluationId
-        ? { ...item, events: [...existingEvents, payload] }
-        : item,
-    );
-    writeLocalScoringHistory(next);
-    return next.find((item) => item.evaluation_id === evaluationId) || null;
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para registrar el evento.");
-
-  const { data: row, error: rowError } = await supabase
-    .from("scoring_history")
-    .select(scoringHistorySelectColumns)
-    .eq("evaluation_id", evaluationId)
-    .single();
-
-  if (rowError || !row) {
-    if (rowError) logSupabaseError(rowError);
-    return null;
-  }
-
-  const existingEvents = Array.isArray(row.events) ? row.events : [];
-  if (shouldSkipEvent(existingEvents, payload)) return row;
-
-  const { data, error } = await supabase
-    .from("scoring_history")
-    .update({ events: [...existingEvents, payload] })
-    .eq("evaluation_id", evaluationId)
-    .select(scoringHistorySelectColumns)
-    .single();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return data;
+  return annotateEvaluation(evaluationId, "milestone", {
+    type: event?.type, details: event?.details || {},
+  });
 }
 
 export { buildScoringHistoryRow, readLocalScoringHistory, writeLocalScoringHistory };

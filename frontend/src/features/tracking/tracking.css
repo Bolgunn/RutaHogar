@@ -1,0 +1,18 @@
+.tracking-page { max-width: 1100px; margin: auto; padding: 1.5rem; }
+.tracking-page section, .tracking-update { margin-block: 1.5rem; padding: 1.25rem; border: 1px solid #dce3ed; border-radius: 12px; }
+.tracking-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.tracking-page label { display: flex; flex-direction: column; gap: .4rem; margin-block: .6rem; }
+.tracking-page input:not([type=checkbox]), .tracking-page select { padding: .7rem; border: 1px solid #a6b2c3; border-radius: 6px; max-width: 100%; }
+.tracking-page fieldset { border: 0; padding: 0; min-width: 0; }
+.tracking-page pre { overflow: auto; max-height: 24rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.tracking-page dd { margin-inline-start: 0; overflow-wrap: anywhere; }
+.tracking-page dt { font-weight: 600; }
+.tracking-page button { margin: .4rem .5rem .4rem 0; }
+.tracking-page figure { margin: 0; color: #1b5179; }
+.tracking-page svg { width: 100%; max-height: 140px; }
+.tracking-table { overflow: auto; }
+.tracking-table table { width: 100%; border-collapse: collapse; }
+.tracking-table td, .tracking-table th { padding: .6rem; border-bottom: 1px solid #dce3ed; text-align: left; }
+.tracking-notice { padding: .8rem; border-left: 4px solid #ad7200; background: #fff7df; }
+.tracking-goal { padding: 1rem; border-radius: 8px; background: #f4f7fb; }
+.tracking-page progress { max-width: 100%; }

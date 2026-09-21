@@ -9,10 +9,10 @@ import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
-import FinancialTracking from "./components/FinancialTracking";
+import ProgressPage from "./features/tracking/ProgressPage";
+import { getTracking } from "./services/trackingService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
-import MonthlyPlan from "./components/MonthlyPlan";
 import Navbar from "./components/Navbar";
 import NotificationToast from "./components/NotificationToast";
 import ObjectiveReview from "./components/ObjectiveReview";
@@ -29,13 +29,11 @@ import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
-import RegisterMilestone from "./components/RegisterMilestone";
-import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
+import { createEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
-import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
@@ -156,6 +154,7 @@ const buildFinancialInput = (input = {}) => ({
   property_value_uf: input.property_value_uf,
   property_value_clp: input.property_value_clp,
   property_value_source: input.property_value_source,
+  project_goal: input.project_goal,
   plazo_credito_hipotecario: input.plazo_credito_hipotecario,
   dividendo_estimado: input.dividendo_estimado,
   dividendo_esperado: input.dividendo_esperado,
@@ -258,7 +257,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "academia") return "/academia";
   if (page === "projects") return "/proyectos";
   if (page === "tracking" || page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
-  if (page === "register-milestone") return "/plan-mejora/hito";
+  if (page === "progress" || page === "register-milestone") return "/plan-mejora/progreso";
   if (page === "profile") return "/perfil";
   if (page === "sales-profile") return "/perfil";
   if (page === "leads") return "/dashboard";
@@ -332,7 +331,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/academia") return { page: "academia" };
     if (path === "/proyectos") return { page: "projects" };
     if (path === "/plan-mejora") return { page: "tracking" };
-    if (path === "/plan-mejora/hito") return { page: "register-milestone" };
+    if (path === "/plan-mejora/progreso" || path === "/plan-mejora/hito") return { page: "progress" };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
     if (path === "/dashboard" || path === "/admin" || path === "/ejecutivo/leads" || path === "/login" || path === "/registro") {
       return { page: "home", path: "/inicio" };
@@ -420,11 +419,10 @@ export default function App() {
   const navigationHistoryRef = useRef([]);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
-  const [milestoneSuccess, setMilestoneSuccess] = useState("");
-  const [trackingGoals, setTrackingGoals] = useState([]);
+  const [trackingState, setTrackingState] = useState(null);
+  const [trackingRevision, setTrackingRevision] = useState(0);
   const [academyArticleId, setAcademyArticleId] = useState(null);
   const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
-  const [activeGoal, setActiveGoal] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
@@ -464,7 +462,27 @@ export default function App() {
   const visibleError = currentError && currentError !== dismissedError ? currentError : "";
 
   const userEvaluations = profile ? evaluations : [];
-  const currentEvaluation = userEvaluations[0] || null;
+  const currentEvaluation = trackingState?.status === "active"
+    ? userEvaluations.find((row) => row.id === trackingState.current_evaluation_id) ||
+      (trackingState.current_evaluation ? {
+        id: trackingState.current_evaluation_id, user_id: userId,
+        input: trackingState.latest_effective_snapshot, result: trackingState.current_evaluation,
+      } : null)
+    : [...userEvaluations].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+  useEffect(() => {
+    let active = true;
+    setTrackingState(null);
+    if (userId && profile?.role === roles.user) {
+      getTracking().then((state) => { if (active) setTrackingState(state); })
+        .catch(() => { if (active) setDataError("No se pudo cargar el seguimiento vigente."); });
+    }
+    return () => { active = false; };
+  }, [userId, profile?.role, evaluations, trackingRevision]);
+  const refreshTracking = async () => {
+    setTrackingRevision((revision) => revision + 1);
+    try { setEvaluations(await getEvaluations(userId, profile?.role)); }
+    catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
+  };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
     : profile
@@ -643,29 +661,6 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadGoals() {
-      if (!userId || !currentEvaluation || page !== "tracking") {
-        setTrackingGoals([]);
-        return;
-      }
-
-      try {
-        const storedGoals = await getGoals(userId, currentEvaluation.id);
-        if (active) setTrackingGoals(storedGoals);
-      } catch (err) {
-        console.warn("No se pudieron cargar metas de seguimiento; se usará el plan sugerido local.", err);
-        if (active) setTrackingGoals([]);
-      }
-    }
-
-    loadGoals();
-    return () => {
-      active = false;
-    };
-  }, [userId, currentEvaluation?.id, page]);
 
   useEffect(() => {
     if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
@@ -915,7 +910,7 @@ export default function App() {
     setResult(null);
     setResultSaved(null);
     setDataError("");
-    setTrackingGoals([]);
+    setTrackingState(null);
     setConsentGranted(false);
     migrateAnonymousSession(nextAuth)
       .then((migration) => {
@@ -1092,71 +1087,6 @@ export default function App() {
     }
   };
 
-  const deleteEvaluation = async (evaluationId) => {
-    try {
-      setDataError("");
-      await deleteStoredEvaluation(
-        evaluationId,
-        userId || profile?.email || "local-user",
-      );
-      removeEvaluation(evaluationId);
-      setTrackingGoals([]);
-    } catch (err) {
-      console.error(err);
-      setDataError("No se pudo eliminar la precalificación seleccionada.");
-    }
-  };
-
-  const handleGoalStatusChange = async (goalId, status) => {
-    try {
-      setDataError("");
-      const updatedGoal = await updateGoalStatus(
-        goalId,
-        userId || profile?.email || "local-user",
-        status,
-      );
-      if (updatedGoal) {
-        setTrackingGoals((prev) =>
-          prev.map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal)),
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      setDataError("No se pudo actualizar el estado de la meta.");
-    }
-  };
-
-  const handleAcceptPlan = async (planType) => {
-    if (!currentEvaluation) return;
-
-    try {
-      setDataError("");
-
-      const updatedEvaluation = await acceptEvaluationPlan(
-        currentEvaluation.id,
-        userId || profile?.email || "local-user",
-        { plan_type: planType }
-      );
-
-      if (updatedEvaluation) {
-        setEvaluations((prev) =>
-          prev.map((item) =>
-            item.id === updatedEvaluation.id ? updatedEvaluation : item,
-          ),
-        );
-        handleLogScoringEvent({
-          type: "accept_plan",
-          details: {
-            plan_type: planType,
-          },
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      setDataError("No pudimos activar el plan. Inténtalo nuevamente.");
-    }
-  };
-
   const handleLogScoringEvent = (event) => {
     if (!currentEvaluation) return;
     appendScoringEvent(
@@ -1193,115 +1123,6 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setDataError("No se pudo guardar el progreso del plan de ahorro.");
-    }
-  };
-
-  const handleOpenGoalPlan = (goal) => {
-    setActiveGoal(goal);
-    navigateToPage(
-      goal.title === "Revisar objetivo inmobiliario"
-        ? "objective-review"
-        : "monthly-plan",
-    );
-  };
-
-  const handleOpenHousingPlan = (pieType) => {
-    setHousingInitialPieType(pieType || "minimo");
-    setPage("housing-plan");
-  };
-
-  const handleSaveGoalProgress = async (goalId, progressData) => {
-    try {
-      setDataError("");
-      const updatedGoal = await updateGoalProgress(
-        goalId,
-        userId || profile?.email || "local-user",
-        progressData,
-      );
-      if (updatedGoal) {
-        setTrackingGoals((prev) =>
-          prev.map((goal) =>
-            goal.id === updatedGoal.id ? { ...goal, ...updatedGoal } : goal,
-          ),
-        );
-        setActiveGoal((prev) =>
-          prev?.id === updatedGoal.id ? { ...prev, ...updatedGoal } : prev,
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      setDataError("No pudimos guardar el avance mensual.");
-    }
-  };
-  const handleRegisterMilestone = async (milestoneData) => {
-    if (!currentEvaluation) return;
-    try {
-      setDataError("");
-      setMilestoneSuccess("");
-
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const scoreUrl = `${apiBase.replace(/\/$/, "")}/score`;
-
-      // 1. SANITIZAR DATOS: Mapear "renta_mensual" a "ingreso_mensual" si es necesario
-      // y forzar que los valores financieros sean números para evitar que la API crashee.
-      const parsedMilestoneData = { ...milestoneData };
-
-      if (parsedMilestoneData.renta_mensual !== undefined) {
-        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.renta_mensual);
-        delete parsedMilestoneData.renta_mensual;
-      } else if (parsedMilestoneData.ingreso_mensual !== undefined) {
-        parsedMilestoneData.ingreso_mensual = Number(parsedMilestoneData.ingreso_mensual);
-      }
-
-      if (parsedMilestoneData.ahorro_disponible !== undefined) {
-        parsedMilestoneData.ahorro_disponible = Number(parsedMilestoneData.ahorro_disponible);
-      }
-
-      // 2. Construir el input mezclando la evaluación anterior con los datos sanitizados
-      const newFinancialInput = buildFinancialInput({
-        ...currentEvaluation.input,
-        ...parsedMilestoneData,
-      });
-
-      let res;
-      try {
-        res = await fetch(scoreUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newFinancialInput),
-        });
-      } catch (fetchErr) {
-        console.error('Network error al contactar API de scoring (¿Está encendido el servidor en el puerto 8000?)', fetchErr);
-        throw new Error(`Error de conexión con el motor de precalificación.`);
-      }
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('Error interno en API de scoring', { status: res.status, body: errorText });
-        throw new Error(`El motor rechazó los datos (Código ${res.status}). Revisa la consola del backend.`);
-      }
-
-      const scoreResult = await res.json();
-      const resultSnapshot = buildResultSnapshot(scoreResult);
-
-      const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
-        email: profile?.email || "sin-email",
-        onboarding: userOnboarding ? { ...userOnboarding } : null,
-        input: newFinancialInput, // Guardamos el nuevo input en Supabase
-        result: resultSnapshot,
-        channel: getChannel(),
-      });
-
-      prependEvaluation(savedEvaluation);
-
-      setMilestoneSuccess("¡Hito registrado exitosamente! Tu score y plan han sido recalculados.");
-      setPage("tracking");
-
-      // Auto-hide success message after 5 seconds
-      setTimeout(() => setMilestoneSuccess(""), 5000);
-    } catch (err) {
-      console.error("Error registrando hito", err);
-      setDataError("Hubo un problema al registrar tu nuevo hito. Por favor, verifica tus datos e intenta nuevamente.");
     }
   };
 
@@ -1355,7 +1176,7 @@ export default function App() {
     await signOut();
     setAuth({ session: null, profile: null });
     setEvaluations([]);
-    setTrackingGoals([]);
+    setTrackingState(null);
     setConsentGranted(false);
     setResult(null);
     setResultSaved(null);
@@ -1749,27 +1570,14 @@ export default function App() {
             onboarding={userOnboarding}
             evaluations={userEvaluations}
           onSaveOnboarding={handleProfileOnboardingSave}
-          onDeleteEvaluation={deleteEvaluation}
           onProfileUpdate={handleProfileUpdate}
           onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
-        <FinancialTracking
-          evaluation={currentEvaluation}
-          goals={trackingGoals}
-          onAcceptPlan={handleAcceptPlan}
-          onGoalStatusChange={handleGoalStatusChange}
-          onOpenGoalPlan={handleOpenGoalPlan}
-          onStartEvaluation={startEvaluation}
-          onOpenHousingPlan={handleOpenHousingPlan}
-          onLogScoringEvent={handleLogScoringEvent}
-          onOpenMilestoneRegistration={() => {
-            setActiveGoal(null);
-            navigateToPage("register-milestone");
-          }}
-          successMessage={milestoneSuccess}
-          onNavigate={navigateToPage}
-        />
+        <ProgressPage compact onStartEvaluation={startEvaluation}
+          onOpenProgress={() => navigateToPage("progress")} onChanged={refreshTracking} />
+      ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
+        <ProgressPage onStartEvaluation={startEvaluation} onChanged={refreshTracking} />
       ) : page === "housing-plan" && profile.role === roles.user ? (
         <HousingSavingsPlan
           evaluation={currentEvaluation}
@@ -1777,19 +1585,6 @@ export default function App() {
           onBack={() => navigateToPage("tracking")}
           onSaveHousingProgress={handleSaveHousingProgress}
           onLogScoringEvent={handleLogScoringEvent}
-        />
-      ) : page === "register-milestone" && profile.role === roles.user ? (
-        <RegisterMilestone
-          evaluation={currentEvaluation}
-          onBack={() => setPage("tracking")}
-          onRegister={handleRegisterMilestone}
-        />
-      ) : page === "monthly-plan" && profile.role === roles.user ? (
-        <MonthlyPlan
-          evaluation={currentEvaluation}
-          goal={activeGoal}
-          onBack={() => navigateToPage("tracking")}
-          onSaveProgress={handleSaveGoalProgress}
         />
       ) : page === "objective-review" && profile.role === roles.user ? (
         <ObjectiveReview
