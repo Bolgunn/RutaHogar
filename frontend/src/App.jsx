@@ -35,6 +35,7 @@ import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingRoutePaths } from "./lib/trackingRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
+import { fetchJsonWithTimeout } from "./services/httpRequest";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
@@ -1141,11 +1142,11 @@ export default function App() {
       );
       const payload = buildFinancialInput(goalInput);
 
-      const res = await fetch(`${apiBase.replace(/\/$/, "")}/score`, {
+      const { response: res, payload: scoreResult } = await fetchJsonWithTimeout(`${apiBase.replace(/\/$/, "")}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+      }, { timeoutMessage: "La evaluación del proyecto tardó demasiado. Intenta nuevamente." });
       if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
 
       const newEval = await createEvaluation(profile.id, {
@@ -1154,7 +1155,7 @@ export default function App() {
         // La metadata de la meta se persiste con la evaluación, pero no se
         // envía a /score para mantener el contrato del motor financiero.
         input: { ...payload, project_goal: goalInput.project_goal },
-        result: buildResultSnapshot(await res.json()),
+        result: buildResultSnapshot(scoreResult),
         channel: "project_selection",
       });
 

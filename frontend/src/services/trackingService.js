@@ -1,23 +1,34 @@
 import { supabase } from "../utils/supabase";
+import { fetchJsonWithTimeout, RequestTimeoutError, withTimeout } from "./httpRequest";
 
 const apiBase = () => (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
 
-export async function trackingRequest(path = "", body) {
+export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   if (!supabase) throw new Error("El seguimiento requiere una conexión configurada.");
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data?.session?.access_token) throw new Error("Inicia sesión para acceder a tu progreso.");
-  let response;
+  let session;
   try {
-    response = await fetch(`${apiBase()}/tracking${path}`, {
+    session = await withTimeout(
+      supabase.auth.getSession(), timeoutMs,
+      "No se pudo verificar tu sesión a tiempo. Intenta nuevamente.",
+    );
+  } catch (cause) {
+    if (cause instanceof RequestTimeoutError) throw cause;
+    throw new Error("No se pudo verificar tu sesión. Intenta nuevamente.");
+  }
+  const { data, error } = session;
+  if (error || !data?.session?.access_token) throw new Error("Inicia sesión para acceder a tu progreso.");
+  let response, payload;
+  try {
+    ({ response, payload } = await fetchJsonWithTimeout(`${apiBase()}/tracking${path}`, {
       method: body === undefined ? "GET" : "POST",
       headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-  } catch {
+    }, { timeoutMs, timeoutMessage: "El seguimiento tardó demasiado. Intenta nuevamente." }));
+  } catch (cause) {
+    if (cause instanceof RequestTimeoutError) throw cause;
     throw new Error("No se pudo conectar. Puedes reintentar sin duplicar el registro.");
   }
-  const payload = await response.json();
   if (!response.ok) {
     const code = payload?.detail?.code || "invalid_request";
     const messages = {
@@ -35,8 +46,8 @@ export async function trackingRequest(path = "", body) {
   return payload;
 }
 
-export const getTracking = () => trackingRequest();
-export const getProjection = () => trackingRequest("/projection");
+export const getTracking = (options) => trackingRequest("", undefined, options);
+export const getProjection = (options) => trackingRequest("/projection", undefined, options);
 export const appendTrackingEvent = (command) => trackingRequest("/events", command);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
