@@ -127,6 +127,47 @@ def test_first_later_project_goal_freezes_target_and_enables_projection():
     assert repo.bundle["plan"]["target_project_snapshot"]["id"] == "p1"
 
 
+def test_baseline_replacement_can_freeze_first_project_without_rewriting_baseline():
+    repo, app = service()
+    baseline_snapshot = valid_snapshot()
+    baseline_snapshot.pop("project_goal")
+    first = app.execute("u1", command(baseline_snapshot))
+    original_baseline = deepcopy(repo.bundle["events"][0])
+    original_evaluation = deepcopy(repo.bundle["evaluations"][0])
+
+    replacement_snapshot = {
+        **baseline_snapshot,
+        "project_goal": {"id": "p1", "nombre": "Proyecto corregido"},
+        "property_value_clp": 120000000,
+    }
+    replacement = {
+        "event_id": str(uuid4()), "effective_at": "2026-02-01T00:00:00Z",
+        "reason": "El objetivo no fue registrado", "correction_effect": "replace",
+        "patch": replacement_snapshot,
+    }
+    app.execute("u1", replacement, first["event_id"])
+
+    assert repo.bundle["plan"]["target_project_snapshot"] == replacement_snapshot["project_goal"]
+    assert repo.commits == 2  # Replacement, reevaluation and target freeze share one commit.
+    assert repo.bundle["events"][0] == original_baseline
+    assert repo.bundle["evaluations"][0] == original_evaluation
+    assert app.projection("u1")["cause"] != "missing_project_goal"
+
+    latest = app.read("u1")["latest_event_id"]
+    later = app.execute("u1", command(
+        {"project_goal": {"id": "p2", "nombre": "Proyecto posterior"}},
+        latest, "2026-04-01T00:00:00Z",
+    ))
+    correction = {
+        "event_id": str(uuid4()), "effective_at": "2026-04-02T00:00:00Z",
+        "reason": "Corregir proyecto posterior", "correction_effect": "replace",
+        "patch": {"project_goal": {"id": "p3", "nombre": "Proyecto corregido posterior"}},
+    }
+    app.execute("u1", correction, later["event_id"])
+
+    assert repo.bundle["plan"]["target_project_snapshot"] == replacement_snapshot["project_goal"]
+
+
 def test_idempotency_compares_equivalent_timestamps_canonically():
     repo, app = service()
     first = app.execute("u1", command(valid_snapshot()))

@@ -243,8 +243,11 @@ class TrackingService:
                 "provenance": evaluation["provenance"],
             }
         target_project_snapshot = None
-        if history and not target_event_id and not bundle["plan"].get("target_project_snapshot"):
-            target_project_snapshot = valid_project_snapshot(outcome["new_complete_snapshot"])
+        if history and not bundle["plan"].get("target_project_snapshot"):
+            target_project_snapshot = next((
+                project for row in outcome["active_line"]
+                if (project := valid_project_snapshot(row["snapshot"])) is not None
+            ), None)
         result = {
             "event_id": command["event_id"], "evaluation_ids": [row["id"] for row in evaluations],
             "evaluation": evaluations[-1] if evaluations else None,
