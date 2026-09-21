@@ -1216,7 +1216,7 @@ begin
   select event_id into current_revision from tracking_events where user_id = p_user_id
     order by recorded_at desc, event_id desc limit 1;
   if current_revision is distinct from p_expected_revision then raise exception 'lineage_conflict'; end if;
-  select id, target_project_snapshot into plan_id_value, frozen_target_project
+  select id, nullif(target_project_snapshot, 'null'::jsonb) into plan_id_value, frozen_target_project
     from tracking_plans where user_id = p_user_id for update;
   if plan_id_value is null then
     plan_id_value := (plan_data->>'id')::uuid;
@@ -1247,13 +1247,14 @@ begin
       original_plan_snapshot, target_project_snapshot, provenance)
     values (plan_id_value, p_user_id, (plan_data->>'baseline_evaluation_id')::uuid,
       (plan_data->>'root_event_id')::uuid, (plan_data->>'baseline_at')::timestamptz,
-      plan_data->'original_plan_snapshot', plan_data->'target_project_snapshot', plan_data->'provenance');
+      plan_data->'original_plan_snapshot', nullif(plan_data->'target_project_snapshot', 'null'::jsonb),
+      plan_data->'provenance');
   elsif frozen_target_project is null
       and jsonb_typeof(p_records->'target_project_snapshot') = 'object'
       and p_records->'target_project_snapshot' <> '{}'::jsonb then
     update tracking_plans
       set target_project_snapshot = p_records->'target_project_snapshot'
-      where id = plan_id_value and target_project_snapshot is null;
+      where id = plan_id_value and nullif(target_project_snapshot, 'null'::jsonb) is null;
   end if;
   for item in select value from jsonb_array_elements(p_records->'events') loop
     stamp := clock_timestamp();

@@ -11,11 +11,12 @@ insert into public.profiles(id, role) values
 insert into public.evaluations(id, user_id, score, classification) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 50, 'Medio');
 insert into public.tracking_plans(
-  id, user_id, baseline_evaluation_id, root_event_id, baseline_at, original_plan_snapshot, provenance
+  id, user_id, baseline_evaluation_id, root_event_id, baseline_at, original_plan_snapshot,
+  target_project_snapshot, provenance
 ) values (
   '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001',
-  '2026-01-01Z', '{}', '{}'
+  '2026-01-01Z', '{}', 'null'::jsonb, '{}'
 );
 insert into public.tracking_events(
   event_id, plan_id, user_id, event_kind, effective_at, reason, patch,
