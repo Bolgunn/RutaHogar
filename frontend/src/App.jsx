@@ -32,6 +32,7 @@ import SignupOffer from "./components/SignupOffer";
 import { createEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
+import { resolveTrackingRoute, trackingRoutePaths } from "./lib/trackingRoutes";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
@@ -275,6 +276,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
+  const trackingPage = resolveTrackingRoute(path);
   const unknownRoute = ![
     "/",
     "/inicio",
@@ -286,8 +288,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/subsidios",
     "/comparar-proyectos",
     "/academia",
-    "/plan-mejora",
-    "/plan-mejora/hito",
+    ...trackingRoutePaths,
     "/perfil",
     "/historial",
     "/dashboard",
@@ -309,7 +310,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/plan-mejora", "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -330,8 +331,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
     if (path === "/proyectos") return { page: "projects" };
-    if (path === "/plan-mejora") return { page: "tracking" };
-    if (path === "/plan-mejora/progreso" || path === "/plan-mejora/hito") return { page: "progress" };
+    if (trackingPage) return { page: trackingPage };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
     if (path === "/dashboard" || path === "/admin" || path === "/ejecutivo/leads" || path === "/login" || path === "/registro") {
       return { page: "home", path: "/inicio" };
