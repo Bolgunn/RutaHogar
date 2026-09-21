@@ -9,6 +9,7 @@ import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
+import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
@@ -1574,10 +1575,22 @@ export default function App() {
           onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
-        <ProgressPage compact onStartEvaluation={startEvaluation}
-          onOpenProgress={() => navigateToPage("progress")} onChanged={refreshTracking} />
+        <FinancialTracking
+          evaluation={currentEvaluation}
+          onStartEvaluation={startEvaluation}
+          onOpenProgress={() => navigateToPage("progress")}
+          onOpenHousingPlan={(pieType) => {
+            setHousingInitialPieType(pieType || "minimo");
+            setPage("housing-plan");
+          }}
+          onNavigate={navigateToPage}
+        />
       ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
-        <ProgressPage onStartEvaluation={startEvaluation} onChanged={refreshTracking} />
+        <ProgressPage
+          onBack={() => navigateToPage("tracking")}
+          onStartEvaluation={startEvaluation}
+          onChanged={refreshTracking}
+        />
       ) : page === "housing-plan" && profile.role === roles.user ? (
         <HousingSavingsPlan
           evaluation={currentEvaluation}

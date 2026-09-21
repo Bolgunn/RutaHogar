@@ -41,7 +41,27 @@ export function belongsToSlot(row, rootEventId, auditLine) {
 
 export const displayValue = (value) => value == null ? "Sin datos" :
   typeof value === "number" ? value.toLocaleString("es-CL", { maximumFractionDigits: 2 }) :
-    typeof value === "object" ? JSON.stringify(value) : String(value);
+  typeof value === "object" ? JSON.stringify(value) : String(value);
+
+function projectSnapshot(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length
+    ? value
+    : null;
+}
+
+// ALG-13 projects against this frozen snapshot. A later evaluation may carry a
+// different preference; it is intentionally kept as the latest effective
+// antecedent rather than being presented as a replacement for the projection
+// target.
+export function trackingProjectContext(tracking) {
+  const frozenTarget = projectSnapshot(tracking?.baseline?.target_project_snapshot);
+  const latestPreference = projectSnapshot(tracking?.latest_effective_snapshot?.project_goal);
+  const sameProject = Boolean(frozenTarget && latestPreference
+    && (frozenTarget.id ? frozenTarget.id === latestPreference.id : frozenTarget === latestPreference));
+  return { frozenTarget, latestPreference, hasDifferentLatestPreference: Boolean(latestPreference && !sameProject) };
+}
+
+export const projectName = (project) => project?.nombre || project?.name || project?.id || "Sin proyecto seleccionado";
 
 export const projectionCauses = {
   insufficient_data: "Aún faltan observaciones en al menos dos fechas distintas.",

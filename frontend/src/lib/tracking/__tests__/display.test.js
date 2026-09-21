@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activeSeries, belongsToSlot, isUpdateDue, projectionCauses, serializePatch } from "../display";
+import { activeSeries, belongsToSlot, isUpdateDue, projectName, projectionCauses, serializePatch, trackingProjectContext } from "../display";
 
 describe("HU13 presence-preserving updates", () => {
   it("omits untouched controls and accepts genuine worsening including zero", () => {
@@ -78,5 +78,26 @@ describe("HU13 active history and update-due indicator", () => {
       "insufficient_data", "missing_project_goal", "incomplete_state",
       "non_projectable_blocker", "no_favorable_trend", "objective_unreachable",
     ]) expect(projectionCauses[cause]).toBeTruthy();
+  });
+});
+
+describe("HU13 frozen project target presentation", () => {
+  it("keeps a later project preference separate from the frozen ALG-13 target", () => {
+    const tracking = {
+      baseline: { target_project_snapshot: { id: "project-a", nombre: "Proyecto inicial" } },
+      latest_effective_snapshot: { project_goal: { id: "project-b", nombre: "Proyecto posterior" } },
+    };
+
+    expect(trackingProjectContext(tracking)).toEqual({
+      frozenTarget: { id: "project-a", nombre: "Proyecto inicial" },
+      latestPreference: { id: "project-b", nombre: "Proyecto posterior" },
+      hasDifferentLatestPreference: true,
+    });
+    expect(projectName(trackingProjectContext(tracking).frozenTarget)).toBe("Proyecto inicial");
+  });
+
+  it("does not manufacture a target when the snapshot is JSON null or absent", () => {
+    expect(trackingProjectContext({ baseline: { target_project_snapshot: null }, latest_effective_snapshot: {} }))
+      .toEqual({ frozenTarget: null, latestPreference: null, hasDifferentLatestPreference: false });
   });
 });

@@ -152,6 +152,7 @@ export default function FinancialTracking({
   onOpenHousingPlan,
   onLogScoringEvent,
   onOpenMilestoneRegistration,
+  onOpenProgress,
   onNavigate,
   successMessage,
 }) {
@@ -184,6 +185,13 @@ export default function FinancialTracking({
   const [filterPriority, setFilterPriority] = useState("Todos");
   const [filterCategory, setFilterCategory] = useState("Todos");
 
+  const progressButton = onOpenProgress ? (
+    <button type="button" className="primary-button" onClick={onOpenProgress}>
+      <i className="ti ti-chart-line" aria-hidden="true" />
+      Mi progreso
+    </button>
+  ) : null;
+
   // Plazo de compra del contexto inicial (limite superior)
   const baseDesiredMonths = useMemo(() => {
     const p = evaluation?.input?.plazo_compra;
@@ -197,9 +205,12 @@ export default function FinancialTracking({
   if (!tracking) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Plan de Mejora</span>
-          <h1>Mi plan de mejora</h1>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Plan de Mejora</span>
+            <h1>Mi plan de mejora</h1>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
         <div className="empty-state">
           <strong>Aún no tienes una precalificación.</strong>
@@ -216,9 +227,12 @@ export default function FinancialTracking({
   if (indicators.ahorro_mensual_acelerado === undefined) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Plan de Mejora</span>
-          <h1>Mi plan de mejora</h1>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Plan de Mejora</span>
+            <h1>Mi plan de mejora</h1>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
         <div className="empty-state">
           <strong>Vuelve a precalificar para ver tu plan actualizado.</strong>
@@ -311,10 +325,13 @@ export default function FinancialTracking({
   if (!planType) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Configuración Inicial</span>
-          <h1>Selecciona tu Plan de Mejora</h1>
-          <p>Revisa las ventajas y desventajas de cada perfil y elige el que mejor se ajuste a tus capacidades.</p>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Configuración Inicial</span>
+            <h1>Selecciona tu Plan de Mejora</h1>
+            <p>Revisa las ventajas y desventajas de cada perfil y elige el que mejor se ajuste a tus capacidades.</p>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
 
         {computedMesesAcelerado > 12 && (
@@ -398,6 +415,7 @@ export default function FinancialTracking({
           <p>Una lectura referencial de las condiciones que conviene preparar antes de una evaluación bancaria.</p>
         </div>
         <div className="tracking-page-head__actions">
+          {progressButton}
           {onNavigate && (
             <button
               type="button"
@@ -831,7 +849,7 @@ export default function FinancialTracking({
 
 
        {/* Acceso único al registro de avances. */}
-       <div className="tracking-goals-toolbar">
+       {onOpenMilestoneRegistration && <div className="tracking-goals-toolbar">
          <button
            className="primary-button tracking-goals-register"
            type="button"
@@ -840,7 +858,7 @@ export default function FinancialTracking({
            <i className="ti ti-chart-line" aria-hidden="true" />
            Registrar avances
          </button>
-       </div>
+       </div>}
 
       {filteredGoals.length === 0 ? (
         <div className="empty-state">
