@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
+import { reportLead } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { detectContactOpportunities } from "../lib/matching/contactOpportunities";
 import { buildLeadProjectComparison } from "../lib/matching/leadComparison";
@@ -17,6 +18,26 @@ import {
   getClassificationClass,
   translateSeverity,
 } from "../utils/helpers";
+
+function getReliabilityBadge(status) {
+  switch (status) {
+    case "sospechoso": return <span className="status-pill bajo">Sospechoso</span>;
+    case "en_revision": return <span className="status-pill medio">En revisión</span>;
+    case "descartado": return <span className="status-pill requiere-antecedentes">Descartado</span>;
+    case "reactivado": return <span className="status-pill alto">Reactivado</span>;
+    case "normal": default: return null; // Normal is hidden by default in badges to keep it clean, but let's show it if requested. Actually user requested: "verde si es normal".
+  }
+}
+
+function getReliabilityBadgeCard(status) {
+  switch (status) {
+    case "sospechoso": return <span className="status-pill bajo">Sospechoso</span>;
+    case "en_revision": return <span className="status-pill medio">En revisión</span>;
+    case "descartado": return <span className="status-pill requiere-antecedentes">Descartado</span>;
+    case "reactivado": return <span className="status-pill alto">Reactivado</span>;
+    case "normal": default: return <span className="status-pill alto">Normal</span>;
+  }
+}
 
 const DATE_RANGES = [
   { label: "Cualquier fecha", value: "todos" },
@@ -352,7 +373,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [commune, setCommune] = useState("todas");
   const [age, setAge] = useState(0);
   const [date, setDate] = useState("todos");
+  const [reliabilityStatus, setReliabilityStatus] = useState("default");
   const [search, setSearch] = useState("");
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState("");
   const [projects, setProjects] = useState([]);
   const [projectsError, setProjectsError] = useState("");
   const [projectsLoaded, setProjectsLoaded] = useState(false);
@@ -486,10 +510,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
       if (ageRange.min && item.input?.edad == null) return false;
-      if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
+      const status = item.reliability_status || "normal";
+      if (reliabilityStatus === "default" && (status === "sospechoso" || status === "descartado")) return false;
+      if (reliabilityStatus !== "default" && reliabilityStatus !== "todos" && status !== reliabilityStatus) return false;
+
       return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
     });
-  }, [latestEvaluations, classification, commune, age, date, search]);
+  }, [latestEvaluations, classification, commune, age, date, search, reliabilityStatus]);
   const { ranked, descartados, requiereAntecedentes } = useMemo(
     () => rankLeadsForProject(filtered, selectedProject, sortBy),
     [filtered, selectedProject, sortBy],
@@ -557,8 +584,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     [comparisonLeads, selectedProject],
   );
   const visibleContactQuestions = showAllContactQuestions ? contactQuestions : contactQuestions.slice(0, 5);
-  const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search;
-  const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); };
+  const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search || reliabilityStatus !== "default";
+  const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); setReliabilityStatus("default"); };
   const selectProject = (nextId) => {
     setProjectId(nextId);
     setClassification(nextId ? "todos" : "Alto");
@@ -588,51 +615,52 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const leadCard = ({ lead, match }) => {
     const isComparisonSelected = comparisonLeadIds.includes(lead.id);
     return (
-    <article
-      key={lead.id}
-      className={`executive-lead-card ${isComparisonSelected ? "is-selected-for-comparison" : ""}`}
-      role="button"
-      tabIndex="0"
-      onClick={() => setSelectedLead(lead)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          setSelectedLead(lead);
-        }
-      }}
-      aria-label={`Ver ficha de ${lead.full_name || lead.email || "lead"}`}
-    >
-      <div className="executive-lead-card__identity">
-        <div>
-          <h3>{lead.full_name || lead.email || "Sin nombre"}</h3>
-          <p>{lead.email || "Sin correo registrado"}</p>
-          {selectedProject && match?.reorientable && (
-            <span className="executive-lead-card__reorientable">
-              <i className="ti ti-route" aria-hidden="true" />
-              Reorientable para este proyecto
-            </span>
-          )}
+      <article
+        key={lead.id}
+        className={`executive-lead-card ${isComparisonSelected ? "is-selected-for-comparison" : ""}`}
+        role="button"
+        tabIndex="0"
+        onClick={() => setSelectedLead(lead)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setSelectedLead(lead);
+          }
+        }}
+        aria-label={`Ver ficha de ${lead.full_name || lead.email || "lead"}`}
+      >
+        <div className="executive-lead-card__identity">
+          <div>
+            <h3>{lead.full_name || lead.email || "Sin nombre"}</h3>
+            <p>{lead.email || "Sin correo registrado"}</p>
+            {selectedProject && match?.reorientable && (
+              <span className="executive-lead-card__reorientable">
+                <i className="ti ti-route" aria-hidden="true" />
+                Reorientable para este proyecto
+              </span>
+            )}
+          </div>
+          <div className="executive-lead-card__status">
+            {getReliabilityBadgeCard(lead.reliability_status || "normal")}
+            <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
+            <CommercialStageBadge stage={commercialStages[lead.user_id]?.stage} />
+            <small>{formatDate(lead.created_at)}</small>
+          </div>
         </div>
-        <div className="executive-lead-card__status">
-          <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
-          <CommercialStageBadge stage={commercialStages[lead.user_id]?.stage} />
-          <small>{formatDate(lead.created_at)}</small>
+        <dl className="executive-lead-card__facts">
+          <div><dt>Comuna</dt><dd>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</dd></div>
+          {selectedProject ? <>
+            <div><dt>Afinidad</dt><dd>{match?.afinidad ?? "-"}<small>{match?.clasificacion || "Sin dato"}</small></dd></div>
+            <div><dt>Capacidad</dt><dd>{match?.evidencia?.capacidad_uf ?? "Sin dato"} UF<small>{match?.evidencia?.plazo_anios ? `${match.evidencia.plazo_anios} años` : "Sin dato"}</small></dd></div>
+            <div><dt>Pie disponible</dt><dd>{match?.evidencia?.pie_disponible_uf ?? "Sin dato"} UF</dd></div>
+            <div className="executive-lead-card__fact--wide"><dt>Bloqueador</dt><dd>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</dd></div>
+          </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</dd></div>}
+        </dl>
+        <div className="executive-lead-card__actions">
+          {selectedProject && <button type="button" className={`secondary-button compact-button executive-compare-toggle ${isComparisonSelected ? "is-active" : ""}`} onClick={(event) => { event.stopPropagation(); toggleComparisonLead(lead); }}>{isComparisonSelected ? "Seleccionado" : "Comparar"}</button>}
+          <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
         </div>
-      </div>
-      <dl className="executive-lead-card__facts">
-        <div><dt>Comuna</dt><dd>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</dd></div>
-        {selectedProject ? <>
-          <div><dt>Afinidad</dt><dd>{match?.afinidad ?? "-"}<small>{match?.clasificacion || "Sin dato"}</small></dd></div>
-          <div><dt>Capacidad</dt><dd>{match?.evidencia?.capacidad_uf ?? "Sin dato"} UF<small>{match?.evidencia?.plazo_anios ? `${match.evidencia.plazo_anios} años` : "Sin dato"}</small></dd></div>
-          <div><dt>Pie disponible</dt><dd>{match?.evidencia?.pie_disponible_uf ?? "Sin dato"} UF</dd></div>
-          <div className="executive-lead-card__fact--wide"><dt>Bloqueador</dt><dd>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</dd></div>
-        </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</dd></div>}
-      </dl>
-      <div className="executive-lead-card__actions">
-        {selectedProject && <button type="button" className={`secondary-button compact-button executive-compare-toggle ${isComparisonSelected ? "is-active" : ""}`} onClick={(event) => { event.stopPropagation(); toggleComparisonLead(lead); }}>{isComparisonSelected ? "Seleccionado" : "Comparar"}</button>}
-        <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
-      </div>
-    </article>
+      </article>
     );
   };
 
@@ -728,34 +756,35 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <p>Combina una prioridad, territorio o perfil para enfocar la bandeja.</p>
         </div>
         {activeFilters && <button type="button" className="secondary-button compact-button" onClick={clearFilters}>Restablecer vista</button>}
+      </div>
+      <div className="executive-leads-controls__guide">
+        <span>Cómo usar esta bandeja</span>
+        <p>Selecciona primero un proyecto. Luego elige si quieres ver antes el mejor encaje o la mayor capacidad de compra; usa los filtros restantes solo para acotar la lista.</p>
+      </div>
+      <div className="executive-leads-controls__primary">
+        <label className="executive-leads-controls__project">Proyecto<select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Al elegirlo, calculamos afinidad, capacidad y pie para ese proyecto.</small></label>
+        <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Puedes cambiar el criterio sin perder los filtros aplicados." : "Disponible al seleccionar un proyecto."}</small></label>
+      </div>
+      <div className="executive-leads-controls__priority">
+        <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
+        <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
+          {[
+            ["todos", "Total", latestEvaluations.length, ""],
+            ["Alto", "Alta prioridad", counts.Alto, "admin-leads-metric--high"],
+            ["Medio", "Prioridad media", counts.Medio, "admin-leads-metric--medium"],
+            ["Bajo", "Prioridad baja", counts.Bajo, "admin-leads-metric--low"],
+          ].map(([value, label, count, tone]) => (
+            <button type="button" key={value} className={`admin-leads-metric executive-priority-rail__item ${tone} ${classification === value ? "is-active" : ""}`} onClick={() => setClassification(value)} aria-pressed={classification === value}>
+              <span>{label}</span>
+              <strong>{count}</strong>
+            </button>
+          ))}
         </div>
-        <div className="executive-leads-controls__guide">
-          <span>Cómo usar esta bandeja</span>
-          <p>Selecciona primero un proyecto. Luego elige si quieres ver antes el mejor encaje o la mayor capacidad de compra; usa los filtros restantes solo para acotar la lista.</p>
-        </div>
-        <div className="executive-leads-controls__primary">
-          <label className="executive-leads-controls__project">Proyecto<select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Al elegirlo, calculamos afinidad, capacidad y pie para ese proyecto.</small></label>
-          <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Puedes cambiar el criterio sin perder los filtros aplicados." : "Disponible al seleccionar un proyecto."}</small></label>
-        </div>
-        <div className="executive-leads-controls__priority">
-          <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
-          <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
-            {[
-              ["todos", "Total", latestEvaluations.length, ""],
-              ["Alto", "Alta prioridad", counts.Alto, "admin-leads-metric--high"],
-              ["Medio", "Prioridad media", counts.Medio, "admin-leads-metric--medium"],
-              ["Bajo", "Prioridad baja", counts.Bajo, "admin-leads-metric--low"],
-            ].map(([value, label, count, tone]) => (
-              <button type="button" key={value} className={`admin-leads-metric executive-priority-rail__item ${tone} ${classification === value ? "is-active" : ""}`} onClick={() => setClassification(value)} aria-pressed={classification === value}>
-                <span>{label}</span>
-                <strong>{count}</strong>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
-          <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
-          <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
+      </div>
+      <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
+        <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
+        <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label>Confiabilidad<select value={reliabilityStatus} onChange={(event) => setReliabilityStatus(event.target.value)}><option value="default">Ocultar sospechosos</option><option value="todos">Todos los leads</option><option value="normal">Solo normales</option><option value="sospechoso">Solo sospechosos</option><option value="en_revision">En revisión</option><option value="reactivado">Reactivados</option><option value="descartado">Descartados</option></select></label>
         <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
         <label>Fecha<select value={date} onChange={(event) => setDate(event.target.value)}>{DATE_RANGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
       </div>
@@ -893,12 +922,48 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         <div className="admin-modal-card admin-modal-card--xl executive-lead-detail" onClick={(event) => event.stopPropagation()}>
           <div className="admin-modal-header">
             <div className="admin-modal-heading">
-              <span className="eyebrow">Ficha comercial</span>
+              <span className="eyebrow">Ficha comercial {getReliabilityBadgeCard(selectedLead.reliability_status || "normal")}</span>
               <h2>{selectedLead.full_name || selectedLead.email || "Lead sin nombre"}</h2>
               <p>{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Comuna sin dato"} · Evaluado el {formatDate(selectedLead.created_at)}</p>
             </div>
-            <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(null)}>Cerrar ficha</button>
+            <button type="button" className="secondary-button compact-button" onClick={() => { setSelectedLead(null); setIsReporting(false); }}>Cerrar ficha</button>
           </div>
+
+          {isReporting ? (
+            <section className="admin-surface admin-section-gap" style={{ background: "var(--color-surface-mixed)" }}>
+              <div className="admin-surface__header">
+                <div className="admin-surface__title">
+                  <h2>Reportar lead sospechoso</h2>
+                  <p>¿Estás seguro de que quieres reportar a este lead por información inconsistente? Su perfil pasará a revisión por un administrador.</p>
+                </div>
+              </div>
+              <textarea
+                className="admin-textarea"
+                placeholder="Motivo del reporte (opcional)"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                rows="3"
+                style={{ width: "100%", marginBottom: "1rem" }}
+              />
+              <div className="admin-action-grid">
+                <button type="button" className="secondary-button" onClick={() => setIsReporting(false)}>Cancelar</button>
+                <button type="button" className="primary-button" onClick={async () => {
+                  if (executiveScope) {
+                    try {
+                      await reportLead(selectedLead.user_id, executiveScope.id, reportReason);
+                      // Optimistic UI update
+                      selectedLead.reliability_status = "en_revision";
+                      setIsReporting(false);
+                      setReportReason("");
+                      alert("Lead reportado correctamente. Pasará a estado de revisión.");
+                    } catch (e) {
+                      alert("Error al reportar lead: " + e.message);
+                    }
+                  }
+                }}>Sí, reportar lead</button>
+              </div>
+            </section>
+          ) : null}
 
           <section className={`executive-lead-brief ${selectedResult.executive_summary ? "" : "is-without-summary"}`}>
             <div className="executive-lead-brief__decision">
@@ -917,6 +982,18 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
               <div className="admin-action-grid">
                 {selectedLead.email ? <a href={selectedEmailHref} className="secondary-button admin-link-button">Enviar correo</a> : <button type="button" className="secondary-button admin-link-button" disabled>Correo no disponible</button>}
                 {selectedPhone ? <a href={selectedWhatsappHref} className="primary-button admin-link-button" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a> : <button type="button" className="secondary-button admin-link-button" disabled>WhatsApp no disponible</button>}
+                {(!isReporting && (selectedLead.reliability_status === "normal" || selectedLead.reliability_status === "reactivado")) && (
+                  <button
+                    type="button"
+                    className="secondary-button admin-link-button"
+                    style={{ color: "var(--color-danger, #d32f2f)", borderColor: "var(--color-danger, #d32f2f)", transition: "all 0.2s ease" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-danger, #d32f2f)"; e.currentTarget.style.color = "white"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--color-danger, #d32f2f)"; }}
+                    onClick={() => setIsReporting(true)}
+                  >
+                    <i className="ti ti-alert-triangle" /> Reportar lead
+                  </button>
+                )}
               </div>
             </div>
           </section>
@@ -956,41 +1033,41 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
               <p>Información del cliente, señales comerciales y diagnóstico financiero ordenados por uso comercial.</p>
             </div>
 
-          <div className="admin-detail-grid executive-lead-detail__matrix">
-            <div className="admin-stack">
-              <article className="admin-panel-card executive-snapshot-card executive-lead-detail__client">
-                <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-user" aria-hidden="true" /></span><h3>Información del cliente</h3></div>
-                <dl className="admin-definition-list executive-snapshot-list">
-                  <DetailRow label="Correo">{selectedLead.email || "Sin dato"}</DetailRow>
-                  <DetailRow label="Teléfono">{selectedPhone || "Sin dato"}</DetailRow>
-                  <DetailRow label="Edad">{selectedInput.edad != null ? `${selectedInput.edad} años` : "Sin dato"}</DetailRow>
-                  <DetailRow label="Comuna principal">{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Sin dato"}</DetailRow>
-                  {selectedOnboarding.comuna_alternativa && <DetailRow label="Comuna alternativa">{selectedOnboarding.comuna_alternativa}</DetailRow>}
-                </dl>
-              </article>
+            <div className="admin-detail-grid executive-lead-detail__matrix">
+              <div className="admin-stack">
+                <article className="admin-panel-card executive-snapshot-card executive-lead-detail__client">
+                  <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-user" aria-hidden="true" /></span><h3>Información del cliente</h3></div>
+                  <dl className="admin-definition-list executive-snapshot-list">
+                    <DetailRow label="Correo">{selectedLead.email || "Sin dato"}</DetailRow>
+                    <DetailRow label="Teléfono">{selectedPhone || "Sin dato"}</DetailRow>
+                    <DetailRow label="Edad">{selectedInput.edad != null ? `${selectedInput.edad} años` : "Sin dato"}</DetailRow>
+                    <DetailRow label="Comuna principal">{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Sin dato"}</DetailRow>
+                    {selectedOnboarding.comuna_alternativa && <DetailRow label="Comuna alternativa">{selectedOnboarding.comuna_alternativa}</DetailRow>}
+                  </dl>
+                </article>
 
-              {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-snapshot-card executive-lead-detail__blocker"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-alert-triangle" aria-hidden="true" /></span><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
+                {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-snapshot-card executive-lead-detail__blocker"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-alert-triangle" aria-hidden="true" /></span><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
 
-              {selectedResult.positive_indicators?.length > 0 && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__positive"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-circle-check" aria-hidden="true" /></span><h3>Indicadores positivos</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.positive_indicators.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
-              {selectedResult.risks?.length > 0 && <article className="admin-panel-card admin-panel-card--danger executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__risks"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-shield-exclamation" aria-hidden="true" /></span><h3>Riesgos detectados</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.risks.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+                {selectedResult.positive_indicators?.length > 0 && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__positive"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-circle-check" aria-hidden="true" /></span><h3>Indicadores positivos</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.positive_indicators.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+                {selectedResult.risks?.length > 0 && <article className="admin-panel-card admin-panel-card--danger executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__risks"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-shield-exclamation" aria-hidden="true" /></span><h3>Riesgos detectados</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.risks.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+              </div>
+
+              <div className="admin-stack">
+                {selectedProjectFit && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__fit"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-target-arrow" aria-hidden="true" /></span><h3>Compatibilidad con su objetivo</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Clasificación">{selectedProjectFit.classification || selectedProjectFit.status || "Sin dato"}</DetailRow><DetailRow label="Score">{formatScore(selectedProjectFit.score) ?? "Sin dato"}</DetailRow><DetailRow label="Brecha de ingreso">{money(selectedProjectFit.income_gap)}</DetailRow><DetailRow label="Brecha de pie">{money(selectedProjectFit.down_payment_gap)}</DetailRow><DetailRow label="Compatible">{booleanText(selectedProjectFit.compatible)}</DetailRow></dl></article>}
+
+                <article className="admin-panel-card executive-snapshot-card executive-lead-detail__signals">
+                  <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-briefcase" aria-hidden="true" /></span><h3>Señales comerciales</h3></div>
+                  <dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Plazo de compra">{purchaseTermLabel(selectedInput.plazo_compra)}</DetailRow><DetailRow label="Proyecto visto">{booleanText(selectedInput.tiene_propiedad_vista)}</DetailRow><DetailRow label="Pie estimado">{formatPercent(selectedFinancialIndicators.pie_ratio)}</DetailRow></dl>
+                </article>
+
+                {selectedPriority && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--priority executive-lead-detail__priority"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-flame" aria-hidden="true" /></span><h3>Prioridad comercial</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Acción">{selectedPriority.action || selectedPriority.level || "Sin dato"}</DetailRow><DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow><DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow></dl></article>}
+
+                {selectedResult.recommendations?.length > 0 && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__recommendations"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-list-check" aria-hidden="true" /></span><h3>Recomendaciones</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.recommendations.map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article>}
+
+                {!selectedPriority && selectedResult.commercial_guidance && <article className="admin-panel-card admin-panel-card--soft executive-snapshot-card executive-lead-detail__guidance"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-compass" aria-hidden="true" /></span><h3>Orientación comercial</h3></div><p>{selectedResult.commercial_guidance}</p></article>}
+
+              </div>
             </div>
-
-            <div className="admin-stack">
-              {selectedProjectFit && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__fit"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-target-arrow" aria-hidden="true" /></span><h3>Compatibilidad con su objetivo</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Clasificación">{selectedProjectFit.classification || selectedProjectFit.status || "Sin dato"}</DetailRow><DetailRow label="Score">{formatScore(selectedProjectFit.score) ?? "Sin dato"}</DetailRow><DetailRow label="Brecha de ingreso">{money(selectedProjectFit.income_gap)}</DetailRow><DetailRow label="Brecha de pie">{money(selectedProjectFit.down_payment_gap)}</DetailRow><DetailRow label="Compatible">{booleanText(selectedProjectFit.compatible)}</DetailRow></dl></article>}
-
-              <article className="admin-panel-card executive-snapshot-card executive-lead-detail__signals">
-                <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-briefcase" aria-hidden="true" /></span><h3>Señales comerciales</h3></div>
-                <dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Plazo de compra">{purchaseTermLabel(selectedInput.plazo_compra)}</DetailRow><DetailRow label="Proyecto visto">{booleanText(selectedInput.tiene_propiedad_vista)}</DetailRow><DetailRow label="Pie estimado">{formatPercent(selectedFinancialIndicators.pie_ratio)}</DetailRow></dl>
-              </article>
-
-              {selectedPriority && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--priority executive-lead-detail__priority"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-flame" aria-hidden="true" /></span><h3>Prioridad comercial</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Acción">{selectedPriority.action || selectedPriority.level || "Sin dato"}</DetailRow><DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow><DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow></dl></article>}
-
-              {selectedResult.recommendations?.length > 0 && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__recommendations"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-list-check" aria-hidden="true" /></span><h3>Recomendaciones</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.recommendations.map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article>}
-
-              {!selectedPriority && selectedResult.commercial_guidance && <article className="admin-panel-card admin-panel-card--soft executive-snapshot-card executive-lead-detail__guidance"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-compass" aria-hidden="true" /></span><h3>Orientación comercial</h3></div><p>{selectedResult.commercial_guidance}</p></article>}
-
-            </div>
-          </div>
           </section>
 
           <section className="admin-panel-card executive-contact-questions">

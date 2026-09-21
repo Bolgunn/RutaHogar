@@ -55,6 +55,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
     phone: contact.phone || null,
+    reliability_status: contact.reliability_status || "normal",
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -110,17 +111,21 @@ export function applyEvaluationAnnotations(row, annotations) {
     const payload = event.payload || {};
     if (event.kind === "plan_accepted") {
       view.plan_accepted_at = event.effective_at;
-      view.housing_plan = { ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
-        ...(payload.plan_type ? { plan_type: payload.plan_type } : {}) };
+      view.housing_plan = {
+        ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
+        ...(payload.plan_type ? { plan_type: payload.plan_type } : {})
+      };
     } else if (event.kind === "housing_plan") {
       view.housing_plan = payload.housing_plan;
     } else if (event.kind === "narrative") {
       // Overlay for display only; the immutable stored result remains untouched.
-      view.financial_data = { ...(view.financial_data || {}), result: {
-        ...(view.financial_data?.result || {}),
-        ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
-          .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
-      } };
+      view.financial_data = {
+        ...(view.financial_data || {}), result: {
+          ...(view.financial_data?.result || {}),
+          ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
+            .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
+        }
+      };
     }
   }
   return view;
