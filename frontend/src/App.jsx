@@ -34,6 +34,7 @@ import { createEvaluation, getEvaluations, saveHousingPlanProgress, updateEvalua
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingRoutePaths } from "./lib/trackingRoutes";
+import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
@@ -463,13 +464,7 @@ export default function App() {
   const visibleError = currentError && currentError !== dismissedError ? currentError : "";
 
   const userEvaluations = profile ? evaluations : [];
-  const currentEvaluation = trackingState?.status === "active"
-    ? userEvaluations.find((row) => row.id === trackingState.current_evaluation_id) ||
-      (trackingState.current_evaluation ? {
-        id: trackingState.current_evaluation_id, user_id: userId,
-        input: trackingState.latest_effective_snapshot, result: trackingState.current_evaluation,
-      } : null)
-    : [...userEvaluations].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+  const currentEvaluation = currentTrackingEvaluation(trackingState, userEvaluations, userId);
   useEffect(() => {
     let active = true;
     setTrackingState(null);
@@ -1164,12 +1159,10 @@ export default function App() {
       });
 
        setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-       sessionStorage.removeItem("scoreleads_selected_plan_type");
        return true;
      } catch (err) {
        console.error(err);
-       alert("Error al fijar el proyecto como meta.");
-       return false;
+       throw new Error("No se pudo actualizar tu preferencia de proyecto. Intenta nuevamente.");
      }
   };
 
@@ -1630,6 +1623,7 @@ export default function App() {
         ) : page === "projects" && profile.role === roles.user ? (
           <ProjectsCatalog
             evaluationBase={currentEvaluation}
+            frozenTrackingTarget={trackingState?.status === "active" ? trackingState.baseline?.target_project_snapshot : null}
             onboarding={userOnboarding}
             userId={profile.id}
             contactEmail={profile.email}

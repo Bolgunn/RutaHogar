@@ -7,6 +7,7 @@ import {
 import { formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { propertyLabels } from "../constants";
+import { submitProjectGoal } from "../lib/projectGoalAction";
 
 const statusClass = {
   Compatible: "compatible",
@@ -91,8 +92,9 @@ export default function ProjectEvaluationModal({
     }
     setGoalPending(true);
     try {
-      const saved = await onSetGoal(project);
-      if (saved) setGoalSuccess(true);
+      const outcome = await submitProjectGoal(onSetGoal, project);
+      if (outcome.saved) setGoalSuccess(true);
+      else setActionError(outcome.error);
     } finally {
       setGoalPending(false);
       setConfirmGoalChange(false);
@@ -127,7 +129,7 @@ export default function ProjectEvaluationModal({
       {goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
-        {isCurrentGoal ? <div className="project-current-goal-notice"><i className="ti ti-circle-check" aria-hidden="true" /><span>Este proyecto ya es tu meta actual.</span></div> : <button
+        {isCurrentGoal ? <div className="project-current-goal-notice"><i className="ti ti-circle-check" aria-hidden="true" /><span>Este proyecto ya es tu preferencia de última evaluación.</span></div> : <button
           type="button"
           className={`secondary-button project-goal-confirm-button ${confirmGoalChange ? "is-confirming" : ""}`}
           disabled={goalPending}
@@ -136,7 +138,7 @@ export default function ProjectEvaluationModal({
           {goalPending
             ? "Actualizando tu plan..."
             : confirmGoalChange
-              ? "Confirmar: reiniciar plan y checklist"
+              ? "Confirmar cambio de preferencia"
               : "Usar como meta de mi plan"}
         </button>}
         {!isCurrentGoal && confirmGoalChange && (

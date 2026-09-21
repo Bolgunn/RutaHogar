@@ -127,6 +127,30 @@ def test_first_later_project_goal_freezes_target_and_enables_projection():
     assert repo.bundle["plan"]["target_project_snapshot"]["id"] == "p1"
 
 
+def test_later_project_evaluation_is_preserved_without_replacing_frozen_target():
+    repo, app = service()
+    baseline = app.execute("u1", command(valid_snapshot()))
+    later_snapshot = {
+        **valid_snapshot(),
+        "project_goal": {"id": "p2", "nombre": "Proyecto posterior"},
+        "property_value_clp": 130000000,
+    }
+    later = app.execute("u1", command(later_snapshot, baseline["event_id"], "2026-02-01T00:00:00Z"))
+
+    view = app.read("u1")
+    assert view["latest_effective_snapshot"]["project_goal"]["id"] == "p2"
+    assert view["current_evaluation_id"] == later["evaluation"]["id"]
+    assert repo.bundle["plan"]["target_project_snapshot"]["id"] == "p1"
+    assert [row["financial_data"]["input"]["project_goal"]["id"] for row in repo.bundle["evaluations"]] == ["p1", "p2"]
+
+    projected_snapshots = []
+    real_scorer = app.scorer
+    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot))
+    app.projection("u1")
+    assert projected_snapshots
+    assert all(snapshot["property_value_clp"] == 100000000 for snapshot in projected_snapshots)
+
+
 def test_baseline_replacement_can_freeze_first_project_without_rewriting_baseline():
     repo, app = service()
     baseline_snapshot = valid_snapshot()
