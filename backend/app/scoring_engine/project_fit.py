@@ -57,6 +57,18 @@ def _main_gap(income_gap: float, required_income: float, down_payment_gap: float
     return "income" if income_ratio >= down_payment_ratio else "down_payment"
 
 
+def project_fit_rule_margins(data: dict, indicators: dict) -> dict:
+    """Raw signed project gaps shared with the projection boundary adapter."""
+    safe_data, safe_indicators = data or {}, indicators or {}
+    income = _positive_float(safe_indicators.get("ingreso_total")) or _positive_float(safe_data.get("ingreso_mensual"))
+    required_income = _positive_float(safe_data.get("dividendo_estimado")) * REQUIRED_INCOME_MULTIPLIER
+    savings = _positive_float(safe_data.get("ahorro_disponible"))
+    return {
+        "income": required_income - income,
+        "down_payment": _positive_float(safe_indicators.get("pie_minimo_clp")) - savings,
+    }
+
+
 def calculate_project_fit(data: dict, indicators: dict, blockers: list) -> dict:
     safe_data = data or {}
     safe_indicators = indicators or {}
@@ -80,8 +92,9 @@ def calculate_project_fit(data: dict, indicators: dict, blockers: list) -> dict:
         )
 
     required_income = dividendo_estimado * REQUIRED_INCOME_MULTIPLIER
-    income_gap = max(required_income - ingreso_total, 0.0)
-    down_payment_gap = _positive_float(safe_indicators.get("brecha_pie_minimo"))
+    margins = project_fit_rule_margins(safe_data, safe_indicators)
+    income_gap = max(margins["income"], 0.0)
+    down_payment_gap = max(margins["down_payment"], 0.0)
 
     score = 100.0
     score -= _gap_ratio(income_gap, required_income) * 45.0

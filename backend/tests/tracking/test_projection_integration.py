@@ -57,3 +57,27 @@ def test_other_owner_rejected_and_future_observations_do_not_enter_ols():
         project_progress(**inputs)
     inputs["active_line"][-1]["subject_user_id"] = "u1"
     assert project_progress(**inputs)["variables"]["ahorro_disponible"]["observation_ids"] == ["e1", "e2"]
+
+
+def test_boundary_provider_delegates_to_engine_predicates(monkeypatch):
+    calls = {"financial": 0, "capacity": 0}
+    provider_globals = RuleBoundaryProvider.milestones.__globals__
+    real_financial = provider_globals["financial_rule_margins"]
+    real_capacity = provider_globals["capacity_rule_margins"]
+
+    def financial(state, indicators):
+        calls["financial"] += 1
+        return real_financial(state, indicators)
+
+    def capacity(state, indicators):
+        calls["capacity"] += 1
+        return real_capacity(state, indicators)
+
+    monkeypatch.setitem(provider_globals, "financial_rule_margins", financial)
+    monkeypatch.setitem(provider_globals, "capacity_rule_margins", capacity)
+
+    inputs = projection()
+    project_progress(**inputs)
+
+    assert calls["financial"] > 0
+    assert calls["capacity"] > 0

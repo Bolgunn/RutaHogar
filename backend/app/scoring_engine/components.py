@@ -41,51 +41,72 @@ def _blocker_codes(blockers: list) -> set:
     return {blocker.get("code") for blocker in blockers or [] if isinstance(blocker, dict)}
 
 
-def _score_payment_capacity(indicators: dict) -> float:
+def component_rule_margins(data: dict, indicators: dict) -> dict:
+    """Signed margins for the thresholds that select financial score branches."""
+    safe_data, safe_indicators = data or {}, indicators or {}
+    income = _positive_float(safe_indicators.get("ingreso_total"))
+    property_value = _positive_float(safe_indicators.get("property_value_clp"))
+    dividend = _positive_float(safe_data.get("dividendo_estimado"))
+    debt = _positive_float(safe_data.get("deuda_mensual"))
+    savings = _positive_float(safe_data.get("ahorro_disponible"))
+    return {
+        "payment": tuple(dividend - limit * income for limit in PAYMENT_RATIO_LIMITS),
+        "debt": tuple(debt - limit * income for limit in DEBT_RATIO_LIMITS),
+        "total_burden": tuple(debt + dividend - limit * income for limit in TOTAL_BURDEN_LIMITS),
+        "savings": tuple(savings - limit * property_value for limit in SAVINGS_RATIO_LIMITS),
+    }
+
+
+def _score_payment_capacity(data: dict, indicators: dict) -> float:
     ratio = _ratio_or_none(indicators.get("ratio_dividendo_ingreso"))
     if ratio is None:
         return 0.0
-    if ratio <= PAYMENT_RATIO_LIMITS[0]:
+    margins = component_rule_margins(data, indicators)["payment"]
+    if margins[0] <= 0:
         return 100.0
-    if ratio <= PAYMENT_RATIO_LIMITS[1]:
+    if margins[1] <= 0:
         return 80.0
-    if ratio <= PAYMENT_RATIO_LIMITS[2]:
+    if margins[2] <= 0:
         return 55.0
     return 25.0
 
 
-def _score_debt(indicators: dict) -> float:
+def _score_debt(data: dict, indicators: dict) -> float:
     debt_ratio = _ratio_or_none(indicators.get("ratio_deuda_ingreso"))
     total_ratio = _ratio_or_none(indicators.get("ratio_carga_total"))
     if debt_ratio is None and total_ratio is None:
         return 0.0
 
     score = 100.0
+    margins = component_rule_margins(data, indicators)
     if debt_ratio is not None:
-        if debt_ratio > DEBT_RATIO_LIMITS[2]:
+        if margins["debt"][2] > 0:
             score -= 45
-        elif debt_ratio > DEBT_RATIO_LIMITS[1]:
+        elif margins["debt"][1] > 0:
             score -= 25
-        elif debt_ratio > DEBT_RATIO_LIMITS[0]:
+        elif margins["debt"][0] > 0:
             score -= 10
     if total_ratio is not None:
-        if total_ratio > TOTAL_BURDEN_LIMITS[2]:
+        if margins["total_burden"][2] > 0:
             score -= 50
-        elif total_ratio > TOTAL_BURDEN_LIMITS[1]:
+        elif margins["total_burden"][1] > 0:
             score -= 25
-        elif total_ratio > TOTAL_BURDEN_LIMITS[0]:
+        elif margins["total_burden"][0] > 0:
             score -= 10
     return score
 
 
-def _score_savings(indicators: dict) -> float:
+def _score_savings(data: dict, indicators: dict) -> float:
     pie_ratio = _ratio_or_none(indicators.get("pie_ratio"))
     if pie_ratio is not None:
-        if pie_ratio >= SAVINGS_RATIO_LIMITS[2]:
+        if pie_ratio <= 0:
+            return 0.0
+        margins = component_rule_margins(data, indicators)["savings"]
+        if margins[2] >= 0:
             return 100.0
-        if pie_ratio >= SAVINGS_RATIO_LIMITS[1]:
+        if margins[1] >= 0:
             return 82.0 + min((pie_ratio - 0.15) / 0.05, 1.0) * 13.0
-        if pie_ratio >= SAVINGS_RATIO_LIMITS[0]:
+        if margins[0] >= 0:
             return 58.0 + min((pie_ratio - 0.10) / 0.05, 1.0) * 18.0
         if pie_ratio > 0:
             return 20.0 + min(pie_ratio / 0.10, 1.0) * 35.0
@@ -217,9 +238,9 @@ def calculate_component_scores(data: dict, indicators: dict, blockers: list) -> 
     codes = _blocker_codes(blockers)
 
     return {
-        "capacidad_pago": _clamp_score(_score_payment_capacity(safe_indicators)),
-        "endeudamiento": _clamp_score(_score_debt(safe_indicators)),
-        "pie_ahorro": _clamp_score(_score_savings(safe_indicators)),
+        "capacidad_pago": _clamp_score(_score_payment_capacity(safe_data, safe_indicators)),
+        "endeudamiento": _clamp_score(_score_debt(safe_data, safe_indicators)),
+        "pie_ahorro": _clamp_score(_score_savings(safe_data, safe_indicators)),
         "estabilidad_laboral": _clamp_score(_score_work_stability(safe_data)),
         "historial_pago": _clamp_score(_score_payment_history(safe_data)),
         "complemento_renta": _clamp_score(_score_income_complement(safe_data, codes)),

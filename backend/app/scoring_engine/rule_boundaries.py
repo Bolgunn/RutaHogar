@@ -8,12 +8,11 @@ Timestamps use PostgreSQL/Python's shared microsecond resolution, not a horizon.
 from datetime import timedelta
 from math import ceil, isfinite
 
-from .blockers import DIVIDEND_RATIO_LIMIT, TOTAL_BURDEN_LIMIT, DEBT_RATIO_LIMIT
-from .components import PAYMENT_RATIO_LIMITS, DEBT_RATIO_LIMITS, TOTAL_BURDEN_LIMITS, SAVINGS_RATIO_LIMITS
+from .boundary_contract import financial_rule_margins
 from .indicators import calculate_financial_indicators
-from .project_fit import PROJECT_BLOCKER_CODES, REQUIRED_INCOME_MULTIPLIER
+from .project_fit import PROJECT_BLOCKER_CODES
 from .property_value import resolve_property_value_clp
-from .purchase_capacity import capacity_limits, dividend_limits, _deuda_total
+from .purchase_capacity import capacity_rule_margins
 from ..tracking.contracts import parse_time
 
 DAY_MICROSECONDS = timedelta(days=1) // timedelta(microseconds=1)
@@ -59,17 +58,7 @@ class RuleBoundaryProvider:
 
         def predicates(state):
             ind = indicators(state)
-            income, debt = ind["ingreso_total"], state.get("deuda_mensual", 0)
-            dividend, savings = state.get("dividendo_estimado") or 0, state.get("ahorro_disponible", 0)
-            values = [dividend * REQUIRED_INCOME_MULTIPLIER - income,
-                      ind["pie_minimo_clp"] - savings]
-            values.extend(dividend - ratio * income for ratio in (*PAYMENT_RATIO_LIMITS, DIVIDEND_RATIO_LIMIT))
-            values.extend(debt - ratio * income for ratio in (*DEBT_RATIO_LIMITS, DEBT_RATIO_LIMIT))
-            values.extend(debt + dividend - ratio * income for ratio in (*TOTAL_BURDEN_LIMITS, TOTAL_BURDEN_LIMIT))
-            values.extend(savings - ratio * ind["property_value_clp"] for ratio in SAVINGS_RATIO_LIMITS)
-            by_income, by_burden = dividend_limits(income, _deuda_total(state))
-            values.extend((by_income, by_burden, by_income - by_burden))
-            return values
+            return financial_rule_margins(state, ind)
 
         def add_roots(predicate, boundaries):
             found = set()
@@ -92,11 +81,7 @@ class RuleBoundaryProvider:
         cuts |= add_roots(predicates, cuts)
 
         def capacity_predicates(state):
-            limits = capacity_limits(state, indicators(state))
-            if limits["missing_income"]:
-                return []
-            return [limits["por_renta"] - limits["por_pie"],
-                    limits["asistida_por_renta"] - limits["asistida_por_pie"]]
+            return capacity_rule_margins(state, indicators(state))
 
         cuts |= add_roots(capacity_predicates, cuts)
         dates = {cutoff + TICK}

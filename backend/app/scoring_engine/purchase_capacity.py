@@ -146,6 +146,22 @@ def capacity_limits(data: dict, indicators: dict) -> dict:
     }
 
 
+def capacity_rule_margins(data: dict, indicators: dict) -> tuple:
+    limits = capacity_limits(data, indicators)
+    if limits["missing_income"]:
+        return ()
+    by_income, by_burden = dividend_limits(
+        _positive_float((indicators or {}).get("ingreso_total")), _deuda_total(data or {}),
+    )
+    return (
+        by_income,
+        by_burden,
+        by_income - by_burden,
+        limits["por_renta"] - limits["por_pie"],
+        limits["asistida_por_renta"] - limits["asistida_por_pie"],
+    )
+
+
 def calculate_purchase_capacity(data: dict, indicators: dict) -> dict:
     limits = capacity_limits(data, indicators)
     supuestos = limits["supuestos"]
