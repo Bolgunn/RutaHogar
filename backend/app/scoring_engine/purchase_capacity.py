@@ -45,10 +45,15 @@ def _deuda_total(data: dict) -> float:
     return _positive_float(data.get("deuda_mensual")) + _positive_float(deuda_complementaria)
 
 
-def _dividendo_maximo_sostenible(ingreso_total: float, deuda_total: float) -> float:
+def dividend_limits(ingreso_total: float, deuda_total: float) -> tuple[float, float]:
+    """Unrounded ALG-9 branch limits, also consumed by the HU13 boundary adapter."""
     por_dividendo = RATIO_DIVIDENDO_MAX * ingreso_total
     por_carga_total = RATIO_CARGA_TOTAL_MAX * ingreso_total - deuda_total
-    return max(0.0, min(por_dividendo, por_carga_total))
+    return por_dividendo, por_carga_total
+
+
+def _dividendo_maximo_sostenible(ingreso_total: float, deuda_total: float) -> float:
+    return max(0.0, min(dividend_limits(ingreso_total, deuda_total)))
 
 
 def _plazo_efectivo(data: dict):
@@ -109,7 +114,8 @@ def _sin_datos(supuestos: dict) -> dict:
     }
 
 
-def calculate_purchase_capacity(data: dict, indicators: dict) -> dict:
+def capacity_limits(data: dict, indicators: dict) -> dict:
+    """Original unrounded limits; shared to avoid reconstructing ALG-9 in HU13."""
     safe_data = data or {}
     safe_indicators = indicators or {}
 
@@ -119,7 +125,7 @@ def calculate_purchase_capacity(data: dict, indicators: dict) -> dict:
 
     ingreso_total = _positive_float(safe_indicators.get("ingreso_total"))
     if ingreso_total <= 0:
-        return _sin_datos(supuestos)
+        return {"supuestos": supuestos, "missing_income": True}
 
     dividendo_maximo = _dividendo_maximo_sostenible(ingreso_total, _deuda_total(safe_data))
     principal_maximo_uf = (dividendo_maximo / uf_value_clp) * _factor_anualidad(plazo_anios)
@@ -128,11 +134,26 @@ def calculate_purchase_capacity(data: dict, indicators: dict) -> dict:
     por_pie = _positive_float(safe_data.get("ahorro_disponible")) / PIE_RATIO_BASE / uf_value_clp
     capacidad = min(por_renta, por_pie)
 
-    asistida = min(
-        principal_maximo_uf / (1 - FOGAES_MIN_PIE_RATIO),
-        _positive_float(safe_data.get("ahorro_disponible")) / FOGAES_MIN_PIE_RATIO / uf_value_clp,
-    )
+    asistida_por_renta = principal_maximo_uf / (1 - FOGAES_MIN_PIE_RATIO)
+    asistida_por_pie = _positive_float(safe_data.get("ahorro_disponible")) / FOGAES_MIN_PIE_RATIO / uf_value_clp
+    asistida = min(asistida_por_renta, asistida_por_pie)
 
+    return {
+        "supuestos": supuestos, "missing_income": False, "uf_value_clp": uf_value_clp,
+        "por_renta": por_renta, "por_pie": por_pie, "capacidad": capacidad,
+        "asistida": asistida, "dividendo_maximo": dividendo_maximo,
+        "asistida_por_renta": asistida_por_renta, "asistida_por_pie": asistida_por_pie,
+    }
+
+
+def calculate_purchase_capacity(data: dict, indicators: dict) -> dict:
+    limits = capacity_limits(data, indicators)
+    supuestos = limits["supuestos"]
+    if limits["missing_income"]:
+        return _sin_datos(supuestos)
+    capacidad, por_renta, por_pie, asistida, dividendo_maximo, uf_value_clp = (
+        limits[name] for name in ("capacidad", "por_renta", "por_pie", "asistida", "dividendo_maximo", "uf_value_clp")
+    )
     return {
         "capacidad_compra_estimada_uf": round(capacidad, 1),
         "capacidad_compra_estimada_clp": int(round(capacidad * uf_value_clp)),

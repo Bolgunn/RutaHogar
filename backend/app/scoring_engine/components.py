@@ -1,5 +1,9 @@
 # Weighted component scoring layer for future auditable scoring versions.
 
+PAYMENT_RATIO_LIMITS = (0.25, 0.30, 0.40)
+DEBT_RATIO_LIMITS = (0.20, 0.30, 0.40)
+TOTAL_BURDEN_LIMITS = (0.25, 0.35, 0.45)
+SAVINGS_RATIO_LIMITS = (0.10, 0.15, 0.20)
 
 def _clamp_score(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 1)
@@ -41,11 +45,11 @@ def _score_payment_capacity(indicators: dict) -> float:
     ratio = _ratio_or_none(indicators.get("ratio_dividendo_ingreso"))
     if ratio is None:
         return 0.0
-    if ratio <= 0.25:
+    if ratio <= PAYMENT_RATIO_LIMITS[0]:
         return 100.0
-    if ratio <= 0.30:
+    if ratio <= PAYMENT_RATIO_LIMITS[1]:
         return 80.0
-    if ratio <= 0.40:
+    if ratio <= PAYMENT_RATIO_LIMITS[2]:
         return 55.0
     return 25.0
 
@@ -58,18 +62,18 @@ def _score_debt(indicators: dict) -> float:
 
     score = 100.0
     if debt_ratio is not None:
-        if debt_ratio > 0.40:
+        if debt_ratio > DEBT_RATIO_LIMITS[2]:
             score -= 45
-        elif debt_ratio > 0.30:
+        elif debt_ratio > DEBT_RATIO_LIMITS[1]:
             score -= 25
-        elif debt_ratio > 0.20:
+        elif debt_ratio > DEBT_RATIO_LIMITS[0]:
             score -= 10
     if total_ratio is not None:
-        if total_ratio > 0.45:
+        if total_ratio > TOTAL_BURDEN_LIMITS[2]:
             score -= 50
-        elif total_ratio > 0.35:
+        elif total_ratio > TOTAL_BURDEN_LIMITS[1]:
             score -= 25
-        elif total_ratio > 0.25:
+        elif total_ratio > TOTAL_BURDEN_LIMITS[0]:
             score -= 10
     return score
 
@@ -77,11 +81,11 @@ def _score_debt(indicators: dict) -> float:
 def _score_savings(indicators: dict) -> float:
     pie_ratio = _ratio_or_none(indicators.get("pie_ratio"))
     if pie_ratio is not None:
-        if pie_ratio >= 0.20:
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[2]:
             return 100.0
-        if pie_ratio >= 0.15:
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[1]:
             return 82.0 + min((pie_ratio - 0.15) / 0.05, 1.0) * 13.0
-        if pie_ratio >= 0.10:
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[0]:
             return 58.0 + min((pie_ratio - 0.10) / 0.05, 1.0) * 18.0
         if pie_ratio > 0:
             return 20.0 + min(pie_ratio / 0.10, 1.0) * 35.0

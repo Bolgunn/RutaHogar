@@ -2,6 +2,10 @@
 
 from .constants import BLOCKER_SEVERITIES
 
+DIVIDEND_RATIO_LIMIT = 0.30
+TOTAL_BURDEN_LIMIT = 0.45
+DEBT_RATIO_LIMIT = 0.40
+CREDIT_END_AGE_LIMIT = 70
 
 def _positive_float(value) -> float:
     try:
@@ -92,7 +96,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["project_fit", "commercial_priority"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_dividendo_ingreso")) > 0.30:
+    if _positive_float(safe_indicators.get("ratio_dividendo_ingreso")) > DIVIDEND_RATIO_LIMIT:
         _add_blocker(
             blockers,
             seen_codes,
@@ -103,7 +107,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score", "project_fit"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_carga_total")) > 0.45:
+    if _positive_float(safe_indicators.get("ratio_carga_total")) > TOTAL_BURDEN_LIMIT:
         _add_blocker(
             blockers,
             seen_codes,
@@ -114,7 +118,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score", "commercial_priority"],
         )
 
-    if _positive_float(safe_indicators.get("ratio_deuda_ingreso")) > 0.40:
+    if _positive_float(safe_indicators.get("ratio_deuda_ingreso")) > DEBT_RATIO_LIMIT:
         _add_blocker(
             blockers,
             seen_codes,
@@ -170,7 +174,7 @@ def detect_blockers(data: dict, indicators: dict) -> list[dict]:
             ["financial_score"],
         )
 
-    if _positive_float(safe_indicators.get("edad_fin_credito")) > 70:
+    if _positive_float(safe_indicators.get("edad_fin_credito")) > CREDIT_END_AGE_LIMIT:
         _add_blocker(
             blockers,
             seen_codes,
