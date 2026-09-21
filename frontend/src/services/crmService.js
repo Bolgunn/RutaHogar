@@ -44,6 +44,10 @@ async function generateHash(obj) {
  * matchData: the matching result from rankLeadsForProject/matchLeadToProjects
  */
 export async function buildCrmPayload(lead, projectData, matchData) {
+  if (lead?.input?.consentimiento === false) {
+    throw new Error("El usuario no ha otorgado consentimiento para compartir sus datos sensibles (Ley 19.628).");
+  }
+
   const result = lead?.result || {};
   const commercialPriority = result?.commercial_priority_detail || {};
   

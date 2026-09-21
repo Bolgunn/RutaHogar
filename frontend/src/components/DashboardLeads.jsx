@@ -223,8 +223,9 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const handleBulkSync = async () => {
     try {
       setSyncing(true);
-      console.log("[DashboardLeads] Iniciando sincronización masiva de leads visibles:", ranked.length);
-      for (const item of ranked) {
+      const leadsConConsentimiento = ranked.filter(item => item.lead.input?.consentimiento !== false);
+      console.log(`[DashboardLeads] Iniciando sincronización masiva de leads visibles con consentimiento: ${leadsConConsentimiento.length} de ${ranked.length}`);
+      for (const item of leadsConConsentimiento) {
         await syncLeadToSimulatedCrm(item.lead, selectedProject, item.match);
       }
       await loadCrmLeads();

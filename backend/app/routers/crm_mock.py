@@ -16,6 +16,32 @@ class CRMSyncPayload(BaseModel):
     proyecto_objetivo: Optional[Dict[str, Any]] = None
     sincronizacion: Dict[str, Any]
 
+# --- Modelos extendidos para la industria chilena ---
+
+class PlanOKPayload(BaseModel):
+    rut: str # Obligatorio para evitar duplicados en sala de ventas
+    nombres: str # Separado
+    apellidos: str # Separado
+    email: str
+    telefono: str
+    id_proyecto: str
+    comentarios: str # RutaHogar concatenará el score financiero aquí
+    origen: str = "RutaHogar"
+
+class HubSpotPayload(BaseModel):
+    email: str
+    properties: Dict[str, Any]
+    # Espera properties como: firstname, lastname, rutahogar_score, rutahogar_afinidad
+
+class SalesforcePayload(BaseModel):
+    LastName: str
+    Company: str = "Particular"
+    Email: str
+    Phone: Optional[str] = None
+    RutaHogar_Score__c: Optional[float] = None
+    Proyecto_Objetivo__c: Optional[str] = None
+
+
 @router.post("/sync", status_code=status.HTTP_200_OK)
 async def sync_lead(payload: CRMSyncPayload):
     lead_id = payload.lead_id
@@ -54,3 +80,23 @@ async def sync_lead(payload: CRMSyncPayload):
 @router.get("/leads")
 async def get_leads():
     return {"leads": list(mock_crm_db.values())}
+
+# --- Endpoints de simulación para proveedores de la industria ---
+
+@router.post("/sync/planok", status_code=status.HTTP_200_OK)
+async def sync_planok(payload: PlanOKPayload):
+    # Simula la recepción en PlanOK
+    mock_crm_db[f"planok_{payload.rut}"] = payload.model_dump()
+    return {"status": "ok", "message": "Recibido en PlanOK simulado"}
+
+@router.post("/sync/hubspot", status_code=status.HTTP_200_OK)
+async def sync_hubspot(payload: HubSpotPayload):
+    # Simula la recepción en HubSpot
+    mock_crm_db[f"hubspot_{payload.email}"] = payload.model_dump()
+    return {"status": "ok", "message": "Recibido en HubSpot simulado"}
+
+@router.post("/sync/salesforce", status_code=status.HTTP_200_OK)
+async def sync_salesforce(payload: SalesforcePayload):
+    # Simula la recepción en Salesforce
+    mock_crm_db[f"sf_{payload.Email}"] = payload.model_dump()
+    return {"status": "ok", "message": "Recibido en Salesforce simulado"}
