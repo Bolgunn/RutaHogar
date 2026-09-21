@@ -3,10 +3,10 @@
 | Field | Value |
 | :---- | :---- |
 | **Version** | `hu13-lineage-v1` |
-| **Runs on / implemented in** | HU13 pure tracking layer · not implemented yet |
+| **Runs on / implemented in** | `backend/app/tracking/lineage.py` |
 | **Cases** | `docs/algorithms/ALG-11-cases.json` |
 | **Open assumptions** | 0 |
-| **Last changed** | 2026-09-20 · HU13 · created |
+| **Last changed** | 2026-09-20 · HU13 · empty active lineage forbidden |
 
 ## Purpose
 
@@ -116,11 +116,14 @@ snapshot completo según el contrato de entrada vigente. Ese evento fija el base
 
 Una corrección `replace` ocupa el mismo slot lógico y conserva el `effective_at` del registro
 corregido; su `recorded_at` sigue mostrando cuándo se corrigió. Una corrección `annul` elimina ese
-slot solo de la línea activa. En ambos casos, todos los registros continúan en auditoría.
+slot solo de la línea activa cuando el replay resultante conserva al menos un estado efectivo
+completo. En ambos casos, todos los registros continúan en auditoría.
 
 La identidad del baseline, su plan y sus metas congeladas nunca cambian. Si se corrigen antecedentes
-de su snapshot, la corrección ocupa el slot del baseline, pero no reemplaza el plan ni crea otro
-baseline.
+de su snapshot, se usa una corrección `replace`: la corrección ocupa el slot del baseline y pasa a
+ser el estado efectivo, pero no reemplaza el plan ni crea otro baseline. El original permanece en
+auditoría. El slot del baseline no admite `annul`; en particular, el único estado baseline no puede
+anularse dejando el seguimiento activo vacío.
 
 ### R4 — Resolve active slots
 
@@ -130,8 +133,10 @@ baseline.
 4. Para un slot con correcciones, seleccionar la corrección máxima por
    `(recorded_at, event_id)`. Esta regla resuelve determinísticamente correcciones concurrentes y
    timestamps iguales.
-5. Si la ganadora es `annul`, omitir el slot activo. Si es `replace`, usar su parche como parche
-   vigente del slot.
+5. Si la ganadora es `annul`, rechazar si corresponde al slot baseline; para otro slot, omitirlo de
+   la línea activa. Si es `replace`, usar su parche como parche vigente del slot.
+6. Rechazar con `invalid_lineage` si la resolución dejaría una línea existente sin ningún estado
+   efectivo completo. El rechazo no agrega la corrección a auditoría.
 
 Las correcciones perdedoras y los registros reemplazados aparecen en `annuls` y
 `excluded_from_metrics`; no se borran ni se etiquetan como fraude.
@@ -191,9 +196,12 @@ antecedentes declarados. Una proyección de ALG-13 es derivada y no se registra 
 8. Corregir un evento intermedio vuelve a aplicar los parches posteriores sobre el estado corregido.
 9. Un `event_id` aceptado produce como máximo un registro.
 10. Ninguna corrección genera una etiqueta o inferencia de fraude.
+11. Un seguimiento con baseline siempre tiene al menos un estado efectivo completo; la línea
+    activa vacía solo existe antes de crear el seguimiento.
 
 **Edge cases:** primera evaluación; parche de un campo; empeoramientos reales; corrección del
-último registro; corrección y anulación de un registro intermedio; correcciones múltiples;
+baseline mediante reemplazo; rechazo de anulación del único baseline; reconstrucción de eventos
+posteriores desde el baseline reemplazado; corrección del último registro; corrección y anulación de un registro intermedio; correcciones múltiples;
 timestamps iguales; reintento idempotente; colisión de clave; campo omitido frente a `null`;
 referencia inexistente, cíclica o perteneciente a otro usuario.
 

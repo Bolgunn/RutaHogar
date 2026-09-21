@@ -3,10 +3,10 @@
 | Field | Value |
 | :---- | :---- |
 | **Version** | `hu13-goal-progress-v2` |
-| **Runs on / implemented in** | HU13 pure progress layer · not implemented yet |
+| **Runs on / implemented in** | `backend/app/tracking/goal_progress.py` |
 | **Cases** | `docs/algorithms/ALG-12-cases.json` |
 | **Open assumptions** | 0 |
-| **Last changed** | 2026-09-20 · HU13 · define already-satisfied quantitative baselines |
+| **Last changed** | 2026-09-20 · HU13 · implemented v2 without rule changes |
 
 ## Purpose
 

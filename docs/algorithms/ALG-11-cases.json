@@ -27,6 +27,84 @@
       }
     },
     {
+      "name": "anulacion_unico_baseline_es_rechazada",
+      "why": "An active tracking plan cannot lose its only complete effective state.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "event": {
+          "event_id": "a1",
+          "event_kind": "correction",
+          "effective_at": "2026-01-01T12:00:00Z",
+          "recorded_at": "2026-02-01T09:00:00Z",
+          "reason": "invalid_initial_record",
+          "correction_of": "e1",
+          "correction_effect": "annul",
+          "patch": {}
+        }
+      },
+      "expect": {
+        "outcome": "rejected",
+        "error": "invalid_lineage",
+        "records_appended": 0
+      }
+    },
+    {
+      "name": "reemplazo_del_baseline_es_permitido",
+      "why": "Baseline data is corrected by replacement while baseline identity and the original audit record remain intact.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "baseline_e1",
+        "event": {
+          "event_id": "c1",
+          "event_kind": "correction",
+          "effective_at": "2026-01-01T12:00:00Z",
+          "recorded_at": "2026-02-01T09:00:00Z",
+          "reason": "verified_initial_data",
+          "correction_of": "e1",
+          "correction_effect": "replace",
+          "patch": { "ingreso_mensual": 1200000, "deuda_mensual": 180000, "ahorro_disponible": 2800000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "baseline_event_id": "e1",
+        "active_event_ids": ["c1"],
+        "audit_event_ids": ["e1", "c1"],
+        "excluded_from_metrics": ["e1"],
+        "latest_effective_snapshot": { "ingreso_mensual": 1200000, "deuda_mensual": 180000, "ahorro_disponible": 2800000 }
+      }
+    },
+    {
+      "name": "eventos_posteriores_se_reconstruyen_desde_reemplazo_baseline",
+      "why": "Patches after the baseline are replayed over its winning replacement without rewriting stored descendant snapshots.",
+      "input": {
+        "actor_user_id": "u1",
+        "subject_user_id": "u1",
+        "history_fixture": "e1_baseline_e2_savings_3500000_e3_debt_150000",
+        "event": {
+          "event_id": "c1",
+          "event_kind": "correction",
+          "effective_at": "2026-01-01T12:00:00Z",
+          "recorded_at": "2026-04-01T09:00:00Z",
+          "reason": "verified_initial_data",
+          "correction_of": "e1",
+          "correction_effect": "replace",
+          "patch": { "ingreso_mensual": 1200000, "deuda_mensual": 210000, "ahorro_disponible": 2800000 }
+        }
+      },
+      "expect": {
+        "outcome": "appended",
+        "baseline_event_id": "e1",
+        "active_event_ids": ["c1", "e2", "e3"],
+        "latest_effective_snapshot": { "ingreso_mensual": 1200000, "deuda_mensual": 150000, "ahorro_disponible": 3500000 },
+        "stored_snapshot_of_e3_unchanged": true,
+        "excluded_from_metrics": ["e1"]
+      }
+    },
+    {
       "name": "parche_de_un_campo_conserva_el_resto",
       "why": "An omitted field retains its last effective value and the new active snapshot remains complete.",
       "input": {

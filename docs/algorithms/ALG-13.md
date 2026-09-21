@@ -3,10 +3,10 @@
 | Field | Value |
 | :---- | :---- |
 | **Version** | `hu13-observed-projection-v1` |
-| **Runs on / implemented in** | HU13 pure projection layer · not implemented yet |
+| **Runs on / implemented in** | `backend/app/tracking/projection.py` + `backend/app/scoring_engine/rule_boundaries.py` |
 | **Cases** | `docs/algorithms/ALG-13-cases.json` |
 | **Open assumptions** | 0 |
-| **Last changed** | 2026-09-20 · HU13 · created |
+| **Last changed** | 2026-09-20 · HU13 · implemented without rule changes |
 
 ## Purpose
 

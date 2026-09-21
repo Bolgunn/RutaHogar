@@ -272,7 +272,7 @@ or tenant-model redesign.
      include the full frozen `project_goal` rather than the current lossy frontend whitelist.
    - Tests: case-file schema/unique-ID validation; omitted-versus-null serialization; complete
      baseline validation; provenance round-trip; no implicit clock/AI/randomness in pure contracts.
-   - Done when: all 44 ALG cases are collected as individually named tests and fail only because
+   - Done when: all 55 ALG cases are collected as individually named tests and fail only because
      their pure implementations do not exist yet; contracts cannot silently drop project metadata.
 
 2. **Add append-only persistence, RLS, and rollback.**
@@ -298,7 +298,7 @@ or tenant-model redesign.
      resolution; deterministic active/audit ordering; replay of presence-preserving patches; and
      exclusion/provenance sets. Repository returns unordered immutable source sets and never marks
      a row active or rewrites reconstructed descendants.
-   - Tests: all 13 ALG-11 fixtures; permutation/property checks; cross-user/cross-plan references;
+   - Tests: all 16 ALG-11 fixtures; permutation/property checks; cross-user/cross-plan references;
      correction chains; equal timestamps; malformed patch atomic rejection; repository mapping.
    - Done when: the same event set always produces the same complete active line, correction audit
      remains intact, and no pure test needs Supabase, network, or current time.
@@ -325,7 +325,7 @@ or tenant-model redesign.
    - Change: calculate action status, temporal status, initial/current/target/remaining values,
      progress percentages, verification decision, and completion/regression evidence from the
      ALG-11 active line and append-only goal events.
-   - Tests: all 14 ALG-12 fixtures; exact tolerance boundaries; missing/invalid target dates;
+   - Tests: all 22 ALG-12 fixtures; exact tolerance boundaries; missing/invalid target dates;
      manual confirmation/revocation; corrected completion excluded from effective evidence; no
      update to goal definitions or current-status columns.
    - Done when: every output is deterministic from explicit inputs and a verifiable goal cannot be
@@ -453,8 +453,8 @@ second fixture that can drift.
 
 | ALG | Cases | Concrete automated test |
 | :-- | :---- | :---------------------- |
-| ALG-11 | 13: `primera_evaluacion_fija_baseline`, `parche_de_un_campo_conserva_el_resto`, `empeoramientos_reales_son_validos`, `correccion_del_ultimo_registro`, `correccion_intermedia_reconstruye_descendientes`, `anulacion_intermedia_omite_su_parche`, `multiples_correcciones_gana_la_ultima_registrada`, `timestamps_iguales_usan_event_id`, `reintento_identico_es_idempotente`, `doble_envio_mismo_id_distinto_payload_es_conflicto`, `omitido_y_null_explicito_son_distintos`, `null_en_campo_obligatorio_rechaza_todo`, `usuario_no_puede_operar_sobre_otro_usuario` | `backend/tests/tracking/test_alg11_cases.py::test_alg11_case[<id>]`; ownership, persistence immutability, and transaction consequences are repeated at repository/RLS/API level. |
-| ALG-12 | 14: `meta_ya_cumplida_en_baseline`, `objetivo_igual_al_inicial_sin_division_por_cero`, `aumento_con_progreso_parcial_atrasado`, `reduccion_con_progreso_parcial_en_trayectoria`, `limite_superior_mas_cinco_pp_sigue_dentro`, `limite_inferior_menos_cinco_pp_sigue_dentro`, `regresion_reabre_meta_sin_borrar_evidencia`, `meta_booleana_verificable`, `meta_categorica_no_infiere_orden`, `dato_insuficiente_no_inventa_progreso`, `usuario_no_fuerza_meta_verificable`, `meta_no_verificable_confirmada_manualmente`, `condicion_desaparece_despues_de_cumplirse`, `condicion_reaparece_y_vuelve_a_cumplida` | `backend/tests/tracking/test_alg12_cases.py::test_alg12_case[<id>]`; confirmation ownership and append-only evidence are repeated in goal-event API/RLS tests and representative states in frontend tests. |
+| ALG-11 | 16: `primera_evaluacion_fija_baseline`, `anulacion_unico_baseline_es_rechazada`, `reemplazo_del_baseline_es_permitido`, `eventos_posteriores_se_reconstruyen_desde_reemplazo_baseline`, `parche_de_un_campo_conserva_el_resto`, `empeoramientos_reales_son_validos`, `correccion_del_ultimo_registro`, `correccion_intermedia_reconstruye_descendientes`, `anulacion_intermedia_omite_su_parche`, `multiples_correcciones_gana_la_ultima_registrada`, `timestamps_iguales_usan_event_id`, `reintento_identico_es_idempotente`, `doble_envio_mismo_id_distinto_payload_es_conflicto`, `omitido_y_null_explicito_son_distintos`, `null_en_campo_obligatorio_rechaza_todo`, `usuario_no_puede_operar_sobre_otro_usuario` | `backend/tests/tracking/test_alg11_cases.py::test_alg11_case[<id>]`; ownership, persistence immutability, and transaction consequences are repeated at repository/RLS/API level. |
+| ALG-12 | 22: `meta_ya_cumplida_en_baseline`, `objetivo_igual_al_inicial_sin_division_por_cero`, `aumento_con_progreso_parcial_atrasado`, `reduccion_con_progreso_parcial_en_trayectoria`, `limite_superior_mas_cinco_pp_sigue_dentro`, `limite_inferior_menos_cinco_pp_sigue_dentro`, `regresion_reabre_meta_sin_borrar_evidencia`, `meta_booleana_verificable`, `meta_categorica_no_infiere_orden`, `dato_insuficiente_no_inventa_progreso`, `usuario_no_fuerza_meta_verificable`, `meta_no_verificable_confirmada_manualmente`, `condicion_desaparece_despues_de_cumplirse`, `condicion_reaparece_y_vuelve_a_cumplida`, `reduccion_baseline_satisfecho_con_inicial_menor_al_objetivo`, `reduccion_baseline_satisfecho_sigue_cumpliendo_en_target`, `reduccion_baseline_satisfecho_regresa_por_encima_del_target`, `reduccion_baseline_satisfecho_retorna_al_cumplimiento`, `aumento_baseline_satisfecho_con_inicial_mayor_al_objetivo`, `aumento_baseline_satisfecho_sigue_cumpliendo_en_target`, `aumento_baseline_satisfecho_regresa_por_debajo_del_target`, `aumento_baseline_satisfecho_retorna_al_cumplimiento` | `backend/tests/tracking/test_alg12_cases.py::test_alg12_case[<id>]`; confirmation ownership and append-only evidence are repeated at goal-event API/RLS level and representative states in frontend tests. |
 | ALG-13 | 17: `cero_observaciones`, `una_observacion`, `dos_fechas_validas_permiten_regresion`, `misma_fecha_repetida_no_es_suficiente`, `pendiente_cero_no_inventa_fecha`, `tendencia_contraria_al_objetivo`, `ahorro_creciente_se_proyecta`, `deuda_decreciente_se_proyecta_hasta_dominio`, `serie_no_monotona_usa_todas_las_observaciones`, `correccion_excluye_outlier_y_cambia_tendencia`, `objetivo_ya_compatible_hoy`, `proyecto_objetivo_ausente`, `datos_incompletos_impiden_ejecutar_reglas`, `cruce_de_threshold_recalcula_score_real`, `capacidad_suficiente_no_basta_si_project_fit_no_compatible`, `bloqueador_no_proyectable_impide_compatibilidad`, `versiones_historicas_distintas_no_recalculan_historia` | `backend/tests/tracking/test_alg13_cases.py::test_alg13_case[<id>]`; real-engine invocation, boundary completeness, zero persistence, and frontend causes have separate integration tests. |
 
 ## Acceptance criteria map
@@ -462,7 +462,7 @@ second fixture that can drift.
 | Criterion | Step(s) | Verified by |
 | :-------- | :------ | :---------- |
 | `E1` — Given an active plan, when the user consults history, then income, employment, debts and savings updates are shown | 1–3, 6, 8–10, 12–13 | All ALG-11 fixtures; SQL append-only/RLS suite; atomic API update test; active versus audit frontend series; reviewer submits partial better and worse values, reloads, and sees complete snapshots without corrected rows in charts. |
-| `E2` — Each goal is shown as `adelantado`, `dentro_de_lo_esperado`, or `atrasado` from actual versus expected progress | 4–5, 8, 10, 13 | All 14 ALG-12 fixtures including exact ±5 pp boundaries, automatic/manual verification and regression; goal component tests; reviewer verifies initial/current/target/remaining values and frozen baseline after a new evaluation. |
+| `E2` — Each goal is shown as `adelantado`, `dentro_de_lo_esperado`, or `atrasado` from actual versus expected progress | 4–5, 8, 10, 13 | All 22 ALG-12 fixtures including exact ±5 pp boundaries, already-satisfied baseline regression, automatic/manual verification and regression; goal component tests; reviewer verifies initial/current/target/remaining values and frozen baseline after a new evaluation. |
 | `E3` — The estimate updates dynamically from real progress | 7–8, 10, 12–13 | All 17 ALG-13 fixtures; real scoring/ALG-9/project-fit adapter tests; zero-write projection test; reviewer sees either the first real compatible date or an explicit `not_projectable` cause—never a fixed +30-day or linear-score estimate. |
 | `E4` — The user sees how eligibility evolves over time | 3, 5–10, 12–13 | Timeline/history UI tests and end-to-end flow show score/classification, capacity, project-fit, primary/secondary variables, goal states, corrections and provenance; corrected events stay audit-only. |
 | Closed Grill rule — update pending after 30 days, visual only | 9, 11, 13 | Boundary/timezone unit tests and reviewer clock fixture; no notification/scheduler/network side effect. |
