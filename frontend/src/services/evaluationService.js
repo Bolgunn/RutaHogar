@@ -101,6 +101,10 @@ export function applyEvaluationAnnotations(row, annotations) {
   return view;
 }
 
+export function evaluationAnnotationOwner(role, userId) {
+  return role === "ejecutivo" || role === "admin" ? null : userId;
+}
+
 export async function getEvaluations(userId, role) {
   requireConnection();
   const user = await getAuthenticatedUser();
@@ -118,8 +122,13 @@ export async function getEvaluations(userId, role) {
     });
     contactsMap = Object.fromEntries((contacts || []).map((contact) => [contact.id, contact]));
   }
-  const { data: annotations, error: annotationError } = await supabase.from("evaluation_events")
-    .select("*").eq("user_id", user.id).order("recorded_at", { ascending: true });
+  if (!data?.length) return [];
+  let annotationQuery = supabase.from("evaluation_events").select("*")
+    .in("evaluation_id", data.map((row) => row.id));
+  const annotationOwner = evaluationAnnotationOwner(role, user.id);
+  if (annotationOwner) annotationQuery = annotationQuery.eq("user_id", annotationOwner);
+  const { data: annotations, error: annotationError } = await annotationQuery
+    .order("recorded_at", { ascending: true });
   if (annotationError) throw annotationError;
   return (data || []).map((row) => normalizeEvaluation(
     applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), contactsMap));

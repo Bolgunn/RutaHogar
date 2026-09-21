@@ -1103,6 +1103,9 @@ create policy "Goal events select own" on public.improvement_goal_events
 drop policy if exists "Evaluation events select own" on public.evaluation_events;
 create policy "Evaluation events select own" on public.evaluation_events
   for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
+create policy "Evaluation events select staff" on public.evaluation_events
+  for select to authenticated using (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text]));
 
 -- Disable legacy mutation policies rather than leave permissive alternatives.
 drop policy if exists "Evaluations update own" on public.evaluations;

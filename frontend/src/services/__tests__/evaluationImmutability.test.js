@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyEvaluationAnnotations,
   deleteEvaluation,
+  evaluationAnnotationOwner,
   normalizeEvaluation,
 } from "../evaluationService";
+import { mergeEvaluationEvents } from "../getScoringHistory";
 
 describe("HU13 immutable evaluation views", () => {
   it("overlays append-only annotations in deterministic audit order without mutating the row", () => {
@@ -42,5 +44,28 @@ describe("HU13 immutable evaluation views", () => {
 
   it("rejects the retired physical-delete path", async () => {
     await expect(deleteEvaluation("evaluation-1", "owner")).rejects.toThrow("historial es inmutable");
+  });
+
+  it("does not filter lead annotations by the executive user id", () => {
+    expect(evaluationAnnotationOwner("ejecutivo", "staff-1")).toBeNull();
+    expect(evaluationAnnotationOwner("admin", "staff-1")).toBeNull();
+    expect(evaluationAnnotationOwner("usuario", "lead-1")).toBe("lead-1");
+  });
+
+  it("shows append-only milestone annotations beside legacy dashboard events", () => {
+    const rows = [{
+      id: "history-1", evaluation_id: "evaluation-1",
+      events: [{ type: "no_viable_shown", at: "2026-01-01T00:00:00Z" }],
+    }];
+    const merged = mergeEvaluationEvents(rows, [{
+      event_id: "event-2", evaluation_id: "evaluation-1", kind: "milestone",
+      effective_at: "2026-02-01T00:00:00Z",
+      payload: { type: "register_savings", details: { total_registered: 10 } },
+    }]);
+
+    expect(merged[0].events.map((event) => event.type)).toEqual([
+      "no_viable_shown", "register_savings",
+    ]);
+    expect(rows[0].events).toHaveLength(1);
   });
 });

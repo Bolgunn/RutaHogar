@@ -2,9 +2,12 @@
 begin;
 insert into auth.users(id, email) values
   ('00000000-0000-0000-0000-000000000001', 'hu13-owner@example.invalid'),
-  ('00000000-0000-0000-0000-000000000002', 'hu13-other@example.invalid');
-insert into public.profiles(id) values
-  ('00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000002');
+  ('00000000-0000-0000-0000-000000000002', 'hu13-other@example.invalid'),
+  ('00000000-0000-0000-0000-000000000003', 'hu13-staff@example.invalid');
+insert into public.profiles(id, role) values
+  ('00000000-0000-0000-0000-000000000001', 'usuario'),
+  ('00000000-0000-0000-0000-000000000002', 'usuario'),
+  ('00000000-0000-0000-0000-000000000003', 'ejecutivo');
 insert into public.evaluations(id, user_id, score, classification) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 50, 'Medio');
 insert into public.tracking_plans(
@@ -22,6 +25,13 @@ insert into public.tracking_events(
   '00000000-0000-0000-0000-000000000001', 'baseline', '2026-01-01Z', 'test',
   '{"ingreso_mensual":1000000}', '{"ingreso_mensual":1000000}',
   '10000000-0000-0000-0000-000000000001', 'hu13-lineage-v1', '{}'
+);
+insert into public.evaluation_events(
+  event_id, evaluation_id, user_id, kind, payload, effective_at, provenance
+) values (
+  '50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000001', 'milestone',
+  '{"type":"register_savings"}', '2026-01-02Z', '{}'
 );
 set constraints all immediate;
 
@@ -149,6 +159,14 @@ do $$
 begin
   if exists(select from public.tracking_events) or exists(select from public.tracking_plans) then
     raise exception 'cross-owner read succeeded';
+  end if;
+end;
+$$;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', true);
+do $$
+begin
+  if (select count(*) from public.evaluation_events) <> 1 then
+    raise exception 'staff cannot read lead evaluation events';
   end if;
 end;
 $$;
