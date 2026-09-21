@@ -1140,10 +1140,9 @@ create or replace function public.hu13_reject_mutation()
 returns trigger language plpgsql set search_path = public as $$
 begin
   if tg_table_name = 'tracking_plans' and tg_op = 'UPDATE'
-     and old.target_project_snapshot is null
-     and new.target_project_snapshot is not null
-     and jsonb_typeof(new.target_project_snapshot) = 'object'
-     and new.target_project_snapshot <> '{}'::jsonb
+     and to_jsonb(old)->'target_project_snapshot' = 'null'::jsonb
+     and jsonb_typeof(to_jsonb(new)->'target_project_snapshot') = 'object'
+     and to_jsonb(new)->'target_project_snapshot' <> '{}'::jsonb
      and (to_jsonb(new) - 'target_project_snapshot') = (to_jsonb(old) - 'target_project_snapshot') then
     return new;
   end if;
