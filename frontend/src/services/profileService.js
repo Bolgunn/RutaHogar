@@ -9,6 +9,7 @@ const roleAliases = {
   ejecutivo_comercial: "ejecutivo",
   ejecutivo: "ejecutivo",
   admin: "admin",
+  admin_inmobiliario: "admin_inmobiliario",
 };
 
 export function normalizeRole(role) {
@@ -27,6 +28,7 @@ function normalizeProfile(row) {
     user_id: row.id,
     full_name: row.full_name || "",
     phone: row.phone || "",
+    rut: row.rut || "",
     birth_date: row.birth_date || "",
     role: normalizeRole(row.role),
     onboarding_data: row.onboarding_data || null,
@@ -85,7 +87,7 @@ export async function getCurrentProfile(userId) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -98,11 +100,12 @@ export async function getCurrentProfile(userId) {
 
 export async function upsertProfile(userId, fullName, role = "usuario", onboardingData, contactData = {}) {
   const phone = normalizePhoneForStorage(contactData.phone || "");
+  const rut = contactData.rut || "";
   const birthDate = normalizeBirthDateForStorage(contactData.birth_date || "");
 
   if (!isUUID(userId)) {
     console.warn("Saltando upsert: ID no es un UUID válido.");
-    return normalizeProfile({ id: userId, full_name: fullName, role, phone, birth_date: birthDate });
+    return normalizeProfile({ id: userId, full_name: fullName, role, phone, rut, birth_date: birthDate });
   }
 
   const profile = {
@@ -112,6 +115,7 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
     onboarding_data: onboardingData || null,
   };
   if (phone) profile.phone = phone;
+  if (rut) profile.rut = rut;
   if (birthDate) profile.birth_date = birthDate;
 
   if (!isSupabaseDataConfigured) {
@@ -121,7 +125,7 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
   const { data, error } = await supabase
     .from("profiles")
     .upsert({ ...profile, updated_at: new Date().toISOString(), created_at: new Date().toISOString() })
-    .select("id, full_name, phone, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .maybeSingle();
 
   if (error) {
@@ -137,11 +141,13 @@ export async function ensureUserProfile(user) {
   }
 
   const metadataPhone = normalizePhoneForStorage(user.user_metadata?.phone || "");
+  const metadataRut = user.user_metadata?.rut || "";
   const metadataBirthDate = normalizeBirthDateForStorage(user.user_metadata?.birth_date || "");
   const existingProfile = await getCurrentProfile(user.id);
   if (existingProfile) {
     const shouldCompleteContactData =
       (!existingProfile.phone && metadataPhone) ||
+      (!existingProfile.rut && metadataRut) ||
       (!existingProfile.birth_date && metadataBirthDate);
 
     if (!shouldCompleteContactData) return existingProfile;
@@ -153,6 +159,7 @@ export async function ensureUserProfile(user) {
       existingProfile.onboarding_data || null,
       {
         phone: existingProfile.phone || metadataPhone,
+        rut: existingProfile.rut || metadataRut,
         birth_date: existingProfile.birth_date || metadataBirthDate,
       },
     );
@@ -162,6 +169,7 @@ export async function ensureUserProfile(user) {
   const role = normalizeRole(user.user_metadata?.role || "usuario");
   return upsertProfile(user.id, fullName, role, null, {
     phone: metadataPhone,
+    rut: metadataRut,
     birth_date: metadataBirthDate,
   });
 }

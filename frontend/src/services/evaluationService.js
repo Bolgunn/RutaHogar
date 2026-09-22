@@ -87,6 +87,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
     phone: contact.phone || null,
+    reliability_status: contact.reliability_status || "normal",
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -249,7 +250,7 @@ export async function createEvaluation(userId, evaluationPayload) {
 
 export async function getEvaluations(userId, role) {
   if (!isSupabaseDataConfigured) {
-    const isSales = role === "ejecutivo" || role === "admin";
+    const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
     if (isSales) return readLocalEvaluations();
     return readLocalEvaluations().filter((item) => item.user_id === userId || item.email === userId);
   }
@@ -258,7 +259,7 @@ export async function getEvaluations(userId, role) {
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
 
-  const isSales = role === "ejecutivo" || role === "admin";
+  const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
 
   let query = supabase
     .from("evaluations")
@@ -283,7 +284,18 @@ export async function getEvaluations(userId, role) {
     if (contactsError) {
       logSupabaseError(contactsError);
     } else if (contactsData) {
-      contactsMap = Object.fromEntries(contactsData.map((contact) => [contact.id, contact]));
+      // Fetch reliability_status separately as the RPC might not include it
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, reliability_status")
+        .in("id", userIds);
+        
+      const profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p.reliability_status]));
+      
+      contactsMap = Object.fromEntries(contactsData.map((contact) => [
+        contact.id, 
+        { ...contact, reliability_status: profilesMap[contact.id] || "normal" }
+      ]));
     }
   }
 

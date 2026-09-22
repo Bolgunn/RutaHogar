@@ -76,6 +76,20 @@ function getBirthDateError(form) {
   return "";
 }
 
+function validateRut(rutNumber, dv) {
+  if (!rutNumber || !dv) return false;
+  const cleanRut = rutNumber.replace(/\D/g, "");
+  if (cleanRut.length < 7) return false;
+  
+  let t = parseInt(cleanRut, 10);
+  let m = 0, s = 1;
+  for (; t; t = Math.floor(t / 10)) {
+    s = (s + t % 10 * (9 - m++ % 6)) % 11;
+  }
+  const expectedDv = s ? String(s - 1) : "K";
+  return expectedDv.toUpperCase() === dv.toUpperCase();
+}
+
 function getPasswordStrength(password) {
   const checks = [
     password.length >= 8,
@@ -770,6 +784,8 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     full_name: "",
+    rut_number: "",
+    rut_dv: "",
     phone: "",
     birth_day: "",
     birth_month: "",
@@ -802,11 +818,15 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       const nextValue =
         name === "phone"
           ? onlyPhoneDigits(value, 8)
-          : name === "birth_day" || name === "birth_month"
-            ? onlyDigits(value, 2)
-            : name === "birth_year"
-              ? onlyDigits(value, 4)
-              : value;
+          : name === "rut_number"
+            ? onlyDigits(value, 8)
+            : name === "rut_dv"
+              ? value.slice(0, 1).toUpperCase().replace(/[^0-9K]/g, "")
+              : name === "birth_day" || name === "birth_month"
+                ? onlyDigits(value, 2)
+                : name === "birth_year"
+                  ? onlyDigits(value, 4)
+                  : value;
       return { ...prev, [name]: nextValue };
     });
 
@@ -841,6 +861,17 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
     if (mode === "signup" && !form.full_name.trim()) {
       setError("Ingresa tu nombre para crear la cuenta.");
       return;
+    }
+
+    if (mode === "signup") {
+      if (!form.rut_number || !form.rut_dv) {
+        setError("Ingresa tu RUT para crear la cuenta.");
+        return;
+      }
+      if (!validateRut(form.rut_number, form.rut_dv)) {
+        setError("El RUT ingresado no es válido.");
+        return;
+      }
     }
 
     const normalizedPhone = normalizePhone(form.phone);
@@ -878,7 +909,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       const auth =
         mode === "signin"
           ? await signIn(form)
-          : await signUp({ ...form, phone: normalizedPhone, birth_date: birthDate });
+          : await signUp({ ...form, phone: normalizedPhone, birth_date: birthDate, rut: `${form.rut_number}-${form.rut_dv}` });
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -977,6 +1008,30 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <div className="auth-field">
                     <label className="auth-field-label" htmlFor="auth-name">Nombre</label>
                     <input id="auth-name" type="text" name="full_name" value={form.full_name} onChange={handleChange} placeholder="Ej: Isaias Carte" autoComplete="name" />
+                  </div>
+
+                  <div className="auth-field">
+                    <label className="auth-field-label">RUT</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '8px' }}>
+                      <input
+                        type="text"
+                        name="rut_number"
+                        value={form.rut_number}
+                        onChange={handleChange}
+                        placeholder="12345678"
+                        maxLength="8"
+                        inputMode="numeric"
+                      />
+                      <input
+                        type="text"
+                        name="rut_dv"
+                        value={form.rut_dv}
+                        onChange={handleChange}
+                        placeholder="K"
+                        maxLength="1"
+                        style={{ textAlign: 'center' }}
+                      />
+                    </div>
                   </div>
 
                   <div className="auth-field">
@@ -1118,7 +1173,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
                     <option value={roles.user}>{roleLabels[roles.user]}</option>
                     <option value={roles.sales}>{roleLabels[roles.sales]}</option>
-                    <option value={roles.admin}>{roleLabels[roles.admin]}</option>
                   </select>
                 </div>
               )}

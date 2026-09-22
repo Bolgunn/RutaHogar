@@ -21,17 +21,29 @@ create table if not exists public.profiles (
   onboarding_data jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin'))
+  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin', 'admin_inmobiliario'))
 );
 
 alter table public.profiles
 add column if not exists onboarding_data jsonb,
 add column if not exists last_lead_seen_at timestamptz,
 add column if not exists phone text,
+add column if not exists rut text,
 add column if not exists birth_date date;
 
 alter table public.profiles
-add column if not exists consent_data jsonb;
+add column if not exists consent_data jsonb,
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado'));
+
+create table if not exists public.lead_status_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  changed_by uuid references auth.users(id) on delete set null,
+  old_status text,
+  new_status text not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.evaluations (
   id uuid primary key default gen_random_uuid(),
@@ -241,10 +253,10 @@ create policy "Evaluations select own"
   on public.evaluations
   for select
   using (
-    (auth.uid() = user_id)
-    or
-    (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text]))
-  );
+      (auth.uid() = user_id)
+      or
+      (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
+    );
 
 drop policy if exists "Evaluations insert own" on public.evaluations;
 create policy "Evaluations insert own"
@@ -269,7 +281,7 @@ as $$
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
-    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text]);
+    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
 $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
@@ -448,7 +460,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.get_my_role() = 'admin'
+  select public.get_my_role() in ('admin', 'admin_inmobiliario')
     and (
       public.get_my_inmobiliaria() is null
       or public.get_my_inmobiliaria() = p_inmobiliaria_id
@@ -570,7 +582,7 @@ begin
   end if;
 
   update public.profiles
-  set role = 'admin',
+  set role = 'admin_inmobiliario',
       inmobiliaria_id = p_inmobiliaria_id
   where id = v_target;
 
@@ -683,7 +695,7 @@ create policy "Proyectos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = inmobiliaria_id
@@ -724,7 +736,7 @@ create policy "Proyecto ejecutivos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
