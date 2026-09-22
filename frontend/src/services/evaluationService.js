@@ -136,11 +136,17 @@ export function evaluationAnnotationOwner(role, userId) {
 }
 
 export async function getEvaluations(userId, role) {
-  requireConnection();
+  requireConnection
+  if (!isSupabaseDataConfigured) {
+    const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
+    if (isSales) return readLocalEvaluations();
+    return readLocalEvaluations().filter((item) => item.user_id === userId || item.email === userId);
+  }
+
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
-  const isSales = role === "ejecutivo" || role === "admin";
+  const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
   let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
   if (!isSales) query = query.eq("user_id", user.id);
   const { data, error } = await query;

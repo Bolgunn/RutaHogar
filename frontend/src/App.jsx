@@ -248,7 +248,7 @@ const mergeOnboardingData = (currentData, pendingData) => {
 const getInitialPageForProfile = (profile) => {
   if (!profile) return "auth";
   if (profile.role === roles.sales) return "home";
-  if (profile.role === roles.admin) return "admin";
+  if (profile.role === roles.admin || profile.role === roles.admin_inmo) return "admin";
   if (profile.role !== roles.user) return "home";
   return hasCompletedOnboarding(getOnboardingData(profile)) ? "home" : "onboarding";
 };
@@ -363,7 +363,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "home", path: "/inicio" };
   }
 
-  if (profile.role === roles.admin) {
+  if (profile.role === roles.admin || profile.role === roles.admin_inmo) {
     if (path === "/") return { page: "admin", path: "/admin" };
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
@@ -687,7 +687,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
+    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin || profile?.role === roles.admin_inmo)) markLeadsSeen();
   }, [page]);
 
   useEffect(() => {
@@ -700,7 +700,7 @@ export default function App() {
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
-    if (profile?.role !== roles.sales && profile?.role !== roles.admin) {
+    if (profile?.role !== roles.sales && profile?.role !== roles.admin && profile?.role !== roles.admin_inmo) {
       setInmobiliariaId(null);
       return;
     }
@@ -1063,7 +1063,7 @@ export default function App() {
 
     try {
       // Se siembra la ref en el mismo tick: el efecto corre después del
-      // render y un fallo síncrono (sesión ausente) llegaría antes, con la
+      // render y un fallo síncrono (sesión ausente) llegaría anterior, con la
       // ref todavía apuntando al resultado anterior.
       resultRef.current = resultSnapshot;
       setResult(resultSnapshot);
@@ -1451,7 +1451,7 @@ export default function App() {
             onAccept={handleDataConsent}
             onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
           />
-        ) : page === "home" && profile.role === roles.admin ? (
+        ) : page === "home" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
           <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
         ) : page === "home" && profile.role === roles.sales ? (
           <ExecutiveHome
@@ -1460,7 +1460,7 @@ export default function App() {
             inmobiliariaId={inmobiliariaId}
             onNavigate={navigateToPage}
           />
-        ) : page === "admin-profile" && profile.role === roles.admin ? (
+        ) : page === "admin-profile" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
           <section className="evaluation-panel home-panel">
@@ -1695,7 +1695,7 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
+      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
         <DashboardLeads
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
@@ -1710,9 +1710,9 @@ export default function App() {
         />
       ) : page === "sales-profile" && profile.role === roles.sales ? (
         <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
-      ) : page === "admin" && profile.role === roles.admin ? (
+      ) : page === "admin" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
-      ) : page === "admin-projects" && profile.role === roles.admin ? (
+      ) : page === "admin-projects" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
         <AdminProjectCatalog />
       ) : (
         <section className="section-block">

@@ -391,7 +391,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
 export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation }) {
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
-  const canSeeTechnicalScoring = profile?.role === "ejecutivo" || profile?.role === "admin";
+  const canSeeTechnicalScoring = profile?.role === "ejecutivo" || profile?.role === "admin" || profile?.role === "admin_inmobiliario";
   const [form, setForm] = useState(savedOnboarding);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");

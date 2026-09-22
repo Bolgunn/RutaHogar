@@ -259,10 +259,10 @@ create policy "Evaluations select own"
   on public.evaluations
   for select
   using (
-    (auth.uid() = user_id)
-    or
-    (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
-  );
+      (auth.uid() = user_id)
+      or
+      (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text, 'admin_inmobiliario'::text]))
+    );
 
 drop policy if exists "Evaluations insert own" on public.evaluations;
 create policy "Evaluations insert own"
@@ -287,7 +287,7 @@ as $$
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
-    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text]);
+    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
 $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
@@ -482,7 +482,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.get_my_role() = 'admin'
+  select public.get_my_role() in ('admin', 'admin_inmobiliario')
     and (
       public.get_my_inmobiliaria() is null
       or public.get_my_inmobiliaria() = p_inmobiliaria_id
@@ -604,7 +604,7 @@ begin
   end if;
 
   update public.profiles
-  set role = 'admin',
+  set role = 'admin_inmobiliario',
       inmobiliaria_id = p_inmobiliaria_id
   where id = v_target;
 
@@ -718,7 +718,7 @@ create policy "Proyectos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = inmobiliaria_id
@@ -768,7 +768,7 @@ create policy "Proyecto ejecutivos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)

@@ -97,7 +97,7 @@ export default function AdminPanel({ evaluations, profile }) {
       key: "admin",
       title: roleLabels.admin,
       description: "Supervisa catálogo, permisos y solicitudes sensibles.",
-      state: profile?.role === "admin" ? "Sesión actual" : "Disponible",
+      state: (profile?.role === "admin" || profile?.role === "admin_inmobiliario") ? "Sesión actual" : "Disponible",
     },
     {
       key: "sales",
