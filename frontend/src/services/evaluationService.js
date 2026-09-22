@@ -250,7 +250,7 @@ export async function createEvaluation(userId, evaluationPayload) {
 
 export async function getEvaluations(userId, role) {
   if (!isSupabaseDataConfigured) {
-    const isSales = role === "ejecutivo" || role === "admin";
+    const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
     if (isSales) return readLocalEvaluations();
     return readLocalEvaluations().filter((item) => item.user_id === userId || item.email === userId);
   }
@@ -259,7 +259,7 @@ export async function getEvaluations(userId, role) {
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
 
-  const isSales = role === "ejecutivo" || role === "admin";
+  const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
 
   let query = supabase
     .from("evaluations")
