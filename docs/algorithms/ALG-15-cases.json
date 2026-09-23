@@ -1,0 +1,47 @@
+{
+  "algorithm": "ALG-15",
+  "version": "hu14-contact-questions-v1",
+  "nota": "Casos documentales alineados con frontend/src/lib/commercial/__tests__/contactQuestions.test.js. Cada caso llama buildContactQuestions({ lead, selectedProject, selectedMatch }) y valida ids de preguntas esperados.",
+  "cases": [
+    {
+      "name": "preguntas_base_siempre_presentes",
+      "por_que": "R1. Todo lead debe tener un minimo de preguntas utiles aunque falte contexto.",
+      "input": { "lead": { "input": {}, "onboarding": {}, "result": {} } },
+      "expect": {
+        "ids_contains": ["purchase_motivation", "decision_makers", "purchase_tradeoff"]
+      }
+    },
+    {
+      "name": "plazo_corto_prioriza_preparacion",
+      "por_que": "R5. Un plazo corto debe llevar primero a readiness bancaria/documental.",
+      "input": { "lead": { "input": { "plazo_compra": "3_6_meses" }, "onboarding": {}, "result": {} } },
+      "expect": { "first_id": "short_term_readiness" }
+    },
+    {
+      "name": "proyecto_compatible_en_comuna_no_declarada",
+      "por_que": "R4. Si el proyecto calza pero su comuna no esta en preferencias/contexto, debe preguntarse por disposicion territorial.",
+      "input": {
+        "lead": {
+          "input": { "comuna_objetivo": "Macul" },
+          "onboarding": { "comuna_alternativa": "Nunoa" },
+          "result": { "classification": "Alto", "score": 88 }
+        },
+        "selectedProject": { "id": "p2", "nombre": "Vista Sur", "comuna": "La Florida" },
+        "selectedMatch": { "clasificacion": "Compatible", "motivo_exclusion": null }
+      },
+      "expect": {
+        "ids_contains": ["selected_project_commune_openness", "compatible_project_decision_trigger"],
+        "question_contains": "La Florida"
+      }
+    },
+    {
+      "name": "sin_proyecto_pregunta_foco_busqueda",
+      "por_que": "R3. Sin proyecto no deben aparecer preguntas especificas de proyecto.",
+      "input": { "lead": { "input": {}, "onboarding": {}, "result": { "classification": "Medio", "score": 65 } } },
+      "expect": {
+        "ids_contains": ["no_project_goal_priority", "medium_score_blocker"],
+        "ids_not_contains": ["selected_project_commune_openness"]
+      }
+    }
+  ]
+}

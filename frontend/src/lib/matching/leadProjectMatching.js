@@ -69,9 +69,28 @@ function penalidadHolgura(capacidadUf, proyecto, peakRatio) {
 export function comunasDeclaradas(evaluacion) {
   const input = evaluacion.input || {};
   const onboarding = evaluacion.onboarding || {};
-  const principal = input.comuna_objetivo || onboarding.comuna_interes || null;
-  const alternativa = onboarding.comuna_alternativa || null;
-  return { principal, declaradas: [principal, alternativa].filter(Boolean) };
+  const context = evaluacion.context || input.context || input.simulation_context || {};
+  const preferences = evaluacion.preferences || input.preferences || input.preferencias || context.preferences || {};
+  const principal =
+    preferences.comuna_interes ||
+    preferences.comuna_objetivo ||
+    preferences.comuna_preferida ||
+    context.comuna_interes ||
+    context.comuna_objetivo ||
+    context.comuna_preferida ||
+    input.comuna_objetivo ||
+    input.comuna_interes ||
+    onboarding.comuna_interes ||
+    null;
+  const declaradas = [
+    principal,
+    preferences.comuna_alternativa,
+    context.comuna_alternativa,
+    input.comuna_alternativa,
+    input.project_goal?.comuna,
+    onboarding.comuna_alternativa,
+  ].filter(Boolean);
+  return { principal, declaradas: [...new Set(declaradas)] };
 }
 
 function penalidadBloqueadores(bloqueadores) {

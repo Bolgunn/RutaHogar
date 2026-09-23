@@ -1,9 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
+import { buildContactQuestions } from "../lib/commercial/contactQuestions";
+import { detectContactOpportunities } from "../lib/matching/contactOpportunities";
+import { buildLeadProjectComparison } from "../lib/matching/leadComparison";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
+import NotificationToast from "./NotificationToast";
+import { formatFormValue } from "../constants";
 import {
   formatScore,
   getClassificationAdjustment,
@@ -25,6 +30,7 @@ const AGE_RANGES = [
   { label: "45 - 55 años", min: 45, max: 55 },
   { label: "55+ años", min: 55, max: Infinity },
 ];
+const DISMISSED_OPPORTUNITIES_KEY = "RutaHogar_dismissed_contact_opportunities";
 
 function formatDate(value) {
   const date = new Date(value);
@@ -93,6 +99,75 @@ function formatEventAt(value) {
   return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL");
 }
 
+function leadIdentity(item) {
+  return item?.user_id || item?.email || item?.id || null;
+}
+
+function latestEvaluationPerLead(items = []) {
+  const latestByLead = new Map();
+  for (const item of items) {
+    const key = leadIdentity(item);
+    if (!key) continue;
+    const current = latestByLead.get(key);
+    if (!current || new Date(item.created_at || 0) > new Date(current.created_at || 0)) {
+      latestByLead.set(key, item);
+    }
+  }
+  return [...latestByLead.values()];
+}
+
+function evaluationsForSameLead(items = [], lead) {
+  const key = leadIdentity(lead);
+  if (!key) return [];
+  return items
+    .filter((item) => leadIdentity(item) === key)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+function historyFallbackFromEvaluation(item) {
+  if (!item) return null;
+  const result = item.result || {};
+  return {
+    id: `evaluation-${item.id}`,
+    evaluation_id: item.id,
+    score: result.score,
+    base_score: result.base_score,
+    adjusted_score: result.adjusted_score,
+    score_adjustment_reason: result.score_adjustment_reason || "",
+    original_classification: result.original_classification || "",
+    classification: result.classification,
+    snapshot: {
+      ...(item.input || {}),
+      input: item.input || {},
+      onboarding: item.onboarding || {},
+      result,
+    },
+    component_scores: result.component_scores || {},
+    algorithm_version: result.algorithm_version || "",
+    created_at: item.created_at,
+    events: [],
+  };
+}
+
+function readDismissedOpportunities(scope) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DISMISSED_OPPORTUNITIES_KEY)) || {};
+    return new Set(stored[scope] || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeDismissedOpportunities(scope, ids) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DISMISSED_OPPORTUNITIES_KEY)) || {};
+    stored[scope] = [...ids];
+    localStorage.setItem(DISMISSED_OPPORTUNITIES_KEY, JSON.stringify(stored));
+  } catch {
+    // El descarte es una ayuda de interfaz; si localStorage falla, no bloquea la bandeja.
+  }
+}
+
 function renderEventDetail(event) {
   const details = event.details || {};
   if (event.type === "apply_alternative") return details.title || details.alternative_id || "Alternativa aplicada";
@@ -117,6 +192,159 @@ function componentScoreLabel(key) {
   return labels[key] || key.replace(/_/g, " ");
 }
 
+function historySnapshot(row = {}) {
+  const snapshot = row.snapshot || {};
+  const result = snapshot.result || snapshot.result_snapshot || row.result || {};
+  const input = snapshot.input || snapshot.input_snapshot || snapshot || {};
+  const onboarding = snapshot.onboarding || {};
+  return { input, result, onboarding };
+}
+
+function numberOrNull(value) {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function projectMatchStatusLabel(match) {
+  if (!match) return "Sin dato";
+  if (match.clasificacion) return match.clasificacion;
+  const labels = {
+    capacidad_requiere_antecedentes: "Requiere antecedentes para calcular capacidad",
+    capacidad_insuficiente: "Capacidad insuficiente para este proyecto",
+    bloqueador_critico: "Excluido por bloqueador crítico",
+  };
+  return labels[match.motivo_exclusion] || match.motivo_exclusion || "Sin dato";
+}
+
+function compareFlagText(value) {
+  if (value === true) return "Sí";
+  if (value === false) return "No";
+  return "Sin comuna declarada";
+}
+
+function comparisonCapacityStatus(item) {
+  if (item.capacity.exclusion === "capacidad_requiere_antecedentes") return "Requiere antecedentes";
+  if (item.capacity.reachesMin) return "Alcanza precio mínimo";
+  return "No alcanza precio mínimo";
+}
+
+function formatSignedNumber(value, suffix = "") {
+  const parsed = numberOrNull(value);
+  if (parsed == null || parsed === 0) return null;
+  const sign = parsed > 0 ? "+" : "";
+  return `${sign}${Math.round(parsed * 10) / 10}${suffix}`;
+}
+
+function formatSignedMoney(value) {
+  const parsed = numberOrNull(value);
+  if (parsed == null || parsed === 0) return null;
+  const sign = parsed > 0 ? "+" : "-";
+  return `${sign}${money(Math.abs(parsed))}`;
+}
+
+function compatibilityForHistory(row, project) {
+  if (!project) return null;
+  const { input, result, onboarding } = historySnapshot(row);
+  const leadLike = {
+    input,
+    result,
+    onboarding,
+  };
+  const { matches, excluidos } = matchLeadToProjects(leadLike, [project]);
+  return matches[0] || excluidos[0] || null;
+}
+
+function projectGoalMatchesSelected(projectGoal, project) {
+  if (!projectGoal || !project) return false;
+  if (projectGoal.id != null && project.id != null && String(projectGoal.id) === String(project.id)) return true;
+  const sameName = projectGoal.nombre && project.nombre && projectGoal.nombre.trim().toLowerCase() === project.nombre.trim().toLowerCase();
+  const sameCommune = projectGoal.comuna && project.comuna && projectGoal.comuna.trim().toLowerCase() === project.comuna.trim().toLowerCase();
+  return Boolean(sameName && sameCommune);
+}
+
+function metricFromHistory(row, project) {
+  const { input, result } = historySnapshot(row);
+  const projectMatch = compatibilityForHistory(row, project);
+  return {
+    score: numberOrNull(row.adjusted_score ?? row.score ?? result.adjusted_score ?? result.score),
+    classification: row.classification || result.classification || "Sin clasificación",
+    income: numberOrNull(input.ingreso_mensual),
+    debt: numberOrNull(input.deuda_mensual),
+    savings: numberOrNull(input.ahorro_disponible),
+    workType: input.tipo_contrato || "Sin dato",
+    capacityUf: project ? numberOrNull(projectMatch?.evidencia?.capacidad_uf) : null,
+    projectCompatibility: project ? projectMatchStatusLabel(projectMatch) : null,
+    projectAffinity: project ? numberOrNull(projectMatch?.afinidad) : null,
+    matchesSelectedGoal: projectGoalMatchesSelected(input.project_goal, project),
+  };
+}
+
+function buildHistoryChangeChips(current, previous) {
+  if (!previous) return [{ label: "Primera calificación registrada", tone: "neutral" }];
+
+  const chips = [];
+  const scoreDelta = current.score != null && previous.score != null ? current.score - previous.score : null;
+  if (scoreDelta) chips.push({ label: `Score ${formatSignedNumber(scoreDelta)}`, tone: scoreDelta > 0 ? "positive" : "negative" });
+
+  const incomeDelta = current.income != null && previous.income != null ? current.income - previous.income : null;
+  if (incomeDelta) chips.push({ label: `Ingreso ${formatSignedMoney(incomeDelta)}`, tone: incomeDelta > 0 ? "positive" : "negative" });
+
+  const debtDelta = current.debt != null && previous.debt != null ? current.debt - previous.debt : null;
+  if (debtDelta) chips.push({ label: `Deuda ${formatSignedMoney(debtDelta)}`, tone: debtDelta < 0 ? "positive" : "negative" });
+
+  const savingsDelta = current.savings != null && previous.savings != null ? current.savings - previous.savings : null;
+  if (savingsDelta) chips.push({ label: `Ahorro ${formatSignedMoney(savingsDelta)}`, tone: savingsDelta > 0 ? "positive" : "negative" });
+
+  const capacityDelta = current.capacityUf != null && previous.capacityUf != null ? current.capacityUf - previous.capacityUf : null;
+  if (capacityDelta) chips.push({ label: `Capacidad ${formatSignedNumber(capacityDelta, " UF")}`, tone: capacityDelta > 0 ? "positive" : "negative" });
+
+  if (current.workType !== previous.workType) {
+    chips.push({ label: `Situación laboral: ${formatFormValue(previous.workType)} -> ${formatFormValue(current.workType)}`, tone: "neutral" });
+  }
+
+  if (current.projectCompatibility && previous.projectCompatibility && current.projectCompatibility !== previous.projectCompatibility) {
+    chips.push({ label: `Compatibilidad: ${previous.projectCompatibility} -> ${current.projectCompatibility}`, tone: current.projectCompatibility === "Compatible" ? "positive" : "neutral" });
+  }
+
+  return chips.length ? chips : [{ label: "Sin cambios materiales detectados", tone: "neutral" }];
+}
+
+function buildHistoryTimeline(history = [], project = null) {
+  const chronological = [...history].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  const items = chronological.map((row, index) => {
+    const metrics = metricFromHistory(row, project);
+    const previousMetrics = index > 0 ? metricFromHistory(chronological[index - 1], project) : null;
+    return {
+      row,
+      metrics,
+      changes: buildHistoryChangeChips(metrics, previousMetrics),
+    };
+  });
+
+  const first = items[0]?.metrics;
+  const last = items[items.length - 1]?.metrics;
+  const scoreDelta = first?.score != null && last?.score != null ? last.score - first.score : null;
+  const capacityDelta = first?.capacityUf != null && last?.capacityUf != null ? last.capacityUf - first.capacityUf : null;
+  const debtDelta = first?.debt != null && last?.debt != null ? last.debt - first.debt : null;
+  const trend = scoreDelta == null || Math.abs(scoreDelta) < 1
+    ? "stable"
+    : scoreDelta > 0
+      ? "improving"
+      : "declining";
+
+  return {
+    items: items.reverse(),
+    summary: {
+      trend,
+      scoreDelta,
+      capacityDelta,
+      debtDelta,
+      count: items.length,
+    },
+  };
+}
+
 export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo }) {
   const [classification, setClassification] = useState("Alto");
   const [commune, setCommune] = useState("todas");
@@ -130,6 +358,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const [sortBy, setSortBy] = useState("afinidad");
   const [showExcluded, setShowExcluded] = useState(false);
   const [showRequiresDocuments, setShowRequiresDocuments] = useState(false);
+  const [showOpportunities, setShowOpportunities] = useState(false);
+  const [visibleOpportunityCount, setVisibleOpportunityCount] = useState(6);
+  const [showAllContactQuestions, setShowAllContactQuestions] = useState(false);
+  const [questionsCopied, setQuestionsCopied] = useState(false);
+  const [comparisonLeadIds, setComparisonLeadIds] = useState([]);
+  const [showComparison, setShowComparison] = useState(false);
+  const [dismissedOpportunities, setDismissedOpportunities] = useState(() => readDismissedOpportunities("global"));
+  const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
   const selectedResult = selectedLead?.result || {};
@@ -143,6 +379,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const selectedPriority = hasObjectData(selectedResult.commercial_priority_detail) ? selectedResult.commercial_priority_detail : null;
   const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators) ? selectedResult.financial_indicators : {};
   const selectedCommunes = selectedLead ? comunasDeclaradas(selectedLead).declaradas : [];
+  const selectedProjectGoal = selectedInput.project_goal || null;
   const selectedName = selectedLead?.full_name?.split(" ")[0] || "cliente";
   const selectedEmailHref = selectedLead
     ? `mailto:${selectedLead.email || ""}?subject=${encodeURIComponent("Contacto RutaHogar - Calificación financiera")}&body=${encodeURIComponent(`Hola ${selectedName},\n\nTe escribo a partir de tu calificación en RutaHogar.\n\nSaludos.`)}`
@@ -156,6 +393,16 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const executiveScope = useMemo(
     () => executiveId || executiveEmail ? { id: executiveId, email: executiveEmail } : null,
     [executiveId, executiveEmail],
+  );
+  const dismissedScope = executiveId || executiveEmail || "global";
+  const latestEvaluations = useMemo(() => latestEvaluationPerLead(evaluations), [evaluations]);
+  const selectedLeadEvaluations = useMemo(
+    () => evaluationsForSameLead(evaluations, selectedLead),
+    [evaluations, selectedLead],
+  );
+  const comparisonLeads = useMemo(
+    () => comparisonLeadIds.map((id) => latestEvaluations.find((lead) => lead.id === id)).filter(Boolean),
+    [comparisonLeadIds, latestEvaluations],
   );
 
   useEffect(() => {
@@ -172,27 +419,39 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   useEffect(() => {
     if (!selectedLead) { setHistory([]); return; }
     let active = true;
-    getScoringHistoryByEvaluation(selectedLead.id)
-      .then((items) => { if (active) setHistory(items); })
+    const evaluationIds = selectedLeadEvaluations.length
+      ? selectedLeadEvaluations.map((item) => item.id)
+      : [selectedLead.id];
+    Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
+      .then((groups) => {
+        if (!active) return;
+        const rows = groups.flat().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        if (rows.length) {
+          setHistory(rows);
+          return;
+        }
+        setHistory(selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean));
+      })
       .catch(() => { if (active) setHistory([]); });
     return () => { active = false; };
-  }, [selectedLead]);
+  }, [selectedLead, selectedLeadEvaluations]);
 
   useEffect(() => {
     setSelectedLead((current) => {
       if (!current) return current;
-      return evaluations.find((item) => item.id === current.id) || current;
+      const currentKey = leadIdentity(current);
+      return latestEvaluations.find((item) => leadIdentity(item) === currentKey) || current;
     });
-  }, [evaluations]);
+  }, [latestEvaluations]);
 
-  const communes = useMemo(() => [...new Set(evaluations.flatMap((item) => [
+  const communes = useMemo(() => [...new Set(latestEvaluations.flatMap((item) => [
     item.input?.comuna_objetivo || item.onboarding?.comuna_interes,
     item.onboarding?.comuna_alternativa,
-  ]).filter(Boolean))].sort(), [evaluations]);
-  const counts = useMemo(() => evaluations.reduce((result, item) => {
+  ]).filter(Boolean))].sort(), [latestEvaluations]);
+  const counts = useMemo(() => latestEvaluations.reduce((result, item) => {
     if (item.result?.classification in result) result[item.result.classification] += 1;
     return result;
-  }, { Alto: 0, Medio: 0, Bajo: 0 }), [evaluations]);
+  }, { Alto: 0, Medio: 0, Bajo: 0 }), [latestEvaluations]);
   const selectedProject = useMemo(
     () => projects.find((item) => String(item.id) === projectId) || null,
     [projects, projectId],
@@ -202,7 +461,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     const dateThreshold = threshold(date);
     const ageRange = AGE_RANGES[age];
     const term = search.trim().toLowerCase();
-    return evaluations.filter((item) => {
+    return latestEvaluations.filter((item) => {
       const mainCommune = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
       if (classification !== "todos" && item.result?.classification !== classification) return false;
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
@@ -211,16 +470,74 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
       return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
     });
-  }, [evaluations, classification, commune, age, date, search]);
+  }, [latestEvaluations, classification, commune, age, date, search]);
   const { ranked, descartados, requiereAntecedentes } = useMemo(
     () => rankLeadsForProject(filtered, selectedProject, sortBy),
     [filtered, selectedProject, sortBy],
   );
+  const contactOpportunities = useMemo(
+    () => detectContactOpportunities(evaluations, projects),
+    [evaluations, projects],
+  );
+  const activeOpportunities = useMemo(
+    () => contactOpportunities.filter((item) => !dismissedOpportunities.has(item.id)),
+    [contactOpportunities, dismissedOpportunities],
+  );
+  const visibleOpportunities = activeOpportunities.slice(0, visibleOpportunityCount);
+  const remainingOpportunities = Math.max(activeOpportunities.length - visibleOpportunityCount, 0);
+
+  useEffect(() => {
+    setDismissedOpportunities(readDismissedOpportunities(dismissedScope));
+  }, [dismissedScope]);
+
+  useEffect(() => {
+    setOpportunityToastDismissed(false);
+  }, [activeOpportunities.length]);
+
+  useEffect(() => {
+    setShowAllContactQuestions(false);
+    setQuestionsCopied(false);
+  }, [selectedLead?.id]);
+
+  useEffect(() => {
+    setComparisonLeadIds([]);
+    setShowComparison(false);
+  }, [projectId]);
+
+  const persistDismissedOpportunities = (next) => {
+    setDismissedOpportunities(next);
+    writeDismissedOpportunities(dismissedScope, next);
+  };
+
+  const dismissOpportunity = (id) => {
+    const next = new Set(dismissedOpportunities);
+    next.add(id);
+    persistDismissedOpportunities(next);
+  };
+
+  const dismissAllOpportunities = () => {
+    persistDismissedOpportunities(new Set(contactOpportunities.map((item) => item.id)));
+    setShowOpportunities(false);
+  };
   const selectedMatch = useMemo(() => {
     if (!selectedLead || !selectedProject) return null;
     const { matches, excluidos } = matchLeadToProjects(selectedLead, [selectedProject]);
     return matches[0] || excluidos[0] || null;
   }, [selectedLead, selectedProject]);
+  const selectedProjectMatchesGoal = projectGoalMatchesSelected(selectedProjectGoal, selectedProject);
+  const historyTimeline = useMemo(
+    () => buildHistoryTimeline(history, selectedProject),
+    [history, selectedProject],
+  );
+  const contactQuestions = useMemo(
+    () => buildContactQuestions({ lead: selectedLead, selectedProject, selectedMatch }),
+    [selectedLead, selectedProject, selectedMatch],
+  );
+  const leadComparison = useMemo(
+    () => buildLeadProjectComparison(comparisonLeads, selectedProject),
+    [comparisonLeads, selectedProject],
+  );
+  const visibleContactQuestions = showAllContactQuestions ? contactQuestions : contactQuestions.slice(0, 5);
   const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search;
   const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); };
   const selectProject = (nextId) => {
@@ -229,11 +546,32 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     setShowRequiresDocuments(false);
     setShowExcluded(false);
   };
+  const copyContactQuestions = async () => {
+    const text = contactQuestions.map((item, index) => `${index + 1}. ${item.question}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setQuestionsCopied(true);
+      window.setTimeout(() => setQuestionsCopied(false), 1800);
+    } catch {
+      setQuestionsCopied(false);
+    }
+  };
+  const toggleComparisonLead = (lead) => {
+    if (!selectedProject) return;
+    setComparisonLeadIds((current) => {
+      if (current.includes(lead.id)) return current.filter((id) => id !== lead.id);
+      const next = [...current, lead.id].slice(-2);
+      if (next.length === 2) setShowComparison(true);
+      return next;
+    });
+  };
 
-  const leadCard = ({ lead, match }) => (
+  const leadCard = ({ lead, match }) => {
+    const isComparisonSelected = comparisonLeadIds.includes(lead.id);
+    return (
     <article
       key={lead.id}
-      className="executive-lead-card"
+      className={`executive-lead-card ${isComparisonSelected ? "is-selected-for-comparison" : ""}`}
       role="button"
       tabIndex="0"
       onClick={() => setSelectedLead(lead)}
@@ -270,11 +608,65 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
           <div className="executive-lead-card__fact--wide"><dt>Bloqueador</dt><dd>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</dd></div>
         </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</dd></div>}
       </dl>
-      <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
+      <div className="executive-lead-card__actions">
+        {selectedProject && <button type="button" className={`secondary-button compact-button executive-compare-toggle ${isComparisonSelected ? "is-active" : ""}`} onClick={(event) => { event.stopPropagation(); toggleComparisonLead(lead); }}>{isComparisonSelected ? "Seleccionado" : "Comparar"}</button>}
+        <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
+      </div>
     </article>
-  );
+    );
+  };
+
+  const opportunityCard = (opportunity, { showDismiss = false } = {}) => {
+    const lead = opportunity.lead;
+    const phone = lead?.phone || lead?.profile?.phone || "";
+    const firstName = lead?.full_name?.split(" ")[0] || "cliente";
+    const mailHref = `mailto:${lead?.email || ""}?subject=${encodeURIComponent("Oportunidad RutaHogar detectada")}&body=${encodeURIComponent(`Hola ${firstName},\n\nDetectamos una mejora en tu preparación financiera y queremos revisar alternativas compatibles contigo.\n\nSaludos.`)}`;
+    const whatsappHref = phone
+      ? `https://wa.me/${phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola ${firstName}. Detectamos una nueva oportunidad en RutaHogar y me gustaría comentarla contigo.`)}`
+      : "";
+    const secondaryTriggerLabels = [...new Set(opportunity.triggers.slice(1).map((trigger) => trigger.label))];
+
+    return (
+      <article className="executive-opportunity-card" key={opportunity.id}>
+        <div className="executive-opportunity-card__main">
+          <span className="eyebrow">{opportunity.primary.label}</span>
+          <h3>{lead.full_name || lead.email || "Lead sin nombre"}</h3>
+          <p>{opportunity.primary.detail}</p>
+          <div className="executive-opportunity-card__signals">
+            {opportunity.score_delta != null && <span>Score {formatScore(opportunity.previous_score) ?? "-"} a {formatScore(opportunity.latest_score) ?? "-"} ({opportunity.score_delta >= 0 ? "+" : ""}{opportunity.score_delta})</span>}
+            {opportunity.primary.project && <span>{opportunity.primary.project.nombre}</span>}
+            {opportunity.primary.match?.afinidad != null && <span>Afinidad {opportunity.primary.match.afinidad}</span>}
+          </div>
+          {secondaryTriggerLabels.length > 0 && (
+            <p className="executive-opportunity-card__extra">
+              También cumple: {secondaryTriggerLabels.join(", ")}.
+            </p>
+          )}
+        </div>
+        <div className="executive-opportunity-card__actions">
+          <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(lead)}>Ver ficha</button>
+          {lead.email ? <a className="secondary-button compact-button" href={mailHref}>Correo</a> : <button type="button" className="secondary-button compact-button" disabled>Sin correo</button>}
+          {phone ? <a className="primary-button compact-button" href={whatsappHref} target="_blank" rel="noopener noreferrer">WhatsApp</a> : <button type="button" className="secondary-button compact-button" disabled>Sin WhatsApp</button>}
+          {showDismiss && <button type="button" className="secondary-button compact-button" onClick={() => dismissOpportunity(opportunity.id)}>Descartar</button>}
+        </div>
+      </article>
+    );
+  };
 
   return <section className="section-block leads-panel admin-leads-page">
+    <NotificationToast
+      count={opportunityToastDismissed ? 0 : activeOpportunities.length}
+      title={`${activeOpportunities.length} oportunidad${activeOpportunities.length === 1 ? "" : "es"} nueva${activeOpportunities.length === 1 ? "" : "s"}`}
+      message="Hay leads con mejoras recientes listos para contactar."
+      icon="🚀"
+      className="notification-toast--opportunities"
+      onClick={() => {
+        setShowOpportunities(true);
+        setVisibleOpportunityCount(6);
+      }}
+      onClose={() => setOpportunityToastDismissed(true)}
+    />
+
     <header className="executive-leads-heading">
       <div className="section-heading">
         <span className="eyebrow">Gestión comercial</span>
@@ -289,6 +681,25 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
     {projectsError && <p className="leads-hint is-error">{projectsError}</p>}
     {!projectsError && executiveScope && projectsLoaded && !projects.length && <p className="leads-hint">Todavía no tienes proyectos asignados para priorizar leads.</p>}
+
+    {activeOpportunities.length > 0 && <section className="admin-surface executive-opportunities-panel executive-opportunities-panel--hero">
+      <button
+        type="button"
+        className={`executive-opportunities-summary ${showOpportunities ? "is-open" : ""}`}
+        onClick={() => {
+          setShowOpportunities(true);
+          setVisibleOpportunityCount(6);
+        }}
+        aria-expanded={showOpportunities}
+      >
+        <span className="executive-opportunities-summary__badge">Oportunidades</span>
+        <span className="executive-opportunities-summary__copy">
+          <strong>{activeOpportunities.length} oportunidad{activeOpportunities.length === 1 ? "" : "es"} activa{activeOpportunities.length === 1 ? "" : "s"}</strong>
+          <small>Leads con una mejora reciente de prioridad, capacidad o afinidad frente a proyectos asignados.</small>
+        </span>
+        <span className="executive-opportunities-summary__cta">Revisar ahora</span>
+      </button>
+    </section>}
 
     <section className="admin-surface admin-section-gap executive-leads-controls">
       <div className="admin-surface__header">
@@ -310,7 +721,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
           <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
           <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
             {[
-              ["todos", "Total", evaluations.length, ""],
+              ["todos", "Total", latestEvaluations.length, ""],
               ["Alto", "Alta prioridad", counts.Alto, "admin-leads-metric--high"],
               ["Medio", "Prioridad media", counts.Medio, "admin-leads-metric--medium"],
               ["Bajo", "Prioridad baja", counts.Bajo, "admin-leads-metric--low"],
@@ -334,6 +745,114 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       <div><span className="eyebrow">Proyecto en foco</span><strong>{selectedProject.nombre}</strong><p>{selectedProject.comuna} · {selectedProject.precio_min_uf}-{selectedProject.precio_max_uf} UF</p></div>
       <p>La bandeja muestra afinidad, capacidad y pie para decidir a quién contactar primero.</p>
     </aside>}
+
+    {selectedProject && comparisonLeadIds.length > 0 && (
+      <aside className="executive-comparison-bar">
+        <div>
+          <span className="eyebrow">Comparación de leads</span>
+          <strong>{comparisonLeadIds.length}/2 seleccionados</strong>
+          <p>{comparisonLeads.map((lead) => lead.full_name || lead.email || "Lead sin nombre").join(" vs ")}</p>
+        </div>
+        <div className="executive-comparison-bar__actions">
+          <button type="button" className="primary-button compact-button" disabled={comparisonLeadIds.length !== 2} onClick={() => setShowComparison(true)}>Comparar</button>
+          <button type="button" className="secondary-button compact-button" onClick={() => { setComparisonLeadIds([]); setShowComparison(false); }}>Limpiar</button>
+        </div>
+      </aside>
+    )}
+
+    {showOpportunities && (
+      <div className="admin-modal executive-opportunities-modal" onClick={() => setShowOpportunities(false)}>
+        <div className="admin-modal-card admin-modal-card--xl executive-opportunities-modal__card" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-header executive-opportunities-modal__header">
+            <div className="admin-modal-heading">
+              <span className="eyebrow">HU14 · E2</span>
+              <h2>Oportunidades de contacto</h2>
+              <p>Revisa mejoras recientes y decide si contactar, ver ficha o descartar.</p>
+            </div>
+            <div className="executive-opportunities-modal__actions">
+              {activeOpportunities.length > 0 && <button type="button" className="secondary-button compact-button" onClick={dismissAllOpportunities}>Descartar todas</button>}
+              <button type="button" className="secondary-button compact-button" onClick={() => setShowOpportunities(false)}>Cerrar</button>
+            </div>
+          </div>
+
+          {activeOpportunities.length ? (
+            <div className="executive-opportunities-list executive-opportunities-list--carousel">
+              <div className="executive-opportunities-list__head">
+                <strong>Mostrando {visibleOpportunities.length} de {activeOpportunities.length}</strong>
+                <span>Las oportunidades superiores combinan mejora reciente, compatibilidad y señales comerciales.</span>
+              </div>
+              {visibleOpportunities.map((opportunity) => (
+                <div className="executive-opportunity-slide" key={opportunity.id}>
+                  {opportunityCard(opportunity, { showDismiss: true })}
+                </div>
+              ))}
+              {remainingOpportunities > 0 && (
+                <button type="button" className="secondary-button executive-opportunities-more" onClick={() => setVisibleOpportunityCount((current) => current + 6)}>
+                  Ver {Math.min(6, remainingOpportunities)} más
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="executive-leads-empty">
+              <strong>No hay oportunidades activas.</strong>
+              <span>Las oportunidades descartadas no volverán a mostrarse salvo que el lead tenga una nueva evaluación.</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    {showComparison && selectedProject && leadComparison.length === 2 && (
+      <div className="admin-modal executive-comparison-modal" onClick={() => setShowComparison(false)}>
+        <div className="admin-modal-card admin-modal-card--xl executive-comparison-modal__card" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-header executive-comparison-modal__header">
+            <div className="admin-modal-heading">
+              <span className="eyebrow">Comparación para proyecto</span>
+              <h2>{selectedProject.nombre}</h2>
+              <p>Resumen acotado de score, capacidad, afinidad y factores clave para decidir a quién contactar primero.</p>
+            </div>
+            <button type="button" className="secondary-button compact-button" onClick={() => setShowComparison(false)}>Cerrar</button>
+          </div>
+
+          <div className="executive-comparison-grid">
+            {leadComparison.map((item) => (
+              <article className="executive-comparison-card" key={item.lead.id}>
+                <header>
+                  <div>
+                    <span className="eyebrow">Lead</span>
+                    <h3>{item.name}</h3>
+                  </div>
+                  <span className={`status-pill ${getClassificationClass(item.classification)}`}>{item.classification}</span>
+                </header>
+
+                <div className="executive-comparison-kpis">
+                  <div><span>Score</span><strong>{formatScore(item.score) ?? "-"}</strong></div>
+                  <div><span>Capacidad</span><strong>{item.capacity.valueUf != null ? `${item.capacity.valueUf} UF` : "Sin dato"}</strong><small>{comparisonCapacityStatus(item)}</small></div>
+                  <div><span>Afinidad</span><strong>{item.affinity.value != null ? item.affinity.value : "-"}</strong><small>{item.affinity.classification || "Sin dato"}</small></div>
+                </div>
+
+                <dl className="executive-comparison-signals">
+                  <div><dt>Comuna del proyecto declarada</dt><dd>{compareFlagText(item.affinity.communeDeclared)}</dd></div>
+                  <div><dt>Tipo de vivienda coincide</dt><dd>{compareFlagText(item.affinity.typeMatches)}</dd></div>
+                  <div><dt>Bloqueador principal</dt><dd>{item.capacity.blocker || item.capacity.exclusion || "Sin bloqueador"}</dd></div>
+                </dl>
+
+                <div className="executive-comparison-factors">
+                  <section>
+                    <h4>Favorece</h4>
+                    <ul>{(item.factors.positive.length ? item.factors.positive : ["Sin factores favorables destacados."]).map((factor, index) => <li key={`positive-${index}`}>{factor}</li>)}</ul>
+                  </section>
+                  <section>
+                    <h4>Dificulta</h4>
+                    <ul>{(item.factors.difficult.length ? item.factors.difficult : ["Sin dificultades destacadas."]).map((factor, index) => <li key={`difficult-${index}`}>{factor}</li>)}</ul>
+                  </section>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
 
     <section className="admin-surface executive-leads-inbox">
       <div className="admin-surface__header">
@@ -384,6 +903,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
           {selectedAdjustment && selectedAdjustment.detail && <div className="admin-callout executive-lead-detail__adjustment"><strong>{selectedAdjustment.detail}</strong>{selectedResult.score_adjustment_reason && <p>{selectedResult.score_adjustment_reason}</p>}</div>}
 
+          {selectedProject && selectedProjectMatchesGoal && (
+            <div className="admin-callout executive-lead-detail__goal-match">
+              <strong>Proyecto meta del lead coincide con el proyecto seleccionado</strong>
+              <p>{selectedProject.nombre} es la meta declarada por el lead y también el proyecto que estás usando para revisar compatibilidad.</p>
+            </div>
+          )}
+
           {selectedProject && selectedMatch && !selectedMatch.motivo_exclusion && (
             <section className="lead-profile-zone lead-profile-verdict">
               <span className="eyebrow">Veredicto frente al proyecto</span>
@@ -401,11 +927,20 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
             </section>
           )}
 
+          <section className="executive-lead-snapshot">
+            <div className="executive-lead-snapshot__header">
+              <div>
+                <span className="eyebrow">Ficha ejecutiva</span>
+                <h3>Datos clave para priorizar el contacto</h3>
+              </div>
+              <p>Información del cliente, señales comerciales y diagnóstico financiero ordenados por uso comercial.</p>
+            </div>
+
           <div className="admin-detail-grid executive-lead-detail__matrix">
             <div className="admin-stack">
-              <article className="admin-panel-card executive-lead-detail__client">
-                <div className="admin-panel-card__header"><h3>Información del cliente</h3></div>
-                <dl className="admin-definition-list">
+              <article className="admin-panel-card executive-snapshot-card executive-lead-detail__client">
+                <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-user" aria-hidden="true" /></span><h3>Información del cliente</h3></div>
+                <dl className="admin-definition-list executive-snapshot-list">
                   <DetailRow label="Correo">{selectedLead.email || "Sin dato"}</DetailRow>
                   <DetailRow label="Teléfono">{selectedPhone || "Sin dato"}</DetailRow>
                   <DetailRow label="Edad">{selectedInput.edad != null ? `${selectedInput.edad} años` : "Sin dato"}</DetailRow>
@@ -414,51 +949,115 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
                 </dl>
               </article>
 
-              {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-lead-detail__blocker"><div className="admin-panel-card__header"><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
+              {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-snapshot-card executive-lead-detail__blocker"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-alert-triangle" aria-hidden="true" /></span><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
 
-              {selectedResult.positive_indicators?.length > 0 && <article className="admin-panel-card admin-panel-card--success executive-lead-detail__positive"><div className="admin-panel-card__header"><h3>Indicadores positivos</h3></div><ul className="admin-bullet-list">{selectedResult.positive_indicators.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
-              {selectedResult.risks?.length > 0 && <article className="admin-panel-card admin-panel-card--danger executive-lead-detail__risks"><div className="admin-panel-card__header"><h3>Riesgos detectados</h3></div><ul className="admin-bullet-list">{selectedResult.risks.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+              {selectedResult.positive_indicators?.length > 0 && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__positive"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-circle-check" aria-hidden="true" /></span><h3>Indicadores positivos</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.positive_indicators.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
+              {selectedResult.risks?.length > 0 && <article className="admin-panel-card admin-panel-card--danger executive-snapshot-card executive-snapshot-card--insight executive-lead-detail__risks"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-shield-exclamation" aria-hidden="true" /></span><h3>Riesgos detectados</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.risks.map((item, index) => <li key={index}>{displayItemText(item)}</li>)}</ul></article>}
             </div>
 
             <div className="admin-stack">
-              {selectedProjectFit && <article className="admin-panel-card executive-lead-detail__fit"><div className="admin-panel-card__header"><h3>Compatibilidad con su objetivo</h3></div><dl className="admin-definition-list"><DetailRow label="Clasificación">{selectedProjectFit.classification || selectedProjectFit.status || "Sin dato"}</DetailRow><DetailRow label="Score">{formatScore(selectedProjectFit.score) ?? "Sin dato"}</DetailRow><DetailRow label="Brecha de ingreso">{money(selectedProjectFit.income_gap)}</DetailRow><DetailRow label="Brecha de pie">{money(selectedProjectFit.down_payment_gap)}</DetailRow><DetailRow label="Compatible">{booleanText(selectedProjectFit.compatible)}</DetailRow></dl></article>}
+              {selectedProjectFit && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__fit"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-target-arrow" aria-hidden="true" /></span><h3>Compatibilidad con su objetivo</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Clasificación">{selectedProjectFit.classification || selectedProjectFit.status || "Sin dato"}</DetailRow><DetailRow label="Score">{formatScore(selectedProjectFit.score) ?? "Sin dato"}</DetailRow><DetailRow label="Brecha de ingreso">{money(selectedProjectFit.income_gap)}</DetailRow><DetailRow label="Brecha de pie">{money(selectedProjectFit.down_payment_gap)}</DetailRow><DetailRow label="Compatible">{booleanText(selectedProjectFit.compatible)}</DetailRow></dl></article>}
 
-              <article className="admin-panel-card executive-lead-detail__signals">
-                <div className="admin-panel-card__header"><h3>Señales comerciales</h3></div>
-                <dl className="admin-definition-list"><DetailRow label="Plazo de compra">{purchaseTermLabel(selectedInput.plazo_compra)}</DetailRow><DetailRow label="Proyecto visto">{booleanText(selectedInput.tiene_propiedad_vista)}</DetailRow><DetailRow label="Pie estimado">{formatPercent(selectedFinancialIndicators.pie_ratio)}</DetailRow></dl>
+              <article className="admin-panel-card executive-snapshot-card executive-lead-detail__signals">
+                <div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-briefcase" aria-hidden="true" /></span><h3>Señales comerciales</h3></div>
+                <dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Plazo de compra">{purchaseTermLabel(selectedInput.plazo_compra)}</DetailRow><DetailRow label="Proyecto visto">{booleanText(selectedInput.tiene_propiedad_vista)}</DetailRow><DetailRow label="Pie estimado">{formatPercent(selectedFinancialIndicators.pie_ratio)}</DetailRow></dl>
               </article>
 
-              {selectedPriority && <article className="admin-panel-card admin-panel-card--success executive-lead-detail__priority"><div className="admin-panel-card__header"><h3>Prioridad comercial</h3></div><dl className="admin-definition-list"><DetailRow label="Acción">{selectedPriority.action || selectedPriority.level || "Sin dato"}</DetailRow><DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow><DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow></dl></article>}
+              {selectedPriority && <article className="admin-panel-card admin-panel-card--success executive-snapshot-card executive-snapshot-card--priority executive-lead-detail__priority"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-flame" aria-hidden="true" /></span><h3>Prioridad comercial</h3></div><dl className="admin-definition-list executive-snapshot-list"><DetailRow label="Acción">{selectedPriority.action || selectedPriority.level || "Sin dato"}</DetailRow><DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow><DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow></dl></article>}
 
-              {selectedResult.recommendations?.length > 0 && <article className="admin-panel-card executive-lead-detail__recommendations"><div className="admin-panel-card__header"><h3>Recomendaciones</h3></div><ul className="admin-bullet-list">{selectedResult.recommendations.map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article>}
+              {selectedResult.recommendations?.length > 0 && <article className="admin-panel-card executive-snapshot-card executive-lead-detail__recommendations"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-list-check" aria-hidden="true" /></span><h3>Recomendaciones</h3></div><ul className="admin-bullet-list executive-snapshot-bullets">{selectedResult.recommendations.map((item, index) => <li key={index}>{displayItemText(item)}{displayItemBenefit(item) && <small className="lead-cell-sub">Beneficio esperado: {displayItemBenefit(item)}</small>}</li>)}</ul></article>}
 
-              {!selectedPriority && selectedResult.commercial_guidance && <article className="admin-panel-card admin-panel-card--soft executive-lead-detail__guidance"><div className="admin-panel-card__header"><h3>Orientación comercial</h3></div><p>{selectedResult.commercial_guidance}</p></article>}
+              {!selectedPriority && selectedResult.commercial_guidance && <article className="admin-panel-card admin-panel-card--soft executive-snapshot-card executive-lead-detail__guidance"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-compass" aria-hidden="true" /></span><h3>Orientación comercial</h3></div><p>{selectedResult.commercial_guidance}</p></article>}
 
             </div>
           </div>
+          </section>
+
+          <section className="admin-panel-card executive-contact-questions">
+            <div className="admin-panel-card__header executive-contact-questions__header">
+              <div>
+                <span className="eyebrow">Abordaje comercial</span>
+                <h3>Preguntas sugeridas para el contacto</h3>
+                <p>Enfocadas en información contextual que no se infiere únicamente desde los datos financieros.</p>
+              </div>
+              <button type="button" className="secondary-button compact-button" onClick={copyContactQuestions}>{questionsCopied ? "Copiado" : "Copiar preguntas"}</button>
+            </div>
+
+            <div className="executive-contact-questions__grid">
+              {visibleContactQuestions.map((item) => (
+                <article className="executive-contact-question" key={item.id}>
+                  <span>{item.category}</span>
+                  <strong>{item.question}</strong>
+                  <p>{item.reason}</p>
+                </article>
+              ))}
+            </div>
+
+            {contactQuestions.length > 5 && (
+              <button type="button" className="executive-contact-questions__more" onClick={() => setShowAllContactQuestions((current) => !current)}>
+                {showAllContactQuestions ? "Ver menos preguntas" : `Ver ${contactQuestions.length - 5} más`}
+              </button>
+            )}
+          </section>
 
           <section className="admin-panel-card admin-panel-card--soft executive-lead-detail__history">
-            <div className="admin-panel-card__header"><h3>Historial inmutable</h3></div>
-            {history.length ? (
-              <div className="admin-history-list">
-                {history.map((item) => (
-                  <details className="admin-history-card" key={item.id}>
-                    <summary className="admin-history-card__summary">
-                      <span className="admin-history-card__score"><small>Calificación</small><strong>{formatScore(item.adjusted_score ?? item.score) ?? "-"}</strong></span>
-                      <span className={`status-pill ${getClassificationClass(item.classification)}`}>{item.classification || "Sin clasificación"}</span>
-                      <span className="admin-history-card__date">Actualizada {formatEventAt(item.created_at)}</span>
-                      <span className="admin-history-card__expand">Ver detalle <i className="ti ti-chevron-down" aria-hidden="true" /></span>
-                    </summary>
-                    <div className="admin-history-card__details">
-                      <section className="admin-history-breakdown">
-                        <div className="admin-history-breakdown__head"><div><strong>Componentes de la calificación</strong><p>Factores que explican este resultado referencial.</p></div><span>Base {formatScore(item.base_score ?? item.score) ?? "-"}</span></div>
-                        {item.component_scores && Object.keys(item.component_scores).length ? <ul className="admin-history-components">{Object.entries(item.component_scores).map(([key, value]) => <li key={key}><span>{componentScoreLabel(key)}</span><strong>{value >= 0 ? `+${value}` : value}</strong></li>)}</ul> : <p>Sin detalle disponible.</p>}
-                      </section>
-                      {item.snapshot?.comuna_objetivo && <p className="admin-history-card__context">Objetivo registrado: <strong>{item.snapshot.comuna_objetivo}</strong></p>}
-                      {item.events?.length > 0 && <div className="admin-history-events"><strong>Eventos del plan</strong><ul className="admin-event-list">{item.events.map((event, index) => <li key={`${item.id}-${index}`}><strong>{eventLabels[event.type] || event.type}</strong><span>{formatEventAt(event.at)}</span><p>{renderEventDetail(event)}</p></li>)}</ul></div>}
-                    </div>
-                  </details>
-                ))}
+            <div className="admin-panel-card__header executive-history-header">
+              <div>
+                <h3>Historial de evolución</h3>
+                <p>{selectedProject ? `Capacidad, compatibilidad y afinidad se calculan contra el proyecto seleccionado: ${selectedProject.nombre}.` : "Lectura temporal de cambios financieros. Selecciona un proyecto para ver capacidad, compatibilidad y afinidad frente a ese proyecto."}</p>
+              </div>
+              {historyTimeline.summary.count > 0 && <span className={`executive-history-trend is-${historyTimeline.summary.trend}`}>{historyTimeline.summary.trend === "improving" ? "Mejora" : historyTimeline.summary.trend === "declining" ? "Deterioro" : "Estable"}</span>}
+            </div>
+            {historyTimeline.items.length ? (
+              <div className="executive-history-timeline-wrap">
+                <div className="executive-history-summary">
+                  <div><span>Registros</span><strong>{historyTimeline.summary.count}</strong></div>
+                  <div><span>Variación score</span><strong>{formatSignedNumber(historyTimeline.summary.scoreDelta) || "0"}</strong></div>
+                  {selectedProject && <div><span>Capacidad vs proyecto seleccionado</span><strong>{formatSignedNumber(historyTimeline.summary.capacityDelta, " UF") || "0 UF"}</strong></div>}
+                  <div><span>Deuda mensual</span><strong>{formatSignedMoney(historyTimeline.summary.debtDelta) || "Sin cambio"}</strong></div>
+                </div>
+
+                <ol className="executive-history-timeline">
+                  {historyTimeline.items.map(({ row, metrics, changes }, index) => (
+                    <li className="executive-history-item" key={row.id}>
+                      <div className="executive-history-item__marker" aria-hidden="true"><span>{historyTimeline.items.length - index}</span></div>
+                      <article className="executive-history-card">
+                        <header className="executive-history-card__head">
+                          <div>
+                            <span className="eyebrow">{index === 0 ? "Última evaluación" : "Evaluación histórica"}</span>
+                            <h4>{formatEventAt(row.created_at)}</h4>
+                          </div>
+                          <div className="executive-history-card__score"><strong>{formatScore(metrics.score) ?? "-"}</strong><span className={`status-pill ${getClassificationClass(metrics.classification)}`}>{metrics.classification}</span></div>
+                        </header>
+
+                        {selectedProject && metrics.matchesSelectedGoal && <div className="executive-history-goal-match">Meta del lead coincide con este proyecto seleccionado.</div>}
+
+                        <dl className="executive-history-metrics">
+                          <div><dt>Ingreso</dt><dd>{metrics.income != null ? money(metrics.income) : "Sin dato"}</dd></div>
+                          <div><dt>Deuda</dt><dd>{metrics.debt != null ? money(metrics.debt) : "Sin dato"}</dd></div>
+                          <div><dt>Ahorro</dt><dd>{metrics.savings != null ? money(metrics.savings) : "Sin dato"}</dd></div>
+                          <div><dt>Laboral</dt><dd>{formatFormValue(metrics.workType, "Sin dato")}</dd></div>
+                          {selectedProject && <div><dt>Capacidad vs proyecto seleccionado</dt><dd>{metrics.capacityUf != null ? `${metrics.capacityUf} UF` : "Sin dato"}</dd></div>}
+                          {selectedProject && <div><dt>Compatibilidad vs proyecto seleccionado</dt><dd>{metrics.projectCompatibility}</dd></div>}
+                          {selectedProject && metrics.projectAffinity != null && <div><dt>Afinidad vs proyecto seleccionado</dt><dd>{metrics.projectAffinity}</dd></div>}
+                        </dl>
+
+                        <div className="executive-history-changes">
+                          {changes.map((change, changeIndex) => <span className={`executive-history-change is-${change.tone}`} key={`${row.id}-${changeIndex}`}>{change.label}</span>)}
+                        </div>
+
+                        {row.component_scores && Object.keys(row.component_scores).length > 0 && (
+                          <details className="executive-history-components-panel">
+                            <summary>Ver componentes del score</summary>
+                            <ul className="admin-history-components">{Object.entries(row.component_scores).map(([key, value]) => <li key={key}><span>{componentScoreLabel(key)}</span><strong>{value >= 0 ? `+${value}` : value}</strong></li>)}</ul>
+                          </details>
+                        )}
+
+                        {row.events?.length > 0 && <div className="admin-history-events"><strong>Eventos del plan</strong><ul className="admin-event-list">{row.events.map((event, eventIndex) => <li key={`${row.id}-${eventIndex}`}><strong>{eventLabels[event.type] || event.type}</strong><span>{formatEventAt(event.at)}</span><p>{renderEventDetail(event)}</p></li>)}</ul></div>}
+                      </article>
+                    </li>
+                  ))}
+                </ol>
               </div>
             ) : <p>Sin registros de auditoría para esta calificación.</p>}
           </section>

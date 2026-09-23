@@ -1,14 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getProjects } from "../services/projectService";
+import { formatScore } from "../utils/helpers";
 
-function formatDate(value) {
+const RECENT_RANGES = [
+  { label: "Última hora", value: "1h", hours: 1 },
+  { label: "Últimas 3 horas", value: "3h", hours: 3 },
+  { label: "Últimas 12 horas", value: "12h", hours: 12 },
+  { label: "Últimas 24 horas", value: "24h", hours: 24 },
+];
+
+function formatDateTime(value) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleDateString("es-CL");
+  return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
 }
 
 export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, onNavigate }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [recentRange, setRecentRange] = useState("3h");
 
   useEffect(() => {
     let active = true;
@@ -28,12 +37,17 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
     return counts;
   }, { total: 0, prioritarios: 0 }), [evaluations]);
 
-  const recentLeads = useMemo(
-    () => [...(evaluations || [])]
+  const recentLeads = useMemo(() => {
+    const range = RECENT_RANGES.find((item) => item.value === recentRange) || RECENT_RANGES[0];
+    const minDate = new Date(Date.now() - range.hours * 60 * 60 * 1000);
+    return [...(evaluations || [])]
+      .filter((lead) => {
+        const createdAt = new Date(lead.created_at || 0);
+        return !Number.isNaN(createdAt.getTime()) && createdAt >= minDate;
+      })
       .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))
-      .slice(0, 4),
-    [evaluations],
-  );
+      .slice(0, 12);
+  }, [evaluations, recentRange]);
 
   const availableProjects = projects.filter((project) => project.estado === "disponible").length;
   const firstName = profile?.full_name?.split(" ")[0] || "Ejecutivo";
@@ -73,21 +87,37 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
         <article className="admin-surface">
           <div className="admin-surface__header">
             <div className="admin-surface__title">
-              <h2>Últimas oportunidades</h2>
-              <p>Calificaciones recientes para revisar en la mesa de leads.</p>
+              <h2>Calificaciones recientes</h2>
+              <p>Últimas evaluaciones recibidas para revisar en la mesa de leads.</p>
             </div>
             <button type="button" className="secondary-button compact-button" onClick={() => onNavigate("leads")}>Ver leads</button>
           </div>
+          <div className="executive-home-recent-filter" aria-label="Filtrar calificaciones recientes por tiempo">
+            {RECENT_RANGES.map((range) => (
+              <button
+                type="button"
+                className={recentRange === range.value ? "is-active" : ""}
+                key={range.value}
+                onClick={() => setRecentRange(range.value)}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
           {recentLeads.length ? (
-            <div className="admin-list">
+            <div className={`admin-list executive-home-recent-list ${recentLeads.length > 3 ? "is-scrollable" : ""}`}>
               {recentLeads.map((lead) => (
                 <article className="admin-list-item" key={lead.id}>
                   <div className="admin-list-item__main">
                     <strong>{lead.full_name || lead.email || "Lead sin nombre"}</strong>
                     <span>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Comuna sin dato"}</span>
                   </div>
+                  <div className="executive-home-recent-score">
+                    <small>Score</small>
+                    <strong>{formatScore(lead.result?.adjusted_score ?? lead.result?.score) ?? "-"}</strong>
+                  </div>
                   <div className="admin-list-item__meta">
-                    <span>{formatDate(lead.created_at)}</span>
+                    <span>{formatDateTime(lead.created_at)}</span>
                     <span>{lead.result?.classification || "Sin clasificación"}</span>
                   </div>
                 </article>
@@ -95,8 +125,8 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
             </div>
           ) : (
             <div className="admin-compact-empty">
-              <strong>No hay calificaciones disponibles todavía.</strong>
-              <p>Cuando existan, podrás priorizarlas desde la mesa de leads.</p>
+              <strong>No hay calificaciones en este rango.</strong>
+              <p>Cambia el filtro de tiempo o revisa la mesa de leads completa.</p>
             </div>
           )}
         </article>
