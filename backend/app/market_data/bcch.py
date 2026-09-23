@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import date, datetime, timezone
 from typing import Callable
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -37,7 +38,8 @@ def _default_transport(url: str, timeout: int):
     with urlopen(Request(url, headers={"Accept": "application/json"}), timeout=timeout) as response:
         if response.status != 200:
             raise BCChError(f"BCCh HTTP status {response.status}")
-        return json.loads(response.read().decode("utf-8"))
+        charset = response.headers.get_content_charset() or "utf-8"
+        return json.loads(response.read().decode(charset))
 
 
 def _first(mapping: dict, *names):
@@ -70,18 +72,28 @@ def _observation_list(payload):
 def _parse_date(value) -> date:
     if not isinstance(value, str):
         raise BCChError("BCCh observation has no usable date")
-    normalized = value[:10]
-    try:
-        return date.fromisoformat(normalized)
-    except ValueError as exc:
-        raise BCChError("BCCh observation date is invalid") from exc
+    normalized = value.strip()[:10]
+    for date_format in ("%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(normalized, date_format).date()
+        except ValueError:
+            continue
+    raise BCChError("BCCh observation date is invalid")
 
 
 def _number(value) -> float:
+    if isinstance(value, bool):
+        raise BCChError("BCCh observation value is invalid")
     try:
-        return float(str(value).replace(",", "."))
+        normalized = str(value).strip()
+        if "," in normalized and "." not in normalized:
+            normalized = normalized.replace(",", ".")
+        number = float(normalized)
     except (TypeError, ValueError) as exc:
         raise BCChError("BCCh observation value is invalid") from exc
+    if not math.isfinite(number):
+        raise BCChError("BCCh observation value is invalid")
+    return number
 
 
 class BCChClient:
@@ -106,9 +118,16 @@ class BCChClient:
             raise
         except Exception as exc:
             raise BCChError(f"BCCh request failed for {series_id}") from exc
+        if isinstance(payload, dict):
+            response_code = payload.get("Codigo")
+            if response_code not in (None, 0, "0"):
+                raise BCChError(f"BCCh returned error code {response_code} for {series_id}")
         observations = []
         for item in _observation_list(payload):
             if not isinstance(item, dict):
+                continue
+            status = _first(item, "statusCode", "StatusCode")
+            if status is not None and str(status).strip().upper() != "OK":
                 continue
             raw_date = _first(item, "indexDateString", "date", "Date", "periodDate", "period")
             raw_value = _first(item, "value", "Value", "valor")
