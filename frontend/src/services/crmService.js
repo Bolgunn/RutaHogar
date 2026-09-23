@@ -54,7 +54,11 @@ export async function buildCrmPayload(lead, projectData, matchData) {
   const basePayload = {
     lead_id: String(lead?.id || `anon_${Date.now()}`),
     lead_info: {
-      nombre: lead?.full_name || lead?.email || "Usuario",
+      nombre: lead?.profile?.nombre || lead?.full_name || lead?.email || "Usuario",
+      apellido_paterno: lead?.profile?.apellido_paterno || "",
+      apellido_materno: lead?.profile?.apellido_materno || "",
+      full_name: lead?.full_name || lead?.email || "Usuario",
+      rut: lead?.profile?.rut || lead?.rut || "11111111-1",
       email: lead?.email || "sin_correo@ejemplo.cl",
       telefono: lead?.phone || lead?.profile?.phone || null,
       fecha_evaluacion: lead?.created_at || new Date().toISOString(),

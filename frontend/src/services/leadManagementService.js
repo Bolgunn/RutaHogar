@@ -72,6 +72,9 @@ export async function getLeadsInReview() {
       created_at,
       user_id,
       profiles!inner (
+        nombre,
+        apellido_paterno,
+        apellido_materno,
         full_name,
         phone,
         rut,
@@ -93,6 +96,9 @@ export async function getLeadsInReview() {
     id: item.user_id, // We use the user_id as the ID for the profile so we can resolve it
     email: item.email,
     created_at: item.created_at,
+    nombre: item.profiles?.nombre,
+    apellido_paterno: item.profiles?.apellido_paterno,
+    apellido_materno: item.profiles?.apellido_materno,
     full_name: item.profiles?.full_name,
     phone: item.profiles?.phone,
     rut: item.profiles?.rut,

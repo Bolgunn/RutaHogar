@@ -126,7 +126,7 @@ export async function signIn({ email, password, role = roles.user }) {
   return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, role));
 }
 
-export async function signUp({ email, password, role = roles.user, full_name = "", phone = "", rut = "", birth_date = "" }) {
+export async function signUp({ email, password, role = roles.user, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "" }) {
   const normalizedRole = normalizeRole(role || roles.user);
   const normalizedPhone = normalizePhoneForStorage(phone);
   const normalizedBirthDate = normalizeBirthDateForStorage(birth_date);
@@ -139,7 +139,7 @@ export async function signUp({ email, password, role = roles.user, full_name = "
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { role: normalizedRole, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
+      options: { data: { role: normalizedRole, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
     });
     if (error) {
       logSupabaseError(error);

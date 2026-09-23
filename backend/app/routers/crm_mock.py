@@ -22,21 +22,21 @@ class PlanOKPayload(BaseModel):
     rut: str # Obligatorio para evitar duplicados en sala de ventas
     nombres: str # Separado
     apellidos: str # Separado
-    email: str
-    telefono: str
+    email: Optional[str] = None
+    telefono: Optional[str] = None
     id_proyecto: str
-    comentarios: str # RutaHogar concatenará el score financiero aquí
+    comentarios: Optional[str] = None # RutaHogar concatenará el score financiero aquí
     origen: str = "RutaHogar"
 
 class HubSpotPayload(BaseModel):
     email: str
-    properties: Dict[str, Any]
+    properties: Optional[Dict[str, Any]] = None
     # Espera properties como: firstname, lastname, rutahogar_score, rutahogar_afinidad
 
 class SalesforcePayload(BaseModel):
     LastName: str
     Company: str = "Particular"
-    Email: str
+    Email: Optional[str] = None
     Phone: Optional[str] = None
     RutaHogar_Score__c: Optional[float] = None
     Proyecto_Objetivo__c: Optional[str] = None

@@ -27,6 +27,9 @@ function normalizeProfile(row) {
     id: row.id,
     user_id: row.id,
     full_name: row.full_name || "",
+    nombre: row.nombre || "",
+    apellido_paterno: row.apellido_paterno || "",
+    apellido_materno: row.apellido_materno || "",
     phone: row.phone || "",
     rut: row.rut || "",
     birth_date: row.birth_date || "",
@@ -87,7 +90,7 @@ export async function getCurrentProfile(userId) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -102,10 +105,13 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
   const phone = normalizePhoneForStorage(contactData.phone || "");
   const rut = contactData.rut || "";
   const birthDate = normalizeBirthDateForStorage(contactData.birth_date || "");
+  const nombre = contactData.nombre || "";
+  const apellido_paterno = contactData.apellido_paterno || "";
+  const apellido_materno = contactData.apellido_materno || "";
 
   if (!isUUID(userId)) {
     console.warn("Saltando upsert: ID no es un UUID válido.");
-    return normalizeProfile({ id: userId, full_name: fullName, role, phone, rut, birth_date: birthDate });
+    return normalizeProfile({ id: userId, full_name: fullName, nombre, apellido_paterno, apellido_materno, role, phone, rut, birth_date: birthDate });
   }
 
   const profile = {
@@ -114,6 +120,9 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
     role: normalizeRole(role),
     onboarding_data: onboardingData || null,
   };
+  if (nombre) profile.nombre = nombre;
+  if (apellido_paterno) profile.apellido_paterno = apellido_paterno;
+  if (apellido_materno) profile.apellido_materno = apellido_materno;
   if (phone) profile.phone = phone;
   if (rut) profile.rut = rut;
   if (birthDate) profile.birth_date = birthDate;
@@ -125,7 +134,7 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
   const { data, error } = await supabase
     .from("profiles")
     .upsert({ ...profile, updated_at: new Date().toISOString(), created_at: new Date().toISOString() })
-    .select("id, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .maybeSingle();
 
   if (error) {
@@ -143,12 +152,19 @@ export async function ensureUserProfile(user) {
   const metadataPhone = normalizePhoneForStorage(user.user_metadata?.phone || "");
   const metadataRut = user.user_metadata?.rut || "";
   const metadataBirthDate = normalizeBirthDateForStorage(user.user_metadata?.birth_date || "");
+  const metadataNombre = user.user_metadata?.nombre || "";
+  const metadataApellidoPaterno = user.user_metadata?.apellido_paterno || "";
+  const metadataApellidoMaterno = user.user_metadata?.apellido_materno || "";
+  
   const existingProfile = await getCurrentProfile(user.id);
   if (existingProfile) {
     const shouldCompleteContactData =
       (!existingProfile.phone && metadataPhone) ||
       (!existingProfile.rut && metadataRut) ||
-      (!existingProfile.birth_date && metadataBirthDate);
+      (!existingProfile.birth_date && metadataBirthDate) ||
+      (!existingProfile.nombre && metadataNombre) ||
+      (!existingProfile.apellido_paterno && metadataApellidoPaterno) ||
+      (!existingProfile.apellido_materno && metadataApellidoMaterno);
 
     if (!shouldCompleteContactData) return existingProfile;
 
@@ -161,6 +177,9 @@ export async function ensureUserProfile(user) {
         phone: existingProfile.phone || metadataPhone,
         rut: existingProfile.rut || metadataRut,
         birth_date: existingProfile.birth_date || metadataBirthDate,
+        nombre: existingProfile.nombre || metadataNombre,
+        apellido_paterno: existingProfile.apellido_paterno || metadataApellidoPaterno,
+        apellido_materno: existingProfile.apellido_materno || metadataApellidoMaterno,
       },
     );
   }
@@ -171,6 +190,9 @@ export async function ensureUserProfile(user) {
     phone: metadataPhone,
     rut: metadataRut,
     birth_date: metadataBirthDate,
+    nombre: metadataNombre,
+    apellido_paterno: metadataApellidoPaterno,
+    apellido_materno: metadataApellidoMaterno,
   });
 }
 

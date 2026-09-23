@@ -88,6 +88,13 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     full_name: contact.full_name || null,
     phone: contact.phone || null,
     reliability_status: contact.reliability_status || "normal",
+    profile: {
+      nombre: contact.nombre || null,
+      apellido_paterno: contact.apellido_paterno || null,
+      apellido_materno: contact.apellido_materno || null,
+      rut: contact.rut || null,
+      phone: contact.phone || null,
+    },
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -294,7 +301,14 @@ export async function getEvaluations(userId, role) {
       
       contactsMap = Object.fromEntries(contactsData.map((contact) => [
         contact.id, 
-        { ...contact, reliability_status: profilesMap[contact.id] || "normal" }
+        { 
+          ...contact, 
+          nombre: contact.nombre,
+          apellido_paterno: contact.apellido_paterno,
+          apellido_materno: contact.apellido_materno,
+          rut: contact.rut,
+          reliability_status: profilesMap[contact.id] || "normal" 
+        }
       ]));
     }
   }
