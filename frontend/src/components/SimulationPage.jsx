@@ -450,7 +450,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
   );
-  const ufValueClp = Number(context.uf_value_clp) || 40695;
+  const ufValueClp = Number(context.uf_value_clp) || 0;
   const [mode, setMode] = useState("project");
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
