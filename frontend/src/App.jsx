@@ -32,7 +32,7 @@ import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
-import { buildProjectGoalInput } from "./lib/projectGoalInput";
+import { buildFinancialInput } from "./lib/financialInput";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { createGoal, getGoals, updateGoalProgress, updateGoalStatus } from "./services/goalsService";
@@ -40,6 +40,7 @@ import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./se
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
+import { projectGoalUserMessage, setProjectGoal } from "./services/projectGoalService";
 import {
   getConsent,
   saveConsent,
@@ -143,54 +144,6 @@ const buildResultSnapshot = (scoreResult = {}) => ({
   positive_indicators: normalizeDisplayList(scoreResult.positive_indicators),
   executive_summary: normalizeDisplayText(scoreResult.executive_summary),
   commercial_guidance: normalizeDisplayText(scoreResult.commercial_guidance),
-});
-
-const buildFinancialInput = (input = {}) => ({
-  birth_date: input.birth_date,
-  ingreso_mensual: input.ingreso_mensual,
-  deuda_mensual: input.deuda_mensual,
-  edad: input.edad,
-  ahorro_disponible: input.ahorro_disponible,
-  property_value: input.property_value,
-  property_value_unit: input.property_value_unit,
-  property_value_uf: input.property_value_uf,
-  property_value_clp: input.property_value_clp,
-  property_value_source: input.property_value_source,
-  plazo_credito_hipotecario: input.plazo_credito_hipotecario,
-  dividendo_estimado: input.dividendo_estimado,
-  dividendo_esperado: input.dividendo_esperado,
-  dividendo_estimado_origen: input.dividendo_estimado_origen,
-  dividendo_estimado_calculado: input.dividendo_estimado_calculado,
-  dividendo_estimado_manual: input.dividendo_estimado_manual,
-  dividendo_tasa_anual_referencial: input.dividendo_tasa_anual_referencial,
-  dividendo_monto_credito_estimado_clp: input.dividendo_monto_credito_estimado_clp,
-  dividendo_monto_credito_estimado_uf: input.dividendo_monto_credito_estimado_uf,
-  dividendo_uf_referencial_clp: input.dividendo_uf_referencial_clp,
-  anonymous_flow_id: input.anonymous_flow_id,
-  comuna_objetivo: input.comuna_objetivo,
-  tipo_contrato: input.tipo_contrato,
-  continuidad_laboral: input.continuidad_laboral,
-  morosidad_actual: input.morosidad_actual,
-  monto_morosidad: input.monto_morosidad,
-  antiguedad_morosidad: input.antiguedad_morosidad,
-  complemento_renta: input.complemento_renta,
-  ingreso_mensual_complementario: input.ingreso_mensual_complementario,
-  deuda_mensual_complementario: input.deuda_mensual_complementario,
-  tipo_contrato_complementario: input.tipo_contrato_complementario,
-  continuidad_laboral_complementario:
-    input.continuidad_laboral_complementario,
-  morosidad_complementario: input.morosidad_complementario,
-  relacion_complementario: input.relacion_complementario,
-  declara_patrimonio: input.declara_patrimonio,
-  valor_vehiculos: input.valor_vehiculos,
-  valor_inmuebles: input.valor_inmuebles,
-  patrimonio_unit: input.patrimonio_unit,
-  plazo_compra: input.plazo_compra,
-  tiene_propiedad_vista: input.tiene_propiedad_vista,
-  vivienda_nueva: input.vivienda_nueva,
-  pie_en_cuotas_interes: input.pie_en_cuotas_interes,
-  consentimiento: input.consentimiento,
-  uf_value_clp: input.uf_value_clp,
 });
 
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
@@ -1320,39 +1273,33 @@ export default function App() {
     if (!currentEvaluation) return;
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const goalInput = buildProjectGoalInput(
-        currentEvaluation.input,
+      const newEval = await setProjectGoal({
+        apiBase: resolveApiBase(),
+        consentGranted,
+        currentEvaluation,
+        normalizeResult: buildResultSnapshot,
+        onboarding: userOnboarding,
+        profile,
         project,
-        currentEvaluation.input?.uf_value_clp,
-      );
-      const payload = buildFinancialInput(goalInput);
-
-      const res = await fetch(`${apiBase.replace(/\/$/, "")}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
-
-      const newEval = await createEvaluation(profile.id, {
-        email: profile.email || "sin-email",
-        onboarding: userOnboarding || null,
-        // La metadata de la meta se persiste con la evaluación, pero no se
-        // envía a /score para mantener el contrato del motor financiero.
-        input: { ...payload, project_goal: goalInput.project_goal },
-        result: buildResultSnapshot(await res.json()),
-        channel: "project_selection",
       });
 
-       setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-       sessionStorage.removeItem("scoreleads_selected_plan_type");
-       return true;
-     } catch (err) {
-       console.error(err);
-       alert("Error al fijar el proyecto como meta.");
-       return false;
-     }
+      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+      return true;
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("[project-goal] No se pudo fijar la meta", {
+          stage: err?.stage || "unknown",
+          status: err?.status || null,
+          detail: err?.detail || null,
+          cause: err?.cause || err,
+        });
+      } else {
+        console.error("No se pudo fijar el proyecto como meta", err?.stage || "unknown");
+      }
+      alert(projectGoalUserMessage(err));
+      return false;
+    }
   };
 
   const handleLogout = async () => {

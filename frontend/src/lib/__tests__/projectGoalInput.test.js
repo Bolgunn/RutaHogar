@@ -29,71 +29,36 @@ const baseInput = {
 const project = { id: "p1", nombre: "Parque Ñuñoa", precio_min_uf: 5000, precio_max_uf: 6200 };
 
 describe("buildProjectGoalInput", () => {
-  // LA REGRESION. Pisar solo `property_value` no cambiaba nada: el resolutor del
-  // backend (scoring_engine/property_value.py) lee property_value_clp y luego
-  // property_value_uf ANTES que property_value, y ambos venian arrastrados de la
-  // evaluacion anterior. La meta se guardaba re-evaluada al precio viejo.
-  it("reescribe los tres campos de valor, no solo property_value", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
+  it("envia el objetivo en UF para que el backend lo convierta con su snapshot", () => {
+    const result = buildProjectGoalInput(baseInput, project);
 
     expect(result.property_value).toBe(5000);
     expect(result.property_value_unit).toBe("uf");
     expect(result.property_value_uf).toBe(5000);
-    expect(result.property_value_clp).toBe(5000 * UF);
+    expect(result.property_value_clp).toBeUndefined();
   });
 
-  it("no deja rastro del valor anterior en ningun campo derivado", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
-    const stale = [result.property_value, result.property_value_uf, result.property_value_clp];
-
-    expect(stale).not.toContain(2000);
-    expect(stale).not.toContain(2000 * UF);
-  });
-
-  // El dividendo depende del monto del credito, o sea del valor de la vivienda.
-  // El backend no lo recalcula: solo lee dividendo_estimado (indicators.py).
-  it("recalcula el dividendo para el nuevo valor", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
-
-    expect(result.dividendo_estimado).toBeGreaterThan(baseInput.dividendo_estimado);
-    expect(result.dividendo_esperado).toBe(result.dividendo_estimado);
-    expect(result.dividendo_estimado_origen).toBe("calculado");
-    // Un manual viejo, calculado para otra vivienda, no puede sobrevivir: el
-    // backend lo usaria como respaldo si dividendo_estimado llegara vacio.
-    expect(result.dividendo_estimado_manual).toBeUndefined();
-  });
-
-  it("el credito estimado descuenta el ahorro del valor de la vivienda", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
-    expect(result.dividendo_monto_credito_estimado_clp).toBe(5000 * UF - 30_000_000);
-  });
-
-  // Un proyecto mas barato tiene que bajar el dividendo, no solo cambiarlo.
-  it("un proyecto mas barato produce un dividendo menor", () => {
-    const caro = buildProjectGoalInput(baseInput, { precio_min_uf: 8000 }, UF);
-    const barato = buildProjectGoalInput(baseInput, { precio_min_uf: 3000 }, UF);
-    expect(barato.dividendo_estimado).toBeLessThan(caro.dividendo_estimado);
-  });
-
-  // Sin plazo no hay cuota que calcular. Poner 0 le diria al motor que no hay
-  // carga financiera, lo que SUBE el score: conservar el valor viejo solo lo
-  // deja desactualizado, que es el menor de los dos errores.
-  it("conserva el dividendo declarado si no puede calcular uno nuevo", () => {
-    const sinPlazo = { ...baseInput, plazo_credito_hipotecario: 0 };
-    const result = buildProjectGoalInput(sinPlazo, project, UF);
+  it("conserva el dividendo declarado y elimina derivados de mercado del frontend", () => {
+    const result = buildProjectGoalInput(baseInput, project);
 
     expect(result.dividendo_estimado).toBe(500_000);
     expect(result.dividendo_estimado_origen).toBe("manual");
+    expect(result.dividendo_estimado_manual).toBe(500_000);
+    expect(result.uf_value_clp).toBeUndefined();
+    expect(result.dividendo_tasa_anual_referencial).toBeUndefined();
+    expect(result.dividendo_monto_credito_estimado_clp).toBeUndefined();
+    expect(result.dividendo_monto_credito_estimado_uf).toBeUndefined();
+    expect(result.dividendo_uf_referencial_clp).toBeUndefined();
   });
 
   it("no muta el input recibido", () => {
     const copy = { ...baseInput };
-    buildProjectGoalInput(baseInput, project, UF);
+    buildProjectGoalInput(baseInput, project);
     expect(baseInput).toEqual(copy);
   });
 
   it("acepta el vocabulario de simulacion (valor_uf) ademas del catalogo", () => {
-    const result = buildProjectGoalInput(baseInput, { valor_uf: 4000 }, UF);
+    const result = buildProjectGoalInput(baseInput, { valor_uf: 4000 });
     expect(result.property_value_uf).toBe(4000);
   });
 
@@ -101,7 +66,7 @@ describe("buildProjectGoalInput", () => {
     const result = buildProjectGoalInput(baseInput, {
       precio_min_uf: 4000,
       estado: "en_construccion",
-    }, UF);
+    });
 
     expect(result.vivienda_nueva).toBe(true);
   });
@@ -110,14 +75,13 @@ describe("buildProjectGoalInput", () => {
     const result = buildProjectGoalInput(
       { ...baseInput, vivienda_nueva: true },
       { precio_min_uf: 4000, estado: "disponible" },
-      UF,
     );
 
     expect(result.vivienda_nueva).toBe(false);
   });
 
   it("conserva un resumen del proyecto para identificar la meta actual", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
+    const result = buildProjectGoalInput(baseInput, project);
 
     expect(result.project_goal).toMatchObject({
       id: "p1",
@@ -127,13 +91,15 @@ describe("buildProjectGoalInput", () => {
     });
   });
 
-  it("cae al uf_value_clp del input si no se pasa uno", () => {
+  it("no reutiliza la UF ni el valor CLP historicos", () => {
     const result = buildProjectGoalInput(baseInput, project);
-    expect(result.property_value_clp).toBe(5000 * UF);
+    const serialized = JSON.parse(JSON.stringify(result));
+    expect(serialized).not.toHaveProperty("uf_value_clp");
+    expect(serialized).not.toHaveProperty("property_value_clp");
   });
 
   it("conserva el resto del perfil intacto", () => {
-    const result = buildProjectGoalInput(baseInput, project, UF);
+    const result = buildProjectGoalInput(baseInput, project);
     expect(result.ingreso_mensual).toBe(2_500_000);
     expect(result.ahorro_disponible).toBe(30_000_000);
     expect(result.morosidad_actual).toBe("no");
