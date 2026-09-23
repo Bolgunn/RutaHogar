@@ -10,8 +10,8 @@ import {
 } from "../lib/mortgage";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
+import { getMarketReference } from "../services/marketReferenceService";
 
-const FALLBACK_UF_VALUE_CLP = 40695;
 const DEBUG_SCORE_REQUESTS =
   import.meta.env.DEV && import.meta.env.VITE_DEBUG_SCORE === "true";
 
@@ -200,6 +200,15 @@ function buildPropertyValues(value, unit, ufValueClp) {
     };
   }
 
+  if (!Number.isFinite(ufValueClp) || ufValueClp <= 0) {
+    return {
+      property_value: numericValue,
+      property_value_unit: unit,
+      property_value_uf: unit === "uf" ? numericValue : undefined,
+      property_value_clp: unit === "clp" ? numericValue : undefined,
+    };
+  }
+
   const valueUf = unit === "uf" ? numericValue : numericValue / ufValueClp;
   const valueClp = unit === "clp" ? numericValue : numericValue * ufValueClp;
 
@@ -218,7 +227,10 @@ function buildReferencePropertyValues(commune, ufValueClp) {
     property_value: referenceUf,
     property_value_unit: "uf",
     property_value_uf: referenceUf,
-    property_value_clp: Math.round(referenceUf * ufValueClp),
+    property_value_clp:
+      Number.isFinite(ufValueClp) && ufValueClp > 0
+        ? Math.round(referenceUf * ufValueClp)
+        : undefined,
     property_value_source: referencePropertyValuesUf[commune]
       ? "referencia_comuna"
       : "referencia_general",
@@ -344,8 +356,8 @@ export default function ScoreForm({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [ufValueClp, setUfValueClp] = useState(FALLBACK_UF_VALUE_CLP);
-  const [ufStatus, setUfStatus] = useState("fallback");
+  const [marketReference, setMarketReference] = useState(null);
+  const [ufStatus, setUfStatus] = useState("loading");
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
   const [incomeTipVisible, setIncomeTipVisible] = useState(true);
@@ -409,12 +421,13 @@ export default function ScoreForm({
     declaredAge,
   );
 
-  const ufHelpText =
-    ufStatus === "loading"
-      ? `Consultando valor UF referencial. Respaldo interno: $${ufValueClp.toLocaleString("es-CL")}.`
-      : ufStatus === "live"
-        ? `Valor UF referencial actualizado: $${ufValueClp.toLocaleString("es-CL")}.`
-        : `Valor UF referencial: $${ufValueClp.toLocaleString("es-CL")} (respaldo interno).`;
+  const ufValueClp = marketReference?.uf_value_clp ?? null;
+  const hasMarketReference = Number.isFinite(ufValueClp) && ufValueClp > 0;
+  const ufHelpText = ufStatus === "loading"
+    ? "Consultando valor UF referencial."
+    : hasMarketReference
+      ? `Valor UF referencial: $${ufValueClp.toLocaleString("es-CL", { maximumFractionDigits: 2 })}.`
+      : "No pudimos cargar el valor UF vigente. Intenta nuevamente más tarde.";
 
   const propertyValuesForDividend = useMemo(
     () =>
@@ -463,24 +476,22 @@ export default function ScoreForm({
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 2500);
+    let disposed = false;
+    const timeoutId = window.setTimeout(() => controller.abort(), 10000);
 
     async function loadUfValue() {
       try {
-        setUfStatus("loading");
-        const response = await fetch("https://mindicador.cl/api/uf", {
+        const reference = await getMarketReference({
+          apiBase: resolveApiBase(),
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("No se pudo obtener la UF.");
-        const data = await response.json();
-        const latestUf = Number(data?.serie?.[0]?.valor);
-        if (!Number.isFinite(latestUf) || latestUf <= 0)
-          throw new Error("UF invalida.");
-        setUfValueClp(Math.round(latestUf));
-        setUfStatus("live");
+        setMarketReference(reference);
+        setUfStatus("ready");
       } catch {
-        setUfValueClp(FALLBACK_UF_VALUE_CLP);
-        setUfStatus("fallback");
+        if (!disposed) {
+          setMarketReference(null);
+          setUfStatus("error");
+        }
       } finally {
         window.clearTimeout(timeoutId);
       }
@@ -488,6 +499,7 @@ export default function ScoreForm({
 
     loadUfValue();
     return () => {
+      disposed = true;
       controller.abort();
       window.clearTimeout(timeoutId);
     };
@@ -625,6 +637,7 @@ export default function ScoreForm({
   };
 
   const switchPropertyUnit = () => {
+    if (!hasMarketReference) return;
     setForm((prev) => {
       const nextUnit = prev.property_value_unit === "uf" ? "clp" : "uf";
       const currentValue = Number(prev.property_value);
@@ -649,6 +662,7 @@ export default function ScoreForm({
   };
 
   const switchPatrimonioUnit = () => {
+    if (!hasMarketReference) return;
     setForm((prev) => {
       const nextUnit = prev.patrimonio_unit === "uf" ? "clp" : "uf";
       const nextForm = { ...prev, patrimonio_unit: nextUnit };
@@ -836,6 +850,10 @@ export default function ScoreForm({
     e.preventDefault();
     setError(null);
     if (!validate()) return;
+    if (!hasMarketReference || !marketReference?.snapshot_fetched_at) {
+      setError("No pudimos cargar la referencia UF vigente. Intenta nuevamente más tarde.");
+      return;
+    }
 
     setLoading(true);
     let scoreUrl = "";
@@ -916,6 +934,7 @@ export default function ScoreForm({
             : 0,
         patrimonio_unit: form.patrimonio_unit,
         uf_value_clp: ufValueClp,
+        market_snapshot_fetched_at: marketReference.snapshot_fetched_at,
         plazo_compra: normalizePurchaseTermForScore(onboardingData?.plazo_compra),
         tiene_propiedad_vista: onboardingData?.tiene_propiedad_vista === true,
       };
@@ -986,6 +1005,8 @@ export default function ScoreForm({
       console.error("RutaHogar /score error", errorLog);
       if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
         setError("La petición tardó demasiado, por favor intenta nuevamente.");
+      } else if (err.response?.status === 409) {
+        setError("La referencia UF se actualizó mientras completabas el formulario. Recarga la página antes de calcular.");
       } else if (import.meta.env.DEV && err.response?.status) {
         setError(
           `No se pudo calcular el score. El backend respondió ${err.response.status}. Revisa la consola para ver el detalle.`,
@@ -1273,16 +1294,18 @@ export default function ScoreForm({
                   type="button"
                   className="secondary-button unit-toggle"
                   onClick={switchPropertyUnit}
+                  disabled={!hasMarketReference}
                 >
                   {form.property_value_unit === "uf" ? "UF" : "CLP"}
                 </button>
               </div>
               {form.property_value && (
                 <span className="pre-wizard-field-hint">
-                  {form.property_value_unit === "uf"
-                    ? `Referencia: $${(Number(form.property_value) * ufValueClp).toLocaleString("es-CL")} CLP`
-                    : `Referencia: ${(Number(form.property_value) / ufValueClp).toFixed(2)} UF`}
-                  . {ufHelpText}
+                  {hasMarketReference
+                    ? `${form.property_value_unit === "uf"
+                      ? `Referencia: $${(Number(form.property_value) * ufValueClp).toLocaleString("es-CL")} CLP`
+                      : `Referencia: ${(Number(form.property_value) / ufValueClp).toFixed(2)} UF`}. ${ufHelpText}`
+                    : ufHelpText}
                 </span>
               )}
             </div>
@@ -1339,6 +1362,9 @@ export default function ScoreForm({
                 <span className="pre-wizard-field-hint">
                   Dividendo referencial: ${formatInteger(String(calculatedDividend))} (tasa {formatPercent(REFERENTIAL_MORTGAGE_ANNUAL_RATE)} anual)
                 </span>
+              )}
+              {!hasMarketReference && (
+                <span className="pre-wizard-field-hint">{ufHelpText}</span>
               )}
             </div>
           </div>
@@ -1552,8 +1578,8 @@ export default function ScoreForm({
               <div className="pre-wizard-nested-header">
                 <span className="pre-wizard-nested-title" style={{ margin: 0 }}>Activos y Patrimonio</span>
                 <div className="pre-wizard-nested-actions">
-                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "clp" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "clp" && switchPatrimonioUnit()}>CLP</button>
-                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "uf" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "uf" && switchPatrimonioUnit()}>UF</button>
+                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "clp" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "clp" && switchPatrimonioUnit()} disabled={!hasMarketReference}>CLP</button>
+                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "uf" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "uf" && switchPatrimonioUnit()} disabled={!hasMarketReference}>UF</button>
                 </div>
               </div>
               <div className="pre-wizard-grid-2">
@@ -1673,7 +1699,7 @@ export default function ScoreForm({
             <button
               type="submit"
               className="pre-wizard-btn-submit"
-              disabled={loading || debtExceedsIncome || !consentGranted}
+              disabled={loading || debtExceedsIncome || !consentGranted || !hasMarketReference}
             >
               {loading ? (
                 <>

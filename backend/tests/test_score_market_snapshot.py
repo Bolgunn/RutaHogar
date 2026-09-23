@@ -42,6 +42,60 @@ def test_server_snapshot_wins_and_no_client_market_value_overrides(monkeypatch):
     assert result["financial_indicators"]["uf_value_clp"] == snapshot()["uf_value_clp"]
 
 
+def test_market_reference_exposes_uf_from_the_same_persisted_snapshot(monkeypatch):
+    persisted = snapshot()
+    persisted["uf_value_clp"] = 40999.93
+    persisted["source"]["uf_value_clp"]["raw_value"] = 40999.93
+    monkeypatch.setattr(main, "resolve_market_snapshot", lambda: persisted)
+
+    result = asyncio.run(main.market_reference_endpoint())
+
+    assert result == {
+        "uf_value_clp": 40999.93,
+        "effective_date": persisted["source"]["uf_value_clp"]["effective_date"],
+        "snapshot_effective_date": persisted["effective_date"],
+        "snapshot_fetched_at": persisted["fetched_at"],
+        "source": {
+            "provider": "BCCh BDE",
+            "series": "F073.UFF.PRE.Z.D",
+        },
+    }
+
+
+def test_score_rejects_a_stale_frontend_market_reference(monkeypatch):
+    monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(
+            uf_value_clp=40999.93,
+            market_snapshot_fetched_at="2026-09-22T12:00:00Z",
+        ))))
+
+    assert error.value.status_code == 409
+
+
+def test_score_accepts_the_current_frontend_market_reference(monkeypatch):
+    persisted = snapshot()
+    monkeypatch.setattr(main, "resolve_market_snapshot", lambda: persisted)
+
+    result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(
+        uf_value_clp=persisted["uf_value_clp"],
+        market_snapshot_fetched_at=persisted["fetched_at"],
+    ))))
+
+    assert result["financial_indicators"]["uf_value_clp"] == persisted["uf_value_clp"]
+
+
+def test_market_reference_returns_503_when_storage_has_no_valid_snapshot(monkeypatch):
+    def unavailable():
+        raise MarketSnapshotUnavailable("sin snapshot")
+
+    monkeypatch.setattr(main, "resolve_market_snapshot", unavailable)
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(main.market_reference_endpoint())
+    assert error.value.status_code == 503
+
+
 def test_omitted_term_is_accepted_and_uses_snapshot_fallback(monkeypatch):
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
     result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(plazo_credito_hipotecario=None))))

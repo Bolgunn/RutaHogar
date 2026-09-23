@@ -87,6 +87,7 @@ class ScoreRequest(BaseModel):
     property_value_uf: Optional[float] = None
     property_value_clp: Optional[float] = None
     uf_value_clp: Optional[float] = None
+    market_snapshot_fetched_at: Optional[str] = None
     plazo_credito_hipotecario: Optional[int] = None
     tipo_contrato: str  # 'indefinido', 'plazo_fijo', 'independiente'
     continuidad_laboral: str
@@ -297,12 +298,41 @@ async def score_endpoint(payload: ScoreRequest):
         snapshot = await asyncio.to_thread(resolve_market_snapshot)
     except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if (
+        payload.market_snapshot_fetched_at
+        and payload.market_snapshot_fetched_at != snapshot["fetched_at"]
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de calcular.",
+        )
     return calculate_score(payload.model_dump(), market_snapshot=snapshot)
 
 
 def resolve_market_snapshot() -> dict:
     """Small injectable boundary used by the endpoint and its contract tests."""
     return resolve_latest_valid_snapshot(repository_from_environment())
+
+
+@app.get("/market-reference")
+async def market_reference_endpoint():
+    """Public projection of the persisted snapshot; never calls BCCh."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    uf_source = snapshot["source"]["uf_value_clp"]
+    return {
+        "uf_value_clp": snapshot["uf_value_clp"],
+        "effective_date": uf_source["effective_date"],
+        "snapshot_effective_date": snapshot["effective_date"],
+        "snapshot_fetched_at": snapshot["fetched_at"],
+        "source": {
+            "provider": uf_source["provider"],
+            "series": uf_source["series"],
+        },
+    }
 
 
 class ExplainRequest(BaseModel):

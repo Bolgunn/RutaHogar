@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
-import { buildSimulationContext, DEFAULT_UF_CLP } from "../lib/simulation/compatibility";
+import { buildSimulationContext } from "../lib/simulation/compatibility";
 import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
@@ -118,7 +118,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   }, [favorites, userId]);
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
-  const ufValueClp = Number(context?.uf_value_clp) || DEFAULT_UF_CLP;
+  const ufValueClp = Number(context?.uf_value_clp) || 0;
   const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
     ? evaluationBase.input.project_goal
     : null;
