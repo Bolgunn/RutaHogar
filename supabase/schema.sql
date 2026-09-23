@@ -181,6 +181,12 @@ alter table public.evaluations enable row level security;
 alter table public.improvement_goals enable row level security;
 alter table public.scoring_history enable row level security;
 
+-- Los privilegios habilitan las operaciones; las policies RLS de abajo siguen
+-- limitando las filas visibles y modificables para authenticated.
+grant select, insert, update, delete
+on table public.evaluations
+to authenticated;
+
 -- Helper SECURITY DEFINER: lee el rol del usuario sin disparar RLS
 create or replace function public.get_my_role()
 returns text
