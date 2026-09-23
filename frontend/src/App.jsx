@@ -49,6 +49,7 @@ import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./se
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
+import { projectGoalUserMessage, setProjectGoal } from "./services/projectGoalService";
 import {
   getConsent,
   saveConsent,
@@ -202,7 +203,6 @@ const buildFinancialInput = (input = {}) => ({
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
 });
-
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`
   : "No declarado";
@@ -1179,37 +1179,33 @@ export default function App() {
     if (!currentEvaluation) return;
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const goalInput = buildProjectGoalInput(
-        currentEvaluation.input,
+      const newEval = await setProjectGoal({
+        apiBase: resolveApiBase(),
+        consentGranted,
+        currentEvaluation,
+        normalizeResult: buildResultSnapshot,
+        onboarding: userOnboarding,
+        profile,
         project,
-        currentEvaluation.input?.uf_value_clp,
-      );
-      const payload = buildFinancialInput(goalInput);
-
-      const { response: res, payload: scoreResult } = await fetchJsonWithTimeout(`${apiBase.replace(/\/$/, "")}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }, { timeoutMessage: "La evaluación del proyecto tardó demasiado. Intenta nuevamente." });
-      if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
-
-      const newEval = await createEvaluation(profile.id, {
-        email: profile.email || "sin-email",
-        onboarding: userOnboarding || null,
-        // La metadata de la meta se persiste con la evaluación, pero no se
-        // envía a /score para mantener el contrato del motor financiero.
-        input: { ...payload, project_goal: goalInput.project_goal },
-        result: buildResultSnapshot(scoreResult),
-        channel: "project_selection",
       });
 
-       setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-       return true;
-     } catch (err) {
-       console.error(err);
-       throw new Error("No se pudo actualizar tu preferencia de proyecto. Intenta nuevamente.");
-     }
+      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+      return true;
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("[project-goal] No se pudo fijar la meta", {
+          stage: err?.stage || "unknown",
+          status: err?.status || null,
+          detail: err?.detail || null,
+          cause: err?.cause || err,
+        });
+      } else {
+        console.error("No se pudo fijar el proyecto como meta", err?.stage || "unknown");
+      }
+      alert(projectGoalUserMessage(err));
+      return false;
+    }
   };
 
   const handleLogout = async () => {
