@@ -1,0 +1,50 @@
+{
+  "algorithm": "ALG-14",
+  "version": "hu14-contact-opportunities-v1",
+  "nota": "Casos documentales alineados con frontend/src/lib/matching/__tests__/contactOpportunities.test.js. Cada caso llama detectContactOpportunities(evaluations, projects, options) y valida los tipos de triggers esperados.",
+  "cases": [
+    {
+      "name": "pasa_a_prioridad_alta",
+      "por_que": "R2. Un lead que antes era Medio y ahora es Alto debe generar oportunidad por prioridad general Alta.",
+      "input": {
+        "evaluations": [
+          { "id": "e1", "user_id": "u1", "created_at": "2026-09-21T10:00:00Z", "result": { "score": 62, "classification": "Medio" } },
+          { "id": "e2", "user_id": "u1", "created_at": "2026-09-22T10:00:00Z", "result": { "score": 84, "classification": "Alto" } }
+        ],
+        "projects": []
+      },
+      "expect": {
+        "count": 1,
+        "primary_type": "score_high",
+        "trigger_types": ["score_high"],
+        "score_delta": 22
+      }
+    },
+    {
+      "name": "pasa_a_compatible_con_proyecto",
+      "por_que": "R4. Si el ultimo match pasa a Compatible y el anterior no lo era, debe generar trigger de compatibilidad.",
+      "input": {
+        "evaluations": "dos evaluaciones del mismo lead; la anterior queda Cercano y la ultima Compatible bajo ALG-10",
+        "projects": [{ "id": "p1", "nombre": "Proyecto Centro", "comuna": "Macul", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3600 }]
+      },
+      "expect": {
+        "count": 1,
+        "trigger_types_contains": ["compatibility"],
+        "detail_contains": "Proyecto Centro"
+      }
+    },
+    {
+      "name": "una_sola_evaluacion_no_genera_cambio",
+      "por_que": "R1. La oportunidad es change-based; sin evaluacion anterior no hay comparacion.",
+      "input": {
+        "evaluations": [
+          { "id": "e1", "user_id": "u1", "created_at": "2026-09-22T10:00:00Z", "result": { "score": 91, "classification": "Alto" } }
+        ],
+        "projects": []
+      },
+      "expect": {
+        "count": 0
+      }
+    }
+  ]
+}
