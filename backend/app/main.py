@@ -9,7 +9,7 @@ from .ai import (
     generate_executive_summary,
     generate_user_explanation,
 )
-
+from .routers import crm_mock
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -34,6 +34,8 @@ VALID_RELATION_TYPES = {
 }
 
 app = FastAPI(title="RutaHogar")
+
+app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
 
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",

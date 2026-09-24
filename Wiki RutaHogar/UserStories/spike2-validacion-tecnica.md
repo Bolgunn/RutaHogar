@@ -150,6 +150,6 @@ Spike no iniciado. Ningún frente tiene documento de cierre en `docs/research/`.
 | `E1` | ❌ | No existe matriz de permisos documentada ni política de privacidad escrita. |
 | `E2` | ❌ | Sin definición de modelo de eventos ni de versionado de evaluaciones. |
 | `E3` | ⚠️ | `docs/crm-integration.md` es punto de partida; faltan credenciales, límites y comportamiento ante fallo. |
-| `E4` | ❌ | UF, tasas y precios referenciales siguen siendo constantes en el código. |
+| `E4` | ✅ | Investigación completada en [spike2-e4-external-data-sources.md](../../docs/research/spike2-e4-external-data-sources.md). |
 | `E5` | ❌ | Sin levantamiento de flujos ni inventario de fricciones. |
-| `E6` | ❌ | El corredor no está modelado como actor. |
+| `E6` | ✅ | Investigación completada en [spike2-e6-real-estate-brokers.md](../../docs/research/spike2-e6-real-estate-brokers.md). |
