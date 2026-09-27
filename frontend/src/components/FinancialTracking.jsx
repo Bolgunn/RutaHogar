@@ -2,8 +2,29 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildFinancialTracking, goalStatuses } from "../services/financialTracking";
 import { formatScore, getClassificationAdjustment, getScoreBadgeClass } from "../utils/helpers";
 import { formatClp } from "../services/housingSavingsPlanService";
+import { propertyLabels } from "../constants";
+import { getCurrentProjectGoal } from "../lib/projectGoalDisplay";
 import BankingChecklist from "./BankingChecklist";
 import FieldTooltip from "./FieldTooltip";
+
+function ProjectGoalSummary({ projectGoal }) {
+  if (!projectGoal?.nombre) return null;
+
+  const details = [
+    projectGoal.comuna,
+    propertyLabels[projectGoal.tipo_vivienda] || projectGoal.tipo_vivienda,
+  ].filter(Boolean);
+
+  return (
+    <div className="tracking-project-goal">
+      <i className="ti ti-target-arrow" aria-hidden="true" />
+      <span>
+        <strong>Proyecto meta: {projectGoal.nombre}</strong>
+        {details.length ? <small>{details.join(" · ")}</small> : null}
+      </span>
+    </div>
+  );
+}
 
 function GoalsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -174,6 +195,7 @@ export default function FinancialTracking({
   }, [planType]);
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
+  const projectGoal = getCurrentProjectGoal(evaluation);
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
 
   const adjustment = useMemo(
@@ -200,6 +222,7 @@ export default function FinancialTracking({
         <div className="section-heading">
           <span className="eyebrow">Plan de Mejora</span>
           <h1>Mi plan de mejora</h1>
+          <ProjectGoalSummary projectGoal={projectGoal} />
         </div>
         <div className="empty-state">
           <strong>Aún no tienes una precalificación.</strong>
@@ -219,6 +242,7 @@ export default function FinancialTracking({
         <div className="section-heading">
           <span className="eyebrow">Plan de Mejora</span>
           <h1>Mi plan de mejora</h1>
+          <ProjectGoalSummary projectGoal={projectGoal} />
         </div>
         <div className="empty-state">
           <strong>Vuelve a precalificar para ver tu plan actualizado.</strong>
@@ -315,6 +339,7 @@ export default function FinancialTracking({
           <span className="eyebrow">Configuración Inicial</span>
           <h1>Selecciona tu Plan de Mejora</h1>
           <p>Revisa las ventajas y desventajas de cada perfil y elige el que mejor se ajuste a tus capacidades.</p>
+          <ProjectGoalSummary projectGoal={projectGoal} />
         </div>
 
         {computedMesesAcelerado > 12 && (
@@ -396,6 +421,7 @@ export default function FinancialTracking({
           <span className="eyebrow">Plan de Mejora {planType === "acelerado" ? "(Acelerado)" : "(Conservador)"}</span>
           <h1>Progreso del plan financiero</h1>
           <p>Una lectura referencial de las condiciones que conviene preparar antes de una evaluación bancaria.</p>
+          <ProjectGoalSummary projectGoal={projectGoal} />
         </div>
         <div className="tracking-page-head__actions">
           {onNavigate && (

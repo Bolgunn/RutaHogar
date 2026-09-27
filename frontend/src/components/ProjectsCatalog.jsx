@@ -5,6 +5,7 @@ import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } 
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
+import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -118,12 +119,10 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
   const ufValueClp = Number(context?.uf_value_clp) || 0;
-  const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
-    ? evaluationBase.input.project_goal
-    : null;
+  const currentGoal = getCurrentProjectGoal(evaluationBase);
   const currentGoalProject = useMemo(() => {
-    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
     if (currentGoal) return projects.find((project) => project.id === currentGoal.id) || currentGoal;
+    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
 
     // Las metas previas a project_goal no tenían identificador. Solo se
     // recuperan si el valor UF identifica de forma única al proyecto actual.
@@ -211,7 +210,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
              const isFavorite = favorites.includes(project.id);
-             const isCurrentGoal = currentGoalProject?.id === project.id;
+             const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
           {userId && (
@@ -226,7 +225,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
           )}
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong>Meta actual</strong>}</div>
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}</div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
