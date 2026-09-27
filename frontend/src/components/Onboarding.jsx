@@ -279,7 +279,6 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
                   <option value="">{regionAlternativa ? "Sin comuna alternativa" : "Elige primero una región"}</option>
                   {alternativeCommunes.map((comuna) => <option key={comuna} value={comuna}>{comuna}</option>)}
                 </select>
-                <span className="pre-wizard-field-hint">Opcional. Útil si estás abierto a otras zonas.</span>
               </div>
             </div>
 
