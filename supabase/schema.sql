@@ -59,6 +59,8 @@ create table if not exists public.evaluations (
   explanation text,
   recommendations jsonb not null default '[]'::jsonb,
   plan_accepted_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb,
   created_at timestamptz not null default now(),
   constraint evaluations_score_check check (score between 0 and 100),
   constraint evaluations_classification_check check (classification in ('Alto', 'Medio', 'Bajo'))
@@ -86,7 +88,9 @@ add column if not exists target_commune text,
 add column if not exists alternative_commune text,
 add column if not exists purchase_timeline text,
 add column if not exists financial_data jsonb,
-add column if not exists plan_accepted_at timestamptz;
+add column if not exists plan_accepted_at timestamptz,
+add column if not exists fraud_score_probability numeric,
+add column if not exists shap_top_factors jsonb;
 
 create table if not exists public.improvement_goals (
   id uuid primary key default gen_random_uuid(),
@@ -352,7 +356,9 @@ returns table (
   phone text,
   rut text,
   reliability_status text,
-  created_at timestamptz
+  created_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb
 )
 language sql
 stable
@@ -366,11 +372,13 @@ as $$
     p.phone,
     p.rut,
     p.reliability_status,
-    e.created_at
+    e.created_at,
+    e.fraud_score_probability,
+    e.shap_top_factors
   from public.profiles p
   join auth.users u on u.id = p.id
   join public.evaluations e on e.user_id = p.id
-  where p.reliability_status in ('en_revision', 'silenciado', 'descartado')
+  where p.reliability_status in ('en_revision', 'silenciado', 'descartado', 'sospechoso')
     and (
       public.get_my_role() = 'admin'
       or (
