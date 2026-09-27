@@ -71,3 +71,16 @@ export async function getLeadsInReview() {
 
   return leads;
 }
+
+export async function getLeadStatusHistoryForAdmin() {
+  if (!isSupabaseDataConfigured) return [];
+
+  const { data, error } = await supabase.rpc("get_lead_status_history_for_admin");
+
+  if (error) {
+    logSupabaseError(error);
+    throw new Error("Error al obtener el historial de reportes. " + (error.message || "Revisa los permisos."));
+  }
+
+  return data || [];
+}

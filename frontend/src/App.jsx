@@ -23,6 +23,7 @@ import ProjectsWorkspace from "./components/ProjectsWorkspace";
 import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
+import AdminReportHistory from "./components/AdminReportHistory";
 import Recommendations from "./components/Recommendations";
 import Subsidios from "./components/Subsidios";
 import Result from "./components/Result";
@@ -279,6 +280,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
   if (page === "admin-profile") return "/admin/perfil";
+  if (page === "admin-reports") return "/admin/reportes";
   return "/inicio";
 };
 
@@ -310,6 +312,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/admin/perfil",
+    "/admin/reportes",
     "/definir-password",
     "/proyectos",
   ].includes(path);
@@ -323,7 +326,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -368,6 +371,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
     if (path === "/admin/perfil") return { page: "admin-profile" };
+    if (path === "/admin/reportes") return { page: "admin-reports" };
     if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
@@ -1412,7 +1416,7 @@ export default function App() {
             <button
               type="button"
               aria-label="Cerrar mensaje"
-            onClick={() => setDismissedError(visibleError)}
+              onClick={() => setDismissedError(visibleError)}
             >
               x
             </button>
@@ -1460,6 +1464,8 @@ export default function App() {
             inmobiliariaId={inmobiliariaId}
             onNavigate={navigateToPage}
           />
+        ) : page === "admin-reports" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+          <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
         ) : page === "admin-profile" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
@@ -1583,37 +1589,37 @@ export default function App() {
                 </div>
               </section>
             ) : <>
-            {userOnboarding && (
-              <div className="context-summary context-summary--prequalification">
-                <strong>Contexto inicial</strong>
-                <span>
-                  {userOnboarding.comuna_interes} ·{" "}
-                  {plazoLabels[userOnboarding.plazo_compra] ||
-                    userOnboarding.plazo_compra}
-                </span>
-                <button
-                  className="primary-button compact-button"
-                  type="button"
-                  onClick={() => navigateToPage("onboarding")}
-                >
-                  Editar contexto
-                </button>
-              </div>
-            )}
-            <ScoreForm
-              targetCommune={userOnboarding?.comuna_interes}
-              objective={userOnboarding?.objetivo_principal}
-              onboardingData={userOnboarding}
-              birthDate={profile?.birth_date || profile?.fecha_nacimiento}
-              profile={profile}
-              consentGranted={consentGranted}
-              onConsentAccept={handleDataConsent}
-              onBirthDateSave={handleBirthDateSave}
-              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
-              initialDraft={scoreFormDraft}
-              onDraftChange={setScoreFormDraft}
-              onResult={handleResult}
-            />
+              {userOnboarding && (
+                <div className="context-summary context-summary--prequalification">
+                  <strong>Contexto inicial</strong>
+                  <span>
+                    {userOnboarding.comuna_interes} ·{" "}
+                    {plazoLabels[userOnboarding.plazo_compra] ||
+                      userOnboarding.plazo_compra}
+                  </span>
+                  <button
+                    className="primary-button compact-button"
+                    type="button"
+                    onClick={() => navigateToPage("onboarding")}
+                  >
+                    Editar contexto
+                  </button>
+                </div>
+              )}
+              <ScoreForm
+                targetCommune={userOnboarding?.comuna_interes}
+                objective={userOnboarding?.objetivo_principal}
+                onboardingData={userOnboarding}
+                birthDate={profile?.birth_date || profile?.fecha_nacimiento}
+                profile={profile}
+                consentGranted={consentGranted}
+                onConsentAccept={handleDataConsent}
+                onBirthDateSave={handleBirthDateSave}
+                onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+                initialDraft={scoreFormDraft}
+                onDraftChange={setScoreFormDraft}
+                onResult={handleResult}
+              />
             </>}
           </section>
         ) : page === "profile" && profile.role === roles.user ? (
@@ -1621,66 +1627,66 @@ export default function App() {
             profile={profile}
             onboarding={userOnboarding}
             evaluations={userEvaluations}
-          onSaveOnboarding={handleProfileOnboardingSave}
-          onProfileUpdate={handleProfileUpdate}
-          onRetryExplanation={handleRetryAiExplanation}
+            onSaveOnboarding={handleProfileOnboardingSave}
+            onProfileUpdate={handleProfileUpdate}
+            onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
-        <FinancialTracking
-          evaluation={currentEvaluation}
-          onAcceptPlan={handleAcceptPlan}
-          onStartEvaluation={startEvaluation}
-          onOpenProgress={() => navigateToPage("progress")}
-          onOpenHousingPlan={(pieType) => {
-            setHousingInitialPieType(pieType || "minimo");
-            setPage("housing-plan");
-          }}
-          onNavigate={navigateToPage}
-        />
-      ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
-        <ProgressPage
-          onOpenHistory={() => navigateToPage("progress-history")}
-          onStartEvaluation={startEvaluation}
-          onChanged={refreshTracking}
-        />
-      ) : page === "progress-history" && profile.role === roles.user ? (
-        <TrackingHistoryPage
-          onChanged={refreshTracking}
-        />
-      ) : page === "housing-plan" && profile.role === roles.user ? (
-        <HousingSavingsPlan
-          evaluation={currentEvaluation}
-          initialPieType={housingInitialPieType}
-          onBack={() => navigateToPage("tracking")}
-          onSaveHousingProgress={handleSaveHousingProgress}
-          onLogScoringEvent={handleLogScoringEvent}
-        />
-      ) : page === "objective-review" && profile.role === roles.user ? (
-        <ObjectiveReview
-          evaluation={currentEvaluation}
-          onBack={() => navigateToPage("tracking")}
-        />
-      ) : page === "recommendations" && profile.role === roles.user ? (
-        <Recommendations
-          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-          onStartEvaluation={startEvaluation}
-          onNavigate={navigateToPage}
-          onRetryExplanation={handleRetryAiExplanation}
-        />
-      ) : page === "subsidios" && profile.role === roles.user ? (
-        <Subsidios
-          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-          onNavigate={navigateToPage}
-        />
-      ) : page === "simulation" && profile.role === roles.user ? (
-        <SimulationPage
-          evaluation={currentEvaluation}
-          onboarding={userOnboarding}
-          onStartEvaluation={startEvaluation}
-          onNavigate={navigateToPage}
-          initialProjectId={simulationInitialProjectId}
-          onRetryExplanation={handleRetryAiExplanation}
-        />
+          <FinancialTracking
+            evaluation={currentEvaluation}
+            onAcceptPlan={handleAcceptPlan}
+            onStartEvaluation={startEvaluation}
+            onOpenProgress={() => navigateToPage("progress")}
+            onOpenHousingPlan={(pieType) => {
+              setHousingInitialPieType(pieType || "minimo");
+              setPage("housing-plan");
+            }}
+            onNavigate={navigateToPage}
+          />
+        ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
+          <ProgressPage
+            onOpenHistory={() => navigateToPage("progress-history")}
+            onStartEvaluation={startEvaluation}
+            onChanged={refreshTracking}
+          />
+        ) : page === "progress-history" && profile.role === roles.user ? (
+          <TrackingHistoryPage
+            onChanged={refreshTracking}
+          />
+        ) : page === "housing-plan" && profile.role === roles.user ? (
+          <HousingSavingsPlan
+            evaluation={currentEvaluation}
+            initialPieType={housingInitialPieType}
+            onBack={() => navigateToPage("tracking")}
+            onSaveHousingProgress={handleSaveHousingProgress}
+            onLogScoringEvent={handleLogScoringEvent}
+          />
+        ) : page === "objective-review" && profile.role === roles.user ? (
+          <ObjectiveReview
+            evaluation={currentEvaluation}
+            onBack={() => navigateToPage("tracking")}
+          />
+        ) : page === "recommendations" && profile.role === roles.user ? (
+          <Recommendations
+            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+            onRetryExplanation={handleRetryAiExplanation}
+          />
+        ) : page === "subsidios" && profile.role === roles.user ? (
+          <Subsidios
+            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+            onNavigate={navigateToPage}
+          />
+        ) : page === "simulation" && profile.role === roles.user ? (
+          <SimulationPage
+            evaluation={currentEvaluation}
+            onboarding={userOnboarding}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+            initialProjectId={simulationInitialProjectId}
+            onRetryExplanation={handleRetryAiExplanation}
+          />
         ) : page === "academia" && profile.role === roles.user ? (
           <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
         ) : page === "projects" && profile.role === roles.user ? (
@@ -1695,34 +1701,34 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
-        <DashboardLeads
-          evaluations={evaluations}
-          inmobiliariaId={inmobiliariaId}
-          ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
-          role={profile.role}
-        />
-      ) : page === "projects" && profile.role === roles.sales ? (
-        <ProjectsWorkspace
-          inmobiliariaId={inmobiliariaId}
-          ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
-          isAdmin={false}
-        />
-      ) : page === "sales-profile" && profile.role === roles.sales ? (
-        <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
-      ) : page === "admin" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
-        <AdminPanel evaluations={evaluations} profile={profile} />
-      ) : page === "admin-projects" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
-        <AdminProjectCatalog />
-      ) : (
-        <section className="section-block">
-          <div className="section-heading">
-            <span className="eyebrow">Vista no disponible</span>
-            <h1>Revisa tu navegacion</h1>
-            <p>Tu rol actual no tiene acceso a esta vista.</p>
-          </div>
-        </section>
-      )}
+        ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
+          <DashboardLeads
+            evaluations={evaluations}
+            inmobiliariaId={inmobiliariaId}
+            ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+            role={profile.role}
+          />
+        ) : page === "projects" && profile.role === roles.sales ? (
+          <ProjectsWorkspace
+            inmobiliariaId={inmobiliariaId}
+            ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+            isAdmin={false}
+          />
+        ) : page === "sales-profile" && profile.role === roles.sales ? (
+          <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
+        ) : page === "admin" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+          <AdminPanel evaluations={evaluations} profile={profile} />
+        ) : page === "admin-projects" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+          <AdminProjectCatalog />
+        ) : (
+          <section className="section-block">
+            <div className="section-heading">
+              <span className="eyebrow">Vista no disponible</span>
+              <h1>Revisa tu navegacion</h1>
+              <p>Tu rol actual no tiene acceso a esta vista.</p>
+            </div>
+          </section>
+        )}
       </div></main>
     </div>
   );
