@@ -31,6 +31,11 @@ describe("validateProject", () => {
     expect(ok).toBe(true);
   });
 
+  it("acepta proyectos de la Región de Valparaíso", () => {
+    expect(validateProject({ ...validProject, comuna: "Viña del Mar" }).ok).toBe(true);
+    expect(validateProject({ ...validProject, comuna: "Valparaíso" }).ok).toBe(true);
+  });
+
   it("no impone un techo al precio máximo", () => {
     const { ok } = validateProject({ ...validProject, precio_max_uf: 250000 });
     expect(ok).toBe(true);
@@ -91,7 +96,7 @@ describe("validateProject", () => {
   it("rechaza valores fuera de los enums y comunas no soportadas", () => {
     expect(validateProject({ ...validProject, tipo: "oficina" }).errors.tipo).toBeTruthy();
     expect(validateProject({ ...validProject, estado: "vendido" }).errors.estado).toBeTruthy();
-    expect(validateProject({ ...validProject, comuna: "Valparaíso" }).errors.comuna).toBeTruthy();
+    expect(validateProject({ ...validProject, comuna: "Comuna inexistente" }).errors.comuna).toBeTruthy();
   });
 });
 

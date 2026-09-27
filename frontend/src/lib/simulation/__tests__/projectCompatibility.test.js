@@ -56,6 +56,16 @@ describe("catálogo -> escenario -> veredicto", () => {
     expect(scenario.tipo_vivienda).toBe("departamento");
   });
 
+  it("adapta una comuna de Valparaíso sin una regla regional", () => {
+    const scenario = projectToScenario(
+      catalogProjectToSimulation(catalogRow({ comuna: "Valparaíso" })),
+      UF,
+    );
+
+    expect(scenario.comuna).toBe("Valparaíso");
+    expect(scenario.valueUf).toBe(3000);
+  });
+
   it("Compatible: ahorro sobre el pie recomendado y dividendo dentro del 25% del ingreso", () => {
     expect(evaluateCatalogProject(catalogRow(), perfilHolgado).status).toBe("Compatible");
   });

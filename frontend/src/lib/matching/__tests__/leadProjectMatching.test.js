@@ -98,6 +98,18 @@ describe("ALG-10 — invariantes", () => {
       excluidos: [],
     });
   });
+
+  it("trata una comuna de Valparaíso con las mismas reglas de matching", () => {
+    const lead = evaluacion({ capacidad: 3000, input: { comuna_objetivo: "Viña del Mar" } });
+    const { matches, excluidos } = matchLeadToProjects(
+      lead,
+      [proyecto({ comuna: "Viña del Mar" })],
+    );
+
+    expect(excluidos).toEqual([]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].comuna).toBe("Viña del Mar");
+  });
 });
 
 describe("ALG-10 — E2: la capacidad manda sobre la clasificación", () => {

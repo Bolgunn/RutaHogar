@@ -1,5 +1,10 @@
 import React, { useState } from "react";
-import { comunasMvp } from "../constants/comunas";
+import {
+  comunasMvp,
+  getComunasPorRegion,
+  obtenerRegionPorComuna,
+  regionesSoportadas,
+} from "../constants/comunas";
 import { calculateAge } from "../utils/helpers";
 
 const normalizePropertyType = (value) =>
@@ -46,10 +51,26 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
     birth_year: initialData?.birth_year || "",
   });
   const [error, setError] = useState("");
+  const [regionInteres, setRegionInteres] = useState(
+    () => obtenerRegionPorComuna(initialData?.comuna_interes) || "",
+  );
+  const [regionAlternativa, setRegionAlternativa] = useState(
+    () => obtenerRegionPorComuna(initialData?.comuna_alternativa) || "",
+  );
 
-  const alternativeCommunes = form.comuna_interes
-    ? comunasMvp.filter((comuna) => comuna !== form.comuna_interes)
+  const alternativeCommunes = form.comuna_interes && regionAlternativa
+    ? getComunasPorRegion(regionAlternativa).filter((comuna) => comuna !== form.comuna_interes)
     : [];
+
+  const handleRegionChange = (field, value) => {
+    if (field === "comuna_interes") {
+      setRegionInteres(value);
+      setForm((prev) => ({ ...prev, comuna_interes: "", comuna_alternativa: "" }));
+      return;
+    }
+    setRegionAlternativa(value);
+    setForm((prev) => ({ ...prev, comuna_alternativa: "" }));
+  };
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -227,40 +248,39 @@ export default function Onboarding({ initialData, onComplete, isAnon = false, is
               </div>
             </div>
 
-            <div className="pre-wizard-field">
-              <label className="pre-wizard-field-label" htmlFor="comuna_interes">
-                ¿En qué comuna te gustaría comprar?
-              </label>
-              <select
-                id="comuna_interes"
-                name="comuna_interes"
-                value={form.comuna_interes}
-                onChange={handleChange}
-              >
-                <option value="">Selecciona una comuna</option>
-                {comunasMvp.map((comuna) => (
-                  <option key={comuna} value={comuna}>{comuna}</option>
-                ))}
-              </select>
+            <div className="pre-wizard-grid-2">
+              <div className="pre-wizard-field">
+                <label className="pre-wizard-field-label" htmlFor="region_interes">Región de interés</label>
+                <select id="region_interes" value={regionInteres} onChange={(event) => handleRegionChange("comuna_interes", event.target.value)}>
+                  <option value="">Selecciona una región</option>
+                  {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+                </select>
+              </div>
+              <div className="pre-wizard-field">
+                <label className="pre-wizard-field-label" htmlFor="comuna_interes">¿En qué comuna te gustaría comprar?</label>
+                <select id="comuna_interes" name="comuna_interes" value={form.comuna_interes} onChange={handleChange} disabled={!regionInteres}>
+                  <option value="">{regionInteres ? "Selecciona una comuna" : "Elige primero una región"}</option>
+                  {getComunasPorRegion(regionInteres).map((comuna) => <option key={comuna} value={comuna}>{comuna}</option>)}
+                </select>
+              </div>
             </div>
 
-            <div className="pre-wizard-field">
-              <label className="pre-wizard-field-label" htmlFor="comuna_alternativa">
-                ¿Tienes una comuna alternativa?
-              </label>
-              <select
-                id="comuna_alternativa"
-                name="comuna_alternativa"
-                value={form.comuna_alternativa}
-                onChange={handleChange}
-                disabled={!form.comuna_interes}
-              >
-                <option value="">{form.comuna_interes ? "Sin comuna alternativa" : "Elige primero una comuna principal"}</option>
-                {alternativeCommunes.map((comuna) => (
-                  <option key={comuna} value={comuna}>{comuna}</option>
-                ))}
-              </select>
-              <span className="pre-wizard-field-hint">Opcional. Útil si estás open a otras zonas.</span>
+            <div className="pre-wizard-grid-2">
+              <div className="pre-wizard-field">
+                <label className="pre-wizard-field-label" htmlFor="region_alternativa">Región alternativa</label>
+                <select id="region_alternativa" value={regionAlternativa} onChange={(event) => handleRegionChange("comuna_alternativa", event.target.value)} disabled={!form.comuna_interes}>
+                  <option value="">{form.comuna_interes ? "Selecciona una región" : "Elige primero una comuna principal"}</option>
+                  {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+                </select>
+              </div>
+              <div className="pre-wizard-field">
+                <label className="pre-wizard-field-label" htmlFor="comuna_alternativa">¿Tienes una comuna alternativa?</label>
+                <select id="comuna_alternativa" name="comuna_alternativa" value={form.comuna_alternativa} onChange={handleChange} disabled={!form.comuna_interes || !regionAlternativa}>
+                  <option value="">{regionAlternativa ? "Sin comuna alternativa" : "Elige primero una región"}</option>
+                  {alternativeCommunes.map((comuna) => <option key={comuna} value={comuna}>{comuna}</option>)}
+                </select>
+                <span className="pre-wizard-field-hint">Opcional. Útil si estás abierto a otras zonas.</span>
+              </div>
             </div>
 
             {isAnon && <>

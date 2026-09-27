@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { comunasMvp } from "../constants/comunas";
+import {
+  comunasMvp,
+  getComunasPorRegion,
+  obtenerRegionPorComuna,
+  regionesSoportadas,
+} from "../constants/comunas";
 import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
 import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
@@ -393,6 +398,12 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
   const canSeeTechnicalScoring = profile?.role === "ejecutivo" || profile?.role === "admin";
   const [form, setForm] = useState(savedOnboarding);
+  const [regionInteres, setRegionInteres] = useState(
+    () => obtenerRegionPorComuna(savedOnboarding.comuna_interes) || "",
+  );
+  const [regionAlternativa, setRegionAlternativa] = useState(
+    () => obtenerRegionPorComuna(savedOnboarding.comuna_alternativa) || "",
+  );
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedEvaluation, setSelectedEvaluation] = useState(null);
@@ -414,8 +425,8 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactLoading, setContactLoading] = useState(false);
 
-  const alternativeCommunes = form.comuna_interes
-    ? comunasMvp.filter((comuna) => comuna !== form.comuna_interes)
+  const alternativeCommunes = form.comuna_interes && regionAlternativa
+    ? getComunasPorRegion(regionAlternativa).filter((comuna) => comuna !== form.comuna_interes)
     : [];
   const hasChanges = useMemo(
     () => Object.keys(savedOnboarding).some((key) => form[key] !== savedOnboarding[key]),
@@ -431,6 +442,8 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
 
   useEffect(() => {
     setForm(savedOnboarding);
+    setRegionInteres(obtenerRegionPorComuna(savedOnboarding.comuna_interes) || "");
+    setRegionAlternativa(obtenerRegionPorComuna(savedOnboarding.comuna_alternativa) || "");
   }, [savedOnboarding]);
 
   useEffect(() => {
@@ -483,6 +496,16 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       }
       return next;
     });
+  };
+
+  const handleRegionChange = (field, value) => {
+    if (field === "comuna_interes") {
+      setRegionInteres(value);
+      setForm((prev) => ({ ...prev, comuna_interes: "", comuna_alternativa: "" }));
+      return;
+    }
+    setRegionAlternativa(value);
+    setForm((prev) => ({ ...prev, comuna_alternativa: "" }));
   };
 
   const handleContactChange = (event) => {
@@ -754,12 +777,18 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                 </label>
 
                 <label>
+                  Región objetivo
+                  <select value={regionInteres} onChange={(event) => handleRegionChange("comuna_interes", event.target.value)}>
+                    <option value="">Selecciona una región</option>
+                    {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+                  </select>
+                </label>
+
+                <label>
                   Comuna objetivo
-                  <select name="comuna_interes" value={form.comuna_interes} onChange={handleChange}>
-                    <option value="">Selecciona una comuna</option>
-                    {comunasMvp.map((comuna) => (
-                      <option key={comuna} value={comuna}>{comuna}</option>
-                    ))}
+                  <select name="comuna_interes" value={form.comuna_interes} onChange={handleChange} disabled={!regionInteres}>
+                    <option value="">{regionInteres ? "Selecciona una comuna" : "Elige primero una región"}</option>
+                    {getComunasPorRegion(regionInteres).map((comuna) => <option key={comuna} value={comuna}>{comuna}</option>)}
                   </select>
                 </label>
 
@@ -775,12 +804,18 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                 </label>
 
                 <label>
+                  Región alternativa
+                  <select value={regionAlternativa} onChange={(event) => handleRegionChange("comuna_alternativa", event.target.value)} disabled={!form.comuna_interes}>
+                    <option value="">{form.comuna_interes ? "Selecciona una región" : "Elige primero una comuna principal"}</option>
+                    {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+                  </select>
+                </label>
+
+                <label>
                   Comuna alternativa
-                  <select name="comuna_alternativa" value={form.comuna_alternativa} onChange={handleChange} disabled={!form.comuna_interes}>
-                    <option value="">{form.comuna_interes ? "Sin comuna alternativa" : "Elige primero una comuna principal"}</option>
-                    {alternativeCommunes.map((comuna) => (
-                      <option key={comuna} value={comuna}>{comuna}</option>
-                    ))}
+                  <select name="comuna_alternativa" value={form.comuna_alternativa} onChange={handleChange} disabled={!form.comuna_interes || !regionAlternativa}>
+                    <option value="">{regionAlternativa ? "Sin comuna alternativa" : "Elige primero una región"}</option>
+                    {alternativeCommunes.map((comuna) => <option key={comuna} value={comuna}>{comuna}</option>)}
                   </select>
                 </label>
 

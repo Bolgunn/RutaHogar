@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
-import { comunasMvp } from "../constants/comunas";
+import {
+  getComunasPorRegion,
+  obtenerRegionPorComuna,
+  regionesSoportadas,
+} from "../constants/comunas";
 import {
   estadoProyectoLabels,
   estadoProyectoPillClass,
@@ -74,11 +78,13 @@ export default function AdminProjectCatalog() {
 
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState("todos");
+  const [filterRegion, setFilterRegion] = useState("todas");
   const [filterComuna, setFilterComuna] = useState("todas");
   const [projectSort, setProjectSort] = useState({ field: "nombre", direction: "asc" });
 
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [projectRegion, setProjectRegion] = useState("");
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
   const [projectSubmitAttempted, setProjectSubmitAttempted] = useState(false);
@@ -189,11 +195,12 @@ export default function AdminProjectCatalog() {
     return [...set].sort((a, b) => a.localeCompare(b, "es"));
   }, [projects]);
 
-  const hasActiveFilters = search !== "" || filterEstado !== "todos" || filterComuna !== "todas";
+  const hasActiveFilters = search !== "" || filterEstado !== "todos" || filterRegion !== "todas" || filterComuna !== "todas";
 
   const clearFilters = () => {
     setSearch("");
     setFilterEstado("todos");
+    setFilterRegion("todas");
     setFilterComuna("todas");
   };
 
@@ -201,11 +208,12 @@ export default function AdminProjectCatalog() {
     const searchLower = search.trim().toLowerCase();
     return projects.filter((project) => {
       if (filterEstado !== "todos" && project.estado !== filterEstado) return false;
+      if (filterRegion !== "todas" && obtenerRegionPorComuna(project.comuna) !== filterRegion) return false;
       if (filterComuna !== "todas" && project.comuna !== filterComuna) return false;
       if (searchLower && !project.nombre.toLowerCase().includes(searchLower)) return false;
       return true;
     });
-  }, [projects, search, filterEstado, filterComuna]);
+  }, [projects, search, filterEstado, filterRegion, filterComuna]);
 
   const sortedProjects = useMemo(() => {
     const valueFor = (project) => {
@@ -255,6 +263,7 @@ export default function AdminProjectCatalog() {
           : selectedInmobiliaria
         : tenant?.inmobiliaria_id || "",
     });
+    setProjectRegion("");
     setModal({ mode: "create", project: null });
   };
 
@@ -274,6 +283,7 @@ export default function AdminProjectCatalog() {
       descripcion: project.descripcion || "",
       entrega_estimada: project.entrega_estimada || "",
     });
+    setProjectRegion(obtenerRegionPorComuna(project.comuna) || "");
     setModal({ mode: "edit", project });
   };
 
@@ -285,6 +295,11 @@ export default function AdminProjectCatalog() {
   };
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const updateProjectRegion = (region) => {
+    setProjectRegion(region);
+    setForm((prev) => ({ ...prev, comuna: "" }));
+  };
 
   const { ok: formValid, errors: formErrors } = validateProject(form);
 
@@ -790,10 +805,18 @@ export default function AdminProjectCatalog() {
           </label>
 
           <label>
+            Región
+            <select value={filterRegion} onChange={(event) => { setFilterRegion(event.target.value); setFilterComuna("todas"); }}>
+              <option value="todas">Todas las regiones</option>
+              {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+            </select>
+          </label>
+
+          <label>
             Comuna
             <select value={filterComuna} onChange={(event) => setFilterComuna(event.target.value)}>
               <option value="todas">Todas las comunas</option>
-              {comunasDisponibles.map((comuna) => (
+              {comunasDisponibles.filter((comuna) => filterRegion === "todas" || obtenerRegionPorComuna(comuna) === filterRegion).map((comuna) => (
                 <option key={comuna} value={comuna}>
                   {comuna}
                 </option>
@@ -1202,15 +1225,27 @@ export default function AdminProjectCatalog() {
 
                   <div className="field-wrap admin-project-form__commune">
                     <div className="field-label-row">
+                      <label>Región</label>
+                      <FieldTooltip text="Ayuda a acotar la selección de comuna. La región no se guarda en el proyecto." />
+                    </div>
+                    <select value={projectRegion} onChange={(event) => updateProjectRegion(event.target.value)}>
+                      <option value="">Selecciona una región</option>
+                      {regionesSoportadas.map((region) => <option key={region} value={region}>{region}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="field-wrap admin-project-form__commune">
+                    <div className="field-label-row">
                       <label>Comuna</label>
                       <FieldTooltip text="Se compara con la comuna de interés declarada por el lead. Una diferencia reduce la afinidad, pero nunca descarta el match." />
                     </div>
                     <select
                       value={form.comuna}
                       onChange={(event) => updateField("comuna", event.target.value)}
+                      disabled={!projectRegion}
                     >
-                      <option value="">Selecciona una comuna</option>
-                      {comunasMvp.map((comuna) => (
+                      <option value="">{projectRegion ? "Selecciona una comuna" : "Elige primero una región"}</option>
+                      {getComunasPorRegion(projectRegion).map((comuna) => (
                         <option key={comuna} value={comuna}>
                           {comuna}
                         </option>
