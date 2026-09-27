@@ -2044,6 +2044,12 @@ a {
 .tracking-page-head p { max-width: 64ch; margin: 0; color: var(--rh-text-secondary); line-height: 1.55; }
 .tracking-page-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
+.tracking-project-goal { display: inline-flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin-top: 8px; padding: 7px 10px; border: 1px solid rgba(19, 43, 74, 0.13); border-radius: var(--rh-radius-sm); background: rgba(19, 43, 74, 0.045); color: var(--rh-navy); }
+.tracking-project-goal > i { flex: 0 0 auto; color: var(--rh-gold-dark); font-size: 1rem; }
+.tracking-project-goal > span { display: grid; min-width: 0; gap: 1px; }
+.tracking-project-goal strong { overflow: hidden; font-size: 0.84rem; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.tracking-project-goal small { color: var(--rh-text-secondary); font-size: 0.72rem; line-height: 1.25; }
+
 .tracking-overview {
   margin: 0;
   width: min(100%, 800px);
@@ -17169,6 +17175,9 @@ th {
 }
 
 .project-catalog-card__top strong { color: #8a5b00; font-size: 0.72rem; }
+.project-goal-badge { display: inline-flex; align-items: center; width: fit-content; padding: 3px 7px; border: 1px solid rgba(138, 91, 0, 0.2); border-radius: 999px; background: rgba(212, 168, 67, 0.14); color: #755000; font-size: 0.7rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.02em; text-transform: uppercase; }
+.simulation-alternative.is-current-goal { border-color: rgba(138, 91, 0, 0.28); }
+.simulation-alternative__heading .project-goal-badge { margin-left: 6px; vertical-align: middle; }
 .project-catalog-card__body { display: grid; gap: 10px; padding: 18px; height: 100%; }
 .project-catalog-card__location { margin: 0; color: var(--rh-text-muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
 .project-catalog-card h2 { margin: 0; color: var(--rh-navy); font-family: var(--rh-font-display); font-size: 1.2rem; line-height: 1.2; }
