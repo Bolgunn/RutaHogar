@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
@@ -291,6 +291,7 @@ export default function ScoreForm({
   initialDraft,
   onDraftChange,
 }) {
+  const mountTimeRef = useRef(Date.now());
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
   const storedBirthDate = normalizeBirthDate(
@@ -856,6 +857,13 @@ export default function ScoreForm({
           ? "manual"
           : "calculado_referencial";
 
+      const timeToSubmitSeconds = (Date.now() - mountTimeRef.current) / 1000;
+      let deviceIdHash = localStorage.getItem("rutahogar_device_id_hash");
+      if (!deviceIdHash) {
+        deviceIdHash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem("rutahogar_device_id_hash", deviceIdHash);
+      }
+
       const payload = {
         birth_date: effectiveBirthDate || undefined,
         ingreso_mensual: parseFloat(form.ingreso_mensual),
@@ -918,6 +926,8 @@ export default function ScoreForm({
         uf_value_clp: ufValueClp,
         plazo_compra: normalizePurchaseTermForScore(onboardingData?.plazo_compra),
         tiene_propiedad_vista: onboardingData?.tiene_propiedad_vista === true,
+        time_to_submit: timeToSubmitSeconds,
+        device_id_hash: deviceIdHash,
       };
       scorePayload = payload;
 

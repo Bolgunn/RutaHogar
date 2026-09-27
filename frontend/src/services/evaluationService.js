@@ -154,6 +154,8 @@ function buildRow(userId, evaluationPayload) {
     },
     executive_summary: result.executive_summary || null,
     commercial_guidance: result.commercial_guidance || null,
+    fraud_score_probability: result.fraud_score_probability ?? null,
+    shap_top_factors: result.shap_top_factors ?? null,
   };
 }
 

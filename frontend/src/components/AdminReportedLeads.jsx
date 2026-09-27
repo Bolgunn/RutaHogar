@@ -53,7 +53,7 @@ export default function AdminReportedLeads({ profile }) {
     }
   };
 
-  const leadsEnRevision = leads.filter((l) => l.reliability_status === "en_revision");
+  const leadsEnRevision = leads.filter((l) => l.reliability_status === "en_revision" || l.reliability_status === "sospechoso");
   const leadsSilenciados = leads.filter((l) => l.reliability_status === "silenciado" || l.reliability_status === "descartado");
   const visibleLeads = currentTab === "en_revision" ? leadsEnRevision : leadsSilenciados;
 
@@ -108,8 +108,8 @@ export default function AdminReportedLeads({ profile }) {
 
       {!visibleLeads.length ? (
         <div className="admin-compact-empty">
-          <strong>{currentTab === "en_revision" ? "No hay leads en revisión en este momento." : "No hay leads silenciados actualmente."}</strong>
-          <p>{currentTab === "en_revision" ? "Los reportes de posibles inconsistencias aparecerán aquí para resolución." : "Los leads que silencies aparecerán aquí por si requieres reactivarlos en el futuro."}</p>
+          <strong>{currentTab === "en_revision" ? "No hay leads en revisión en este momento." : "No hay leads silenciados ni sospechosos actualmente."}</strong>
+          <p>{currentTab === "en_revision" ? "Los reportes manuales o automáticos (ML) aparecerán aquí para resolución." : "Los leads que silencies o marques como descartados aparecerán aquí por si requieres reactivarlos en el futuro."}</p>
         </div>
       ) : (
         <div className="admin-list admin-list--dense">
@@ -127,7 +127,21 @@ export default function AdminReportedLeads({ profile }) {
                 <span>{lead.email} | {lead.phone || "Sin teléfono"} | RUT: {lead.rut || "Sin RUT"}</span>
                 {lead.report_reason && (
                   <div style={{ marginTop: "0.5rem", padding: "0.5rem", background: "var(--color-surface-mixed)", borderRadius: "4px", fontSize: "0.85rem" }}>
-                    <strong>Motivo:</strong> {lead.report_reason}
+                    <strong>Motivo manual:</strong> {lead.report_reason}
+                  </div>
+                )}
+                {lead.fraud_score_probability >= 80 && (
+                  <div style={{ marginTop: "0.5rem", padding: "0.5rem", background: "#fdeded", border: "1px solid #ef5350", borderRadius: "4px", fontSize: "0.85rem", color: "#d32f2f" }}>
+                    <strong><i className="ti ti-robot" /> Alerta de Inconsistencia (Automática):</strong> Riesgo detectado del {lead.fraud_score_probability}%
+                    {lead.shap_top_factors && typeof lead.shap_top_factors === 'object' && (
+                      <ul style={{ margin: "0.25rem 0 0 1.5rem", padding: 0 }}>
+                        {Object.entries(lead.shap_top_factors).map(([key, value]) => (
+                          <li key={key}>
+                            {key}: impacto de {Number(value) > 0 ? "+" : ""}{Number(value).toFixed(2)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>
