@@ -284,17 +284,9 @@ export async function getEvaluations(userId, role) {
     if (contactsError) {
       logSupabaseError(contactsError);
     } else if (contactsData) {
-      // Fetch reliability_status separately as the RPC might not include it
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, reliability_status")
-        .in("id", userIds);
-        
-      const profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p.reliability_status]));
-      
       contactsMap = Object.fromEntries(contactsData.map((contact) => [
         contact.id, 
-        { ...contact, reliability_status: profilesMap[contact.id] || "normal" }
+        { ...contact, reliability_status: contact.reliability_status || "normal" }
       ]));
     }
   }

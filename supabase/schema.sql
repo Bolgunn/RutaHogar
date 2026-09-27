@@ -33,7 +33,7 @@ add column if not exists birth_date date;
 
 alter table public.profiles
 add column if not exists consent_data jsonb,
-add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado'));
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado', 'silenciado'));
 
 create table if not exists public.lead_status_history (
   id uuid primary key default gen_random_uuid(),
@@ -253,10 +253,27 @@ create policy "Evaluations select own"
   on public.evaluations
   for select
   using (
-      (auth.uid() = user_id)
-      or
-      (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
-    );
+    (auth.uid() = user_id)
+    or (public.get_my_role() = 'admin')
+    or (
+      public.get_my_role() in ('admin_inmobiliario', 'ejecutivo')
+      and exists (
+        select 1 from public.proyectos pr
+        where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+        and (
+          pr.comuna = evaluations.input->>'comuna_objetivo'
+          or pr.comuna = (select onboarding_data->>'comuna_interes' from public.profiles p where p.id = evaluations.user_id)
+          or pr.comuna = (select onboarding_data->>'comuna_alternativa' from public.profiles p where p.id = evaluations.user_id)
+        )
+      )
+      or exists (
+        select 1 from public.lead_status_history lsh
+        join public.profiles exec_p on exec_p.id = lsh.changed_by
+        where lsh.profile_id = evaluations.user_id
+        and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+      )
+    )
+  );
 
 drop policy if exists "Evaluations insert own" on public.evaluations;
 create policy "Evaluations insert own"
@@ -266,18 +283,20 @@ with check (auth.uid() = user_id::uuid);
 
 -- Entrega solo contacto de leads a ejecutivos y administradores. La función
 -- evita abrir lectura directa de todos los perfiles personales al staff.
+drop function if exists public.list_lead_contacts(uuid[]);
 create or replace function public.list_lead_contacts(p_user_ids uuid[])
 returns table (
   id uuid,
   full_name text,
-  phone text
+  phone text,
+  reliability_status text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
@@ -286,6 +305,94 @@ $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
 grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
+-- Permite actualizar de forma segura el estado de confiabilidad de un lead
+create or replace function public.update_lead_reliability(
+  p_lead_id uuid,
+  p_reporter_id uuid default null,
+  p_new_status text default 'silenciado',
+  p_reason text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_status text;
+  v_changed_by uuid;
+begin
+  v_changed_by := coalesce(auth.uid(), p_reporter_id);
+
+  select reliability_status into v_old_status from public.profiles where id = p_lead_id;
+  
+  update public.profiles 
+  set reliability_status = p_new_status, updated_at = now()
+  where id = p_lead_id;
+
+  insert into public.lead_status_history (profile_id, changed_by, old_status, new_status, reason)
+  values (p_lead_id, v_changed_by, v_old_status, p_new_status, coalesce(p_reason, 'Cambio de estado'));
+end;
+$$;
+
+revoke all on function public.update_lead_reliability(uuid, uuid, text, text) from public;
+grant execute on function public.update_lead_reliability(uuid, uuid, text, text) to authenticated;
+
+-- Entrega a administradores globales y de inmobiliaria los leads en revisión y silenciados
+create or replace function public.get_reported_leads_for_admin()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct on (p.id)
+    p.id,
+    u.email::text as email,
+    p.full_name,
+    p.phone,
+    p.rut,
+    p.reliability_status,
+    e.created_at
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  join public.evaluations e on e.user_id = p.id
+  where p.reliability_status in ('en_revision', 'silenciado', 'descartado')
+    and (
+      public.get_my_role() = 'admin'
+      or (
+        public.get_my_role() = 'admin_inmobiliario'
+        and (
+          exists (
+            select 1 from public.proyectos pr
+            where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+            and (
+              pr.comuna = e.input->>'comuna_objetivo'
+              or pr.comuna = p.onboarding_data->>'comuna_interes'
+              or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+            )
+          )
+          or exists (
+            select 1 from public.lead_status_history lsh
+            join public.profiles exec_p on exec_p.id = lsh.changed_by
+            where lsh.profile_id = p.id
+            and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+          )
+        )
+      )
+    )
+  order by p.id, e.created_at desc;
+$$;
+
+revoke all on function public.get_reported_leads_for_admin() from public;
+grant execute on function public.get_reported_leads_for_admin() to authenticated;
 
 drop policy if exists "Evaluations delete own" on public.evaluations;
 create policy "Evaluations delete own"

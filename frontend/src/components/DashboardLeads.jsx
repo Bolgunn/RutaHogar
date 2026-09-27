@@ -16,9 +16,10 @@ function getReliabilityBadge(status) {
   switch (status) {
     case "sospechoso": return <span className="status-pill bajo">Sospechoso</span>;
     case "en_revision": return <span className="status-pill medio">En revisión</span>;
-    case "descartado": return <span className="status-pill requiere-antecedentes">Descartado</span>;
+    case "descartado":
+    case "silenciado": return <span className="status-pill requiere-antecedentes">Silenciado</span>;
     case "reactivado": return <span className="status-pill alto">Reactivado</span>;
-    case "normal": default: return null; // Normal is hidden by default in badges to keep it clean, but let's show it if requested. Actually user requested: "verde si es normal".
+    case "normal": default: return null;
   }
 }
 
@@ -26,7 +27,8 @@ function getReliabilityBadgeCard(status) {
   switch (status) {
     case "sospechoso": return <span className="status-pill bajo">Sospechoso</span>;
     case "en_revision": return <span className="status-pill medio">En revisión</span>;
-    case "descartado": return <span className="status-pill requiere-antecedentes">Descartado</span>;
+    case "descartado":
+    case "silenciado": return <span className="status-pill requiere-antecedentes">Silenciado</span>;
     case "reactivado": return <span className="status-pill alto">Reactivado</span>;
     case "normal": default: return <span className="status-pill alto">Normal</span>;
   }
@@ -214,6 +216,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
     item.onboarding?.comuna_alternativa,
   ]).filter(Boolean))].sort(), [evaluations]);
   const counts = useMemo(() => evaluations.reduce((result, item) => {
+    const status = item.reliability_status || "normal";
+    if (status === "silenciado" || status === "descartado") return result;
     if (item.result?.classification in result) result[item.result.classification] += 1;
     return result;
   }, { Alto: 0, Medio: 0, Bajo: 0 }), [evaluations]);
@@ -233,7 +237,9 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
       if (ageRange.min && item.input?.edad == null) return false;
       const status = item.reliability_status || "normal";
-      if (reliabilityStatus === "default" && (status === "sospechoso" || status === "descartado")) return false;
+      // Leads silenciados no salen en el perfil de ejecutivos a no ser que sean reactivados
+      if (status === "silenciado" || status === "descartado") return false;
+      if (reliabilityStatus === "default" && (status === "sospechoso" || status === "en_revision")) return false;
       if (reliabilityStatus !== "default" && reliabilityStatus !== "todos" && status !== reliabilityStatus) return false;
 
       return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
@@ -353,7 +359,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
         <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
           <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
           <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label>Confiabilidad<select value={reliabilityStatus} onChange={(event) => setReliabilityStatus(event.target.value)}><option value="default">Ocultar sospechosos</option><option value="todos">Todos los leads</option><option value="normal">Solo normales</option><option value="sospechoso">Solo sospechosos</option><option value="en_revision">En revisión</option><option value="reactivado">Reactivados</option><option value="descartado">Descartados</option></select></label>
+        <label>Confiabilidad<select value={reliabilityStatus} onChange={(event) => setReliabilityStatus(event.target.value)}><option value="default">Oportunidades confiables</option><option value="todos">Todos los leads activos</option><option value="normal">Solo normales</option><option value="sospechoso">Solo sospechosos</option><option value="en_revision">En revisión</option><option value="reactivado">Reactivados</option></select></label>
         <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
         <label>Fecha<select value={date} onChange={(event) => setDate(event.target.value)}>{DATE_RANGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
       </div>
@@ -440,22 +446,29 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
 
             <div className="executive-lead-brief__contact">
               <span className="eyebrow">Contacto</span>
-              <div className="admin-action-grid">
-                {selectedLead.email ? <a href={selectedEmailHref} className="secondary-button admin-link-button">Enviar correo</a> : <button type="button" className="secondary-button admin-link-button" disabled>Correo no disponible</button>}
-                {selectedPhone ? <a href={selectedWhatsappHref} className="primary-button admin-link-button" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a> : <button type="button" className="secondary-button admin-link-button" disabled>WhatsApp no disponible</button>}
-                {(!isReporting && (selectedLead.reliability_status === "normal" || selectedLead.reliability_status === "reactivado")) && (
-                  <button 
-                    type="button" 
-                    className="secondary-button admin-link-button" 
-                    style={{ color: "var(--color-danger, #d32f2f)", borderColor: "var(--color-danger, #d32f2f)", transition: "all 0.2s ease" }} 
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-danger, #d32f2f)"; e.currentTarget.style.color = "white"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--color-danger, #d32f2f)"; }}
-                    onClick={() => setIsReporting(true)}
-                  >
-                    <i className="ti ti-alert-triangle" /> Reportar lead
-                  </button>
-                )}
-              </div>
+              {(selectedLead.reliability_status === "silenciado" || selectedLead.reliability_status === "descartado" || selectedLead.reliability_status === "en_revision") ? (
+                <div style={{ padding: "0.75rem", borderRadius: "6px", backgroundColor: "var(--color-surface-mixed, #f8fafc)", border: "1px solid var(--color-border, #e2e8f0)", color: "var(--color-text-muted, #64748b)", fontSize: "0.88rem" }}>
+                  <i className="ti ti-volume-off" style={{ marginRight: "0.5rem", color: "var(--color-danger, #d32f2f)" }} />
+                  <strong>Contacto bloqueado:</strong> Este lead se encuentra {selectedLead.reliability_status === "en_revision" ? "en revisión" : "silenciado"} y no puede ser contactado comercialmente a menos que sea reactivado por un administrador.
+                </div>
+              ) : (
+                <div className="admin-action-grid">
+                  {selectedLead.email ? <a href={selectedEmailHref} className="secondary-button admin-link-button">Enviar correo</a> : <button type="button" className="secondary-button admin-link-button" disabled>Correo no disponible</button>}
+                  {selectedPhone ? <a href={selectedWhatsappHref} className="primary-button admin-link-button" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a> : <button type="button" className="secondary-button admin-link-button" disabled>WhatsApp no disponible</button>}
+                  {(!isReporting && (selectedLead.reliability_status === "normal" || selectedLead.reliability_status === "reactivado")) && (
+                    <button 
+                      type="button" 
+                      className="secondary-button admin-link-button" 
+                      style={{ color: "var(--color-danger, #d32f2f)", borderColor: "var(--color-danger, #d32f2f)", transition: "all 0.2s ease" }} 
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--color-danger, #d32f2f)"; e.currentTarget.style.color = "white"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "var(--color-danger, #d32f2f)"; }}
+                      onClick={() => setIsReporting(true)}
+                    >
+                      <i className="ti ti-alert-triangle" /> Reportar lead
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 
