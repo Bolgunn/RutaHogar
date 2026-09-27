@@ -157,6 +157,14 @@ export async function getEvaluations(userId, role) {
       p_user_ids: [...new Set(data.map((row) => row.user_id))],
     });
     contactsMap = Object.fromEntries((contacts || []).map((contact) => [contact.id, contact]));
+    if (contactsError) {
+      logSupabaseError(contactsError);
+    } else if (contactsData) {
+      contactsMap = Object.fromEntries(contactsData.map((contact) => [
+        contact.id,
+        { ...contact, reliability_status: contact.reliability_status || "normal" }
+      ]));
+    }
   }
   if (!data?.length) return [];
   let annotationQuery = supabase.from("evaluation_events").select("*")

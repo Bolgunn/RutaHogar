@@ -687,7 +687,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin || profile?.role === roles.admin_inmo)) markLeadsSeen();
+    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
   }, [page]);
 
   useEffect(() => {
@@ -1695,7 +1695,7 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
