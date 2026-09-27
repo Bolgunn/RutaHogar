@@ -156,23 +156,12 @@ export default function FinancialTracking({
   onNavigate,
   successMessage,
 }) {
-  const [planType, setPlanType] = useState(() => {
-    return evaluation?.plan_type || sessionStorage.getItem("scoreleads_selected_plan_type") || null;
-  });
+  const [planType, setPlanType] = useState(() => evaluation?.plan_type || null);
+  const [acceptingPlan, setAcceptingPlan] = useState(false);
 
   useEffect(() => {
-    if (evaluation?.plan_type && evaluation.plan_type !== planType) {
-      setPlanType(evaluation.plan_type);
-    }
-  }, [evaluation?.plan_type]);
-
-  useEffect(() => {
-    if (planType) {
-      sessionStorage.setItem("scoreleads_selected_plan_type", planType);
-    } else {
-      sessionStorage.removeItem("scoreleads_selected_plan_type");
-    }
-  }, [planType]);
+    setPlanType(evaluation?.plan_type || null);
+  }, [evaluation?.id, evaluation?.plan_type]);
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
@@ -184,6 +173,16 @@ export default function FinancialTracking({
 
   const [filterPriority, setFilterPriority] = useState("Todos");
   const [filterCategory, setFilterCategory] = useState("Todos");
+
+  const choosePlan = async (nextPlanType) => {
+    if (!onAcceptPlan || acceptingPlan) return;
+    setAcceptingPlan(true);
+    try {
+      if (await onAcceptPlan(nextPlanType)) setPlanType(nextPlanType);
+    } finally {
+      setAcceptingPlan(false);
+    }
+  };
 
   const progressButton = onOpenProgress ? (
     <button type="button" className="primary-button" onClick={onOpenProgress}>
@@ -360,12 +359,10 @@ export default function FinancialTracking({
               type="button"
               className="primary-button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
-              onClick={() => {
-                setPlanType("acelerado");
-                if (onAcceptPlan) onAcceptPlan("acelerado");
-              }}
+              onClick={() => choosePlan("acelerado")}
+              disabled={acceptingPlan}
             >
-              Elegir Plan Acelerado
+              {acceptingPlan ? "Activando plan..." : "Elegir Plan Acelerado"}
             </button>
           </div>
 
@@ -385,12 +382,10 @@ export default function FinancialTracking({
               type="button"
               className="primary-button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
-              onClick={() => {
-                setPlanType("conservador");
-                if (onAcceptPlan) onAcceptPlan("conservador");
-              }}
+              onClick={() => choosePlan("conservador")}
+              disabled={acceptingPlan}
             >
-              Elegir Plan Conservador
+              {acceptingPlan ? "Activando plan..." : "Elegir Plan Conservador"}
             </button>
           </div>
         </div>

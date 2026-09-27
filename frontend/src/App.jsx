@@ -30,7 +30,14 @@ import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
-import { createEvaluation, getEvaluations, saveHousingPlanProgress, updateEvaluationAiContent } from "./services/evaluationService";
+import {
+  acceptEvaluationPlan,
+  applyAcceptedPlanEvent,
+  createEvaluation,
+  getEvaluations,
+  saveHousingPlanProgress,
+  updateEvaluationAiContent,
+} from "./services/evaluationService";
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
@@ -1125,6 +1132,38 @@ export default function App() {
     }
   };
 
+  const handleAcceptPlan = async (planType) => {
+    if (!currentEvaluation) return false;
+
+    try {
+      setDataError("");
+      const acceptance = await acceptEvaluationPlan(
+        currentEvaluation.id,
+        userId || profile?.email || "local-user",
+        { plan_type: planType },
+      );
+      const updatedEvaluation = acceptance.evaluation
+        || applyAcceptedPlanEvent(currentEvaluation, acceptance.event);
+
+      if (updatedEvaluation) {
+        setEvaluations((previous) => previous.map((item) =>
+          item.id === currentEvaluation.id ? updatedEvaluation : item,
+        ));
+      }
+
+      if (acceptance.refreshError) {
+        console.warn("El plan fue aceptado, pero no se pudo refrescar la evaluación:", acceptance.refreshError);
+        setDataError("El plan se activó, pero no pudimos actualizar la vista. Recarga la página para volver a consultar el historial.");
+      }
+
+      return true;
+    } catch (err) {
+      console.error(err);
+      setDataError("No pudimos activar el plan. Inténtalo nuevamente.");
+      return false;
+    }
+  };
+
   // "Fijar como mi Meta" del catálogo (HU 9). La llamada a /score vive aquí y
   // no en el modal: antes el modal evaluaba al abrirse y esta función persistía
   // ese resultado, así que la evaluación guardada podía no corresponder al
@@ -1573,6 +1612,7 @@ export default function App() {
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
           evaluation={currentEvaluation}
+          onAcceptPlan={handleAcceptPlan}
           onStartEvaluation={startEvaluation}
           onOpenProgress={() => navigateToPage("progress")}
           onOpenHousingPlan={(pieType) => {

@@ -144,13 +144,45 @@ export async function deleteEvaluation() {
   throw new Error("El historial es inmutable. Usa una corrección o anulación desde Mi progreso.");
 }
 
-async function annotateAndRead(evaluationId, userId, kind, payload) {
-  await annotateEvaluation(evaluationId, kind, payload);
-  return (await getEvaluations(userId)).find((row) => row.id === evaluationId) || null;
+async function annotateAndRead(evaluationId, userId, kind, payload, { tolerateReadFailure = false } = {}) {
+  const event = await annotateEvaluation(evaluationId, kind, payload);
+  try {
+    const evaluation = (await getEvaluations(userId)).find((row) => row.id === evaluationId) || null;
+    if (!tolerateReadFailure) return evaluation;
+    return {
+      event,
+      evaluation,
+      refreshError: evaluation ? null : new Error("No se encontró la evaluación después de persistir la anotación."),
+    };
+  } catch (refreshError) {
+    if (!tolerateReadFailure) throw refreshError;
+    return { event, evaluation: null, refreshError };
+  }
 }
 
 export async function acceptEvaluationPlan(evaluationId, userId, updates = {}) {
-  return annotateAndRead(evaluationId, userId, "plan_accepted", updates);
+  // La anotación ya quedó confirmada antes de leer nuevamente. Una falla de
+  // refresco no puede convertir esa escritura persistida en un falso error.
+  return annotateAndRead(evaluationId, userId, "plan_accepted", updates, {
+    tolerateReadFailure: true,
+  });
+}
+
+export function applyAcceptedPlanEvent(evaluation, event) {
+  if (!evaluation || !event) return evaluation;
+  const payload = event.payload || {};
+  const housingPlan = {
+    ...(evaluation.housing_plan || {}),
+    ...(payload.housing_plan || {}),
+    ...(payload.plan_type ? { plan_type: payload.plan_type } : {}),
+  };
+
+  return {
+    ...evaluation,
+    plan_accepted_at: event.effective_at || evaluation.plan_accepted_at || null,
+    housing_plan: housingPlan,
+    plan_type: payload.plan_type || housingPlan.plan_type || evaluation.plan_type || null,
+  };
 }
 
 export async function saveHousingPlanProgress(evaluationId, userId, housingPlan) {
