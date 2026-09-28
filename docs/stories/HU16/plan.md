@@ -1,11 +1,11 @@
-# PLAN — HU 16: Gestión de leads inconsistentes o sospechosos
+# DOCUMENTO DE IMPLEMENTACIÓN — HU 16: Gestión de leads inconsistentes o sospechosos
 
 - **Story:** HU16 — Gestión de leads inconsistentes o sospechosos
 - **Categoría:** Deseable · **Story Points:** 8 SP
 - **Actores:** Ejecutivo comercial (reporte, filtrado y priorización) & Administrador inmobiliario (revisión y resolución de estado)
 - **Metodología:** Scrum + SDD acotado (`docs/SCRUM_SDD_ACOTADO_RUTAHOGAR.md`)
 - **Referencia de contexto:** Spike 2 (`docs/stories/E1 Spike N2/E1 Spike 2.md` — Privacidad, RBAC y Trazabilidad Legal)
-- **Estado:** 📋 Planificado (Listo para aprobación)
+- **Estado:** ✅ Implementado
 
 ---
 
@@ -42,12 +42,12 @@ Conforme a la metodología establecida en `docs/SCRUM_SDD_ACOTADO_RUTAHOGAR.md`,
 - **E2 — Reporte y revisión manual:**
   Dado que un ejecutivo identifica información sospechosa en un lead,  
   cuando lo reporte indicando un motivo,  
-  entonces el caso debe quedar disponible para revisión por parte del administrador inmobiliario, quien podrá cambiar su estado a `Normal`, `En revisión`, `descartado` o `reactivado`.
+  entonces el caso debe quedar disponible para revisión por parte del administrador inmobiliario, quien podrá cambiar su estado a `Normal`, `En revisión`, `silenciado` o `reactivado`.
 
 - **E3 — Visualización y filtrado por estado de confiabilidad:**
   Dado que existen leads con distintos estados de revisión,  
   cuando el ejecutivo acceda al dashboard comercial,  
-  entonces el sistema debe mostrar su estado de confiabilidad y permitir filtrarlos, **mostrando por defecto los leads que no estén marcados como sospechosos o descartados**.
+  entonces el sistema debe mostrar su estado de confiabilidad y permitir filtrarlos, **mostrando por defecto los leads que no estén marcados como sospechosos o silenciados**.
 
 - **E4 — Conservación del historial y trazabilidad:**
   Dado que un lead es marcado, reportado, revisado, descartado o reactivado,  
@@ -71,13 +71,13 @@ stateDiagram-v2
     normal --> sospechoso: E1 (Actualización con salto anormal)
     
     sospechoso --> en_revision: Admin inmobiliario inicia revisión
-    sospechoso --> descartado: Admin inmobiliario descarta el lead
+    sospechoso --> silenciado: Admin inmobiliario descarta el lead
     sospechoso --> normal: Admin inmobiliario desestima sospecha
     
-    en_revision --> descartado: Admin confirma inconsistencia/fraude
+    en_revision --> silenciado: Admin confirma inconsistencia/fraude
     en_revision --> normal: Admin convalida antecedentes
     
-    descartado --> reactivado: Admin reactiva con nuevos antecedentes
+    silenciado --> reactivado: Admin reactiva con nuevos antecedentes
     reactivado --> sospechoso: Nuevo reporte o inconsistencia
     reactivado --> en_revision: Nueva revisión
 ```
@@ -87,7 +87,7 @@ stateDiagram-v2
 | `normal` | Lead confiable sin alertas activas | **Sí** |
 | `sospechoso` | Marcado automáticamente (E1) o reportado por ejecutivo (E2) | **No** (requiere activar filtro) |
 | `en_revision` | El administrador inmobiliario está analizando el caso | **No** (o seleccionable vía filtro) |
-| `descartado` | Descartado formalmente por el administrador inmobiliario | **No** (oculto por defecto) |
+| `silenciado` | Silenciado formalmente por el administrador inmobiliario | **No** (oculto por defecto) |
 | `reactivado` | Reincorporado tras subsanar observaciones | **Sí** |
 
 ### 3.2. Reglas Heurísticas del Detector Automático (E1)
@@ -114,7 +114,7 @@ Si se activa al menos una regla de severidad **Alta**, o dos de severidad **Medi
 ### 3.3. Modelo de Datos y Persistencia (E4)
 
 #### Extensión a `public.evaluations`:
-- `reliability_status` (`text`, check `in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado')`, default `'normal'`).
+- `reliability_status` (`text`, check `in ('normal', 'sospechoso', 'en_revision', 'silenciado', 'reactivado')`, default `'normal'`).
 - `inconsistency_flags` (`jsonb`, default `'[]'::jsonb`).
 - `reliability_updated_at` (`timestamptz`, default `now()`).
 
@@ -149,7 +149,7 @@ Políticas RLS:
      - "Todos los leads" (Incluye sospechosos y descartados).
      - "Sospechosos / En alerta" (`sospechoso`).
      - "En revisión" (`en_revision`).
-     - "Descartados" (`descartado`).
+     - "Silenciado" (`silenciado`).
 2. **Badges Visuales en Lead Card:**
    - Badge ámbar/rojo con icono `ti ti-alert-triangle` para leads con alerta de inconsistencia.
    - Badge azul `ti ti-clock-search` para leads en revisión.
@@ -157,7 +157,7 @@ Políticas RLS:
 3. **Ficha Detallada del Lead:**
    - **Card de Advertencia de Inconsistencias (E1):** Muestra claramente los factores detonantes (ej: *"Deuda mensual declarada ($1.500.000) excede el ingreso mensual total ($1.200.000)"*).
    - **Botón "Reportar información sospechosa" (E2):** Visible para ejecutivos comerciales. Abre modal para ingresar motivo.
-   - **Panel de Gestión de Confiabilidad (E2):** Visible exclusivamente para administradores (`role === 'admin'`). Permite cambiar a `Normal`, `En revisión`, `Descartado` o `Reactivado` exigiendo motivo.
+   - **Panel de Gestión de Confiabilidad (E2):** Visible exclusivamente para administradores (`role === 'admin'`). Permite cambiar a `Normal`, `En revisión`, `Silenciado` o `Reactivado` exigiendo motivo.
    - **Línea de Tiempo de Trazabilidad (E4):** Visualización cronológica de todas las marcas, reportes y cambios de estado con autor, fecha, estado anterior/posterior y motivo.
 
 ---
@@ -193,7 +193,7 @@ Políticas RLS:
    - Formulario para ejecutivo con motivos tipificados (Inconsistencia financiera, Contacto falso, Duplicado, etc.) y campo de observaciones.
    - Manejo de estados de carga, feedback visual accesible e integración con el servicio.
 2. **Componente `ManageLeadReliabilityModal.jsx`:**
-   - Formulario exclusivo para `admin` con selección de nuevo estado (`normal`, `en_revision`, `descartado`, `reactivado`) y motivo obligatorio.
+   - Formulario exclusivo para `admin` con selección de nuevo estado (`normal`, `en_revision`, `silenciado`, `reactivado`) y motivo obligatorio.
 3. **Componente `LeadReliabilityTimeline.jsx`:**
    - Renderizado limpio y ordenado de la trazabilidad (E4) dentro de la ficha del lead.
 
@@ -214,7 +214,7 @@ Políticas RLS:
    - Caso 2: Abrir `DashboardLeads` con ejecutivo -> Comprobar que el lead sospechoso NO aparece por defecto (E3).
    - Caso 3: Cambiar filtro a "Sospechosos / En alerta" -> El lead aparece con su badge de advertencia.
    - Caso 4: Reportar un lead normal como sospechoso indicando motivo -> Verificar cambio a `sospechoso` y registro en trazabilidad (E2 y E4).
-   - Caso 5: Autenticarse como administrador -> Cambiar estado a `en_revision` y luego a `descartado` con motivos -> Verificar que no se borra el lead y queda registrado en la línea de tiempo (E4).
+   - Caso 5: Autenticarse como administrador -> Cambiar estado a `en_revision` y luego a `silenciado` con motivos -> Verificar que no se borra el lead y queda registrado en la línea de tiempo (E4).
    - Caso 6: Reactivar el lead descartado -> Comprobar que vuelve a estar visible en el filtro por defecto de leads confiables.
 
 ---
@@ -229,3 +229,46 @@ Políticas RLS:
 | Filtrar por confiabilidad (E3) | Sin acceso | **Permitido** | **Permitido** |
 | Ver historial de trazabilidad (E4) | Sin acceso | **Lectura** | **Lectura** |
 | Borrado físico de lead | Sin acceso (Soft delete ARCO) | Prohibido | Prohibido |
+
+---
+
+## 6. Estado de Implementación Final (Ejecutado)
+
+Durante el desarrollo e implementación final de la HU16, se tomaron decisiones arquitectónicas críticas que modificaron sutilmente el plan original para optimizar rendimiento, adherencia a la ley y explicabilidad (XAI).
+
+### 6.1. Detección de Bots y Privacidad (Geolocalización descartada)
+Originalmente se propuso capturar la IP y la geolocalización de la solicitud para compararla con la comuna declarada. Esta idea fue **descartada** por dos motivos:
+1. **Precisión técnica:** En Chile, las IPs móviles son altamente dinámicas y rara vez coinciden con precisión de comuna.
+2. **Privacidad (Ley 19.628):** Para evitar recabar más datos personales de los necesarios y evitar tener que declarar políticas invasivas en la fase inicial del embudo.
+
+En su lugar, el sistema detecta bots de manera limpia usando:
+* `time_to_submit_ms`: Se inyectó un timestamp en el frontend `ScoreForm.jsx` para calcular los milisegundos que demora el usuario en llenar el formulario. Llenados instantáneos (< 2-3 seg) se penalizan fuertemente como bots.
+* `device_id_hash`: Un hash ofuscado local del navegador para detectar exceso de solicitudes masivas desde el mismo dispositivo.
+
+### 6.2. Motor de Clasificación y Explicabilidad (XAI)
+En lugar de depender exclusivamente de validaciones hardcodeadas (reglas manuales descritas en la sección 3.2), se integró el concepto en el backend mediante un **modelo basado en árboles (XGBoost) soportado por explicabilidad SHAP**:
+- `fraud_score_probability`: El backend calcula y devuelve un porcentaje real de probabilidad de que el lead sea inconsistente o automatizado.
+- `shap_top_factors`: Para no ser una "caja negra" inauditable (lo cual es vital para el Administrador Inmobiliario), el modelo extrae el top de atributos que más pesaron en esa alta probabilidad de fraude (ej: "Ahorro irreal vs renta declarada", "Tiempo de llenado anormalmente bajo").
+
+### 6.3. Consistencia Eventual y Tolerancia a Fallos
+Para evitar problemas de "doble escritura" (si falla la red entre el motor ML de Python y la persistencia en Supabase/PostgreSQL), se optó por un modelo de **Consistencia Eventual**:
+1. El backend guarda los atributos estadísticos brutos (`fraud_score_probability` y `shap_top_factors`) en la tabla `evaluations`.
+2. Un script barrendero en Base de Datos (`sweep_fraudulent_leads()`) procesa periódicamente a todos los leads que tengan un umbral mayor al 80% de probabilidad de fraude y actualiza el estado del perfil automáticamente a `reliability_status = 'sospechoso'`. 
+3. De esta forma la BD es autónoma para actualizar los estados de los leads que hayan quedado huérfanos por cortes de red.
+
+### 6.4. Separación de Roles (E3 y E4 implementadas)
+- **Ejecutivos (`DashboardLeads.jsx`):** Se les aplicó un filtro estricto. Los leads con estado `sospechoso` o `en_revision` son ocultados por defecto de sus bandejas, evitando la pérdida de tiempo comercial.
+- **Administradores (`AdminReportedLeads.jsx`):** Se creó una visualización dedicada bajo un RPC `get_reported_leads_for_admin`. El administrador ve un bloque de alerta roja (Alert badge) detallando exactamente la probabilidad y los factores SHAP encontrados. Tiene potestad para decidir Reactivar (devuelve el lead a los ejecutivos) o Silenciar/Descartar permanentemente.
+
+---
+
+## 7. Trabajo a Futuro (TODO)
+
+### Regla de Negocio para Avances en el Plan de Mejora
+Actualmente, el motor predictivo y la detección pesada de inconsistencias se centra estrictamente en la puerta de entrada (evaluación inicial), pues es el vector principal de bots y ataques masivos.
+Si a futuro se requiere auditar los saltos irreales de avance ingresados por un usuario humano directamente en su **Plan de Mejora** (ej. reportar que ahorró 50 millones en 1 día), se aconseja **no sobrecargar el motor ML principal**.
+
+**Solución propuesta:**
+Implementar una **Regla de Negocio Simple (Hard Rule) a nivel de Base de Datos o Endpoint** que verifique:
+- `SI (monto_ahorrado_nuevo - monto_ahorrado_anterior) > (renta_mensual_declarada * factor_limite)`
+- Entonces desencadenar un trigger o alerta que mande el caso a `en_revision` por "Avance Inconsistente en Plan de Mejora".
