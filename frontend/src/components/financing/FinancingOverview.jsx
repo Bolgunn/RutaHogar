@@ -1,0 +1,81 @@
+import React from "react";
+import FieldTooltip from "../FieldTooltip";
+import SectionNumber from "./SectionNumber";
+
+const money = (value) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0));
+const uf = (clp, value) => Number(value) > 0 ? Number(clp || 0) / Number(value) : 0;
+const percentage = (value, total) => Number(total) > 0 ? (Number(value || 0) / Number(total)) * 100 : 0;
+const ufLabel = (value) => `${Number(value || 0).toLocaleString("es-CL", { maximumFractionDigits: 1 })} UF`;
+const oneDecimal = (value) => Math.round(Number(value || 0) * 10) / 10;
+const preventWheel = (event) => event.currentTarget.blur();
+const inputNumber = (event) => event.target.value === "" ? "" : Number(event.target.value);
+
+function SummaryCard({ title, children, icon, tone = "blue" }) {
+  return <article className={`financing-summary-card is-${tone}`}><header><span className="financing-summary-card__icon"><i className={`ti ${icon}`} aria-hidden="true" /></span><small>{title}</small></header>{children}</article>;
+}
+
+export default function FinancingOverview({ draft, result, ufReference }) {
+  if (!draft || !result) return null;
+  const ufValue = Number(ufReference?.uf_value_clp) || 0;
+  const price = Number(result.precio_clp) || 0;
+  const pie = Number(result.pie_clp) || 0;
+  const credit = Number(result.credito_clp) || 0;
+  const benefit = result.benefit || {};
+  const isRange = benefit.amount_kind === "range" && Array.isArray(benefit.estimated_range_clp);
+  const hasSelectedRange = benefit.amount_kind === "range_selected";
+  const knownBenefit = !isRange && Number(result.subsidio_principal_clp) > 0;
+  const rangeAmounts = benefit.range_reference_clp || benefit.estimated_range_clp;
+  const benefitUfRange = Array.isArray(rangeAmounts) ? rangeAmounts.map((amount) => uf(amount, ufValue)) : null;
+  const segments = [
+    { id: "pie", label: "Pie", amount: pie, tone: "pie" },
+    ...(knownBenefit ? [{ id: "benefit", label: "Beneficio", amount: Number(result.subsidio_principal_clp), tone: "benefit" }] : []),
+    { id: "credit", label: "Crédito referencial", amount: credit, tone: "credit" },
+  ].filter((segment) => segment.amount > 0);
+
+  return <section className="financing-overview" aria-label="Resumen del financiamiento">
+    <div className="financing-summary-grid">
+      <SummaryCard title="Precio de vivienda" icon="ti-home"><strong>{ufLabel(result.precio_uf)}</strong><span>{money(price)}</span></SummaryCard>
+      <SummaryCard title="Tu pie" icon="ti-wallet" tone="gold"><strong>{ufLabel(uf(pie, ufValue))}</strong><span>{money(pie)} · {percentage(pie, price).toFixed(2)}% del valor</span></SummaryCard>
+      <SummaryCard title="Subsidio / beneficio" icon="ti-gift" tone="blue">{isRange ? <><strong>Rango referencial</strong><span>{ufLabel(benefitUfRange[0])} a {ufLabel(benefitUfRange[1])}</span></> : hasSelectedRange ? <><strong>Monto de referencia</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · dentro del rango</span></> : knownBenefit ? <><strong>{benefit.amount_kind === "base" ? "Aporte base" : "Monto informado"}</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · {money(result.subsidio_principal_clp)}</span></> : <><strong>Sin subsidio</strong><span>No se descuenta del financiamiento</span></>}</SummaryCard>
+      <SummaryCard title="Crédito referencial" icon="ti-file-invoice" tone="navy"><strong>{ufLabel(uf(credit, ufValue))}</strong><span>{money(credit)}</span></SummaryCard>
+      <SummaryCard title="Dividendo estimado" icon="ti-calendar-month"><strong>{money(result.dividendo_clp)} / mes</strong><span>Estimación referencial</span></SummaryCard>
+    </div>
+
+    <section className="financing-composition-visual" aria-label="Composición del financiamiento">
+      <header><h3>Composición del financiamiento</h3><span>Total: {ufLabel(result.precio_uf)}</span></header>
+      <div className="financing-composition-bar" role="img" aria-label={segments.map((segment) => `${segment.label} ${money(segment.amount)}`).join(", ")}>
+        {segments.map((segment) => <span key={segment.id} className={`is-${segment.tone}`} style={{ width: `${percentage(segment.amount, price)}%` }}>{percentage(segment.amount, price) >= 12 ? `${percentage(segment.amount, price).toFixed(0)}%` : ""}</span>)}
+      </div>
+      <div className="financing-composition-legend">{segments.map((segment) => <span key={segment.id}><i className={`is-${segment.tone}`} aria-hidden="true" />{segment.label} <strong>{ufLabel(uf(segment.amount, ufValue))}</strong></span>)}</div>
+      {isRange ? <p className="financing-composition-range">Subsidio referencial: {ufLabel(benefitUfRange[0])} a {ufLabel(benefitUfRange[1])}. Elige un monto de referencia para incorporarlo a esta composición.</p> : hasSelectedRange ? <p className="financing-composition-range">Monto de referencia seleccionado dentro del rango: {ufLabel(benefitUfRange[0])} a {ufLabel(benefitUfRange[1])}. No constituye una asignación oficial.</p> : null}
+    </section>
+
+  </section>;
+}
+
+export function FinancingAdjustments({ draft, result, ufReference, terms = [], onPieChange, onCreditChange, onRangeAmountChange, onUpdate }) {
+  if (!draft || !result) return null;
+  const ufValue = Number(ufReference?.uf_value_clp) || 0;
+  const price = Number(result.precio_clp) || 0;
+  const pie = Number(result.pie_clp) || 0;
+  const credit = Number(result.credito_clp) || 0;
+  const benefit = result.benefit || {};
+  const isRange = benefit.amount_kind === "range" && Array.isArray(benefit.estimated_range_clp);
+  const hasSelectedRange = benefit.amount_kind === "range_selected";
+  const complementaryEnabled = draft.usar_renta_complementaria !== false;
+
+  return <section className="financing-adjustments" aria-labelledby="financing-adjustments-title">
+      <header><SectionNumber number="3" /><div><h3 id="financing-adjustments-title">Ajusta tus supuestos</h3><p>Modifica los valores para ver cómo cambia tu financiamiento.</p></div></header>
+      <div className="financing-adjustments__grid">
+        <label><span>Pie en UF <FieldTooltip text="Monto que aportarás inicialmente. Al modificarlo, RutaHogar recalcula el crédito referencial." /></span><input type="number" min="0" step="0.1" value={oneDecimal(uf(pie, ufValue))} onWheel={preventWheel} onChange={(event) => onPieChange(Number(event.target.value) * ufValue)} /></label>
+        <label><span>Pie (% del valor) <FieldTooltip text="Proporción del precio de vivienda que cubrirás con tu aporte inicial." /></span><input type="number" min="0" max="100" step="0.01" value={percentage(pie, price).toFixed(2)} onWheel={preventWheel} onChange={(event) => onPieChange((Number(event.target.value) / 100) * price)} /></label>
+        {(isRange || hasSelectedRange) ? <label><span>Monto de referencia del subsidio <FieldTooltip text="Puedes incluir uno de los límites revisados del rango solo para explorar su impacto. No es un monto oficial asignado." /></span><select value={hasSelectedRange ? String(benefit.selected_range_amount_clp) : ""} onChange={(event) => onRangeAmountChange(event.target.value === "" ? null : Number(event.target.value))}><option value="">No incorporar a la composición</option>{benefit.range_reference_clp || benefit.estimated_range_clp ? [...new Set((benefit.range_reference_clp || benefit.estimated_range_clp).map(Number))].sort((left, right) => left - right).map((amount, index, values) => <option key={amount} value={amount}>{index === 0 ? "Límite inferior" : index === values.length - 1 ? "Límite superior" : "Monto revisado"} · {ufLabel(uf(amount, ufValue))}</option>) : null}</select></label> : null}
+        <label><span>Crédito referencial (CLP) <FieldTooltip text="Monto que necesitarías financiar después de tu pie y de un beneficio con monto definido. No es una aprobación bancaria." /></span><input type="number" min="0" value={credit} onWheel={preventWheel} onChange={(event) => onCreditChange(Number(event.target.value))} /></label>
+        <label><span>Plazo <FieldTooltip text="Tiempo en años para pagar el crédito. Las opciones respetan el límite de edad de esta simulación." /></span><select value={draft.plazo_anios} onChange={(event) => onUpdate("plazo_anios", Number(event.target.value))}>{terms.map((term) => <option key={term} value={term}>{term} años</option>)}</select></label>
+        <label><span>Tasa referencial anual (%) <FieldTooltip text="Tasa anual usada solo para estimar el dividendo mensual. La tasa final depende de la evaluación de la entidad financiera." /></span><input type="number" min="0" step="0.01" value={(Number(draft.tasa_anual || 0) * 100).toFixed(2)} onWheel={preventWheel} onChange={(event) => onUpdate("tasa_anual", Number(event.target.value) / 100)} /></label>
+        <label><span>Ingreso mensual <FieldTooltip text="Ingreso líquido mensual considerado para revisar la carga del dividendo en este escenario." /></span><input type="number" min="0" value={draft.renta_propia_clp} onWheel={preventWheel} onChange={(event) => onUpdate("renta_propia_clp", inputNumber(event))} /></label>
+        <label className="financing-adjustments__toggle"><input type="checkbox" checked={complementaryEnabled} onChange={(event) => onUpdate("usar_renta_complementaria", event.target.checked)} />Complementar renta <FieldTooltip text="Incluye otro ingreso mensual en la referencia. No representa una evaluación crediticia de otra persona." /></label>
+        {complementaryEnabled ? <label><span>Renta complementaria <FieldTooltip text="Monto mensual que se suma al ingreso considerado solo mientras mantengas activada la complementación de renta." /></span><input type="number" min="0" value={draft.renta_complementaria_clp ?? ""} onWheel={preventWheel} onChange={(event) => onUpdate("renta_complementaria_clp", inputNumber(event))} /></label> : null}
+      </div>
+    </section>;
+}

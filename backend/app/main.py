@@ -4,8 +4,9 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
-from .market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot
+from .market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot, read_persisted_uf_history
 from .market_data.repository import MarketRepositoryError
+from .housing_benefit_catalog import HousingBenefitCatalogueError, HousingBenefitCatalogueRepository
 from .scoring import calculate_score
 from .ai import (
     generate_commercial_guidance,
@@ -329,6 +330,39 @@ async def market_reference_endpoint():
             "series": uf_source["series"],
         },
     }
+
+
+@app.get("/market-reference-history")
+async def market_reference_history_endpoint():
+    try:
+        observations = await asyncio.to_thread(read_persisted_uf_history, repository_from_environment())
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"observations": observations}
+
+
+def housing_benefit_catalogue_from_environment() -> HousingBenefitCatalogueRepository:
+    secret = os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    return HousingBenefitCatalogueRepository(os.getenv("SUPABASE_URL", ""), secret)
+
+
+def complete_housing_benefit_catalogue(catalogue: dict | None) -> bool:
+    entries = catalogue.get("entries") if isinstance(catalogue, dict) else None
+    if not isinstance(entries, list):
+        return False
+    primary = {entry.get("identifier"): entry for entry in entries if isinstance(entry, dict)}
+    return all(isinstance(primary.get(identifier, {}).get("value", {}).get("amount_clp"), (int, float)) and primary[identifier]["value"]["amount_clp"] > 0 for identifier in ("DS1", "DS49"))
+
+
+@app.get("/housing-benefit-catalog")
+async def housing_benefit_catalog_endpoint():
+    try:
+        catalogue = await asyncio.to_thread(housing_benefit_catalogue_from_environment().current_published)
+    except HousingBenefitCatalogueError as exc:
+        raise HTTPException(status_code=503, detail="No fue posible leer el catÃ¡logo oficial revisado.") from exc
+    if not complete_housing_benefit_catalogue(catalogue):
+        raise HTTPException(status_code=503, detail="No hay un catÃ¡logo oficial revisado disponible.")
+    return {"version": catalogue["version"], "published_at": catalogue.get("published_at"), "entries": catalogue["entries"]}
 
 
 class ExplainRequest(BaseModel):

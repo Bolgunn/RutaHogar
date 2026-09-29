@@ -44,6 +44,16 @@ class MarketSnapshotRepository:
             raise MarketRepositoryError("market snapshot storage returned an invalid response")
         return rows
 
+    def list_uf_history(self):
+        query = urlencode({
+            "select": "id,snapshot,effective_date,fetched_at",
+            "order": "effective_date.asc,fetched_at.asc,id.asc",
+        })
+        rows = self.transport("GET", f"{self.base_url}/rest/v1/market_snapshots?{query}")
+        if not isinstance(rows, list):
+            raise MarketRepositoryError("market snapshot storage returned an invalid response")
+        return rows
+
     def insert(self, snapshot: dict):
         row = {
             "snapshot": snapshot,

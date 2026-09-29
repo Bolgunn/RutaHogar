@@ -151,7 +151,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
       onStartEvaluation?.();
       return;
     }
-    onNavigate?.("simulation", { projectId: project.id });
+    onNavigate?.("simulation", { projectId: project.id, simulationSection: "financing" });
   };
 
   return <section className="section-block simulation-panel projects-catalog-page">

@@ -1,0 +1,19 @@
+{
+  "version": "official-v1",
+  "status": "draft",
+  "official_source_metadata": {
+    "sources": [
+      { "url": "https://www.minvu.gob.cl/beneficio/subsidio-para-comprar-una-vivienda-d-s-1/", "label": "MINVU DS1" },
+      { "url": "https://www.minvu.gob.cl/beneficio/subsidio-para-comprar-una-vivienda-d-s-49/", "label": "MINVU DS49" }
+    ]
+  },
+  "source_checksum": "replace-with-reviewed-source-checksum-before-publishing",
+  "effective_from": "2026-09-27",
+  "entries": [
+    { "identifier": "DS1", "value": { "amount_clp": 0 }, "eligibility": {} },
+    { "identifier": "DS49", "value": { "amount_clp": 0 }, "eligibility": {} },
+    { "identifier": "FOGAES", "value": {}, "eligibility": {} },
+    { "identifier": "PADHI", "value": {}, "eligibility": {} },
+    { "identifier": "Leasing", "value": {}, "eligibility": {} }
+  ]
+}
