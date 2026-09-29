@@ -260,15 +260,8 @@ Para evitar problemas de "doble escritura" (si falla la red entre el motor ML de
 - **Ejecutivos (`DashboardLeads.jsx`):** Se les aplicó un filtro estricto. Los leads con estado `sospechoso` o `en_revision` son ocultados por defecto de sus bandejas, evitando la pérdida de tiempo comercial.
 - **Administradores (`AdminReportedLeads.jsx`):** Se creó una visualización dedicada bajo un RPC `get_reported_leads_for_admin`. El administrador ve un bloque de alerta roja (Alert badge) detallando exactamente la probabilidad y los factores SHAP encontrados. Tiene potestad para decidir Reactivar (devuelve el lead a los ejecutivos) o Silenciar/Descartar permanentemente.
 
----
-
-## 7. Trabajo a Futuro (TODO)
-
-### Regla de Negocio para Avances en el Plan de Mejora
-Actualmente, el motor predictivo y la detección pesada de inconsistencias se centra estrictamente en la puerta de entrada (evaluación inicial), pues es el vector principal de bots y ataques masivos.
-Si a futuro se requiere auditar los saltos irreales de avance ingresados por un usuario humano directamente en su **Plan de Mejora** (ej. reportar que ahorró 50 millones en 1 día), se aconseja **no sobrecargar el motor ML principal**.
-
-**Solución propuesta:**
-Implementar una **Regla de Negocio Simple (Hard Rule) a nivel de Base de Datos o Endpoint** que verifique:
-- `SI (monto_ahorrado_nuevo - monto_ahorrado_anterior) > (renta_mensual_declarada * factor_limite)`
-- Entonces desencadenar un trigger o alerta que mande el caso a `en_revision` por "Avance Inconsistente en Plan de Mejora".
+### 6.5. Regla de Negocio para Avances en el Plan de Mejora (Hard Rule en BD)
+Para proteger el **Plan de Mejora** de saltos irreales (ej. un usuario reportando que ahorró 50 millones en 1 día) sin sobrecargar el motor ML principal de evaluaciones, se implementó una **Regla de Negocio Simple (Hard Rule)** a nivel de Base de Datos.
+- Se agregó un trigger (`check_housing_plan_progress`) en la tabla `evaluations`.
+- **Condición:** `SI (monto_ahorrado_nuevo - monto_ahorrado_anterior) > (renta_mensual_declarada * 3)`.
+- **Acción:** El trigger mueve al lead a estado `en_revision` e inyecta un 100% de probabilidad de fraude con el factor "Avance irreal vs renta mensual en Plan de Mejora" para alertar al Administrador.
