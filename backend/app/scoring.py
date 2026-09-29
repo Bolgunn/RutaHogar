@@ -145,6 +145,18 @@ def calculate_score(data: Dict, include_ai: bool = True, market_snapshot: dict |
         "project_fit": project_fit, "commercial_priority_detail": priority, "structured_improvement_plan": structured_plan,
         "housing_benefits": detect_housing_benefits(data, objective_indicators),
     }
+    
+    # -------------------------------------------------------------
+    # ML FRAUD ADAPTIVO (XGBoost + SHAP)
+    # -------------------------------------------------------------
+    from .ml_fraud import predict_fraud_xgboost
+    
+    fraud_prob, shap_factors = predict_fraud_xgboost(data)
+            
+    # Asignamos al payload de salida
+    result["fraud_score_probability"] = fraud_prob
+    result["shap_top_factors"] = shap_factors
+
     result.update(build_deterministic_explanations(result))
     if include_ai:
         shared = dict(classification=classification, score=adjusted_score, positive_indicators=positives, risks=risks)
