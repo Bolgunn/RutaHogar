@@ -1,6 +1,6 @@
-# HU 12 - Sistema de derivación e integración comercial
+# HU 12 - Sistema de Derivación e Integración Comercial
 
-> **🗓 Planificada - Sprint 2.** Replica en el CRM de la inmobiliaria los leads calificados de alta prioridad, y los mantiene actualizados cuando cambia su score.
+> **🗓 Planificada - Sprint 2.** Envía al CRM **simulado** los leads evaluados con su información relevante y sus niveles de prioridad, y mantiene el registro actualizado cuando algo cambia.
 
 ---
 
@@ -9,8 +9,8 @@
 | Campo | Valor |
 | :---- | :---- |
 | **Categoría** | Importante |
-| **Puntos de Historia** | 8 |
-| **Actor** | Funcionario de inmobiliaria |
+| **Puntos de Historia** | 5 |
+| **Actor** | Ejecutivo comercial · Administrador inmobiliario |
 | **Sprint** | Sprint 2 |
 | **Estado** | 🗓 Planificada |
 
@@ -18,25 +18,27 @@
 
 ## Historia de usuario
 
-> **Como** funcionario de una inmobiliaria, **quiero** ingresar usuarios calificados desde la aplicación al CRM de la inmobiliaria, **para** poder darles una gestión priorizada dentro del flujo de venta del proyecto inmobiliario.
+> **Como** ejecutivo/Administrador inmobiliario, **quiero** mandar en un CRM simulado los leads evaluados junto con su información relevante y sus niveles de prioridad, **para** gestionarlos dentro del flujo comercial y saber cuáles requieren mayor atención.
 
 ---
 
 ## Criterios de aceptación
 
-### E1 - Derivación automática de leads de alta prioridad al CRM
+### E1 - Derivación de leads evaluados
 
-**Dado** un usuario ingresado en la aplicación, **cuando** este termine de ser calificado y sea calificado como de alta prioridad, **entonces** el sistema debe replicar, inmediatamente o eventualmente, la información del usuario dentro del CRM.
+**Dado** que un usuario obtuvo un score, **cuando** corresponda ejecutar la sincronización con el CRM, **entonces** el sistema debe enviar al CRM simulado la información relevante del lead, independientemente de su clasificación.
 
-### E2 - Actualización del lead en el CRM ante cambios de score o prioridad
+### E2 - Información del lead y proyecto objetivo
 
-**Dado** un usuario ingresado en la aplicación, **cuando** ocurra una actualización en el score de nuestro usuario y este pase a estar calificado o se aumente su prioridad, **entonces** el sistema debe mandar una request al CRM para que actualice los datos del usuario.
+**Dado** que un lead será enviado al CRM simulado, **cuando** se construya la información de integración, **entonces** se deben incluir los datos necesarios para su gestión comercial, su proyecto objetivo y los resultados de su evaluación asociados a dicho proyecto.
 
-### E3 - Retención interna de leads no prioritarios
+### E3 - Priorización del lead
 
-**Dado** un usuario ingresado en la aplicación, **cuando** este termine de ser calificado y no se considere de alta prioridad, **entonces** la aplicación no debe enviar su perfil al CRM y solo debe manejar sus datos dentro de la aplicación hasta que su calificación se actualice.
+**Dado** que un lead posee una evaluación general y un proyecto objetivo, **cuando** sea enviado al CRM simulado, **entonces** deben registrarse separadamente su prioridad general, compatibilidad por capacidad de compra con el proyecto objetivo, su compatibilidad por afinidad con el proyecto objetivo.
 
----
+### E4 - Actualización periódica en el CRM
+
+**Dado** que un lead ya existe en el CRM simulado, **cuando** cambie su score, proyecto objetivo, compatibilidad por capacidad de compra, compatibilidad por afinidad o información comercial relevante, **entonces** en la siguiente sincronización el sistema debe actualizar el registro existente en el CRM simulado.
 
 ## Notas
 

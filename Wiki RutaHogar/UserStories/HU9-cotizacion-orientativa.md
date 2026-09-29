@@ -46,7 +46,7 @@
 
 - Depende del catálogo de [[HU7-catalogo-de-proyectos|HU 7]] para saber qué proyectos existen.
 - La lógica de compatibilidad vive en `backend/app/scoring_engine/project_fit.py`; la brecha principal de E2 se apoya en `blockers.py`.
-- El ranking de alternativas ordenadas por brecha es [[HU19-ranking-proyectos-brecha|HU 19]].
+- El ranking de alternativas ordenadas por brecha es [[HU30-ranking-proyectos-brecha|HU 30]].
 
 ---
 

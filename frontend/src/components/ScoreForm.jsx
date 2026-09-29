@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
@@ -10,6 +10,10 @@ import {
 } from "../lib/mortgage";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
+import {
+  trackPrequalificationCompleted,
+  trackPrequalificationStarted,
+} from "../lib/analytics";
 
 const FALLBACK_UF_VALUE_CLP = 40695;
 const DEBUG_SCORE_REQUESTS =
@@ -349,6 +353,7 @@ export default function ScoreForm({
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
   const [incomeTipVisible, setIncomeTipVisible] = useState(true);
+  const prequalificationStartedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState(() => {
     const draftStep = Number(initialDraft?.currentStep);
     if (Number.isFinite(draftStep) && draftStep >= 1 && draftStep <= 4) return draftStep;
@@ -362,6 +367,16 @@ export default function ScoreForm({
       day: "numeric",
     })
     : null;
+
+  const trackPrequalificationStart = (step) => {
+    if (prequalificationStartedRef.current) return;
+    prequalificationStartedRef.current = true;
+    trackPrequalificationStarted({
+      flowType: isAnon ? "anonymous" : "authenticated",
+      entryPoint: isAnon ? "anonymous_prequalification" : "prequalification",
+      formStep: `step_${step}`,
+    });
+  };
 
   useEffect(() => {
     onDraftChange?.({
@@ -543,10 +558,12 @@ export default function ScoreForm({
   const handleBirthFieldChange = (e) => {
     const { name, value } = e.target;
     const maxLen = name === "birth_year" ? 4 : 2;
+    trackPrequalificationStart(currentStep);
     setBirthFields((prev) => ({ ...prev, [name]: onlyDigits(value, maxLen) }));
   };
 
   const handleBirthFieldSelect = (name, value) => {
+    trackPrequalificationStart(currentStep);
     setBirthFields((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -561,6 +578,7 @@ export default function ScoreForm({
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    trackPrequalificationStart(currentStep);
 
     // Campos de montos enteros: autoformatear con puntos de miles
     if (integerFormattedFields.has(name)) {
@@ -969,6 +987,11 @@ export default function ScoreForm({
         timeout: 60000,
       });
 
+      trackPrequalificationCompleted({
+        flowType: isAnon ? "anonymous" : "authenticated",
+        entryPoint: isAnon ? "anonymous_prequalification" : "prequalification",
+        hasComplementaryIncome: Boolean(form.complemento_renta),
+      });
       onResult(res.data, payload);
     } catch (err) {
       const calledUrl = scoreUrl || `${resolveApiBase()}/score`;
@@ -1035,6 +1058,7 @@ export default function ScoreForm({
 
   const goNext = () => {
     if (currentStep < totalSteps) {
+      trackPrequalificationStart(currentStep);
       setError(null);
       setCurrentStep((s) => s + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });

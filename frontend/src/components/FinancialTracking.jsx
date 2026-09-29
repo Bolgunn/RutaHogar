@@ -152,26 +152,16 @@ export default function FinancialTracking({
   onOpenHousingPlan,
   onLogScoringEvent,
   onOpenMilestoneRegistration,
+  onOpenProgress,
   onNavigate,
   successMessage,
 }) {
-  const [planType, setPlanType] = useState(() => {
-    return evaluation?.plan_type || sessionStorage.getItem("scoreleads_selected_plan_type") || null;
-  });
+  const [planType, setPlanType] = useState(() => evaluation?.plan_type || null);
+  const [acceptingPlan, setAcceptingPlan] = useState(false);
 
   useEffect(() => {
-    if (evaluation?.plan_type && evaluation.plan_type !== planType) {
-      setPlanType(evaluation.plan_type);
-    }
-  }, [evaluation?.plan_type]);
-
-  useEffect(() => {
-    if (planType) {
-      sessionStorage.setItem("scoreleads_selected_plan_type", planType);
-    } else {
-      sessionStorage.removeItem("scoreleads_selected_plan_type");
-    }
-  }, [planType]);
+    setPlanType(evaluation?.plan_type || null);
+  }, [evaluation?.id, evaluation?.plan_type]);
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
@@ -183,6 +173,23 @@ export default function FinancialTracking({
 
   const [filterPriority, setFilterPriority] = useState("Todos");
   const [filterCategory, setFilterCategory] = useState("Todos");
+
+  const choosePlan = async (nextPlanType) => {
+    if (!onAcceptPlan || acceptingPlan) return;
+    setAcceptingPlan(true);
+    try {
+      if (await onAcceptPlan(nextPlanType)) setPlanType(nextPlanType);
+    } finally {
+      setAcceptingPlan(false);
+    }
+  };
+
+  const progressButton = onOpenProgress ? (
+    <button type="button" className="primary-button" onClick={onOpenProgress}>
+      <i className="ti ti-chart-line" aria-hidden="true" />
+      Mi progreso
+    </button>
+  ) : null;
 
   // Plazo de compra del contexto inicial (limite superior)
   const baseDesiredMonths = useMemo(() => {
@@ -197,9 +204,12 @@ export default function FinancialTracking({
   if (!tracking) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Plan de Mejora</span>
-          <h1>Mi plan de mejora</h1>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Plan de Mejora</span>
+            <h1>Mi plan de mejora</h1>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
         <div className="empty-state">
           <strong>Aún no tienes una precalificación.</strong>
@@ -216,9 +226,12 @@ export default function FinancialTracking({
   if (indicators.ahorro_mensual_acelerado === undefined) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Plan de Mejora</span>
-          <h1>Mi plan de mejora</h1>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Plan de Mejora</span>
+            <h1>Mi plan de mejora</h1>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
         <div className="empty-state">
           <strong>Vuelve a precalificar para ver tu plan actualizado.</strong>
@@ -311,10 +324,13 @@ export default function FinancialTracking({
   if (!planType) {
     return (
       <section className="section-block tracking-panel">
-        <div className="section-heading">
-          <span className="eyebrow">Configuración Inicial</span>
-          <h1>Selecciona tu Plan de Mejora</h1>
-          <p>Revisa las ventajas y desventajas de cada perfil y elige el que mejor se ajuste a tus capacidades.</p>
+        <div className="section-heading tracking-page-head">
+          <div>
+            <span className="eyebrow">Configuración Inicial</span>
+            <h1>Selecciona tu Plan de Mejora</h1>
+            <p>Revisa las ventajas y desventajas de cada perfil y elige el que mejor se ajuste a tus capacidades.</p>
+          </div>
+          <div className="tracking-page-head__actions">{progressButton}</div>
         </div>
 
         {computedMesesAcelerado > 12 && (
@@ -343,12 +359,10 @@ export default function FinancialTracking({
               type="button"
               className="primary-button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
-              onClick={() => {
-                setPlanType("acelerado");
-                if (onAcceptPlan) onAcceptPlan("acelerado");
-              }}
+              onClick={() => choosePlan("acelerado")}
+              disabled={acceptingPlan}
             >
-              Elegir Plan Acelerado
+              {acceptingPlan ? "Activando plan..." : "Elegir Plan Acelerado"}
             </button>
           </div>
 
@@ -368,12 +382,10 @@ export default function FinancialTracking({
               type="button"
               className="primary-button"
               style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
-              onClick={() => {
-                setPlanType("conservador");
-                if (onAcceptPlan) onAcceptPlan("conservador");
-              }}
+              onClick={() => choosePlan("conservador")}
+              disabled={acceptingPlan}
             >
-              Elegir Plan Conservador
+              {acceptingPlan ? "Activando plan..." : "Elegir Plan Conservador"}
             </button>
           </div>
         </div>
@@ -398,6 +410,7 @@ export default function FinancialTracking({
           <p>Una lectura referencial de las condiciones que conviene preparar antes de una evaluación bancaria.</p>
         </div>
         <div className="tracking-page-head__actions">
+          {progressButton}
           {onNavigate && (
             <button
               type="button"
@@ -831,7 +844,7 @@ export default function FinancialTracking({
 
 
        {/* Acceso único al registro de avances. */}
-       <div className="tracking-goals-toolbar">
+       {onOpenMilestoneRegistration && <div className="tracking-goals-toolbar">
          <button
            className="primary-button tracking-goals-register"
            type="button"
@@ -840,7 +853,7 @@ export default function FinancialTracking({
            <i className="ti ti-chart-line" aria-hidden="true" />
            Registrar avances
          </button>
-       </div>
+       </div>}
 
       {filteredGoals.length === 0 ? (
         <div className="empty-state">

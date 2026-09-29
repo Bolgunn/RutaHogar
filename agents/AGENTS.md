@@ -94,6 +94,7 @@ FEEDBACK_FROM_EMAIL=RutaHogar <onboarding@resend.dev>
 | `agents/frontend.md` | Actualizado (páginas, componentes, servicios) |
 | `agents/devops.md` | Actualizado (CI edge functions, tests) |
 | `agents/qa.md` | Actualizado |
+| `agents/ANTIGRAVITY_HU12_DERIVACION_COMERCIAL.md` | Guía de ejecución para Antigravity (Sprint 2 / HU 12) |
 
 ## Guardrails
 
