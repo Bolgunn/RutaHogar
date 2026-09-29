@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { annotateEvaluation } from "./trackingService";
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
 const SCORING_HISTORY_KEY = "RutaHogar_scoring_history";
@@ -85,6 +86,42 @@ function normalizeScoringHistoryRow(row) {
   };
 }
 
+export function mergeEvaluationEvents(rows, annotations) {
+  const byEvaluation = new Map();
+  for (const annotation of annotations || []) {
+    if (annotation.kind !== "milestone") continue;
+    const events = byEvaluation.get(annotation.evaluation_id) || [];
+    events.push({
+      ...(annotation.payload || {}),
+      at: annotation.effective_at,
+      event_id: annotation.event_id,
+    });
+    byEvaluation.set(annotation.evaluation_id, events);
+  }
+
+  return (rows || []).map((row) => ({
+    ...row,
+    events: [...(Array.isArray(row.events) ? row.events : []), ...(byEvaluation.get(row.evaluation_id) || [])]
+      .sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")) ||
+        String(a.event_id || "").localeCompare(String(b.event_id || ""))),
+  }));
+}
+
+async function withEvaluationEvents(rows) {
+  const evaluationIds = [...new Set((rows || []).map((row) => row.evaluation_id).filter(Boolean))];
+  if (!evaluationIds.length) return rows;
+  let query = supabase.from("evaluation_events").select("*");
+  query = evaluationIds.length === 1
+    ? query.eq("evaluation_id", evaluationIds[0])
+    : query.in("evaluation_id", evaluationIds);
+  const { data, error } = await query.order("recorded_at", { ascending: true });
+  if (error) {
+    logSupabaseError(error);
+    throw error;
+  }
+  return mergeEvaluationEvents(rows, data || []);
+}
+
 function buildScoringHistoryRow(userId, evaluationId, evaluationPayload) {
   const result = evaluationPayload.result || {};
   return {
@@ -134,7 +171,7 @@ export async function getScoringHistory(userId) {
     logSupabaseError(error);
     throw error;
   }
-  return (data || []).map(normalizeScoringHistoryRow);
+  return withEvaluationEvents((data || []).map(normalizeScoringHistoryRow));
 }
 
 export async function getScoringHistoryByEvaluation(evaluationId) {
@@ -152,80 +189,18 @@ export async function getScoringHistoryByEvaluation(evaluationId) {
     logSupabaseError(error);
     throw error;
   }
-  return (data || []).map(normalizeScoringHistoryRow);
-}
-
-function shouldSkipEvent(existingEvents, event) {
-  const events = Array.isArray(existingEvents) ? existingEvents : [];
-
-  if (event?.type === "no_viable_shown") {
-    return events.some((item) => item.type === "no_viable_shown");
-  }
-
-  if (event?.type === "simulate_success") {
-    const last = events[events.length - 1];
-    return last?.type === "simulate_success";
-  }
-
-  if (event?.type === "register_savings") {
-    const last = events[events.length - 1];
-    return last?.type === "register_savings" &&
-      Number(last.details?.total_registered) === Number(event.details?.total_registered);
-  }
-
-  return false;
+  return withEvaluationEvents((data || []).map(normalizeScoringHistoryRow));
 }
 
 /**
  * Registra un evento de trazabilidad en el ScoringRecord de la evaluación
  * (estado "No viable" presentado y acciones posteriores del usuario).
  */
-export async function appendScoringEvent(evaluationId, userId, event) {
+export async function appendScoringEvent(evaluationId, _userId, event) {
   if (!evaluationId) return null;
-  const payload = { type: event?.type, at: new Date().toISOString(), details: event?.details || {} };
-
-  if (!isSupabaseDataConfigured) {
-    const history = readLocalScoringHistory();
-    const target = history.find((item) => item.evaluation_id === evaluationId);
-    if (!target) return null;
-    const existingEvents = Array.isArray(target.events) ? target.events : [];
-    if (shouldSkipEvent(existingEvents, payload)) return target;
-
-    const next = history.map((item) =>
-      item.evaluation_id === evaluationId
-        ? { ...item, events: [...existingEvents, payload] }
-        : item,
-    );
-    writeLocalScoringHistory(next);
-    return next.find((item) => item.evaluation_id === evaluationId) || null;
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para registrar el evento.");
-
-  const { data: row, error: rowError } = await supabase
-    .from("scoring_history")
-    .select(scoringHistorySelectColumns)
-    .eq("evaluation_id", evaluationId)
-    .single();
-
-  if (rowError || !row) {
-    if (rowError) logSupabaseError(rowError);
-    return null;
-  }
-
-  const existingEvents = Array.isArray(row.events) ? row.events : [];
-  if (shouldSkipEvent(existingEvents, payload)) return row;
-
-  const { data, error } = await supabase
-    .from("scoring_history")
-    .update({ events: [...existingEvents, payload] })
-    .eq("evaluation_id", evaluationId)
-    .select(scoringHistorySelectColumns)
-    .single();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return data;
+  return annotateEvaluation(evaluationId, "milestone", {
+    type: event?.type, details: event?.details || {},
+  });
 }
 
 export { buildScoringHistoryRow, readLocalScoringHistory, writeLocalScoringHistory };
