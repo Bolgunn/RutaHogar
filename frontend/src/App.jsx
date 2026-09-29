@@ -59,6 +59,7 @@ import {
 } from "./services/profileService";
 import { formatScore } from "./utils/helpers";
 import { formatFormValue, plazoLabels } from "./constants";
+import { createPageViewDeduper, trackSignUp } from "./lib/analytics";
 
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
@@ -428,6 +429,10 @@ export default function App() {
   // Permite saber, al resolverse un guardado lento, si el resultado visible
   // sigue siendo el que originó ese guardado.
   const resultRef = useRef(null);
+  const pageViewTrackerRef = useRef(null);
+  if (!pageViewTrackerRef.current) {
+    pageViewTrackerRef.current = createPageViewDeduper();
+  }
   const navigationHistoryRef = useRef([]);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
@@ -570,6 +575,19 @@ export default function App() {
     if ((route.path && route.path !== pathname) || window.location.href.includes("#")) {
       updateBrowserPath(route.path || pathname, { replace: true });
     }
+  }, [pathname, profile?.role, anonOnboarding]);
+
+  useEffect(() => {
+    const route = resolveRouteForPath(pathname, profile, Boolean(anonOnboarding));
+    const normalizedCurrentPath = normalizePathname(pathname);
+    const finalPath = normalizePathname(route.path || pathname);
+
+    if (route.path && finalPath !== normalizedCurrentPath) return;
+    pageViewTrackerRef.current({
+      pagePath: finalPath,
+      pageLocation: window.location.href,
+      pageTitle: document.title,
+    });
   }, [pathname, profile?.role, anonOnboarding]);
 
   useEffect(() => {
@@ -866,6 +884,7 @@ export default function App() {
         birth_date,
         role: roles.user,
       });
+      trackSignUp({ method: "signup_offer" });
 
       const newProfile = nextAuth.profile;
       const newUserId = isUUID(newProfile?.id) ? newProfile.id

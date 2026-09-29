@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { trackCtaClick } from "../lib/analytics";
 
 export const landingStyles = `
 /* ═══ Landing Navy/Gold ═══ */
@@ -533,6 +534,9 @@ export default function LandingPage({
       ? "Continuar con mi perfil"
       : "Ir al dashboard";
 
+  const primaryActionDestination = !isLoggedIn || profile?.role === "usuario"
+    ? "/precalificacion"
+    : "/inicio";
   const [activeSection, setActiveSection] = useState("inicio");
   const [contactForm, setContactForm] = useState({ name: "", email: "", message: "" });
 
@@ -542,6 +546,16 @@ export default function LandingPage({
       el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
+
+  const handlePrimaryCta = (ctaLocation, ctaName) => {
+    trackCtaClick({
+      ctaLocation,
+      ctaName,
+      destination: primaryActionDestination,
+      authState: isLoggedIn ? "authenticated" : "anonymous",
+    });
+    onStart();
+  };
 
   useEffect(() => {
     const sectionIds = NAV_ITEMS.map((item) => item.id);
@@ -585,7 +599,7 @@ export default function LandingPage({
                 {item.label}
               </button>
             ))}
-            <button className="lp-nav-cta" type="button" onClick={onStart}>
+            <button className="lp-nav-cta" type="button" onClick={() => handlePrimaryCta("nav", "evaluate_profile")}>
               Evalúa tu perfil
             </button>
           </div>
@@ -606,7 +620,7 @@ export default function LandingPage({
                 Sin documentos, sin claves bancarias.
               </p>
               <div className="lp-hero-actions">
-                <button className="lp-hero-btn-primary" type="button" onClick={onStart}>
+                <button className="lp-hero-btn-primary" type="button" onClick={() => handlePrimaryCta("hero", "evaluate_profile")}>
                   {primaryActionLabel}
                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -650,7 +664,7 @@ export default function LandingPage({
               </div>
               <div className="lp-sc-footer">
                 <span className="lp-sc-footer-text">Ejemplo orientativo</span>
-                <button className="lp-sc-footer-link" type="button" onClick={onStart}>
+                <button className="lp-sc-footer-link" type="button" onClick={() => handlePrimaryCta("score_card", "calculate_my_score")}>
                   Calcular el mío
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
@@ -903,7 +917,7 @@ export default function LandingPage({
                 ? "Tu sesión está activa y puedes continuar con tu precalificación."
                 : "Es gratis, toma unos minutos y no necesitas crear una cuenta para empezar."}
             </p>
-            <button className="lp-cta-btn" type="button" onClick={onStart}>
+            <button className="lp-cta-btn" type="button" onClick={() => handlePrimaryCta("footer_cta", "evaluate_profile")}>
               {primaryActionLabel}
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
