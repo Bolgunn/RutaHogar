@@ -914,6 +914,18 @@ def calculate_score(data: Dict, include_ai: bool = True) -> Dict:
         "commercial_priority_detail": commercial_priority_detail,
         "structured_improvement_plan": structured_improvement_plan,
     }
+    
+    # -------------------------------------------------------------
+    # ML FRAUD ADAPTIVO (XGBoost + SHAP)
+    # -------------------------------------------------------------
+    from .ml_fraud import predict_fraud_xgboost
+    
+    fraud_prob, shap_factors = predict_fraud_xgboost(data)
+            
+    # Asignamos al payload de salida
+    result["fraud_score_probability"] = fraud_prob
+    result["shap_top_factors"] = shap_factors
+
     result.update(build_deterministic_explanations(result))
 
     if include_ai:

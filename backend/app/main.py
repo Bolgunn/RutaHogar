@@ -113,6 +113,8 @@ class ScoreRequest(BaseModel):
     valor_vehiculos: Optional[float] = 0.0
     valor_inmuebles: Optional[float] = 0.0
     patrimonio_unit: Optional[str] = "clp"
+    time_to_submit: Optional[int] = None
+    device_id_hash: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -345,6 +347,21 @@ async def explain_endpoint(payload: ExplainRequest):
         )
 
     return response
+
+
+@app.post("/score/retrain")
+async def retrain_model_endpoint():
+    """
+    Endpoint para reentrenar el modelo de Fraude (XGBoost) con datos históricos.
+    Ideal para agendar en un cronjob o activarlo desde un panel Admin cuando
+    se reactivan muchos leads.
+    """
+    from .ml_fraud import retrain_adaptive_model
+    try:
+        res = retrain_adaptive_model()
+        return res
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 # --- HU 9: interés en un proyecto ---
