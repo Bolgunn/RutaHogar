@@ -1409,6 +1409,7 @@ export default function App() {
           count={newHighLeadsCount}
           onClick={handleNotificationClick}
           onClose={handleDismissNotification}
+          className="notification-toast--high-score"
         />
 
         {page === "onboarding" && profile.role === roles.user ? (
