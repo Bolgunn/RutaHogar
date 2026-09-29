@@ -38,7 +38,7 @@ export default function SubsidyDashboard({ evaluation, benefitStates, selectedBe
   const detailCompatibility = detailSubsidy ? compatibilityById[detailSubsidy.id] : null;
   return <section className={`subsidy-dashboard ${detailOpen ? "" : "is-detail-closed"}`} aria-labelledby="subsidy-dashboard-title">
     <div className="subsidy-dashboard__main">
-      <header className="subsidy-dashboard__header"><SectionNumber number="2" /><div><span className="eyebrow">Subsidios</span><h2 id="subsidy-dashboard-title">Subsidios disponibles</h2><p>Revisa alternativas para tu perfil y abre el detalle antes de incluir una en tu simulación.</p></div></header>
+      <header className="subsidy-dashboard__header"><SectionNumber number="2" /><div><span className="eyebrow">Subsidios</span><h2 id="subsidy-dashboard-title">Subsidios disponibles</h2></div></header>
       <SubsidyFilters filter={filter} onFilterChange={setFilter} sort={sort} onSortChange={setSort} />
       <SubsidyList subsidies={subsidies} selectedId={selectedId} compatibilityById={compatibilityById} onSelect={selectDetail} />
     </div>

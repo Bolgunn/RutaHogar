@@ -14,7 +14,7 @@ function Metric({ icon, label, value, detail, tone }) {
   return <article className="scenario-status__metric"><span className="scenario-status__metric-icon"><i className={`ti ${icon}`} aria-hidden="true" /><b className={`is-${tone}`}><i className={`ti ${indicatorIcon}`} aria-hidden="true" /></b></span><div><small>{label}</small><strong>{value}</strong>{detail ? <span>{detail}</span> : null}</div></article>;
 }
 
-export default function ScenarioStatus({ result, ufReference, projection, hasProjectionHistory, draft, onProjectionChange, onDateChange }) {
+export default function ScenarioStatus({ result, ufReference }) {
   if (!result) return null;
   const status = statusConfig(result.financial_status);
   const price = Number(result.precio_clp) || 0;
@@ -25,6 +25,9 @@ export default function ScenarioStatus({ result, ufReference, projection, hasPro
   const income = Number(result.renta_total_clp) || 0;
   const burden = income > 0 ? (Number(result.dividendo_clp || 0) / income) * 100 : 0;
   const message = result.reasons?.[0] || status.message;
+  const explanation = result.financial_status === "Compatible"
+    ? `Con un pie de ${oneDecimal(piePercent)}%, financiarías ${money(result.credito_clp)}. El dividendo estimado es ${money(result.dividendo_clp)} y representa ${oneDecimal(burden)}% de los ingresos considerados; se mantiene dentro de los rangos referenciales de RutaHogar.`
+    : `Con un pie de ${oneDecimal(piePercent)}%, financiarías ${money(result.credito_clp)}. El dividendo estimado es ${money(result.dividendo_clp)} y representa ${oneDecimal(burden)}% de los ingresos considerados. ${result.reasons?.[0] || status.message}`;
 
   return <section className={`scenario-status scenario-status--${status.tone}`} aria-labelledby="scenario-status-title">
     <h3 id="scenario-status-title">Estado del escenario</h3>
@@ -35,10 +38,7 @@ export default function ScenarioStatus({ result, ufReference, projection, hasPro
         <Metric icon="ti-coins" label="Dividendo" value={money(result.dividendo_clp)} detail="/ mes" tone={status.tone} />
         <Metric icon="ti-chart-bar" label="Carga financiera" value={`${oneDecimal(burden)}%`} detail="de tus ingresos" tone={status.tone} />
       </div>
-      <div className="scenario-status__accordions">
-        <details><summary>Entender este resultado</summary><p>El resultado compara el dividendo y tus deudas declaradas con tus ingresos, y el crédito con el precio de la vivienda. Es una referencia para explorar, no una decisión bancaria.</p></details>
-        <details className="financing-projection"><summary>Explorar UF futura (opcional)</summary><p>Esto no estima cuándo podrás comprar ni garantiza un valor futuro.</p>{hasProjectionHistory ? <><label><input type="checkbox" checked={projection} onChange={(event) => onProjectionChange(event.target.checked)} /> Usar proyección referencial de UF</label>{projection ? <label>Fecha del escenario<input type="date" value={draft.fecha_compra || ""} onChange={(event) => onDateChange(event.target.value)} /></label> : null}</> : null}</details>
-      </div>
+      <div className="scenario-status__accordions"><details><summary>Entender este resultado</summary><p>{explanation}</p></details></div>
     </article>
   </section>;
 }
