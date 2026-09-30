@@ -99,6 +99,51 @@ def test_market_reference_returns_503_when_storage_has_no_valid_snapshot(monkeyp
     assert error.value.status_code == 503
 
 
+def test_local_fixture_serves_market_reference_and_score_without_supabase(monkeypatch):
+    import app.market_data.bcch as bcch
+    from app.market_data.service import resolve_market_snapshot_from_environment
+
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("MARKET_SNAPSHOT_ALLOW_FIXTURE", "true")
+    monkeypatch.setattr(main, "resolve_market_snapshot", resolve_market_snapshot_from_environment)
+    monkeypatch.setattr(bcch.BCChClient, "fetch_snapshot", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("endpoints must not call BCCh")))
+
+    reference = asyncio.run(main.market_reference_endpoint())
+    result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
+    used = result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]
+
+    assert reference["uf_value_clp"] == used["uf_value_clp"]
+    assert reference["snapshot_fetched_at"] == used["fetched_at"]
+    assert reference["effective_date"] == used["source"]["uf_value_clp"]["effective_date"]
+    assert reference["source"] == {
+        "provider": used["source"]["uf_value_clp"]["provider"],
+        "series": used["source"]["uf_value_clp"]["series"],
+    }
+    assert used["fixture_only"] is True
+
+
+def test_endpoints_fail_controlled_without_supabase_or_fixture_opt_in(monkeypatch):
+    from app.market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
+
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "MARKET_SNAPSHOT_ALLOW_FIXTURE"):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(MarketSnapshotUnavailable):
+        resolve_market_snapshot_from_environment()
+
+    def unavailable():
+        raise main.MarketSnapshotUnavailable("sin snapshot")
+
+    monkeypatch.setattr(main, "resolve_market_snapshot", unavailable)
+
+    with pytest.raises(HTTPException) as market_error:
+        asyncio.run(main.market_reference_endpoint())
+    with pytest.raises(HTTPException) as score_error:
+        asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
+
+    assert market_error.value.status_code == score_error.value.status_code == 503
+
 def test_omitted_term_is_accepted_and_uses_snapshot_fallback(monkeypatch):
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
     result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(plazo_credito_hipotecario=None))))

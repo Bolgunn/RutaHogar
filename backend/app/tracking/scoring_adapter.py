@@ -56,12 +56,11 @@ def market_snapshot_from_result(result):
 
 def resolve_tracking_market_snapshot():
     """I/O boundary for a new HU13 line; pure scoring never invokes this."""
-    from ..market_data.repository import MarketRepositoryError
-    from ..market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot
+    from ..market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
 
     try:
-        return resolve_latest_valid_snapshot(repository_from_environment())
-    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        return resolve_market_snapshot_from_environment()
+    except MarketSnapshotUnavailable as exc:
         raise TrackingError("market_data_unavailable") from exc
 
 

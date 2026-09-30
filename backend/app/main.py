@@ -4,7 +4,7 @@ from typing import Any, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
-from .market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot
+from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
 from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
 from .ai import (
@@ -311,7 +311,7 @@ async def score_endpoint(payload: ScoreRequest):
 
 def resolve_market_snapshot() -> dict:
     """Small injectable boundary used by the endpoint and its contract tests."""
-    return resolve_latest_valid_snapshot(repository_from_environment())
+    return resolve_market_snapshot_from_environment()
 
 
 @app.get("/market-reference")
