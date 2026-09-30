@@ -4,6 +4,7 @@ import { roleLabels, roles } from "../services/auth";
 const navByRole = {
   [roles.user]: [
     { id: "evaluate", label: "Precalificación" },
+    { id: "portal", label: "Portal RAG" },
     { id: "recommendations", label: "Recomendaciones" },
     { id: "simulation", label: "Simulación" },
     { id: "tracking", label: "Plan de Mejora" },

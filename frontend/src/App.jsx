@@ -20,6 +20,7 @@ import ScoreForm from "./components/ScoreForm";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
 import RegisterMilestone from "./components/RegisterMilestone";
+import PropertySearch from "./components/PropertySearch";
 import { acceptEvaluationPlan, createEvaluation, deleteEvaluation as deleteStoredEvaluation, getEvaluations, saveHousingPlanProgress } from "./services/evaluationService";
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan } from "./utils/text";
@@ -1477,6 +1478,12 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           initialArticleId={selectedAcademyArticleId}
+        />
+      ) : page === "portal" && profile.role === roles.user ? (
+        <PropertySearch
+          evaluation={currentEvaluation}
+          onStartEvaluation={startEvaluation}
+          onNavigate={navigateToPage}
         />
       ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
         <DashboardLeads evaluations={evaluations} />

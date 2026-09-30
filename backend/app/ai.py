@@ -9,21 +9,14 @@ except ImportError:
     Groq = None
  
 
-_env_path = Path(__file__).resolve().parent.parent / ".env"
-if _env_path.exists():
-    with open(_env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, _, value = line.partition("=")
-                os.environ.setdefault(key.strip(), value.strip())
- 
+from .config import get_groq_api_key
+
 def _ask_groq(prompt: str, max_tokens: int = 300) -> str:
     """Wrapper interno que llama a llama-3.1-8b-instant vía Groq."""
     if Groq is None:
         return "Resumen IA no disponible en entorno local."
 
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = get_groq_api_key()
     if not api_key:
         return "Resumen IA no disponible: GROQ_API_KEY no configurada."
 

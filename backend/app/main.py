@@ -1,9 +1,10 @@
 import os
-from typing import Any, Optional
+from typing import Any, List, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
 from .scoring import calculate_score
+from .properties_search import search_properties
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
 VALID_CONTINUITY_VALUES = {"menos_6_meses", "entre_6_y_12_meses", "entre_1_y_3_anios", "mas_3_anios"}
@@ -271,3 +272,26 @@ class ScoreRequest(BaseModel):
 async def score_endpoint(payload: ScoreRequest):
     result = calculate_score(payload.model_dump())
     return result
+
+
+class PropertySearchRequest(BaseModel):
+    query: str
+    commune: Optional[str] = None
+    max_price_uf: Optional[float] = None
+    property_type: Optional[str] = None
+    limit: Optional[int] = 10
+    similarity_threshold: Optional[float] = 0.0
+
+
+@app.post("/api/properties/search")
+@app.post("/properties/search")
+async def properties_search_endpoint(payload: PropertySearchRequest):
+    return search_properties(
+        query=payload.query,
+        commune=payload.commune,
+        max_price_uf=payload.max_price_uf,
+        property_type=payload.property_type,
+        limit=payload.limit or 10,
+        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.0,
+    )
+
