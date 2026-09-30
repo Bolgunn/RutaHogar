@@ -71,7 +71,7 @@ def calculate_financial_indicators(data: dict, property_value_clp: float) -> dic
     pie_recomendado = property_value * 0.20 if property_value > 0 else 0.0
     total_burden_ratio = _ratio(deuda + dividendo, ingreso)
 
-    return {
+    result = {
         "property_value_clp": property_value,
         "property_value_uf": property_value / uf_value if property_value > 0 and uf_value > 0 else 0.0,
         "uf_value_clp": uf_value,
@@ -92,5 +92,22 @@ def calculate_financial_indicators(data: dict, property_value_clp: float) -> dic
         "brecha_pie_minimo": max(pie_minimo - ahorro, 0.0) if pie_minimo > 0 else 0.0,
         "brecha_pie_intermedio": max(pie_intermedio - ahorro, 0.0) if pie_intermedio > 0 else 0.0,
         "brecha_pie_recomendado": max(pie_recomendado - ahorro, 0.0) if pie_recomendado > 0 else 0.0,
+        "dividendo_estimado": dividendo,
+        "dividendo_viable": max(0.0, (ingreso * 0.25) - deuda),
+        "dividendo_viable_bruto": ingreso * 0.25,
+        "ahorro_mensual_acelerado": max(0.0, ingreso * 0.20),
+        "ahorro_mensual_conservador": max(0.0, ingreso * 0.10),
         "edad_fin_credito": edad + plazo_credito if edad > 0 and plazo_credito > 0 else None,
     }
+
+    import math
+    # Proyecciones de meses para la brecha de pie mínimo
+    brecha = result["brecha_pie_minimo"]
+    if brecha > 0:
+        result["meses_acelerado"] = math.ceil(brecha / result["ahorro_mensual_acelerado"]) if result["ahorro_mensual_acelerado"] > 0 else 999
+        result["meses_conservador"] = math.ceil(brecha / result["ahorro_mensual_conservador"]) if result["ahorro_mensual_conservador"] > 0 else 999
+    else:
+        result["meses_acelerado"] = 0
+        result["meses_conservador"] = 0
+
+    return result

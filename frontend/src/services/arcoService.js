@@ -1,7 +1,7 @@
 import { supabase } from "../utils/supabase";
 import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
-const ARCO_KEY = "scoreleads_arco_requests";
+const ARCO_KEY = "RutaHogar_arco_requests";
 
 function readLocalArcoRequests() {
   try {

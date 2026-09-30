@@ -1,0 +1,359 @@
+# PLAN — HU 10: Matching lead-proyecto para ejecutivos comerciales
+
+- **Story:** `Wiki RutaHogar/UserStories/HU10-matching-lead-proyecto.md` · **Actor:** Ejecutivo comercial
+- **Status:** ✅ Built · Sprint 1 · 5 SP · **Depends on:** HU 7 (PR #69, **merged**),
+  [CATALOGO-UNICO](../CATALOGO-UNICO/PLAN.md) (**in this branch's lineage** — `mockProjects` is gone
+  from `frontend/src`) and **HU 8 (PR #80, merged)** for the FOGAES constants · **Required by:** —
+- **Branch:** `feature/sprint1/HU10`, cut off `feature/catalogo-unico-simulacion`; after step 0 its
+  **merge base is `origin/develop`'s tip**, so every ancestor's work is in the branch
+
+> **This plan has been built.** Steps 0–13 are done and the branch is up at `c50358b`. The sections
+> below are kept as written so the reasoning stays auditable; where the build diverged from them, the
+> divergence is in **Deviations recorded during the build** at the end and cross-referenced inline.
+> **Where this document and the shipped code disagree, the code plus its `ALG-*` govern** — same rule
+> the ALGs apply to the spike.
+
+> **Branch-name deviation.** The handbook norm is `feat/hu10-matching-lead-proyecto`. The team chose
+> to keep `feature/sprint1/HU10` for consistency with the other in-flight branches. Recorded rather
+> than silently ignored.
+
+> **Stack depth — resolved.** `develop` → HU 7 (#69) → CATALOGO-UNICO → HU 10. ~~Every ancestor is
+> unmerged.~~ **#69 is merged to `develop`**, and step 0 brought `develop` in, so the catalog contract
+> step 6 was written against is the shipped one. The last Assumption below is answered by this.
+>
+> ~~**And the branch is now 21 commits behind `develop`**~~ — **done in step 0** (`7d1a577`). The
+> branch carries the redesign (#74), its follow-ups (#79) and **HU 8 (#80)**, so the three FOGAES
+> constants ALG-9 R4 needs exist and were reused, not redeclared. The merge base is now exactly
+> `origin/develop`'s tip.
+
+## Start here
+
+For the build session. Standing instructions are in `docs/HANDBOOK.md` ("Starting a build
+session"); only what is specific to this story goes here.
+
+- Read first: `docs/algorithms/ALG-9-purchase-capacity.md` and `ALG-10-lead-project-affinity.md` **in
+  full** — they are **the normative source** and hold every number this story uses ·
+  `backend/app/scoring_engine/indicators.py` (the shape `purchase_capacity.py` sits beside) ·
+  `backend/app/scoring_engine/blockers.py` (codes and severities the affinity penalty and blocker
+  resolution consume verbatim) · `backend/app/scoring_engine/constants.py` (the three FOGAES
+  constants you must reuse, not redeclare) · `frontend/src/services/projectService.js` header (the
+  frozen catalog contract)
+- **The spike is history, not a spec.** `docs/research/spike1-e4-lead-project-matching-criteria.md`
+  explains *why* the criteria are what they are and is worth reading for that. But HU 10 amended it
+  in nine places — §4.4, §4.5, §5.1, §5.2, §6.1, §7, §8.1, §8.2/§8.3 and §8.4 — each dated in its
+  **Registro de cambios**. **Where the spike and an ALG disagree, the ALG governs**, and the spike
+  says so itself. Do not "reconcile" a case back to the spike.
+- Stop and report if: a case in `ALG-9-cases.json` or `ALG-10-cases.json` disagrees with **its own
+  ALG document** (the case files are generated from those rules, so a mismatch means one of them is
+  wrong) · the affinity weights produce a ranking that visibly contradicts E2 ("capacity beats
+  classification") · you find yourself needing a capacity number on the frontend that the backend
+  does not already send · you are about to declare a constant that already exists in `constants.py`
+
+## Goal
+
+An ejecutivo comercial today sees one list: every lead, sorted by financial classification. That
+ranking cannot answer the question the executive actually has, which is *"who should I call about
+this project?"* — because nothing in the system knows what a lead can afford independently of what
+they said they wanted. This story adds a preference-independent buying capacity to the scoring
+engine, joins it against the HU 7 catalog, and gives the executive a project-scoped, affinity-ranked
+lead list with the evidence to act on it. It also makes HU 10 E4 computable at all: you cannot detect
+"this person can buy something other than what they asked for" from a model that only evaluates what
+they asked for.
+
+## Approach & decisions
+
+Capacity is computed once in the backend, travels inside the existing `financial_indicators` dict,
+and is persisted with the assumptions that produced it. The catalog join stays on the frontend, pure
+and testable, because the catalog lives in Supabase and the backend cannot see it. The executive UI
+extends the dashboard that already exists rather than adding a second lead surface.
+
+| Decision | Rationale |
+| :------- | :-------- |
+| Capacity in `backend/app/scoring_engine/purchase_capacity.py`, additive keys inside `financial_indicators` | Pure financial computation belongs beside `indicators.py`; it is then versioned, persisted per evaluation and auditable (RNF 4 / RNF 5). Additive keys mean no `POST /score` contract break (S2) |
+| Matching in `frontend/src/lib/matching/`, **not** `services/` as spike §8.2 says | The handbook reserves `lib/` for pure logic and calls it the only place an algorithm may be implemented. The spike's stated reason for "frontend" was guardrail #5 (no new FastAPI endpoints) — a frontend/backend argument that `lib/` honours equally. Precedent: `lib/simulation/compatibility.js`. **Spike §8.2 and §8.3 are amended in this PR** |
+| Two ALG documents — ALG-9 capacity, ALG-10 affinity | Split on the backend/frontend seam, so each points at one module and one test runner. ALG-1…7 stay reserved for the existing engine per `docs/procedures/algorithms.md`, and **ALG-8 is claimed by HU 8** (PR #80, `housing_benefits.py`) — HU 10 renumbered off it rather than colliding |
+| ALG-10's cases assert under **vitest**, not pytest | It governs frontend code. The handbook's Tier 1 lists ALG cases under pytest; this story establishes the frontend equivalent. Noted so a reviewer does not read it as a gap |
+| `ALGORITHM_VERSION` does **not** move | It moves "when a rule changes"; these keys are additive and change no existing rule. Capacity carries its own `capacidad_supuestos.version = "e4-matching-v1"` (spike §8.1) so matching can be retuned without an engine bump |
+| Legacy evaluations get a **backfill script**, not a lazy recompute | Team decision. The `requires_info` path is still built, but after ALG-9's amendment to spike §4.5 it has exactly **two** causes: `ingreso_total <= 0`, and a stored snapshot the backfill cannot complete. `plazo_efectivo < 5` no longer routes there — it computes and flags `plazo_bajo_minimo` (ALG-9 R2, invariant 4b) |
+| Project selector **inside `DashboardLeads.jsx`**, not a new page | Team decision. One destination for the executive. The no-project-selected path stays behaviourally identical and is pinned by a test, so HU 2 cannot regress silently |
+| Matching input is `getAvailableProjects({ inmobiliariaId, ejecutivo })` | **Shipped with `ejecutivo` added during the build (V1).** Tenant scoping answers "whose catalog", not "whose proyectos": an ejecutivo ranking leads against a colleague's proyecto is not the question the panel exists to answer. The lead feed stays un-scoped — see standing question 2 |
+| HU 6 consumes `ALG-9`'s **capacity**; it does **not** adopt `ALG-10`'s ranking | Two surfaces must not disagree about what a lead can afford — that is the defect. They may legitimately disagree about *ordering*, because they answer different questions: HU 6 asks "what can this lead buy?" (money should dominate, preference is a fair tie-break), the HU 10 panel asks "who do I call about this project?" (comuna is a top-tier signal). An earlier draft of step 11 said "delegates its ranking", which would have silently converted HU 6's preference handling from a tie-break into 25 of 100 points on a shipped screen — a change to HU 6 that nothing in the spike or this plan ever argued |
+| `matchLeadToProjects` takes a project array, never fetches | Keeps it pure and vitest-coverable, and lets each caller decide what subset to feed it (spike §8.2) |
+
+## Standing questions
+
+| # | Question | Answer |
+| :- | :------- | :----- |
+| 1 | Touches scoring? Which ALG, numbers changed? | **Yes — additively.** New module `purchase_capacity.py` under `ALG-9`; new constants in `constants.py` — **except the three FOGAES constants, which are reused from `ALG-8` (HU 8) and must not be redeclared** (ALG-9 A7). **No existing number changes**: no weight, threshold, blocker or classification cutoff is touched, and `ALGORITHM_VERSION` stays at `1.1.0-prep`. `commercial_priority.py` and `project_fit.py` are read, never modified |
+| 2 | Needs RLS / multi-tenant scoping? | **Yes — one new policy pair, plus one inherited gap left open. The original answer of "no new policy" was wrong and is corrected here.** Tenant scoping alone turned out not to be enough: HU 7's RLS let *any* `ejecutivo` read their whole inmobiliaria's catalog, so the selector would have offered a colleague's proyecto. Migration `20260831090000` narrows `SELECT` on `proyectos` to the proyectos where the ejecutivo is assigned, and on `proyecto_ejecutivos` to their own assignments **within their tenant** — see question 3 and V1/V7. Both bodies are mirrored into `supabase/schema.sql`, which defines them for a fresh bootstrap. Beyond that, `public.evaluations` is **not** tenant-scoped — it lets any `ejecutivo`/`admin` select every evaluation, and the table has no `inmobiliaria_id`. HU 10 does not widen this (the HU 2 dashboard already exposes the same rows) but does not close it either. **Still recorded as a defect against S6**; closing it needs a product decision on what a lead's inmobiliaria means for public pre-qualification traffic |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | **Yes — one, added during the build; the original answer of "no migration" was wrong and is corrected here.** No *schema* change: capacity is persisted inside the existing `financial_data` JSON column. But step 8 needs the project selector scoped to the executive, and HU 7 left `proyecto_ejecutivos` decorative for reads — so `supabase/migrations/20260831090000_proyectos_scope_ejecutivo.sql` makes the assignment binding: it rewrites the `SELECT` policies on `proyectos` and `proyecto_ejecutivos` and adds `is_ejecutivo_asignado()` (`SECURITY DEFINER`, to avoid recursing on the assignment policies). Admin and lead reads are unchanged; **the executive stops seeing their tenant's whole catalog**. Rollback ships beside it. **Applied by whoever merges this PR**, before the backfill. See "Deviations" below. **Plus the one-time backfill script** (`backend/scripts/backfill_capacity.py`), *not* auto-applied and *not* CI-enforced: same person runs it against hosted Supabase and posts the dry-run counts in the PR thread |
+| 4 | Changes the `POST /score` contract? | **No.** Purely additive keys inside the existing `financial_indicators` dict. No field removed, renamed or retyped; no endpoint added (S2, guardrail #5) |
+| 5 | Consent / privacy impact? | **None new.** Capacity is derived from data the lead already submitted under `consentimiento = true`; no new intake field, no external data source (S5). The executive sees no personal data they cannot already see. `capacidad_supuestos` is metadata about the calculation, not about the person |
+
+> 1 and 3 are meant to be checked against the diff by CI. **They are not**: the repo's only workflow
+> is `deploy-supabase-functions.yml`. The handbook marks this gate *(planned)*, and question 3 having
+> shipped with the wrong answer is what that missing gate looks like in practice.
+
+## Entities
+
+No schema change. The surface is the `POST /score` response and one persisted JSON column.
+
+| Surface | Change |
+| :------ | :----- |
+| `financial_indicators` (response + `financial_data.result`) | **New keys**, all additive, listed verbatim in ALG-9 §contract: `capacidad_compra_estimada_uf`, `capacidad_compra_estimada_clp`, `capacidad_por_renta_uf`, `capacidad_por_pie_uf`, `capacidad_asistida_uf`, `restriccion_vinculante`, `dividendo_maximo_sostenible_clp`, `capacidad_status`, `capacidad_supuestos` |
+| `public.evaluations.financial_data` | Same keys, persisted automatically — `buildFinancialDataSnapshot` already stores the whole `result` object, so no service change is needed |
+| Rows written before this PR | Have none of these keys. Backfilled by script; rows whose stored input cannot produce a capacity are written `capacidad_status: "requires_info"` with capacity `null` — **never `0`** (ALG-9 invariant) |
+| `proyectos` | **Read only**, via `getAvailableProjects({ inmobiliariaId })`. No write, no schema change |
+
+## Algorithms
+
+Referenced, never restated. Every number this story uses lives in one of these two documents.
+
+- **`ALG-9` — purchase capacity** (`docs/algorithms/ALG-9-purchase-capacity.md`). **New**, seeded in
+  this PR from spike §3–§4 and §6.1. Implemented by `backend/app/scoring_engine/purchase_capacity.py`;
+  every tunable in `constants.py`. Cases in `ALG-9-cases.json`, asserted by pytest. Assumptions log
+  carries the developer judgments — chiefly the 0.30 calculation ceiling (spike §3.4) and the 20% pie
+  anchor over 10% (spike §4.3).
+- **`ALG-10` — lead–project affinity** (`docs/algorithms/ALG-10-lead-project-affinity.md`). **New**,
+  seeded in this PR from spike §5–§7. Implemented by
+  `frontend/src/lib/matching/leadProjectMatching.js`. Cases in `ALG-10-cases.json`, asserted by
+  vitest. Assumptions log records that the weights are **v1, asserted from domain reasoning and not
+  fitted** — there is no conversion history to calibrate against until HU 16.
+
+Both are read-only consumers of `ALG-2` (blockers) and `ALG-5` (project fit), **neither of which has
+been written yet**. See Assumptions.
+
+**Local logic** (no ALG number, story-local): the dashboard's sort, the "ver descartados" toggle, and
+the empty-state copy.
+
+## Scope
+
+**In:** `purchase_capacity.py` and its constants · the additive `financial_indicators` keys · ALG-9
+and ALG-10 with their case files and test wiring · `lib/matching/leadProjectMatching.js` · the project
+selector, ranked list and evidence card inside `DashboardLeads.jsx` · the re-orientable annotation ·
+the backfill script · pointing `buildAccessibleAlternatives` at ALG-9's capacity (**its ordering
+untouched** — step 11) · amending spike §4.5, §5.1, §5.2, §6.1, §7, §8.2 and §8.3.
+
+**Added to scope during the build** (V1, V7): scoping the selector's catalog to the ejecutivo —
+migration `20260831090000` with its rollback, `filterAssignedTo()` mirroring the same predicate
+client-side for the `local` provider, and the matching bodies folded back into `supabase/schema.sql`
+so a fresh bootstrap and hosted Supabase cannot disagree about who reads what.
+
+**Out:**
+
+- **`commercial_priority.py` stays untouched** (spike §7). Its lead-global `reorient` action keeps its
+  current behaviour; HU 10 adds a pair-scoped annotation beside it. No shipped `/score` path needs
+  re-verification.
+- **`PRECIOS_REFERENCIA_UF` and `property_value.py`** — the capacity model is preference-independent
+  and does not read them (guardrail #7).
+- **`project_fit.py`** — its verdict is consumed for the re-orientable rule, never modified.
+- **Closing the `evaluations` tenant-scoping gap** — needs a product decision, recorded as an S6
+  defect.
+- **HU 6's capacity constants.** `compatibility.js` computes `maxByMinDownPayment = savings / 0.10`
+  with no income gate, and uses `PRUDENT_DIVIDEND_RATE = 0.25` in calculation where the spike resolved
+  0.30. For an income-bound lead its figure and ALG-9's differ by an order of magnitude. Step 11 fixes
+  the **capacity number only**; HU 6's ordering is deliberately left alone. **Recorded as
+  a defect against HU 6**, naming commit `fd09826` ("Cambios para el Rebranding RutaHogar"), which
+  introduced `SimulationPage.jsx`, `mockProjects.js` and `compatibility.js` in one commit and left no
+  rationale for any of those numbers. Only the *recommender's ranking* is corrected here; the two
+  labelled display tiles are honest about being down-payment stretch and stay.
+- **`primera_vivienda` intake field** — would let capacity branch on `FOGAES_MIN_PIE_RATIO` (`ALG-8`) directly
+  (spike §10.5, flagged as the highest-value follow-up). Belongs to HU 1.
+- **Rate / term / UF scenarios** — one base case only; owned by HU 18 and HU 29.
+- **Subsidy eligibility rules** — HU 10 emits only the FOGAES flag; HU 26 owns the rules.
+- **The `mockProjects` → catalog migration** — [CATALOGO-UNICO](../CATALOGO-UNICO/PLAN.md).
+
+## Steps
+
+Ordered. Each names the exact files and functions and the concrete change. **All thirteen landed**;
+where the outcome differs from what the step asked for, an *Outcome* line says so and points at the
+deviation.
+
+0. **Merge `develop` into this branch — blocking.** `feature/sprint1/HU10` is 21 commits behind and
+   predates **PR #80 (HU 8)**, which owns `FOGAES_MIN_PIE_RATIO`, `FOGAES_MAX_PROPERTY_UF` and
+   `FOGAES_MAX_UF_CON_SUBSIDIO`. `constants.py` on this branch has **no FOGAES constants**, so ALG-9
+   R4 and ALG-10 R1/R5 cannot be implemented as written. Confirm the three names exist before step 2.
+   `develop` also now carries the redesign (PR #74) and its follow-ups (PR #79), which touch
+   `DashboardLeads.jsx`'s surroundings — expect frontend conflicts here rather than at step 8.
+   **Do not resolve a missing constant by declaring a local copy** (ALG-9 A7).
+
+   **Outcome:** done in `7d1a577`. The three FOGAES constants were reused, never redeclared.
+
+1. **Write `ALG-9` and `ALG-10` first**, from `docs/templates/ALG-N.md`, extracting from the spike.
+   Create `docs/algorithms/`. Fill the rules tables before any code exists; every number carries its
+   provenance row from spike §3.1 (market-sourced) or §3.2 (policy). **No code in this step.**
+
+2. **`backend/app/scoring_engine/constants.py`** — add only the capacity tunables that do not already
+   exist: rate, `PIE_RATIO_BASE`, both burden ratios, `RATIO_DIVIDENDO_SALUDABLE`, reference and
+   minimum term, age cap, and `MATCHING_VERSION = "e4-matching-v1"`. **Do not add a pie ratio or a
+   price cap for FOGAES** — `FOGAES_MIN_PIE_RATIO`, `FOGAES_MAX_PROPERTY_UF` and
+   `FOGAES_MAX_UF_CON_SUBSIDIO` already exist, owned by `ALG-8` (HU 8, PR #80); reuse them (ALG-9
+   A7). No literal may appear inside a function (handbook).
+
+3. **`backend/app/scoring_engine/purchase_capacity.py`** — new module implementing ALG-9:
+   `calculate_purchase_capacity(data, indicators) -> dict` returning exactly the keys listed under
+   Entities. Flat functions mirroring `indicators.py`; no classes. Honour **ALG-9's** edge-case table
+   exactly, especially `null` ≠ `0`. It supersedes spike §4.5 on one row: `plazo_efectivo < 5` is a
+   **flag** (`plazo_bajo_minimo`), not a refusal — capacity still computes (ALG-9 R2, invariant 4b).
+   Where the two disagree, ALG-9 governs; the divergence is argued in A4.
+
+4. **`backend/app/scoring.py`** — call it after `calculate_financial_indicators` and merge its keys
+   into `financial_indicators`. One call site, no reordering of existing logic.
+
+5. **`backend/tests/test_purchase_capacity.py`** — load `ALG-9-cases.json` and assert each case, plus
+   the invariants as invariants: capacity is `None` or `>= 0`; `capacidad_compra_estimada_uf ==
+   min(por_renta, por_pie)` whenever status is `ok`; `restriccion_vinculante` is set whenever capacity
+   computes; the same input always yields the same output. Add a golden-fixture case proving existing
+   `POST /score` keys are byte-identical (S2).
+
+   **Outcome:** 13 cases plus the invariants, and preference-independence asserted as a test.
+   **The golden fixture was not built** — `test_score_no_pierde_ninguna_clave_previa` re-runs the
+   current engine instead of comparing against a frozen response, so it proves the keys are additive
+   but cannot prove a future refactor behaviour-preserving. `backend/tests/golden/` still does not
+   exist. **V8.**
+
+6. **`frontend/src/lib/matching/leadProjectMatching.js`** — new pure module implementing ALG-10:
+   `matchLeadToProjects(evaluacion, proyectos) -> { matches, excluidos }`, `MatchRow` exactly as spike
+   §8.2. Evaluate "at/above `precio_max` → no penalty" **before** interpolating, or a single-price
+   project divides by zero and `NaN` corrupts the ranking (contract note 2). Re-declare only the
+   affinity weights; never a capacity constant — capacity arrives pre-computed.
+
+7. **`frontend/src/lib/matching/__tests__/leadProjectMatching.test.js`** — load `ALG-10-cases.json`
+   and assert each case, plus: a `Medio` lead above `precio_max` outranks an `Alto` lead at
+   `precio_min` (this is E2, expressed as a test); a single-price project produces no `NaN`; a lead
+   who clears `precio_ref_uf` gets `bloqueador_principal: null` rather than a fabricated
+   `pie_insuficiente_para_proyecto` (spike §6.2, the load-bearing guard).
+
+8. **`DashboardLeads.jsx` — project selector.** Add a `selectedProject` state and a project dropdown
+   fed by `getAvailableProjects({ inmobiliariaId })`. **When nothing is selected the component
+   behaves exactly as today** — same filters, same classification sort, same columns. When a project
+   is selected, rank by `afinidad` and render the evidence columns.
+
+   **Outcome:** shipped, with the catalog call taking `ejecutivo` too (**V1**). Two departures from
+   "exactly as today": the classification filter now defaults to `todos` **while a proyecto is
+   selected** (**V2** — without it the UI cancelled E2), and the no-proyecto table lost its
+   "Ver detalles" column to make the row itself the entry point (**V3**). Order and filters are
+   unchanged and pinned by `leadRanking.test.js`.
+
+9. **`DashboardLeads.jsx` — evidence card (E3).** Per selected project, show `capacidad_uf`,
+   `pie_disponible_uf`, `clasificacion_financiera`, `restriccion_vinculante`, `plazo_anios`,
+   `plazo_origen` and `bloqueador_principal`. `plazo_anios` and `plazo_origen` are **not optional** —
+   leads are ranked under different term assumptions and the executive must never compare invisibly
+   different numbers (spike §4.2).
+
+10. **`DashboardLeads.jsx` — re-orientable (E4) and descartados.** Annotate rows where `reorientable`
+    is true; add a "ver descartados" toggle rendering `excluidos` with their `motivo_exclusion`.
+    Render the `requires_info` group distinctly — these are leads needing a fresh evaluation, not
+    leads with no capacity.
+
+11. **`frontend/src/lib/simulation/compatibility.js` — capacity only, ordering untouched.**
+    Two surgical changes:
+    (a) `buildSimulationContext` (`compatibility.js:508-525`) currently spreads `evaluation.input`
+    and cherry-picks only `classification`, `score` and `risks` from `result` — it **drops
+    `financial_indicators`**, so ALG-9's capacity never reaches this screen. Pass it through.
+    (b) `buildAccessibleAlternatives` uses `capacidad_compra_estimada_uf` in place of its own
+    `maxByMinDownPayment = savings / 0.10` (no income gate) and `PRUDENT_DIVIDEND_RATE = 0.25`, which
+    for an income-bound lead differ from ALG-9 by an order of magnitude. Fall back to the current
+    local computation when `capacidad_status` is `requires_info`.
+    **Its sort stays exactly as it is** — `statusRank → gapAmount → communeMatch → typeMatch →
+    valueClp`. Do **not** call `matchLeadToProjects` here. Its two display tiles and
+    `getMaxValueRange` are untouched.
+
+12. **`backend/scripts/backfill_capacity.py`** — recompute capacity from each stored `input_snapshot`
+    and write it back into `financial_data.result.financial_indicators`. **Requirements:** `--dry-run`
+    default; prints counts of computed / skipped / already-present; rows it cannot compute are written
+    `requires_info` explicitly, never `0`; idempotent, so a second run is a no-op. It must fail loudly
+    on a row it does not understand rather than writing a wrong number.
+
+    **Outcome:** shipped with a fifth counter, `reparado`, that the step did not anticipate — it
+    exists because an early run against hosted Supabase wrote legacy rows carrying only the nine
+    capacity keys and no base indicators (**V5**). Two defects found in review were fixed on top: the
+    loop advanced by page size rather than by rows read, which silently skipped rows and reported a
+    false total; and a network error aborted without printing what had already been written. **The
+    hosted dry-run is still outstanding** and is the merger's to run.
+
+13. **`docs/research/spike1-e4-lead-project-matching-criteria.md` — done in this PR, not left to the
+    build session.** §4–§8 were rewritten: they keep the spike's reasoning but **reference** ALG-9 /
+    ALG-10 for the rules instead of restating them, and each change is dated and attributed to its HU
+    in the body. §1–§3 and §9–§12 stay as history untouched. The document now opens with a status
+    banner and a **Registro de cambios** table, and §9 carries a marker saying its affinity
+    arithmetic predates the amendments.
+
+    **The build session's job here is to keep that record current**: if implementing ALG-9 or ALG-10
+    forces any further rule change, add a dated row to the changelog and amend the matching section —
+    do not let the spike drift back into contradicting the ALGs. Where the two disagree, the ALG
+    governs; the spike says so explicitly.
+
+## Acceptance criteria map
+
+**Verified after the build.** A criterion whose evidence is a test names the test; one that needs a
+person names what was done and seen. Nothing here is a checkmark.
+
+| Criterion | Step(s) | Evidence | State |
+| :-------- | :------ | :------- | :---- |
+| `E1` — executive selects a project and sees compatible leads ordered by affinity and capacity | 6, 8 | `ALG-10-cases.json` ordering cases + `leadRanking.test.js` "ordena por afinidad y, en el orden alternativo, por capacidad" (vitest). The selector is fed by `getAvailableProjects({ inmobiliariaId, ejecutivo })` and the counter names the active sort, as ALG-10 R6 requires | **Done in code · reviewer walkthrough pending** against a hosted env where the ejecutivo has assignments — the catalog scoping (V1) cannot be exercised with the `local` provider alone |
+| `E2` — a lead with sufficient capacity can be recommended even when their classification is not Alta | 6, 7 | `leadProjectMatching.test.js` — the explicit `Medio`-above-`precio_max` outranks `Alto`-at-`precio_min` test, bounded as ALG-10 invariant 8 so a retune cannot cross it silently. Re-run in review: `Medio` **88.6** (Compatible) over `Alto` **56.4** (Cercano). `leadRanking.test.js` "no descarta leads por su clasificacion" pins the panel half (V2) | **Done** |
+| `E3` — the card shows capacity, pie, classification and main blocker | 3, 9 | `ALG-9-cases.json` for the numbers. The row and the modal's zone 2 both render capacidad, pie, clasificación, restricción vinculante and bloqueador principal with its CLP gap, plus `plazo_anios` and `plazo_origen` — non-optional under ALG-9 R2 | **Done** |
+| `E4` — a lead who can buy a project other than their declared objective shows as re-orientable | 6, 10 | `ALG-10-cases.json` re-orientable cases and the two negatives (no declared comuna + unresolvable `project_fit` is never re-orientable; a `comuna_alternativa` project is never a re-orientation). The panel now tells R4's two branches apart via the exported `comunasDeclaradas()`, covered by "un reorientable de rama 3b tiene el proyecto dentro de lo declarado" (V6) | **Done** |
+| Legacy rows do not appear as capacity-zero | 12 | `test_backfill_capacity.py` — 16 tests including idempotence, the flat legacy shape, the `reparado` path (V5) and the pagination that used to skip rows | **Code done · hosted dry-run outstanding.** Whoever merges runs it and posts the five counts; if `reparados > 0` those rows are showing wrong evidence today and the repair belongs to this merge |
+| HU 2's dashboard is unchanged when no project is selected | 8 | `leadRanking.test.js` "devuelve los leads tal cual, sin evidencia ni grupos" pins the default render's data. Per the handbook, the logic lives in `lib/` precisely so it can be pinned without mounting the component | **Partial — deliberately.** Order and filters hold; the table lost a column (V3) and the modal's three score tiles became a headline (V4). Both are recorded for HU 2's owner to accept or reject |
+| No new tenant leak from the project scoping | — (V1, V7) | `projectCatalog.test.js` — 7 `filterAssignedTo` tests, including that the client predicate matches the policy's (id **or** email) so it cannot hide what the base authorizes. Policy bodies in the migration and in `schema.sql` diffed predicate-for-predicate | **Done in code · unverifiable locally.** RLS only executes against Supabase; the reviewer has to confirm on a hosted env that an ejecutivo sees only assigned proyectos and only their own assignments |
+
+## Assumptions
+
+- **`ALG-2` (blockers) and `ALG-5` (project fit) do not exist.** ALG-9 and ALG-10 must reference them
+  by number for codes, severities and the `project_fit.status` verdict. Until they are written, both
+  documents cite `blockers.py` and `project_fit.py` **by file and line** and carry a note that the
+  citation is provisional. Do not restate their rules — that is what the reference exists to prevent.
+- **Affinity weights are uncalibrated v1** (spike §5.2, open item 3). They ship as domain reasoning,
+  not fitted values, and are revisited when HU 16 supplies conversion data. Logged in ALG-10's
+  assumptions log so the reviewer confirms it was *logged*, not that the values are right.
+- **Complementary debt is dropped by `indicators.py`** (spike §10.1): validated complementary income
+  is added to `ingreso_total` but `deuda` stays `deuda_mensual` alone, so every ratio for a lead with
+  a complemento is overstated — and ALG-9 inherits that inflation. §4.1 specifies `deuda_total`
+  including the complementary side. **The build session must implement §4.1 as specified and note the
+  divergence**, not silently follow the existing code. Fixing `indicators.py` is HU 3 / HU 15's.
+- **`VALOR_UF_CLP = 40695` is hardcoded and stale** (0,39% on 2026-08-16). Matching is computed
+  entirely in UF, so this is display precision only (spike §3.3). Not this story's to fix.
+- **`edad` and `plazo_credito_hipotecario` are required** in the Pydantic contract
+  (`main.py:65,72`), so §4.2's "edad missing → `age_term_verified = false`" branch is unreachable
+  through the API. Implement it anyway for the backfill script, which reads stored snapshots that may
+  predate those fields.
+- ~~**Both ancestor branches are unmerged.**~~ **Answered.** PR #69 is merged and step 0 brought
+  `develop` in, so step 6 was written against the shipped catalog contract, not a moving one. The
+  contract did move once afterwards and inside this story: `getProjects` / `getAvailableProjects`
+  gained the `ejecutivo` argument (V1), which is additive — every existing caller passing only
+  `inmobiliariaId` keeps its behaviour.
+
+## Deviations recorded during the build
+
+Written down rather than left for a reviewer to discover. Each names what changed and why.
+
+| # | Deviation | Why |
+| :- | :-------- | :-- |
+| V1 | **A migration was added** — `20260831090000_proyectos_scope_ejecutivo.sql`, correcting standing question 3 | Step 8 feeds the selector from `getAvailableProjects({ inmobiliariaId })`, which under HU 7's RLS returns the **whole tenant catalog**. An executive ranking leads against a colleague's project is not "who should I call about this project?". The assignment link already existed in `proyecto_ejecutivos`; this makes it binding for reads. `filterAssignedTo()` mirrors the same predicate client-side because the `local` provider has no RLS |
+| V2 | **The classification filter defaults to `todos` when a project is selected** (`92f7a8f`) | Affinity already weighs classification (R2: `Medio` −8, `Bajo` −15, against −60 max for holgura). Keeping the shipped "Alto only" default on top of it applies the same signal twice and hides exactly the leads **E2 exists to surface**. With no project selected the HU 2 default is untouched |
+| V3 | **The no-project table went from 6 columns to 5** — the "Ver detalles" column is gone; the lead's name is now the button | Step 8 promised "same columns". The row became the entry point, and a `<tr onClick>` alone is announced as a row and does not exist for keyboard users, so the real `<button>` moved into the name cell. Same actions, one less column |
+| V4 | **The modal's `lead-score-highlight` block (three score tiles) was replaced by a one-line headline** | The lead profile was reorganised into five zones (`2a240d4`) so the pair verdict could sit above the fold. Base score, final score and classification all still render, in the headline. This is HU 2's surface and the change was not in scope; recorded so HU 2's owner can object |
+| V5 | **The backfill was run against hosted Supabase before it was correct**, writing legacy rows with only the nine capacity keys and no base indicators | ALG-10 reads `ingreso_total` for the renta gap, so those rows showed wrong evidence. `procesar_fila` now detects them by the absent `ingreso_total` and repairs them (`reparado`), idempotently. **The repair run is part of this merge**, and its dry-run counts go in the PR thread — running a write script over production ahead of review is the process error, not the code |
+| V6 | **`ALG-10` exports `comunasDeclaradas()`** and R4 gained a "Consequence the UI must carry" note | R4 has two divergence branches and emits one boolean. The panel rendered a single sentence for both, which on branch 3b reads *"can buy in Ñuñoa although they declared Ñuñoa"*. Consumers now re-test 3a against the algorithm's own set instead of recomputing it and dropping `comuna_alternativa` |
+| V7 | **`supabase/schema.sql` updated alongside the migration** | `schema.sql` is the "run this in the SQL Editor" bootstrap snapshot, and it *defines* both policies the migration rewrites. Leaving it alone meant the same two policy names carried different bodies in two files: a fresh environment bootstrapped from `schema.sql` would silently get the permissive HU 7 version while hosted Supabase got the scoped one. The divergence is invisible from the UI, because `filterAssignedTo()` also trims client-side — which is exactly why it would have drifted |
+| V8 | **Step 5's golden fixture was not built** | The step asked for a frozen `POST /score` response proving byte-identity. What shipped, `test_score_no_pierde_ninguna_clave_previa`, re-runs the *current* engine and asserts the new key set is exactly the nine additive ones. That covers S2's "nothing was removed or retyped" but **not** "a future refactor is behaviour-preserving", which is the whole point of a golden fixture. `backend/tests/golden/` still does not exist — a repo-wide gap the handbook already names, not one HU 10 created, but this story is where it was noticed and not closed |
+
+> **Pre-existing gap, not this story's to close.** HU 7's `20260827090200_proyectos_lectura_lead.sql`
+> ("Proyectos select lead") was never folded back into `schema.sql` either, so a fresh bootstrap has
+> no lead-read policy on `proyectos` at all. Recorded here rather than absorbed into HU 10's diff.
+
+## Still open at the end of the build
+
+Neither is code, and neither is mine to close from here.
+
+1. **Run the backfill against hosted Supabase** — `python backend/scripts/backfill_capacity.py` for the
+   dry-run, counts into the PR thread, then `--apply` if `reparados > 0`. Needs the secret key, and it
+   writes to production. Do it **after** the migration, so the panel and the data move together.
+2. **Apply migration `20260831090000`** to hosted Supabase, and confirm on that environment that an
+   ejecutivo sees only their assigned proyectos. RLS does not execute locally, so this is the only
+   place E1's scoping and V1/V7 can actually be verified.
+
+Two more, outside this story but surfaced by it: the `evaluations` tenant-scoping gap (standing
+question 2, S6) and HU 7's "Proyectos select lead" never reaching `schema.sql`.

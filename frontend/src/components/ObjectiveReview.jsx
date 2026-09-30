@@ -46,7 +46,7 @@ export default function ObjectiveReview({ evaluation, onBack }) {
           <strong>Orientación</strong>
           <p>
             No es necesario cambiar tu objetivo de inmediato. Usa esta revisión para comparar alternativas
-            antes de repetir una preevaluación o iniciar una evaluación bancaria formal.
+            antes de repetir una precalificación o iniciar una evaluación bancaria formal.
           </p>
           <ul>
             <li>Revisar si el plazo declarado da espacio suficiente para ahorrar.</li>

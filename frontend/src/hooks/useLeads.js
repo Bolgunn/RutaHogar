@@ -57,7 +57,8 @@ export function useLeads({ userId, profile }) {
   }, [userId]);
 
   useEffect(() => {
-    if (!isStaff) return;
+    // Sin Supabase configurada no hay realtime: el flujo local debe seguir funcionando.
+    if (!isStaff || !supabase) return;
 
     const channel = supabase
       .channel("evaluations-feed")

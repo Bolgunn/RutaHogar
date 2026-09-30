@@ -10,7 +10,7 @@ def _safe_get(mapping: dict, key: str, default=None):
 
 def _main_blocker_text(main_blocker: dict) -> str:
     if not main_blocker:
-        return "No se detecta un bloqueador principal en esta preevaluacion."
+        return "No se detecta un bloqueador principal en esta precalificación."
     title = _safe_get(main_blocker, "title", "Bloqueador principal")
     description = _safe_get(main_blocker, "description", "Existe una condicion que requiere revision.")
     return f"El bloqueador principal es: {title}. {description}"

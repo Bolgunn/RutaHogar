@@ -104,7 +104,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
         <h3 className="signup-offer-benefits-title">¿Por qué crear una cuenta?</h3>
         <ul className="signup-offer-benefit-list">
           {[
-            "Guarda tu historial de evaluaciones",
+            "Guarda tu historial de calificaciones",
             "Accede a tu plan de mejora personalizado",
             "Haz seguimiento de tu progreso financiero",
             "Recibe notificaciones cuando estés listo para comprar",
@@ -112,7 +112,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
             <li key={item} className="signup-offer-benefit-item">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                 <circle cx="9" cy="9" r="9" fill="rgba(36,99,84,0.12)" />
-                <polyline points="5 9 7.5 11.5 13 6.5" stroke="#246354" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="5 9 7.5 11.5 13 6.5" stroke="#2D8A4E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               {item}
             </li>
@@ -228,7 +228,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
           Salir
         </button>
         <p className="signup-offer-skip-note">
-          Tu evaluación no se guardará si continúas sin crear una cuenta.
+          Tu calificación no se guardará si continúas sin crear una cuenta.
         </p>
       </div>
 

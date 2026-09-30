@@ -1,0 +1,88 @@
+{
+  "algorithm": "ALG-8",
+  "version": "1.1.0-prep",
+  "note": "Asserted by the backend test suite (backend/tests/test_benefits_detector.py). A number changed in code but not here turns the build red. One case per branch of the rules table plus edge cases.",
+  "cases": [
+    {
+      "name": "fogaes_eligible_3000_uf_con_aviso",
+      "why": "FOGAES happy path dentro del tope general (6000 UF), con el aviso informativo de 3000 UF si se combina con subsidio.",
+      "input": {
+        "data": { "vivienda_nueva": true },
+        "indicators": { "property_value_uf": 3000, "pie_ratio": 0.15 }
+      },
+      "expect": {
+        "FOGAES_eligible": true,
+        "FOGAES_notes_contains": ["3000 UF", "subsidio habitacional"]
+      }
+    },
+    {
+      "name": "fogaes_eligible_hasta_6000",
+      "why": "El tope general FOGAES es 6000 UF; una propiedad de 5500 UF sigue siendo elegible.",
+      "input": {
+        "data": { "vivienda_nueva": true },
+        "indicators": { "property_value_uf": 5500, "pie_ratio": 0.15 }
+      },
+      "expect": { "FOGAES_eligible": true }
+    },
+    {
+      "name": "fogaes_no_elegible_precio_excede_6000",
+      "why": "Propiedad de 6500 UF supera el tope general FOGAES de 6000 UF.",
+      "input": {
+        "data": { "vivienda_nueva": true },
+        "indicators": { "property_value_uf": 6500, "pie_ratio": 0.15 }
+      },
+      "expect": { "FOGAES_eligible": false, "FOGAES_missing": ["precio_dentro_limite"] }
+    },
+    {
+      "name": "ds49_eligible_vulnerable",
+      "why": "DS49 happy path: RSH dentro del 40% más vulnerable y resto de condiciones cumplidas.",
+      "input": {
+        "data": { "edad": 25, "rsh_tramo": 30, "propiedad_previa": false, "ahorro_uf": 15, "grupo_familiar_rsh": true },
+        "indicators": {}
+      },
+      "expect": { "DS49_eligible": true }
+    },
+    {
+      "name": "ds49_no_elegible_rsh_supera_40",
+      "why": "DS49 sin excepción adulto mayor: RSH 85 supera el límite de 40 y no es elegible.",
+      "input": {
+        "data": { "edad": 25, "rsh_tramo": 85, "propiedad_previa": false, "ahorro_uf": 15, "grupo_familiar_rsh": true },
+        "indicators": {}
+      },
+      "expect": { "DS49_eligible": false, "DS49_missing": ["vulnerabilidad_rsh"] }
+    },
+    {
+      "name": "padhi_orientacion_educativa",
+      "why": "PADHI requiere deuda hipotecaria vigente + beneficio previo; es orientación a la Academia, no nueva ruta.",
+      "input": {
+        "data": { "deuda_hipotecaria_vigente": true, "beneficio_previo": true },
+        "indicators": {}
+      },
+      "expect": { "PADHI_eligible": true, "PADHI_academy_module": "padhi" }
+    },
+    {
+      "name": "ds1_tramo_ii_adulto_mayor",
+      "why": "DS1 Tramo II: RSH 85 (<= 90 por adulto mayor), ahorro y tope cumplidos.",
+      "input": {
+        "data": { "edad": 65, "rsh_tramo": 85, "propiedad_previa": false, "ahorro_uf": 50, "ahorro_antiguedad_meses": 12 },
+        "indicators": { "property_value_uf": 1500 }
+      },
+      "expect": { "DS1_eligible": true }
+    },
+    {
+      "name": "ley_21748_eligible_vivienda_nueva",
+      "why": "Ley 21.748: vivienda nueva, persona natural y valor dentro del tope de 4000 UF.",
+      "input": {
+        "data": { "vivienda_nueva": true, "es_empresa": false },
+        "indicators": { "property_value_uf": 3000 }
+      },
+      "expect": { "LEY_21748_eligible": true, "LEY_21748_notes_contains": ["60 puntos base"] }
+    },
+    {
+      "name": "sin_datos_ninguno_elegible",
+      "why": "Sin datos declarados todo campo es falsy/0: los 6 beneficios siguen presentes pero ninguno es elegible, y el disclaimer está.",
+      "input": { "data": null, "indicators": null },
+      "expect": { "six_benefits_present": true, "any_eligible": false, "disclaimer_present": true }
+    }
+  ]
+}

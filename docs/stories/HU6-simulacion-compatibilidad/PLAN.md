@@ -52,9 +52,9 @@ Lead / usuario interesado en comprar vivienda.
 10. El valor maximo estimado es una orientacion por ahorro/capacidad declarada, no financiamiento real ni monto aprobado.
 11. El pie minimo y el pie recomendado siempre se calculan sobre el valor del escenario; no deben confundirse con el rango referencial por ahorro.
 12. Las alternativas accesibles deben incluir una accion `Comparar` o `Comparar con escenario actual` para contrastarlas directamente contra el escenario actual.
-13. La comparacion principal debe estar visible cerca del selector de escenario, mostrando claramente `Escenario A` y `Escenario B`.
-14. Si aun no hay alternativa seleccionada, el panel de comparacion debe indicar que el usuario debe elegir una alternativa desde las opciones accesibles.
-15. Al comparar desde una tarjeta, la vista debe desplazarse al panel superior de comparacion para que el usuario vea el resultado creado.
+13. La vista debe priorizar primero el resultado del escenario actual, antes de mostrar la comparacion visual.
+14. La comparacion visual reemplaza las tarjetas numericas `Escenario A` y `Escenario B`; no debe duplicar datos en cards redundantes.
+15. Al comparar desde una tarjeta, la vista debe desplazarse al panel de comparacion visual para que el usuario vea el resultado creado.
 16. No se usara la idea de `Seleccionar simulacion` en las tarjetas mientras la UI real use comparacion directa.
 17. La vista `Simulacion` puede usar un contenedor mas ancho que el resto de vistas para aprovechar mejor el espacio horizontal, sin cambiar el layout global de la aplicacion.
 18. La UI debe evitar exceso de marcos anidados; priorizar secciones limpias, separadores y columnas. Los marcos deben reservarse para resultado principal, comparacion, advertencias y elementos repetidos donde aporten claridad.
@@ -63,7 +63,8 @@ Lead / usuario interesado en comprar vivienda.
 21. Las explicaciones de HU6 deben ser deterministicas o verificables. La IA no decide compatibilidad, no calcula estados y no modifica reglas.
 22. La comparacion no debe limitarse a valores lado a lado; debe explicar ventajas, desventajas, tradeoffs y una recomendacion referencial.
 23. La comparacion debe usar solo indicadores ya calculados por HU6 y no crear un score nuevo.
-24. La comparacion puede usar barras o graficos simples hechos con HTML/CSS, sin dependencias externas.
+24. La comparacion debe usar un grafico tipo barras comparativas o dumbbell hecho con HTML/CSS, sin radar chart ni dependencias externas.
+25. Academia se mantiene como CTA final de la vista y no forma parte del calculo de compatibilidad.
 
 ## Dependencias
 
@@ -243,9 +244,11 @@ El horizonte de compra ajusta mensajes, no cambia el score ni reemplaza el orden
 
 Cada alternativa debe incluir un boton `Comparar` o `Comparar con escenario actual` para contrastarla directamente contra el escenario actual. Si no hay escenario actual, la UI debe mostrar un mensaje controlado: `Primero selecciona un proyecto o ingresa un valor manual para comparar`.
 
-La comparacion principal debe estar visible cerca del selector de escenario. Debe mostrar `Escenario A` como el escenario actual y `Escenario B` como la alternativa seleccionada, incluyendo nombre, valor y estado de compatibilidad para que el usuario no tenga que adivinar que se esta comparando. Si aun no hay alternativa, debe indicar: `Selecciona una alternativa desde las opciones accesibles para compararla con tu escenario actual`.
+La vista debe presentar primero el resultado del escenario actual, porque responde que ocurre con el proyecto o valor que el usuario eligio. Despues de ese resultado, si existe una alternativa seleccionada, debe aparecer la comparacion visual.
 
-Cuando se genere una comparacion desde una tarjeta, la interfaz debe llevar la vista al panel superior de comparacion para que el usuario no tenga que buscar el resultado al final de la pagina.
+La comparacion visual reemplaza las tarjetas numericas `Escenario A` y `Escenario B`. Debe incluir lectura rapida, grafico comparativo tipo barras o dumbbell, ventajas y tradeoffs, integrando ahi los datos necesarios para entender escenario actual y alternativa sin duplicar cards lado a lado. No debe usar radar/pentagono, porque esa lectura dificulta entender rapidamente que escenario exige menor pie, menor brecha o mejor compatibilidad. Si aun no hay alternativa, la seccion de comparacion no necesita ocupar espacio principal; las opciones accesibles deben seguir disponibles mas abajo para iniciar la comparacion.
+
+Cuando se genere una comparacion desde una tarjeta, la interfaz debe llevar la vista al panel de comparacion visual para que el usuario no tenga que buscar el resultado al final de la pagina.
 
 La comparacion debe ir mas alla de una tabla de valores. Debe explicar, de forma deterministica y referencial:
 
@@ -263,6 +266,8 @@ Ejemplos de tradeoff:
 - escenario Cercano mas alineado a comuna/tipo declarado.
 
 Si un escenario tiene mejor compatibilidad, menor brecha y menor valor, puede marcarse como mas conveniente de forma referencial. Si financieramente es mejor pero se aleja de preferencias, debe explicarse como tradeoff. Si ambos son similares, la decision debe quedar asociada a preferencias de comuna, tipo de vivienda u horizonte de compra.
+
+La comparacion no crea score nuevo, no reemplaza la evaluacion bancaria y no cambia el resultado financiero principal del usuario. Solo reorganiza indicadores ya calculados por HU6 para explicar diferencias y tradeoffs de forma referencial. La seccion de Academia debe mantenerse al final como CTA de apoyo conceptual, sin alterar el flujo de calculo ni reemplazar la comparacion.
 
 ## Reglas de integracion con proyectos fake
 

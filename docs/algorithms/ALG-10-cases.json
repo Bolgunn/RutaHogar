@@ -1,0 +1,1836 @@
+{
+  "algorithm": "ALG-10",
+  "version": "e4-matching-v1",
+  "note": "Asserted by frontend/src/lib/matching/__tests__/leadProjectMatching.test.js under VITEST, not pytest — ALG-10 governs frontend code. Each case calls matchLeadToProjects(evaluacion, proyectos) and compares the whole returned object, order included. Capacity values in `evaluacion` are given literally rather than recomputed: ALG-10 never computes capacity, and pinning them here keeps these cases independent of ALG-9. Every ratio the pair-scoped math needs arrives inside capacidad_supuestos, so no capacity constant is declared on the frontend (spike §8.3). A number changed in code but not here turns the build red.",
+  "cases": [
+    {
+      "name": "comuna_alternativa_es_declaracion_no_preferencia",
+      "why": "R2.2 + R4 branch 3a. The lead declared Nunoa with Macul as alternative. Altos de Macul takes NO comuna penalty and is NOT re-orientable -- they already pointed there. Parque Lo Espejo is outside comunas_declaradas and takes the full -15, re-orientable. Pins the resolution of the contradiction with the shipped HU 2 filter (DashboardLeads.jsx:225-227), which already treats main and alternativa as equal matches.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": "Macul"
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-macul",
+          "nombre": "Altos de Macul",
+          "comuna": "Macul",
+          "tipo": "departamento",
+          "precio_min_uf": 2400,
+          "precio_max_uf": 3200,
+          "estado": "disponible"
+        },
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 68.9,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "p-macul",
+            "proyecto_nombre": "Altos de Macul",
+            "comuna": "Macul",
+            "tipo": "departamento",
+            "precio_min_uf": 2400,
+            "precio_max_uf": 3200,
+            "afinidad": 67.7,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 128.4,
+              "brecha_recurso_clp": 1045048,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "desempate_prefiere_comuna_principal",
+      "why": "R6 first tie-break, constructed so proyecto_id ordering CANNOT produce the answer: the alternative-comuna project is 'a-alt' and the main-comuna one is 'z-main', so alphabetical order would put the alternative first. Identical afinidad (both single-price at 2100, both inside comunas_declaradas, so neither takes the comuna penalty) -- only the main-comuna tie-break can put z-main first. This is where R2.2's flattened preference signal is recovered: an ordering rule, not a weight.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 20510280,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": "Macul"
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [],
+          "project_fit": {
+            "status": "compatible"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2200000,
+            "capacidad_compra_estimada_uf": 2520.0,
+            "capacidad_compra_estimada_clp": 102551400,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 3400.0,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "a-alt",
+          "nombre": "Torre Macul",
+          "comuna": "Macul",
+          "tipo": "departamento",
+          "precio_min_uf": 2100,
+          "precio_max_uf": 2100,
+          "estado": "disponible"
+        },
+        {
+          "id": "z-main",
+          "nombre": "Torre Ñuñoa",
+          "comuna": "Ñuñoa",
+          "tipo": "departamento",
+          "precio_min_uf": 2100,
+          "precio_max_uf": 2100,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "z-main",
+            "proyecto_nombre": "Torre Ñuñoa",
+            "comuna": "Ñuñoa",
+            "tipo": "departamento",
+            "precio_min_uf": 2100,
+            "precio_max_uf": 2100,
+            "afinidad": 92.0,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 2520.0,
+              "pie_disponible_uf": 504.0,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "a-alt",
+            "proyecto_nombre": "Torre Macul",
+            "comuna": "Macul",
+            "tipo": "departamento",
+            "precio_min_uf": 2100,
+            "precio_max_uf": 2100,
+            "afinidad": 92.0,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 2520.0,
+              "pie_disponible_uf": 504.0,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "holgura_parcial_ordena_y_marca_reorientable",
+      "why": "R2 with every component firing at once, plus R6 ordering across three projects. Spike §9.2 recomputed at uf_value_clp = 40695. Altos de Macul: holgura -7.2, comuna -15, clasif -8, blocker high -7 -> 62.8 Cercano, re-orientable because the comuna diverges, and the executive is told the lead needs ~$1,05 MM more in savings to reach the top of the range.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-macul",
+          "nombre": "Altos de Macul",
+          "comuna": "Macul",
+          "tipo": "departamento",
+          "precio_min_uf": 2400,
+          "precio_max_uf": 3200,
+          "estado": "disponible"
+        },
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        },
+        {
+          "id": "p-maipo",
+          "nombre": "Casas del Maipo",
+          "comuna": "Puente Alto",
+          "tipo": "casa",
+          "precio_min_uf": 2900,
+          "precio_max_uf": 2900,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 68.9,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "p-macul",
+            "proyecto_nombre": "Altos de Macul",
+            "comuna": "Macul",
+            "tipo": "departamento",
+            "precio_min_uf": 2400,
+            "precio_max_uf": 3200,
+            "afinidad": 52.7,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 128.4,
+              "brecha_recurso_clp": 1045048,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "p-maipo",
+            "proyecto_nombre": "Casas del Maipo",
+            "comuna": "Puente Alto",
+            "tipo": "casa",
+            "precio_min_uf": 2900,
+            "precio_max_uf": 2900,
+            "afinidad": 51.6,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "clears_price_range_sin_bloqueador_fabricado",
+      "why": "R3 guard, the load-bearing one. The lead clears Parque Lo Espejo's whole range so brecha_valor_uf is 0, steps 2-3 are SKIPPED, and the card falls through to the lead-level pie_insuficiente (step 4) with brecha_recurso_clp null. Without the guard it would claim pie_insuficiente_para_proyecto for a pair that has no such shortfall.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 68.9,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "proyecto_precio_unico_no_produce_nan",
+      "why": "Invariant 3 / R2.1: precio_min_uf == precio_max_uf is a valid single-price project. The 'capacidad >= precio_max -> 0' branch must run before interpolating. Also pins the tipo penalty (-10, casa vs departamento declarado).",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-maipo",
+          "nombre": "Casas del Maipo",
+          "comuna": "Puente Alto",
+          "tipo": "casa",
+          "precio_min_uf": 2900,
+          "precio_max_uf": 2900,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-maipo",
+            "proyecto_nombre": "Casas del Maipo",
+            "comuna": "Puente Alto",
+            "tipo": "casa",
+            "precio_min_uf": 2900,
+            "precio_max_uf": 2900,
+            "afinidad": 51.6,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "e2_lead_medio_holgado",
+      "why": "HU 10 E2, half one. A Medio lead sitting above precio_max, no declared preferences, no blockers. Compare with e2_lead_alto_ajustado: the test asserts this afinidad is strictly greater, which is 'capacity beats classification' expressed as a test.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": null,
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": null,
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [],
+          "project_fit": {
+            "status": "compatible"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 90.9,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "e2_lead_alto_ajustado",
+      "why": "HU 10 E2, half two. An Alto lead scraping precio_min on the same project takes the full -45 holgura penalty and lands below the Medio lead above.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 14652000,
+          "comuna_objetivo": null,
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": null,
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Alto",
+          "blockers": [],
+          "project_fit": {
+            "status": "compatible"
+          },
+          "financial_indicators": {
+            "ingreso_total": 3000000,
+            "capacidad_compra_estimada_uf": 1800.0,
+            "capacidad_compra_estimada_clp": 73251000,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 2400.0,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 55.0,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 800.0,
+              "brecha_recurso_clp": 6511200,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 1800.0,
+              "pie_disponible_uf": 360.0,
+              "clasificacion_financiera": "Alto",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "cercania_bajo_precio_min_entra_como_no_alcanza",
+      "why": "R1 near-miss band. Capacity 3071.6 is below precio_min 3800 but clears 0.80 x 3800 = 3040, so the pair stays in matches with alcanza_precio_min false. precio_ref becomes precio_min ('what it takes to qualify at all') per R3's third rule -- quoting precio_max here would overstate the gap by the whole width of the project.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-nunoa",
+          "nombre": "Mirador Ñuñoa",
+          "comuna": "Ñuñoa",
+          "tipo": "departamento",
+          "precio_min_uf": 3800,
+          "precio_max_uf": 4600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-nunoa",
+            "proyecto_nombre": "Mirador Ñuñoa",
+            "comuna": "Ñuñoa",
+            "tipo": "departamento",
+            "precio_min_uf": 3800,
+            "precio_max_uf": 4600,
+            "afinidad": 25.6,
+            "clasificacion": "Marginal",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 728.4,
+              "brecha_recurso_clp": 5928448,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "fuera_de_alcance_excluido_de_verdad",
+      "why": "R1 G2. Below 0.80 x precio_min with no FOGAES route, so the pair is genuinely excluded. This is the case the band still refuses -- softening G2 did not remove it.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 9768000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 1200.0,
+            "capacidad_compra_estimada_clp": 48834000,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 1600.0,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-nunoa",
+          "nombre": "Mirador Ñuñoa",
+          "comuna": "Ñuñoa",
+          "tipo": "departamento",
+          "precio_min_uf": 3800,
+          "precio_max_uf": 4600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [],
+        "excluidos": [
+          {
+            "proyecto_id": "p-nunoa",
+            "proyecto_nombre": "Mirador Ñuñoa",
+            "comuna": "Ñuñoa",
+            "tipo": "departamento",
+            "precio_min_uf": 3800,
+            "precio_max_uf": 4600,
+            "afinidad": null,
+            "clasificacion": null,
+            "motivo_exclusion": "capacidad_insuficiente",
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 2600.0,
+              "brecha_recurso_clp": 21161400,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 1200.0,
+              "pie_disponible_uf": 240.0,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "fogaes_vivienda_nueva_rescata_lead_de_entrada",
+      "why": "R1 assisted inclusion + R5. Perfil entrada: capacity 1474.4 is under 0.80 x 2100 = 1680, so the conservative gate would drop them. They declared vivienda_nueva, the project is under the FOGAES cap, and their savings already cover the 10% pie -- so inclusion tests the assisted ceiling (2573.6) and they appear, ranked on the CONSERVATIVE number and flagged desbloqueable_con_fogaes. This is the first-home segment the 20% anchor would otherwise lose.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 12000000,
+          "comuna_objetivo": "Puente Alto",
+          "vivienda_nueva": true
+        },
+        "onboarding": {
+          "tipo_propiedad": "casa",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 1500000,
+            "capacidad_compra_estimada_uf": 1474.4,
+            "capacidad_compra_estimada_clp": 60000708,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 2573.6,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-puente",
+          "nombre": "Puente Alto Familiar Referencial",
+          "comuna": "Puente Alto",
+          "tipo": "casa",
+          "precio_min_uf": 2100,
+          "precio_max_uf": 2100,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-puente",
+            "proyecto_nombre": "Puente Alto Familiar Referencial",
+            "comuna": "Puente Alto",
+            "tipo": "casa",
+            "precio_min_uf": 2100,
+            "precio_max_uf": 2100,
+            "afinidad": 32.0,
+            "clasificacion": "Marginal",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente_para_proyecto",
+              "titulo": "Pie insuficiente para este proyecto",
+              "brecha_valor_uf": 625.6,
+              "brecha_recurso_clp": 5091758,
+              "brecha_recurso_tipo": "ahorro"
+            },
+            "evidencia": {
+              "capacidad_uf": 1474.4,
+              "pie_disponible_uf": 294.9,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": true
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "holgura_en_tope_precio_unico_cuesta_12",
+      "why": "R2.1's precio_max anchor on a single-price project. The lead can exactly afford it -- zero margin -- and pays HOLGURA_EN_TOPE = 12, NOT the precio_min anchor of 45. A lead who clears a single-price project reaches 100% of its inventory; what they lack is margin for gastos operacionales, not inventory reach.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 17091900,
+          "comuna_objetivo": "Puente Alto",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "casa",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2000000,
+            "capacidad_compra_estimada_uf": 2100.0,
+            "capacidad_compra_estimada_clp": 85459500,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 2800.0,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-puente",
+          "nombre": "Puente Alto Familiar Referencial",
+          "comuna": "Puente Alto",
+          "tipo": "casa",
+          "precio_min_uf": 2100,
+          "precio_max_uf": 2100,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-puente",
+            "proyecto_nombre": "Puente Alto Familiar Referencial",
+            "comuna": "Puente Alto",
+            "tipo": "casa",
+            "precio_min_uf": 2100,
+            "precio_max_uf": 2100,
+            "afinidad": 80.0,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 2100.0,
+              "pie_disponible_uf": 420.0,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "sobrecalce_saturado_ordena_ultimo",
+      "why": "R2.1 upper tail. A lead with 4.6x the project price saturates at SOBRECALCE_MAX = 20 -- the inversionista at 2x is NOT penalised this hard (saturation is 3.0), which is the whole reason that constant moved off 2.0.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 78134400,
+          "comuna_objetivo": "Puente Alto",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "casa",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 6000000,
+            "capacidad_compra_estimada_uf": 9600.0,
+            "capacidad_compra_estimada_clp": 390672000,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 8500.0,
+            "restriccion_vinculante": "renta",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-puente",
+          "nombre": "Puente Alto Familiar Referencial",
+          "comuna": "Puente Alto",
+          "tipo": "casa",
+          "precio_min_uf": 2100,
+          "precio_max_uf": 2100,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-puente",
+            "proyecto_nombre": "Puente Alto Familiar Referencial",
+            "comuna": "Puente Alto",
+            "tipo": "casa",
+            "precio_min_uf": 2100,
+            "precio_max_uf": 2100,
+            "afinidad": 72.0,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 9600.0,
+              "pie_disponible_uf": 1920.0,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "renta",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "bloqueador_critico_excluye_antes_que_capacidad",
+      "why": "G1 before G2. A critical blocker excludes every pair with motivo bloqueador_critico even where the lead could afford the project, because commercial_priority.py already refuses to route them (do_not_route). bloqueador_principal reports the critical blocker (step 1).",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "morosidad_vigente",
+              "severity": "critical",
+              "title": "Morosidad vigente"
+            },
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        },
+        {
+          "id": "p-nunoa",
+          "nombre": "Mirador Ñuñoa",
+          "comuna": "Ñuñoa",
+          "tipo": "departamento",
+          "precio_min_uf": 3800,
+          "precio_max_uf": 4600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [],
+        "excluidos": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": null,
+            "clasificacion": null,
+            "motivo_exclusion": "bloqueador_critico",
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "morosidad_vigente",
+              "titulo": "Morosidad vigente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "p-nunoa",
+            "proyecto_nombre": "Mirador Ñuñoa",
+            "comuna": "Ñuñoa",
+            "tipo": "departamento",
+            "precio_min_uf": 3800,
+            "precio_max_uf": 4600,
+            "afinidad": null,
+            "clasificacion": null,
+            "motivo_exclusion": "bloqueador_critico",
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "morosidad_vigente",
+              "titulo": "Morosidad vigente",
+              "brecha_valor_uf": 728.4,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "requires_info_excluye_todo_sin_puntuar",
+      "why": "G0 / A2. Capacity is null, so nothing is rankable: every project lands in excluidos with capacidad_requiere_antecedentes and bloqueador_principal null. These are leads needing a fresh evaluation, never leads with zero capacity.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 5000000,
+          "comuna_objetivo": null,
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": null,
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Requiere antecedentes",
+          "blockers": [],
+          "project_fit": {
+            "status": "requires_info"
+          },
+          "financial_indicators": {
+            "ingreso_total": 0,
+            "capacidad_compra_estimada_uf": null,
+            "capacidad_compra_estimada_clp": null,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": null,
+            "restriccion_vinculante": null,
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "requires_info",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        },
+        {
+          "id": "p-macul",
+          "nombre": "Altos de Macul",
+          "comuna": "Macul",
+          "tipo": "departamento",
+          "precio_min_uf": 2400,
+          "precio_max_uf": 3200,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [],
+        "excluidos": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": null,
+            "clasificacion": null,
+            "motivo_exclusion": "capacidad_requiere_antecedentes",
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": null,
+              "pie_disponible_uf": 122.9,
+              "clasificacion_financiera": "Requiere antecedentes",
+              "restriccion_vinculante": null,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": false
+            }
+          },
+          {
+            "proyecto_id": "p-macul",
+            "proyecto_nombre": "Altos de Macul",
+            "comuna": "Macul",
+            "tipo": "departamento",
+            "precio_min_uf": 2400,
+            "precio_max_uf": 3200,
+            "afinidad": null,
+            "clasificacion": null,
+            "motivo_exclusion": "capacidad_requiere_antecedentes",
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": null,
+              "pie_disponible_uf": 122.9,
+              "clasificacion_financiera": "Requiere antecedentes",
+              "restriccion_vinculante": null,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": false,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sin_comuna_ni_project_fit_nunca_reorientable",
+      "why": "R4's stated negative consequence, pinned so it is not later rediscovered as a bug. No comuna declared (branch 3a cannot fire) and project_fit.status is requires_info rather than out_of_reach/near (branch 3b cannot fire), so a Compatible pair is still reorientable=false. You cannot re-orient someone who never stated a direction.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": null,
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": null,
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Alto",
+          "blockers": [],
+          "project_fit": {
+            "status": "requires_info"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 98.9,
+            "clasificacion": "Compatible",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": null,
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Alto",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "renta_vinculante_brecha_en_ingreso",
+      "why": "R3 step 3: an income-bound lead gets renta_insuficiente_para_proyecto and the gap is expressed in monthly income, computed through the annuity factor under the same capacidad_supuestos the capacity used (plazo 25, not the default 30).",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 80000000,
+          "comuna_objetivo": "Las Condes",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Alto",
+          "blockers": [],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 5500000,
+            "capacidad_compra_estimada_uf": 9601.8,
+            "capacidad_compra_estimada_clp": 390745251,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 8534.9,
+            "restriccion_vinculante": "renta",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 25,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-alto",
+          "nombre": "Cumbres de Apoquindo",
+          "comuna": "Las Condes",
+          "tipo": "departamento",
+          "precio_min_uf": 9000,
+          "precio_max_uf": 11000,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-alto",
+            "proyecto_nombre": "Cumbres de Apoquindo",
+            "comuna": "Las Condes",
+            "tipo": "departamento",
+            "precio_min_uf": 9000,
+            "precio_max_uf": 11000,
+            "afinidad": 64.9,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": false,
+            "bloqueador_principal": {
+              "codigo": "renta_insuficiente_para_proyecto",
+              "titulo": "Renta insuficiente para este proyecto",
+              "brecha_valor_uf": 1398.2,
+              "brecha_recurso_clp": 800894,
+              "brecha_recurso_tipo": "ingreso"
+            },
+            "evidencia": {
+              "capacidad_uf": 9601.8,
+              "pie_disponible_uf": 1965.8,
+              "clasificacion_financiera": "Alto",
+              "restriccion_vinculante": "renta",
+              "plazo_anios": 25,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    },
+    {
+      "name": "bloqueadores_no_criticos_topan_en_15",
+      "why": "R2 last row: three high blockers would subtract 21, but the component is capped at 15. Step 4 then reports the highest-severity one by declaration order in blockers.py.",
+      "evaluacion": {
+        "input": {
+          "ahorro_disponible": 25000000,
+          "comuna_objetivo": "Ñuñoa",
+          "vivienda_nueva": null
+        },
+        "onboarding": {
+          "tipo_propiedad": "departamento",
+          "comuna_alternativa": null
+        },
+        "result": {
+          "classification": "Medio",
+          "blockers": [
+            {
+              "code": "pie_insuficiente",
+              "severity": "high",
+              "title": "Pie insuficiente"
+            },
+            {
+              "code": "dividendo_exigente",
+              "severity": "high",
+              "title": "Dividendo exigente"
+            },
+            {
+              "code": "deuda_actual_alta",
+              "severity": "high",
+              "title": "Deuda actual alta"
+            },
+            {
+              "code": "contrato_inestable",
+              "severity": "medium",
+              "title": "Contrato inestable"
+            }
+          ],
+          "project_fit": {
+            "status": "near"
+          },
+          "financial_indicators": {
+            "ingreso_total": 2500000,
+            "capacidad_compra_estimada_uf": 3071.6,
+            "capacidad_compra_estimada_clp": 124998762,
+            "capacidad_por_renta_uf": null,
+            "capacidad_por_pie_uf": null,
+            "capacidad_asistida_uf": 4289.3,
+            "restriccion_vinculante": "pie",
+            "dividendo_maximo_sostenible_clp": null,
+            "capacidad_status": "ok",
+            "capacidad_supuestos": {
+              "tasa_anual_uf": 0.04,
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "pie_ratio": 0.2,
+              "ratio_dividendo_max": 0.3,
+              "ratio_dividendo_saludable": 0.25,
+              "fogaes_tope_uf": 6000,
+              "fogaes_tope_con_subsidio_uf": 3000,
+              "fogaes_pie_ratio": 0.1,
+              "uf_value_clp": 40695,
+              "uf_fecha": "2026-08-16",
+              "age_term_verified": true,
+              "version": "e4-matching-v1"
+            }
+          }
+        }
+      },
+      "proyectos": [
+        {
+          "id": "p-espejo",
+          "nombre": "Parque Lo Espejo",
+          "comuna": "Lo Espejo",
+          "tipo": "departamento",
+          "precio_min_uf": 1800,
+          "precio_max_uf": 2600,
+          "estado": "disponible"
+        }
+      ],
+      "expect": {
+        "matches": [
+          {
+            "proyecto_id": "p-espejo",
+            "proyecto_nombre": "Parque Lo Espejo",
+            "comuna": "Lo Espejo",
+            "tipo": "departamento",
+            "precio_min_uf": 1800,
+            "precio_max_uf": 2600,
+            "afinidad": 60.9,
+            "clasificacion": "Cercano",
+            "motivo_exclusion": null,
+            "reorientable": true,
+            "bloqueador_principal": {
+              "codigo": "pie_insuficiente",
+              "titulo": "Pie insuficiente",
+              "brecha_valor_uf": 0.0,
+              "brecha_recurso_clp": null,
+              "brecha_recurso_tipo": null
+            },
+            "evidencia": {
+              "capacidad_uf": 3071.6,
+              "pie_disponible_uf": 614.3,
+              "clasificacion_financiera": "Medio",
+              "restriccion_vinculante": "pie",
+              "plazo_anios": 30,
+              "plazo_origen": "declarado",
+              "alcanza_precio_min": true,
+              "desbloqueable_con_fogaes": false
+            }
+          }
+        ],
+        "excluidos": []
+      }
+    }
+  ]
+}

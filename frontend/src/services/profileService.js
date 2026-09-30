@@ -179,7 +179,7 @@ export async function updateLastLeadSeenAt(userId) {
 }
 
 function consentKeyForUser(userId) {
-  return userId ? `scoreleads_dataconsent_${userId}` : "scoreleads_dataconsent";
+  return userId ? `RutaHogar_dataconsent_${userId}` : "RutaHogar_dataconsent";
 }
 
 export function getLocalConsent(userId) {

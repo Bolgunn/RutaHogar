@@ -352,7 +352,7 @@ export default function HousingSavingsPlan({ evaluation, onBack, initialPieType,
                 <small>Ahorrando {formatClp(realPlan.monthlyCapacity)} mensual</small>
               </>
             ) : (
-              <strong>{realPlan.isViable ? "C\u00e1lculo en progreso" : "No viable actualmente"}</strong>
+              <strong>{realPlan.isViable ? "Cálculo en progreso" : "No viable actualmente"}</strong>
             )}
           </div>
         </div>

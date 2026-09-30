@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import test from "node:test";
+import { test } from "vitest";
 import {
   CHECKLIST_ITEMS,
   DISCLAIMER_TEXTS,
@@ -72,6 +72,8 @@ test("All checklist items have valid Academia mappings (E4)", () => {
 });
 
 test("DISCLAIMER_TEXTS satisfies S1, S5, and S7 safeguards (E3)", () => {
-  assert.strictEqual(DISCLAIMER_TEXTS.bannerText.includes("No se deben subir ni ingresar documentos sensibles"), true);
-  assert.strictEqual(DISCLAIMER_TEXTS.legalNote.includes("orientativo y educacional"), true);
+  assert.strictEqual(DISCLAIMER_TEXTS.consolidated.includes("orientativo y educacional"), true);
+  assert.strictEqual(DISCLAIMER_TEXTS.consolidated.includes("no constituye aprobación de crédito".toLowerCase()) ||
+    DISCLAIMER_TEXTS.consolidated.includes("No constituye aprobación de crédito"), true);
+  assert.strictEqual(DISCLAIMER_TEXTS.consolidated.includes("no se deben ingresar ni subir claves bancarias ni documentos sensibles"), true);
 });

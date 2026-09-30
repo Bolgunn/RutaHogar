@@ -81,8 +81,11 @@ export default function AdminArcoRequests() {
 
   return (
     <section>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-        <strong>Solicitudes ARCO</strong>
+      <div className="admin-surface__header">
+        <div className="admin-surface__title">
+          <h2>Solicitudes ARCO</h2>
+          <p>Gestiona solicitudes de acceso, rectificación, cancelación u oposición con trazabilidad básica.</p>
+        </div>
         <label style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
           <input type="checkbox" checked={showAll} onChange={() => setShowAll((s) => !s)} />
           Mostrar todas
@@ -141,32 +144,24 @@ export default function AdminArcoRequests() {
       )}
 
       {selected && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => { if (!resolving) setSelected(null); }}
-        >
-          <div
-            style={{
-              background: "var(--color-surface, #fff)",
-              borderRadius: "14px",
-              padding: "2rem",
-              maxWidth: "520px",
-              width: "90%",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: "0 0 1rem" }}>Resolver solicitud ARCO</h2>
+        <div className="admin-modal" onClick={() => { if (!resolving) setSelected(null); }}>
+          <div className="admin-modal-card" style={{ maxWidth: "520px" }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div className="admin-modal-heading">
+                <span className="eyebrow">Privacidad y datos</span>
+                <h2>Resolver solicitud ARCO</h2>
+                <p>Confirma el cambio de estado manteniendo el registro visible para seguimiento.</p>
+              </div>
+              <button
+                className="secondary-button compact-button"
+                onClick={() => setSelected(null)}
+                disabled={resolving}
+              >
+                Cerrar
+              </button>
+            </div>
 
-            <div style={{ display: "grid", gap: "0.5rem", marginBottom: "1.25rem" }}>
+            <div className="admin-list" style={{ marginBottom: "1.25rem" }}>
               <p style={{ margin: 0 }}><strong>Email:</strong> {selected.email}</p>
               <p style={{ margin: 0 }}><strong>Tipo:</strong> {tipoLabels[selected.tipo] || selected.tipo}</p>
               <p style={{ margin: 0 }}><strong>Descripción:</strong> {selected.descripcion}</p>
@@ -179,7 +174,7 @@ export default function AdminArcoRequests() {
 
             {error && <div className="error-message" style={{ marginBottom: "0.75rem" }}>{error}</div>}
 
-            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
+            <div className="form-actions" style={{ justifyContent: "flex-end" }}>
               <button
                 className="secondary-button"
                 onClick={() => setSelected(null)}

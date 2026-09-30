@@ -8,8 +8,8 @@ function preserveCase(match, replacement) {
 const WORD_FIXES = [
   [/\bAun\b/g, "Aún"],
   [/\baun\b/g, "aún"],
-  [/\bpreevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "preevaluaciones" : "preevaluación")],
-  [/\bevaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "evaluaciones" : "evaluación")],
+  [/\bpre-?evaluacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "precalificaciones" : "precalificación")],
+  [/\bevaluacion(es)?\b(?!\s+(?:bancaria|formal|hipotecaria|crediticia|oficial)\b)(?!\s+(?:del?|para\s+el)\s+(?:MINVU|SERVIU)\b)/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "calificaciones" : "calificación")],
   [/\bsituacion(es)?\b/gi, (match) => preserveCase(match, match.toLowerCase().endsWith("es") ? "situaciones" : "situación")],
   [/\binformacion\b/gi, (match) => preserveCase(match, "información")],
   [/\bantiguedad\b/gi, (match) => preserveCase(match, "antigüedad")],
@@ -63,6 +63,19 @@ export function normalizeDisplayList(items) {
     .filter(Boolean);
 }
 
+// normalizeDisplayList conserva los objetos {text, benefit} que el motor emite
+// desde HU 4, asi que sus listas son mixtas: strings en evaluaciones antiguas,
+// objetos en las nuevas. Un objeto renderizado como hijo de React tumba el arbol
+// entero, asi que todo consumidor tiene que leerlas por aca.
+export function displayItemText(item) {
+  if (typeof item === "string") return item;
+  return item?.text || "";
+}
+
+export function displayItemBenefit(item) {
+  return typeof item === "string" ? null : item?.benefit || null;
+}
+
 export function normalizeImprovementPlan(items) {
   if (!Array.isArray(items)) return [];
   
@@ -85,4 +98,21 @@ export function normalizeImprovementPlan(items) {
     }
     return null;
   }).filter(Boolean);
+}
+
+// Prefijos con los que el backend marcaba errores de IA en versiones
+// anteriores. Se tratan como "sin contenido" para que nunca se muestren.
+const AI_ERROR_PREFIXES = ["error ia:", "error:", "resumen ia no disponible"];
+
+export function hasUsableAiText(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+  return !AI_ERROR_PREFIXES.some((prefix) =>
+    text.toLowerCase().startsWith(prefix)
+  );
+}
+
+// Devuelve el texto si es utilizable; de lo contrario, cadena vacía.
+export function sanitizeAiText(value) {
+  return hasUsableAiText(value) ? String(value) : "";
 }

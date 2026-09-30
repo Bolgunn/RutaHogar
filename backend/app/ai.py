@@ -11,32 +11,73 @@ except ImportError:
 
 from .config import get_groq_api_key
 
-def _ask_groq(prompt: str, max_tokens: int = 300) -> str:
-    """Wrapper interno que llama a llama-3.1-8b-instant vía Groq."""
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    with open(_env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                os.environ.setdefault(key.strip(), value.strip())
+
+# Groq retiró los modelos Llama 3.x el 16/08/2026. El reemplazo oficial
+# recomendado para llama-3.1-8b-instant es openai/gpt-oss-20b.
+# Se puede cambiar sin tocar código con la variable GROQ_MODEL en backend/.env.
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
+
+def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
+    """Wrapper interno que consulta el modelo configurado vía Groq.
+
+    Devuelve el texto generado o None si la IA no está disponible o falló;
+    los textos de estado/error jamás se exponen como contenido.
+    """
+
     if Groq is None:
-        return "Resumen IA no disponible en entorno local."
+        print("[ai] Librería de Groq no instalada; IA deshabilitada.", flush=True)
+        return None
 
     api_key = get_groq_api_key()
     if not api_key:
-        return "Resumen IA no disponible: GROQ_API_KEY no configurada."
+        print("[ai] GROQ_API_KEY no configurada; IA deshabilitada.", flush=True)
+        return None
+
+    model = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
 
     client = Groq(api_key=api_key)
+
+    kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.4,
+    }
+
+    # Los modelos GPT-OSS aceptan controlar el esfuerzo de razonamiento;
+    # "low" basta para textos cortos y evita consumir presupuesto de salida.
+    if model.startswith("openai/gpt-oss"):
+        kwargs["reasoning_effort"] = "low"
+
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-            temperature=0.4,
-        )
-        return completion.choices[0].message.content.strip()
+        try:
+            completion = client.chat.completions.create(**kwargs)
+        except TypeError:
+            # SDK antiguo sin soporte para reasoning_effort.
+            kwargs.pop("reasoning_effort", None)
+            completion = client.chat.completions.create(**kwargs)
+        content = (completion.choices[0].message.content or "").strip()
+        # Ante cualquier fallo se devuelve None: los textos de IA fallidos
+        # nunca deben mostrarse al usuario como contenido.
+        return content or None
     except Exception as e:
-        return f"ERROR IA: {str(e)}"
+        # No se filtra el detalle del error del proveedor hacia el producto;
+        # queda registrado en los logs del servidor.
+        print(f"[ai] Falló la generación con {model}: {e}", flush=True)
+        return None
 
 
 def _clean_generated_text(text: str) -> str:
     replacements = {
-        "preevaluacion": "preevaluación",
-        "evaluacion": "evaluación",
+        "preevaluacion": "precalificación",
         "situacion": "situación",
         "informacion": "información",
         "antiguedad": "antigüedad",
@@ -64,6 +105,16 @@ def _clean_generated_text(text: str) -> str:
             cleaned,
             flags=re.IGNORECASE,
         )
+    cleaned = re.sub(
+        r"\bevaluacion(es)?\b(?!\s+(?:bancaria|formal|hipotecaria|crediticia|oficial)\b)(?!\s+(?:del?|para\s+el)\s+(?:MINVU|SERVIU)\b)",
+        lambda match: (
+            "Calificaciones" if match.group(0) == "Evaluaciones" else
+            "Calificación" if match.group(0) == "Evaluacion" else
+            "calificaciones" if match.group(1) else "calificación"
+        ),
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     return cleaned
 
 
@@ -167,7 +218,7 @@ NO debes:
 5. Reemplazar la evaluación bancaria formal.
 Responde solo el resumen, sin títulos ni encabezados."""
 
-    return _clean_generated_text(_ask_groq(prompt, max_tokens=200))
+    return _clean_generated_text(_ask_groq(prompt, max_tokens=200)) or None
 
 
 def generate_commercial_guidance(
@@ -221,7 +272,7 @@ Recomendaciones del sistema:
 
 Indica UNA sola acción comercial concreta para este lead, usando especialmente commercial_priority_detail si está disponible.
 No ejecutes derivaciones reales ni digas que se enviará a CRM; solo orienta.
-Luego explica la razón considerando toda la evaluación.
+Luego explica la razón considerando toda la calificación.
 
 Formato de respuesta (respeta exactamente este formato):
 Acción: [nombre de la acción]\n
@@ -234,7 +285,7 @@ NO debes:
 4. Prometer aprobación bancaria, subsidios ni condiciones comerciales.
 """
 
-    return _clean_generated_text(_ask_groq(prompt, max_tokens=120))
+    return _clean_generated_text(_ask_groq(prompt, max_tokens=120)) or None
 
 
 def generate_user_explanation(
@@ -261,10 +312,10 @@ def generate_user_explanation(
     )
 
     prompt = f"""Eres un asesor financiero hipotecario que habla directamente con una persona interesada en comprar vivienda.
-Redacta UN párrafo de entre 80 y 120 palabras explicando los principales factores que influyeron en su evaluación.
+Redacta UN párrafo de entre 80 y 120 palabras explicando los principales factores que influyeron en su calificación.
 El score y la clasificación ya fueron calculados por reglas del sistema. La IA solo redacta la explicación.
 
-Datos de la evaluación:
+Datos de la calificación:
 - Score: {score}/100
 - Clasificación: {classification}
 
@@ -295,7 +346,10 @@ NO debes:
 Responde solo el párrafo, sin títulos ni encabezados."""
 
     explanation = _clean_generated_text(_ask_groq(prompt, max_tokens=250))
-    disclaimer = "Esta preevaluación es orientativa y no reemplaza una evaluación bancaria formal."
+    if not explanation:
+        return None
+
+    disclaimer = "Esta precalificación es orientativa y no reemplaza una evaluación bancaria formal."
     if disclaimer not in explanation:
         explanation = f"{explanation}\n\n{disclaimer}"
     return explanation

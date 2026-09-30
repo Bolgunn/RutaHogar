@@ -9,9 +9,7 @@
  */
 
 export const DISCLAIMER_TEXTS = {
-  bannerTitle: "Checklist Formativo y Referencial",
-  bannerText: "No se deben subir ni ingresar documentos sensibles ni claves bancarias en esta etapa.",
-  legalNote: "Este checklist es meramente orientativo y educacional; no genera compromisos financieros ni constituye aprobación de crédito ni asesoría formal.",
+  consolidated: "Este checklist es meramente orientativo y educacional. No constituye aprobación de crédito, asesoría formal ni genera compromisos financieros. En esta etapa no se deben ingresar ni subir claves bancarias ni documentos sensibles.",
 };
 
 export const CHECKLIST_ITEMS = {

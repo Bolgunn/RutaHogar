@@ -1,5 +1,6 @@
 frontend/.env.local
 backend/.venv/
+backend/venv/
 frontend/.env
 backend/ .env
 .env
@@ -8,6 +9,10 @@ supabase/functions/.env.local
 supabase/.env
 supabase/.temp/
 Makefile
+handbookmd
+
+.agents
+skills-lock.json
 
 # Dependencies
 node_modules/
@@ -16,12 +21,15 @@ frontend/node_modules/
 # Build output
 frontend/dist
 
+# Generado por `make story-graph` a partir del wiki; se comparte como archivo suelto
+docs/story-graph.html
+
 # Python cache
 **/__pycache__/
 **/*.pyc
 
-# Obsidian UI state
-**/.obsidian/workspace.json
+# Obsidian: configuracion local del vault, no del proyecto
+**/.obsidian/
 .vercel
 .env*
 !.env.example
@@ -38,5 +46,12 @@ backend/uvicorn.log
 
 backend/vercel.json
 
+*.zip
+
 # Obsidian config in docs/
 docs/.obsidian/
+
+Makefile
+
+# Antigravity artifacts
+install.cmd

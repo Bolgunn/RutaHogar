@@ -49,7 +49,7 @@ function getUfValue(input = {}) {
   return toNumber(input.uf_value_clp) || DEFAULT_UF_CLP;
 }
 
-function projectToScenario(project, ufValueClp) {
+export function projectToScenario(project, ufValueClp) {
   const valueUf = toNumber(project?.valor_uf);
   const valueClp = toNumber(project?.valor_clp) || Math.round(valueUf * ufValueClp);
   return {
@@ -64,16 +64,21 @@ function projectToScenario(project, ufValueClp) {
   };
 }
 
-export function getScenarioFromManualValue(valueUf, ufValueClp) {
-  const numericUf = toNumber(valueUf);
+export function getScenarioFromManualValue(value, ufValueClp, unit = "uf") {
+  const safeUfValueClp = toNumber(ufValueClp) || DEFAULT_UF_CLP;
+  const normalizedUnit = normalizeText(unit);
+  const numericValue = toNumber(value);
+  const isClp = normalizedUnit === "clp";
+  const valueClp = isClp ? numericValue : Math.round(numericValue * safeUfValueClp);
+  const valueUf = isClp && safeUfValueClp > 0 ? valueClp / safeUfValueClp : numericValue;
   return {
     id: "manual",
     source: "manual",
     label: "Valor manual",
     comuna: "",
     tipo_vivienda: "",
-    valueUf: numericUf,
-    valueClp: Math.round(numericUf * ufValueClp),
+    valueUf,
+    valueClp,
     project: null,
   };
 }
@@ -192,7 +197,9 @@ function getStatusMessage(status, mainGap, horizon, details = {}) {
   return byGap[mainGap] || "Este escenario requiere ajustes importantes antes de avanzar.";
 }
 
-export function evaluateScenario(input = {}, scenario) {
+// `capacidad` es el override de ALG-9 (HU 10). Sin él, el escenario se evalúa
+// exactamente como antes: ningún consumidor previo cambia de comportamiento.
+export function evaluateScenario(input = {}, scenario, capacidad = null) {
   const ufValueClp = getUfValue(input);
   const valueClp = toNumber(scenario?.valueClp);
   const valueUf = toNumber(scenario?.valueUf) || (ufValueClp > 0 ? valueClp / ufValueClp : 0);
@@ -208,9 +215,15 @@ export function evaluateScenario(input = {}, scenario) {
   const gapRecomendado = Math.max(pieRecomendado - savings, 0);
   const gapMinimoUf = ufValueClp > 0 ? gapMinimo / ufValueClp : 0;
   const gapRecomendadoUf = ufValueClp > 0 ? gapRecomendado / ufValueClp : 0;
-  const prudentDividend = Math.round(income * PRUDENT_DIVIDEND_RATE);
+  const prudentDividend = capacidad
+    ? capacidad.dividendoMaximoClp
+    : Math.round(income * PRUDENT_DIVIDEND_RATE);
   const debtRatio = income > 0 ? debt / income : 0;
-  const maxByMinDownPayment = savings > 0 ? savings / MIN_DOWN_PAYMENT_RATE : 0;
+  const maxByMinDownPayment = capacidad
+    ? capacidad.maxValueClp
+    : savings > 0
+      ? savings / MIN_DOWN_PAYMENT_RATE
+      : 0;
   const maxByRecommendedDownPayment = savings > 0 ? savings / RECOMMENDED_DOWN_PAYMENT_RATE : 0;
   const status = buildStatus({
     input,
@@ -371,7 +384,7 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     considerations.push("Ambos escenarios son similares financieramente; la decision depende mas de comuna, tipo de vivienda u horizonte.");
   }
   if (considerations.length === 0) {
-    considerations.push("No se detecta una diferencia decisiva; revisa preferencias de comuna, tipo de vivienda y horizonte antes de decidir.");
+    considerations.push("No se detecta una diferencia decisiva");
   }
 
   const currentFinancialWins =
@@ -382,12 +395,9 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     (alternativeStatusRank < currentStatusRank ? 1 : 0) +
     (valueComparison > 0 ? 1 : 0) +
     (gapComparison > 0 ? 1 : 0);
-  const currentPreferenceWins =
-    (currentPreference.communeMatch && !alternativePreference.communeMatch ? 1 : 0) +
-    (currentPreference.typeMatch && !alternativePreference.typeMatch ? 1 : 0);
-  const alternativePreferenceWins =
-    (alternativePreference.communeMatch && !currentPreference.communeMatch ? 1 : 0) +
-    (alternativePreference.typeMatch && !currentPreference.typeMatch ? 1 : 0);
+  const currentPreferenceMatches = (currentPreference.communeMatch ? 1 : 0) + (currentPreference.typeMatch ? 1 : 0);
+  const alternativePreferenceMatches =
+    (alternativePreference.communeMatch ? 1 : 0) + (alternativePreference.typeMatch ? 1 : 0);
 
   let recommendation = "similar";
   if (currentFinancialWins >= 2 && currentFinancialWins > alternativeFinancialWins) {
@@ -409,27 +419,15 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
     sin_datos_suficientes: "Faltan datos para comparar",
   };
 
-  const summaryByRecommendation = {
-    escenario_actual:
-      currentPreferenceWins < alternativePreferenceWins
-        ? "El escenario actual se ve financieramente mas holgado, aunque la alternativa puede estar mejor alineada a tus preferencias."
-        : "El escenario actual concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    alternativa:
-      alternativePreferenceWins < currentPreferenceWins
-        ? "La alternativa se ve financieramente mas holgada, aunque el escenario actual puede estar mejor alineado a tus preferencias."
-        : "La alternativa concentra mejores condiciones referenciales en compatibilidad, valor o brecha.",
-    similar: "No hay una ventaja financiera clara; conviene decidir mirando comuna, tipo de vivienda y horizonte.",
-    sin_datos_suficientes: "Primero selecciona dos escenarios comparables.",
-  };
-
   const maxValueUf = Math.max(toNumber(current.valueUf), toNumber(alternative.valueUf), 1);
   const maxPieMinUf = Math.max(toNumber(current.pieMinimoUf), toNumber(alternative.pieMinimoUf), 1);
+  const maxPieRecommendedUf = Math.max(toNumber(current.pieRecomendadoUf), toNumber(alternative.pieRecomendadoUf), 1);
   const maxGapUf = Math.max(toNumber(current.gapMinimoUf), toNumber(alternative.gapMinimoUf), 1);
 
   return {
     recommendation,
     title: titleByRecommendation[recommendation],
-    summary: summaryByRecommendation[recommendation],
+    summary: "",
     advantages: {
       current: currentAdvantages.length ? currentAdvantages : ["No presenta una ventaja clara frente a la alternativa."],
       alternative: alternativeAdvantages.length ? alternativeAdvantages : ["No presenta una ventaja clara frente al escenario actual."],
@@ -464,10 +462,19 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
       },
       {
         id: "pie-minimo",
-        label: "Pie minimo requerido",
+        label: "Pie mínimo requerido",
         current: toNumber(current.pieMinimoUf),
         alternative: toNumber(alternative.pieMinimoUf),
         max: maxPieMinUf,
+        lowerIsBetter: true,
+        unit: "UF",
+      },
+      {
+        id: "pie-recomendado",
+        label: "Pie recomendado",
+        current: toNumber(current.pieRecomendadoUf),
+        alternative: toNumber(alternative.pieRecomendadoUf),
+        max: maxPieRecommendedUf,
         lowerIsBetter: true,
         unit: "UF",
       },
@@ -490,6 +497,17 @@ export function buildComparisonInsights(current, alternative, preferences = {}) 
         unit: "",
         currentLabel: current.status,
         alternativeLabel: alternative.status,
+      },
+      {
+        id: "preferencias",
+        label: "Preferencias",
+        current: currentPreferenceMatches,
+        alternative: alternativePreferenceMatches,
+        max: 2,
+        lowerIsBetter: false,
+        unit: "",
+        currentLabel: `${currentPreferenceMatches}/2`,
+        alternativeLabel: `${alternativePreferenceMatches}/2`,
       },
     ],
   };
@@ -521,14 +539,37 @@ export function buildSimulationContext(evaluation, onboarding) {
     classification: evaluation?.result?.classification,
     score: evaluation?.result?.score,
     risks: evaluation?.result?.risks || [],
+    // Sin esto la capacidad de ALG-9 nunca llega a esta pantalla.
+    financial_indicators: evaluation?.result?.financial_indicators,
+  };
+}
+
+// ALG-9 es la única fuente de "qué puede comprar este lead". El cálculo local
+// (savings / 0.10, sin puerta de ingreso, y 0.25 en cálculo donde ALG-9 resolvió
+// 0.30) difiere en un orden de magnitud para un lead limitado por renta; dos
+// pantallas no pueden discrepar sobre eso. El orden de esta lista NO cambia.
+function capacidadDesdeIndicadores(input) {
+  const indicadores = input?.financial_indicators;
+  if (!indicadores || indicadores.capacidad_status === "requires_info") return null;
+  const capacidadUf = indicadores.capacidad_compra_estimada_uf;
+  if (typeof capacidadUf !== "number") return null;
+  const ufValueClp = getUfValue(input);
+  return {
+    maxValueClp: capacidadUf * ufValueClp,
+    dividendoMaximoClp: indicadores.dividendo_maximo_sostenible_clp ?? 0,
   };
 }
 
 export function buildAccessibleAlternatives(projects = [], input = {}, onboarding = {}, limit = 4) {
   const ufValueClp = getUfValue(input);
+  const capacidad = capacidadDesdeIndicadores(input);
   return projects
     .map((project) => {
-      const scenarioEvaluation = evaluateScenario(input, projectToScenario(project, ufValueClp));
+      const scenarioEvaluation = evaluateScenario(
+        input,
+        projectToScenario(project, ufValueClp),
+        capacidad,
+      );
       const preference = getPreferenceScore(project, onboarding);
       return {
         ...scenarioEvaluation,

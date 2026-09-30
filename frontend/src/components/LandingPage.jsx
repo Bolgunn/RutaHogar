@@ -1,595 +1,522 @@
-import React, { useEffect, useState } from "react";
-import { submitFeedback } from "../services/feedbackService";
+import React, { useState, useEffect, useCallback } from "react";
 
 export const landingStyles = `
-.sl * { box-sizing: border-box; margin: 0; padding: 0; }
-
-.sl {
-  --sl-navy:  var(--rh-blue);
-  --sl-navy2: var(--rh-blue-dark);
-  --sl-accent: var(--rh-yellow);
-  --sl-blue-light: var(--rh-blue-light);
-  --sl-yellow-light: var(--rh-yellow-light);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  background: var(--rh-background);
+/* ═══ Landing Navy/Gold ═══ */
+.lp * { box-sizing: border-box; margin: 0; padding: 0; }
+.lp {
+  font-family: var(--rh-font);
   color: var(--rh-text);
+  background: var(--rh-bg);
+  scroll-behavior: smooth;
 }
 
 /* ── Nav ── */
-.sl-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: .5rem 2rem;
-  background: var(--rh-white);
-  border-bottom: 1px solid var(--rh-border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
+.lp-nav {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 2.5rem; height: 72px;
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(16px) saturate(1.2);
+  border-bottom: 1px solid rgba(11,26,46,0.06);
+  box-shadow: 0 1px 3px rgba(11,26,46,0.04);
 }
-.sl-logo-img { width: 190px; height: 96px; object-fit: contain; object-position: left center; display: block; }
-.sl-nav-cta {
-  background: var(--rh-blue); color: var(--rh-white);
-  padding: 9px 20px; border-radius: 8px;
-  font-size: 14px; font-weight: 600; border: none; cursor: pointer; min-height: unset;
-  transition: background .15s;
-  font-family: inherit;
+.lp-nav-brand { display: flex; align-items: center; text-decoration: none; flex-shrink: 0; }
+.lp-nav-brand-logo { height: 44px; width: auto; }
+.lp-nav-right { display: flex; align-items: center; gap: 0; margin-left: auto; }
+.lp-nav-tab {
+  font-size: 14px; font-weight: 500; color: rgba(11,26,46,0.55);
+  text-decoration: none; background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font-family: var(--rh-font); padding: 24px 18px 22px;
+  transition: color 0.2s, border-color 0.2s; white-space: nowrap;
 }
-.sl-nav-cta:hover { background: var(--rh-blue-dark); }
-.sl-nav-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.sl-nav-secondary,
-.sl-nav-link {
-  padding: 9px 14px; border-radius: 8px; min-height: unset; cursor: pointer;
-  font-family: inherit; font-size: 13px; font-weight: 600;
+.lp-nav-tab:hover { color: var(--rh-navy-deep); }
+.lp-nav-tab.is-active { color: var(--rh-navy-deep); font-weight: 600; border-bottom-color: var(--rh-gold); }
+.lp-nav-cta {
+  background: linear-gradient(135deg, var(--rh-gold) 0%, var(--rh-gold-dark) 100%);
+  color: var(--rh-navy-deep);
+  padding: 10px 22px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; border: none; cursor: pointer;
+  font-family: var(--rh-font); transition: all 0.2s ease;
+  margin-left: 8px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(212,168,67,0.2);
 }
-.sl-nav-secondary { background: var(--rh-white); color: var(--rh-blue); border: 1px solid var(--rh-blue); }
-.sl-nav-secondary:hover { background: var(--rh-blue-light); }
-.sl-nav-link { background: transparent; color: #4a5568; border: none; }
-.sl-nav-link:hover { background: var(--rh-blue-light); color: var(--rh-blue); }
+.lp-nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(212,168,67,0.3); }
 
 /* ── Hero ── */
-.sl-hero {
-  background: linear-gradient(180deg, var(--rh-white), var(--rh-blue-light));
-  padding: 4.5rem 2rem;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
+.lp-hero {
+  background: linear-gradient(165deg, var(--rh-navy-deep) 0%, #0F2240 45%, var(--rh-navy-mid) 100%);
+  padding: 5rem 2.5rem 4.5rem; position: relative; overflow: hidden;
+  min-height: 72vh; display: flex; align-items: center;
 }
-.sl-hero::before {
-  content: '';
-  position: absolute; top: -60px; right: -80px;
-  width: 300px; height: 300px; border-radius: 50%;
-  background: rgba(255,183,0,.18);
+.lp-hero::before {
+  content: ''; position: absolute; top: -200px; right: -200px;
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,67,0.10) 0%, transparent 70%);
+  animation: lp-hero-glow 8s ease-in-out infinite alternate;
 }
-.sl-hero::after {
-  content: '';
-  position: absolute; bottom: -80px; left: -60px;
-  width: 240px; height: 240px; border-radius: 50%;
-  background: rgba(0,50,185,.08);
+@keyframes lp-hero-glow {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
 }
-.sl-hero-inner { position: relative; z-index: 1; max-width: 600px; margin: 0 auto; }
-.sl-hero-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--rh-yellow-light); color: var(--rh-blue);
-  font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-  padding: 5px 14px; border-radius: 999px; margin-bottom: 1.5rem;
-  border: 1px solid rgba(255,183,0,.45);
+.lp-hero::after {
+  content: ''; position: absolute; bottom: -150px; left: -100px;
+  width: 400px; height: 400px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,67,0.05) 0%, transparent 70%);
 }
-.sl-hero h1 {
-  font-size: 40px; font-weight: 800; line-height: 1.15;
-  color: var(--rh-text); margin-bottom: 1rem; letter-spacing: -1px;
+.lp-hero-grid-pattern {
+  position: absolute; inset: 0; opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size: 60px 60px;
 }
-.sl-hero h1 span { color: var(--rh-blue); }
-.sl-hero-sub {
-  font-size: 17px; color: var(--rh-text-secondary); line-height: 1.7;
-  margin-bottom: 2.5rem; max-width: 480px; margin-left: auto; margin-right: auto;
+
+.lp-hero-inner {
+  max-width: 1120px; margin: 0 auto; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4rem;
+  align-items: center; position: relative; z-index: 2;
 }
-.sl-hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
-.sl-btn-primary {
-  background: var(--rh-blue); color: var(--rh-white);
-  padding: 14px 28px; border-radius: 8px;
-  font-size: 15px; font-weight: 700; border: none; cursor: pointer; min-height: unset;
-  transition: background .15s; text-decoration: none;
+.lp-hero-eyebrow {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: inherit;
+  background: rgba(212,168,67,0.10); border: 1px solid rgba(212,168,67,0.20);
+  border-radius: 999px; padding: 6px 16px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--rh-gold); margin-bottom: 1.5rem;
 }
-.sl-btn-primary:hover { background: var(--rh-blue-dark); }
-.sl-btn-ghost {
-  background: var(--rh-white); color: var(--rh-blue);
-  padding: 14px 28px; border-radius: 8px;
-  font-size: 15px; font-weight: 600;
-  border: 1px solid var(--rh-blue); cursor: pointer; min-height: unset;
-  transition: all .15s; text-decoration: none;
-  font-family: inherit;
+.lp-hero-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--rh-gold);
+  animation: lp-blink 2s ease-in-out infinite;
 }
-.sl-btn-ghost:hover { background: var(--rh-blue-light); }
-.sl-hero-trust {
-  font-size: 13px; color: var(--rh-text-secondary);
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+@keyframes lp-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.lp-hero h1 {
+  font-family: var(--rh-font-display); font-size: clamp(38px,4.5vw,58px);
+  font-weight: 400; color: #fff; line-height: 1.08; letter-spacing: -0.5px;
+  margin-bottom: 1.25rem;
 }
-.sl-hero-trust svg { color: var(--rh-yellow); }
+.lp-hero h1 .gold { color: var(--rh-gold); }
+.lp-hero-sub { font-size: 16px; color: rgba(255,255,255,0.55); line-height: 1.7; margin-bottom: 2rem; max-width: 440px; }
+.lp-hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.lp-hero-btn-primary {
+  background: linear-gradient(135deg, var(--rh-gold) 0%, var(--rh-gold-dark) 100%);
+  color: var(--rh-navy-deep);
+  padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 700;
+  border: none; cursor: pointer; font-family: var(--rh-font);
+  transition: all 0.25s ease;
+  display: inline-flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 20px rgba(212,168,67,0.3);
+}
+.lp-hero-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(212,168,67,0.4); }
+.lp-hero-btn-primary:active { transform: translateY(0); }
+.lp-hero-btn-outline {
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.8);
+  padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.15); cursor: pointer;
+  font-family: var(--rh-font); transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+.lp-hero-btn-outline:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); color: #fff; }
+
+/* ── Score Card (hero right) ── */
+.lp-score-card {
+  background: rgba(255,255,255,0.06); backdrop-filter: blur(24px) saturate(1.3);
+  border: 1px solid rgba(212,168,67,0.2); border-radius: 20px;
+  padding: 1.75rem; position: relative; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.lp-score-card::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(212,168,67,0.4),transparent); }
+.lp-sc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; }
+.lp-sc-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.35); }
+.lp-sc-badge { background:rgba(45,138,78,0.15); color:#5DD87A; font-size:11px; font-weight:700; padding:4px 12px; border-radius:999px; border:1px solid rgba(45,138,78,0.25); }
+.lp-sc-arc { display:flex; justify-content:center; margin-bottom:1.25rem; position:relative; width:170px; height:95px; margin-left:auto; margin-right:auto; }
+.lp-sc-arc svg { width:100%; height:100%; }
+.lp-sc-arc-val { position:absolute; bottom:0; left:50%; transform:translateX(-50%); text-align:center; }
+.lp-sc-arc-num { font-family:var(--rh-font-mono); font-size:40px; font-weight:700; color:var(--rh-gold); line-height:1; }
+.lp-sc-arc-total { font-family:var(--rh-font-mono); font-size:15px; color:rgba(255,255,255,0.25); margin-left:2px; }
+.lp-sc-factors { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.lp-sc-factor { display:flex; align-items:center; gap:8px; padding:9px 10px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.06); transition: background 0.2s ease; }
+.lp-sc-factor:hover { background:rgba(255,255,255,0.07); }
+.lp-sc-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.lp-sc-dot.ok { background:#5DD87A; box-shadow: 0 0 6px rgba(93,216,122,0.4); }
+.lp-sc-dot.warn { background:var(--rh-gold); box-shadow: 0 0 6px rgba(212,168,67,0.4); }
+.lp-sc-factor-text { font-size:11px; color:rgba(255,255,255,0.55); line-height:1.3; }
+.lp-sc-footer { margin-top:1rem; padding-top:0.85rem; border-top:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between; align-items:center; }
+.lp-sc-footer-text { font-size:11px; color:rgba(255,255,255,0.3); }
+.lp-sc-footer-link { font-size:12px; font-weight:700; color:var(--rh-gold); text-decoration:none; display:flex; align-items:center; gap:4px; transition:all 0.2s ease; background:none; border:none; cursor:pointer; font-family:var(--rh-font); }
+.lp-sc-footer-link:hover { color:var(--rh-gold-light); gap: 6px; }
 
 /* ── Stats ── */
-.sl-stats { background: var(--rh-white); padding: 1.5rem 2rem; border-top: 1px solid var(--rh-border); border-bottom: 1px solid var(--rh-border); }
-.sl-stats-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
-  gap: 1px; max-width: 640px; margin: 0 auto;
-}
-.sl-stat      { text-align: center; padding: .75rem 1rem; }
-.sl-stat-num  { font-size: 26px; font-weight: 800; color: var(--rh-blue); line-height: 1; }
-.sl-stat-label{ font-size: 12px; color: var(--rh-text-secondary); margin-top: 3px; font-weight: 500; }
+.lp-stats { background:var(--rh-surface); border-bottom:1px solid var(--rh-border); padding:1.25rem 2.5rem; }
+.lp-stats-inner { max-width:1120px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:2rem; }
+.lp-stat { text-align:center; padding: var(--rh-space-2) 0; }
+.lp-stat-num { font-family:var(--rh-font-mono); font-size:28px; font-weight:700; color:var(--rh-navy-deep); line-height:1; }
+.lp-stat-label { font-size:12px; color:var(--rh-text-sec); margin-top:4px; font-weight:500; }
 
-/* ── Score preview / Para quién es ── */
-.sl-score-section { background: var(--rh-background); padding: 3.5rem 2rem; }
-.sl-score-inner {
-  max-width: 760px; margin: 0 auto;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center;
-}
-.sl-section-eyebrow {
-  font-size: 11px; font-weight: 700; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--rh-blue); margin-bottom: .5rem;
-}
-.sl-score-copy h2 { font-size: 26px; font-weight: 800; color: var(--rh-text); line-height: 1.2; margin-bottom: .75rem; }
-.sl-score-copy p  { font-size: 14px; color: #4a5568; line-height: 1.7; margin-bottom: 1.25rem; }
-.sl-score-list { list-style: none; margin: 0 0 1.5rem; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.sl-score-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: #2d3748; line-height: 1.5; }
-.sl-score-list svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; color: var(--rh-blue); }
-.sl-score-card {
-  background: var(--rh-white); border-radius: 16px;
-  padding: 1.5rem; border: 1px solid var(--rh-border);
-  box-shadow: var(--rh-shadow);
-}
-.sl-score-preview-label {
-  font-size: 11px; color: #a0aec0; text-transform: uppercase;
-  letter-spacing: .06em; margin-bottom: .75rem; font-weight: 600;
-}
-.sl-score-top { display: flex; align-items: center; gap: 14px; margin-bottom: 1rem; }
-.sl-score-ring {
-  width: 72px; height: 72px; border-radius: 50%;
-  background: var(--rh-blue); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; flex-shrink: 0;
-}
-.sl-score-ring-num { font-size: 22px; font-weight: 800; color: #fff; line-height: 1; }
-.sl-score-ring-den { font-size: 11px; color: rgba(255,255,255,.5); }
-.sl-score-badge-alto {
-  background: rgba(22,163,74,.12); color: var(--rh-success);
-  font-size: 12px; font-weight: 700;
-  padding: 3px 10px; border-radius: 999px;
-  display: inline-block; margin-bottom: 5px;
-}
-.sl-score-msg  { font-size: 13px; color: #4a5568; line-height: 1.5; }
-.sl-score-bar-wrap { margin-top: .75rem; }
-.sl-score-bar-track {
-  height: 8px; border-radius: 999px;
-  background: var(--rh-blue-light); overflow: hidden; position: relative;
-}
-.sl-score-bar-fill {
-  position: absolute; left: 0; top: 0; height: 100%;
-  background: var(--rh-blue); border-radius: 999px;
-}
-.sl-score-bar-labels {
-  display: flex; justify-content: space-between;
-  font-size: 11px; color: #a0aec0; margin-top: 4px;
-}
-.sl-score-factors { display: flex; flex-direction: column; gap: 7px; margin-top: 1rem; }
-.sl-factor        { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.sl-factor-dot    { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.sl-factor-dot.ok   { background: var(--rh-success); }
-.sl-factor-dot.warn { background: var(--rh-warning); }
-.sl-factor-label  { color: #4a5568; }
+/* ── Sections shared ── */
+.lp-section { padding:5rem 2.5rem; }
+.lp-section-inner { max-width:1120px; margin:0 auto; }
+.lp-section-eyebrow { font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--rh-gold-dark); margin-bottom:0.5rem; }
+.lp-section-title { font-family:var(--rh-font-display); font-size:clamp(26px,3.2vw,38px); color:var(--rh-text); line-height:1.12; margin-bottom:0.75rem; }
+.lp-section-sub { font-size:15px; color:var(--rh-text-sec); line-height:1.7; max-width:520px; }
 
-/* ── Steps ── */
-.sl-steps-section { padding: 3.5rem 2rem; background: #fff; }
-.sl-steps-inner   { max-width: 760px; margin: 0 auto; }
-.sl-section-title { font-size: 28px; font-weight: 800; color: var(--rh-text); margin-bottom: .5rem; }
-.sl-section-sub   { font-size: 15px; color: #718096; line-height: 1.7; margin-bottom: 2rem; }
-.sl-steps-grid    { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
-.sl-step-card {
-  background: #F7FAFC; border-radius: 12px;
-  padding: 1.25rem; border: 1px solid #e2e8f0;
+/* ── Qué es (bento split) ── */
+.lp-what { background: var(--rh-surface); border-top:1px solid var(--rh-border); }
+.lp-what-split { display:grid; grid-template-columns:1fr 1fr; gap:3rem; align-items:center; margin-top:2.5rem; }
+.lp-what-visual {
+  background: var(--rh-navy-deep); border-radius:20px; padding:2.5rem;
+  position:relative; overflow:hidden; min-height:320px;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow: 0 8px 32px rgba(11,26,46,0.15);
 }
-.sl-step-num {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--rh-blue); color: var(--rh-white);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; margin-bottom: .75rem;
+.lp-what-visual::before {
+  content:''; position:absolute; top:-60px; right:-60px;
+  width:200px; height:200px; border-radius:50%;
+  background:radial-gradient(circle,rgba(212,168,67,0.12) 0%,transparent 70%);
 }
-.sl-step-title { font-size: 14px; font-weight: 700; color: var(--rh-text); margin-bottom: 4px; }
-.sl-step-desc  { font-size: 13px; color: #718096; line-height: 1.55; }
-.sl-step-time  { font-size: 11px; color: var(--rh-blue); font-weight: 600; margin-top: 6px; }
+.lp-what-visual-inner { position:relative; z-index:1; text-align:center; }
+.lp-what-big-num { font-family:var(--rh-font-mono); font-size:80px; font-weight:700; color:var(--rh-gold); line-height:1; }
+.lp-what-big-label { font-size:14px; color:rgba(255,255,255,0.45); margin-top:0.5rem; }
+.lp-what-points { list-style:none; display:flex; flex-direction:column; gap:1rem; }
+.lp-what-point {
+  display:flex; gap:1rem; align-items:flex-start;
+  padding:1.1rem 1.25rem; background:var(--rh-bg);
+  border:1px solid var(--rh-border); border-radius:12px;
+  transition:all 0.25s ease;
+}
+.lp-what-point:hover { border-color:rgba(212,168,67,0.3); transform:translateX(4px); box-shadow: 0 4px 16px rgba(11,26,46,0.04); }
+.lp-what-point-icon {
+  width:40px; height:40px; border-radius:10px;
+  background:rgba(212,168,67,0.08); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  border: 1px solid rgba(212,168,67,0.12);
+}
+.lp-what-point-icon svg { width:18px; height:18px; color:var(--rh-gold-dark); }
+.lp-what-point-title { font-size:14px; font-weight:700; color:var(--rh-text); margin-bottom:2px; }
+.lp-what-point-desc { font-size:13px; color:var(--rh-text-sec); line-height:1.5; }
 
-/* ── Benefits (Por qué) ── */
-.sl-benefits-section { background: var(--rh-blue-light); padding: 3.5rem 2rem; }
-.sl-benefits-inner   { max-width: 760px; margin: 0 auto; }
-.sl-benefits-title   { font-size: 28px; font-weight: 800; color: var(--rh-text); margin-bottom: .5rem; }
-.sl-benefits-sub     { font-size: 15px; color: var(--rh-text-secondary); line-height: 1.7; margin-bottom: 2rem; }
-.sl-benefits-grid    { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 12px; }
-.sl-benefit {
-  background: var(--rh-white);
-  border: 1px solid var(--rh-border);
-  border-radius: 12px; padding: 1.25rem;
-  transition: transform .2s, background .2s;
+/* ── Process ── */
+.lp-process { background:var(--rh-navy-deep); position:relative; }
+.lp-process::before {
+  content:''; position:absolute; inset:0; opacity:0.025;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size:50px 50px;
 }
-.sl-benefit:hover { transform: translateY(-3px); background: var(--rh-white); border-color: rgba(0,50,185,.24); }
-.sl-benefit-icon {
-  width: 40px; height: 40px; border-radius: 10px;
-  background: var(--rh-yellow-light);
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: .75rem; color: var(--rh-blue);
+.lp-process .lp-section-eyebrow { color:var(--rh-gold); }
+.lp-process .lp-section-title { color:#fff; }
+.lp-process .lp-section-sub { color:rgba(255,255,255,0.45); }
+.lp-process-steps {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+  margin-top:3rem; position:relative;
 }
-.sl-benefit-icon svg { width: 20px; height: 20px; }
-.sl-benefit-title { font-size: 14px; font-weight: 700; color: var(--rh-text); margin-bottom: 4px; }
-.sl-benefit-desc  { font-size: 13px; color: var(--rh-text-secondary); line-height: 1.55; }
+.lp-process-steps::before {
+  content:''; position:absolute; top:40px; left:calc(16.67% + 20px); right:calc(16.67% + 20px);
+  height:2px; background:linear-gradient(90deg,rgba(212,168,67,0.1),rgba(212,168,67,0.3),rgba(212,168,67,0.1));
+}
+.lp-process-step {
+  text-align:center; padding:0 1.5rem; position:relative;
+}
+.lp-process-step-num {
+  width:52px; height:52px; border-radius:50%;
+  background:rgba(212,168,67,0.12); border:2px solid rgba(212,168,67,0.25);
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 1.25rem; font-family:var(--rh-font-mono);
+  font-size:17px; font-weight:700; color:var(--rh-gold);
+  position:relative; z-index:1;
+  transition: all 0.3s ease;
+}
+.lp-process-step:hover .lp-process-step-num {
+  background:rgba(212,168,67,0.2);
+  border-color: rgba(212,168,67,0.4);
+  transform: scale(1.05);
+}
+.lp-process-step-title { font-family:var(--rh-font-display); font-size:20px; color:#fff; margin-bottom:0.5rem; }
+.lp-process-step-desc { font-size:13px; color:rgba(255,255,255,0.45); line-height:1.65; max-width:260px; margin:0 auto; }
+.lp-process-step-time {
+  margin-top:0.85rem; font-size:11px; font-weight:600; color:var(--rh-gold);
+  display:flex; align-items:center; justify-content:center; gap:5px;
+}
 
-/* ── FAQ ── */
-.sl-faq-section { background: var(--rh-background); padding: 3.5rem 2rem; }
-.sl-faq-inner   { max-width: 680px; margin: 0 auto; }
-.sl-faq-list    { display: flex; flex-direction: column; margin-top: 1.5rem; }
-.sl-faq-item    { border-bottom: 1px solid #e2e8f0; }
-.sl-faq-item:first-child { border-top: 1px solid #e2e8f0; }
-.sl-faq-q-btn {
-  width: 100%; background: none; border: none; padding: 1rem 0; min-height: unset;
-  cursor: pointer; text-align: left; font-family: inherit;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  font-size: 14px; font-weight: 700; color: var(--rh-text);
-  transition: color .15s;
+/* ── Features (bento 2+2) ── */
+.lp-features-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-top:2.5rem; }
+.lp-feature-card {
+  background:var(--rh-surface); border:1px solid var(--rh-border);
+  border-radius:16px; padding:1.75rem;
+  transition:transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  position: relative; overflow: hidden;
 }
-.sl-faq-q-btn:hover { background: none; color: var(--rh-blue); }
-.sl-faq-chevron {
-  width: 16px; height: 16px; flex-shrink: 0; color: var(--rh-blue);
-  transition: transform .25s ease;
+.lp-feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--rh-gold) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
-.sl-faq-chevron.open { transform: rotate(180deg); }
-.sl-faq-a { font-size: 14px; color: #718096; line-height: 1.65; padding: 0 0 1rem; }
+.lp-feature-card:hover { transform:translateY(-3px); box-shadow:0 10px 35px rgba(11,26,46,0.06); border-color:rgba(212,168,67,0.25); }
+.lp-feature-card:hover::before { opacity: 1; }
+.lp-feature-card.is-wide { grid-column:span 2; display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:center; }
+.lp-feature-icon {
+  width:48px; height:48px; border-radius:12px;
+  background:linear-gradient(135deg,var(--rh-gold),var(--rh-gold-dark));
+  display:flex; align-items:center; justify-content:center; margin-bottom:1rem;
+  box-shadow: 0 2px 8px rgba(212,168,67,0.2);
+}
+.lp-feature-icon svg { width:22px; height:22px; color:var(--rh-navy-deep); }
+.lp-feature-title { font-size:16px; font-weight:700; color:var(--rh-text); margin-bottom:0.4rem; }
+.lp-feature-desc { font-size:13px; color:var(--rh-text-sec); line-height:1.6; }
+.lp-feature-visual {
+  background:var(--rh-navy-deep); border-radius:12px; padding:1.5rem;
+  display:flex; align-items:center; justify-content:center; min-height:140px;
+  position:relative; overflow:hidden;
+}
+.lp-feature-visual::before {
+  content:''; position:absolute; top:-30px; right:-30px;
+  width:100px; height:100px; border-radius:50%;
+  background:radial-gradient(circle,rgba(212,168,67,0.1) 0%,transparent 70%);
+}
+.lp-feature-visual-num { font-family:var(--rh-font-mono); font-size:48px; font-weight:700; color:var(--rh-gold); position:relative; z-index:1; }
+.lp-feature-visual-label { font-size:12px; color:rgba(255,255,255,0.4); position:relative; z-index:1; margin-top:0.25rem; }
 
-/* ── Feedback ── */
-.sl-feedback-section { background: var(--rh-white); padding: 3.5rem 2rem; }
-.sl-feedback-inner {
-  max-width: 920px; margin: 0 auto;
-  display: grid; grid-template-columns: minmax(220px, .85fr) minmax(0, 1.35fr);
-  gap: 1.75rem; align-items: start;
+/* ── Vision/Mission ── */
+.lp-vision { background:var(--rh-bg); }
+.lp-vision-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-top:2.5rem; }
+.lp-vision-card {
+  padding:2.25rem; border-radius:16px; background:var(--rh-surface);
+  border:1px solid var(--rh-border); position:relative; overflow:hidden;
+  transition:border-color 0.2s, transform 0.2s;
 }
-.sl-feedback-copy p { font-size: 14px; color: #4a5568; line-height: 1.7; margin-top: .75rem; }
-.sl-feedback-points { list-style: none; padding: 0; margin: 1.25rem 0 0; display: grid; gap: 9px; }
-.sl-feedback-points li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #4a5568; margin: 0; }
-.sl-feedback-points span {
-  width: 18px; height: 18px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--rh-yellow-light); color: var(--rh-blue); font-size: 12px; font-weight: 800;
-  flex-shrink: 0;
+.lp-vision-card:hover { border-color:rgba(212,168,67,0.25); transform:translateY(-2px); }
+.lp-vision-card::before {
+  content:''; position:absolute; top:-40px; right:-40px;
+  width:120px; height:120px; border-radius:50%;
+  background:radial-gradient(circle,rgba(212,168,67,0.06) 0%,transparent 70%);
 }
-.sl-feedback-form {
-  background: var(--rh-background); border: 1px solid var(--rh-border); border-radius: 12px;
-  padding: 1.15rem; display: grid; gap: 10px;
+.lp-vision-icon {
+  width:52px; height:52px; border-radius:13px;
+  background:linear-gradient(135deg,var(--rh-gold),var(--rh-gold-dark));
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:1.25rem; position:relative; z-index:1;
 }
-.sl-feedback-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.sl-feedback-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: var(--rh-text); }
-.sl-feedback-form input,
-.sl-feedback-form select,
-.sl-feedback-form textarea {
-  width: 100%; min-height: 42px; margin: 0; padding: 10px 11px;
-  border: 1px solid var(--rh-border); border-radius: 8px; background: var(--rh-white);
-  color: var(--rh-text); font: inherit; font-size: 14px; resize: vertical;
+.lp-vision-icon svg { width:26px; height:26px; color:var(--rh-navy-deep); }
+.lp-vision-card h3 {
+  font-family:var(--rh-font-display); font-size:1.2rem; color:var(--rh-text);
+  margin-bottom:0.6rem; position:relative; z-index:1;
 }
-.sl-feedback-form textarea { min-height: 62px; line-height: 1.45; }
-.sl-feedback-form input:focus,
-.sl-feedback-form select:focus,
-.sl-feedback-form textarea:focus {
-  border-color: var(--rh-blue); outline: 3px solid rgba(0,50,185,.14);
-}
-.sl-feedback-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
-.sl-feedback-status { font-size: 13px; color: #4a5568; line-height: 1.5; }
-.sl-feedback-status.ok { color: var(--rh-success); }
-.sl-feedback-status.error { color: var(--rh-danger); }
+.lp-vision-card p { font-size:14px; color:var(--rh-text-sec); line-height:1.7; position:relative; z-index:1; }
 
-/* ── Final CTA ── */
-.sl-cta-section { background: var(--rh-blue); padding: 4.5rem 2rem; text-align: center; }
-.sl-cta-inner   { max-width: 520px; margin: 0 auto; }
-.sl-cta-section h2 { font-size: 30px; font-weight: 800; color: #fff; margin-bottom: .75rem; line-height: 1.2; }
-.sl-cta-section p  { font-size: 16px; color: rgba(255,255,255,.85); margin-bottom: 2rem; line-height: 1.6; }
-.sl-btn-white {
-  background: var(--rh-yellow); color: var(--rh-text);
-  padding: 14px 32px; border-radius: 8px;
-  font-size: 15px; font-weight: 700; border: none; cursor: pointer; min-height: unset;
-  transition: background .15s;
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: inherit;
+/* ── FAQ + Contact ── */
+.lp-faq { background:var(--rh-surface); border-top:1px solid var(--rh-border); }
+.lp-faq-grid { display:grid; grid-template-columns:1fr 1fr; gap:3rem; align-items:start; margin-top:2.5rem; }
+.lp-faq-list { }
+.lp-faq-item { border-bottom:1px solid var(--rh-border); }
+.lp-faq-item:first-child { border-top:1px solid var(--rh-border); }
+.lp-faq-q {
+  width:100%; background:none; border:none; padding:1.1rem 0;
+  cursor:pointer; text-align:left; display:flex; justify-content:space-between;
+  align-items:center; gap:12px; font-family:var(--rh-font); font-size:14px;
+  font-weight:600; color:var(--rh-text); transition:color 0.2s;
 }
-.sl-btn-white:hover { background: var(--rh-yellow-dark); }
+.lp-faq-q:hover { color:var(--rh-gold-dark); }
+.lp-faq-chevron { width:16px; height:16px; flex-shrink:0; color:var(--rh-gold); transition:transform 0.3s; }
+.lp-faq-chevron.open { transform:rotate(180deg); }
+.lp-faq-a { font-size:13px; color:var(--rh-text-sec); line-height:1.7; padding:0 0 1.1rem; }
 
-/* ── Respaldo EI ── */
-.sl-ei-section { background: var(--rh-blue-dark); padding: 3.5rem 2rem; text-align: center; }
-.sl-ei-label { font-size: 12px; color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 1.75rem; }
-.sl-ei-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1.25rem; max-width: 760px; margin: 0 auto;
+/* ── Contact Form (next to FAQ) ── */
+.lp-contact-card {
+  background:var(--rh-bg); border:1px solid var(--rh-border); border-radius:16px;
+  padding:2rem; position:relative;
 }
-.sl-ei-item {
-  padding: 1.25rem 1rem; border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
-  background: rgba(255,255,255,.03); transition: background .2s, border-color .2s;
+.lp-contact-title {
+  font-family:var(--rh-font-display); font-size:20px; color:var(--rh-text);
+  margin-bottom:0.5rem;
 }
-.sl-ei-item:hover { background: rgba(255,255,255,.06); border-color: rgba(255,183,0,.42); }
-.sl-ei-name  { font-size: clamp(18px, 2.4vw, 24px); font-weight: 800; color: #fff; letter-spacing: -.5px; line-height: 1.15; margin-bottom: 4px; }
-.sl-ei-type  { font-size: 12px; color: rgba(255,255,255,.45); letter-spacing: .1em; text-transform: uppercase; }
+.lp-contact-desc { font-size:13px; color:var(--rh-text-sec); line-height:1.6; margin-bottom:1.5rem; }
+.lp-contact-field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+.lp-contact-label { font-size:12px; font-weight:600; color:rgba(11,26,46,0.55); }
+.lp-contact-input, .lp-contact-textarea {
+  width:100%; padding:10px 14px; border:1.5px solid rgba(11,26,46,0.10);
+  border-radius:10px; background:#fff; color:var(--rh-text); font-size:14px;
+  font-family:var(--rh-font); transition:border-color 0.2s, box-shadow 0.2s; outline:none;
+}
+.lp-contact-input::placeholder, .lp-contact-textarea::placeholder { color:rgba(11,26,46,0.28); }
+.lp-contact-input:focus, .lp-contact-textarea:focus {
+  border-color:var(--rh-gold); box-shadow:0 0 0 3px rgba(212,168,67,0.12);
+}
+.lp-contact-textarea { min-height:100px; resize:vertical; line-height:1.5; }
+.lp-contact-submit {
+  width:100%; padding:12px; border:none; border-radius:10px;
+  background:var(--rh-navy-deep); color:#fff; font-size:14px; font-weight:700;
+  font-family:var(--rh-font); cursor:pointer;
+  transition:background 0.2s, transform 0.15s; margin-top:4px;
+}
+.lp-contact-submit:hover { background:var(--rh-navy); transform:translateY(-1px); }
+.lp-contact-submit:active { transform:translateY(0); }
+
+/* ── Team ── */
+.lp-team { background:var(--rh-bg); }
+.lp-team-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.25rem; margin-top:2.5rem; }
+.lp-team-card {
+  padding:1.75rem; border-radius:14px; background:var(--rh-surface);
+  border:1px solid var(--rh-border); text-align:center;
+  transition:border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+}
+.lp-team-card:hover { border-color:rgba(212,168,67,0.25); transform:translateY(-3px); box-shadow:0 10px 35px rgba(11,26,46,0.06); }
+.lp-team-avatar {
+  width:72px; height:72px; border-radius:50%; margin:0 auto 1rem;
+  background:linear-gradient(135deg,var(--rh-navy),var(--rh-navy-mid));
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid var(--rh-border); font-family:var(--rh-font-display);
+  font-size:22px; font-weight:700; color:rgba(255,255,255,0.7);
+}
+.lp-team-name { font-family:var(--rh-font-display); font-size:1rem; color:var(--rh-text); margin-bottom:3px; }
+.lp-team-role { font-size:12px; font-weight:600; color:var(--rh-gold-dark); margin-bottom:6px; }
+.lp-team-desc { font-size:12px; color:var(--rh-text-sec); line-height:1.5; }
+
+/* ── CTA ── */
+.lp-cta {
+  background:linear-gradient(165deg,var(--rh-navy-deep),var(--rh-navy));
+  padding:4.5rem 2.5rem; text-align:center; position:relative; overflow:hidden;
+}
+.lp-cta::before {
+  content:''; position:absolute; bottom:-100px; right:-100px;
+  width:300px; height:300px; border-radius:50%;
+  background:radial-gradient(circle,rgba(212,168,67,0.08) 0%,transparent 70%);
+}
+.lp-cta::after {
+  content:''; position:absolute; inset:0; opacity:0.02;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size:50px 50px;
+}
+.lp-cta-inner { max-width:520px; margin:0 auto; position:relative; z-index:1; }
+.lp-cta h2 { font-family:var(--rh-font-display); font-size:clamp(28px,3.5vw,40px); color:#fff; margin-bottom:0.85rem; line-height:1.1; }
+.lp-cta h2 .gold { color:var(--rh-gold); }
+.lp-cta p { font-size:15px; color:rgba(255,255,255,0.5); margin-bottom:2rem; line-height:1.7; }
+.lp-cta-btn {
+  background:linear-gradient(135deg, var(--rh-gold) 0%, var(--rh-gold-dark) 100%);
+  color:var(--rh-navy-deep);
+  padding:14px 28px; border-radius:10px; font-size:15px; font-weight:700;
+  border:none; cursor:pointer; font-family:var(--rh-font);
+  display:inline-flex; align-items:center; gap:8px;
+  box-shadow:0 4px 20px rgba(212,168,67,0.3);
+  transition:all 0.25s ease;
+}
+.lp-cta-btn:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(212,168,67,0.4); }
+.lp-cta-btn:active { transform:translateY(0); }
 
 /* ── Footer ── */
-.sl-footer {
-  background: var(--rh-blue-dark); padding: 1.5rem 2rem;
-  display: flex; justify-content: space-between; align-items: center;
-  flex-wrap: wrap; gap: 12px;
-  border-top: 1px solid rgba(255,255,255,.06);
+.lp-footer { background:var(--rh-navy-deep); border-top:1px solid rgba(212,168,67,0.08); }
+.lp-footer-top {
+  display:grid; grid-template-columns:1.2fr 1fr 1fr 1fr; gap:2.5rem;
+  padding:3rem 2.5rem 2.5rem; max-width:1120px; margin:0 auto;
 }
-.sl-footer-note { font-size: 12px; color: rgba(255,255,255,.4); line-height: 1.5; max-width: 70%; }
-.sl-footer-link {
-  font-size: 13px; color: rgba(255,255,255,.6); background: none; border: none;
-  min-height: unset; padding: 0; cursor: pointer; font-family: inherit; font-weight: 500;
-  text-decoration: underline; text-underline-offset: 3px; transition: color .15s;
+.lp-footer-col-title {
+  font-size:0.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em;
+  color:rgba(255,255,255,0.3); margin-bottom:1rem;
 }
-.sl-footer-link:hover { background: none; color: #fff; }
+.lp-footer-brand-col { display:flex; flex-direction:column; gap:0.75rem; }
+.lp-footer-brand-logo { height:36px; width:auto; align-self:flex-start; filter: brightness(0) invert(1); opacity: 0.9; }
+.lp-footer-brand-slogan { font-size:0.8125rem; color:rgba(255,255,255,0.4); line-height:1.6; max-width:220px; }
+.lp-footer-links-col { display:flex; flex-direction:column; gap:0.6rem; }
+.lp-footer-link {
+  font-size:0.8125rem; color:rgba(255,255,255,0.5); text-decoration:none;
+  font-weight:500; transition:all 0.2s ease; background:none; border:none;
+  cursor:pointer; font-family:var(--rh-font); text-align:left; padding:2px 0;
+}
+.lp-footer-link:hover { color:var(--rh-gold); }
+.lp-footer-social-col { display:flex; flex-direction:column; gap:0.6rem; }
+.lp-footer-social-link {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:0.8125rem; color:rgba(255,255,255,0.5); text-decoration:none;
+  font-weight:500; transition:all 0.2s ease; background:none; border:none;
+  cursor:pointer; font-family:var(--rh-font); padding:2px 0;
+}
+.lp-footer-social-link:hover { color:var(--rh-gold); }
+.lp-footer-social-link svg { width:18px; height:18px; flex-shrink:0; }
+.lp-footer-partners-col { display:flex; flex-direction:column; gap:0.75rem; }
+.lp-footer-partner-placeholder {
+  padding:0.75rem 1rem; border:1px dashed rgba(255,255,255,0.12);
+  border-radius:var(--rh-radius-md); font-size:0.6875rem; color:rgba(255,255,255,0.2);
+  text-align:center; min-height:48px; display:flex; align-items:center; justify-content:center;
+}
+.lp-footer-bottom {
+  border-top:1px solid rgba(255,255,255,0.06);
+  padding:1.25rem 2.5rem; max-width:1120px; margin:0 auto;
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;
+}
+.lp-footer-copy { font-size:0.6875rem; color:rgba(255,255,255,0.25); }
+.lp-footer-legal { display:flex; gap:1.25rem; }
+.lp-footer-legal-link {
+  font-size:0.6875rem; color:rgba(255,255,255,0.25); text-decoration:none;
+  transition:color 0.2s; background:none; border:none; cursor:pointer;
+  font-family:var(--rh-font);
+}
+.lp-footer-legal-link:hover { color:rgba(255,255,255,0.5); }
 
-@media (max-width: 560px) {
-  .sl-hero h1        { font-size: 28px; }
-  .sl-score-inner    { grid-template-columns: 1fr; }
-  .sl-nav            { padding: .875rem 1.25rem; }
-  .sl-logo-img       { width: 155px; height: 78px; }
-  .sl-nav-actions    { gap: 4px; }
-  .sl-nav-secondary,
-  .sl-nav-link       { padding: 8px 10px; }
-  .sl-hero           { padding: 3rem 1.25rem; }
-  .sl-steps-section,
-  .sl-benefits-section,
-  .sl-faq-section,
-  .sl-feedback-section,
-  .sl-cta-section,
-  .sl-ei-section,
-  .sl-score-section  { padding: 2.5rem 1.25rem; }
-  .sl-feedback-inner  { grid-template-columns: 1fr; }
-  .sl-feedback-row    { grid-template-columns: 1fr; }
-  .sl-footer         { flex-direction: column; align-items: flex-start; }
-  .sl-footer-note    { max-width: 100%; }
+/* ── Responsive ── */
+@media (max-width:900px) {
+  .lp-hero-inner { grid-template-columns:1fr; gap:2.5rem; }
+  .lp-hero { padding:3.5rem 1.5rem 3rem; min-height:auto; }
+  .lp-what-split { grid-template-columns:1fr; }
+  .lp-features-grid { grid-template-columns:1fr; }
+  .lp-feature-card.is-wide { grid-template-columns:1fr; }
+  .lp-process-steps { grid-template-columns:1fr; gap:2rem; }
+  .lp-process-steps::before { display:none; }
+  .lp-vision-grid { grid-template-columns:1fr; }
+  .lp-faq-grid { grid-template-columns:1fr; }
+  .lp-team-grid { grid-template-columns:1fr 1fr; }
+  .lp-stats-inner { grid-template-columns:repeat(2,1fr); }
+  .lp-nav-right { display:none; }
+  .lp-footer-top { grid-template-columns:1fr 1fr; }
+  .lp-footer-bottom { flex-direction:column; text-align:center; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .sl-benefit, .sl-faq-chevron, .sl-faq-q-btn { transition: none; }
-  .sl-benefit:hover { transform: none; }
+@media (max-width:560px) {
+  .lp-nav { padding:0 1.25rem; }
+  .lp-section { padding:3rem 1.25rem; }
+  .lp-hero h1 { font-size:30px; }
+  .lp-stats-inner { grid-template-columns:1fr 1fr; gap:1rem; }
+  .lp-stat-num { font-size:20px; }
+  .lp-sc-factors { grid-template-columns:1fr; }
+  .lp-team-grid { grid-template-columns:1fr; }
+  .lp-footer-top { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation:none!important; transition:none!important; }
+  .lp { scroll-behavior:auto; }
 }
 `;
-
-const faqs = [
-  {
-    q: "¿Qué es un score de precalificación?",
-    a: "Es una evaluación orientativa que estima qué tan preparado estás financieramente para solicitar un crédito hipotecario, en base a tus ingresos, deudas, ahorro y situación laboral.",
-  },
-  {
-    q: "¿Guardan mis datos?",
-    a: "No. Si no creas una cuenta, tus datos se usan únicamente para calcular tu score en ese momento y no se almacenan permanentemente.",
-  },
-  {
-    q: "¿Reemplaza una evaluación bancaria?",
-    a: "No. Es una herramienta orientativa de precalificación temprana. El resultado no equivale a una aprobación bancaria formal.",
-  },
-  {
-    q: "¿Necesito documentos?",
-    a: "No. Solo necesitas datos que ya conoces de memoria: tu ingreso aproximado, tus deudas, tu ahorro disponible y tu situación laboral.",
-  },
-  {
-    q: "¿Es gratis?",
-    a: "Sí. La pre-evaluación es completamente gratuita y toma solo unos minutos.",
-  },
-];
-
-const testerTypes = ["Usuario", "Ejecutivo", "Banco", "Inmobiliaria", "Otro"];
-
-const initialFeedback = {
-  name: "",
-  email: "",
-  phone: "",
-  tester_type: "Usuario",
-  first_impression: "",
-  confusing_part: "",
-  improvement_suggestion: "",
-  clarity_rating: "5",
-};
-
-const testerTypeByRole = {
-  usuario: "Usuario",
-  ejecutivo: "Ejecutivo",
-  admin: "Otro",
-};
-
-function buildInitialFeedback(profile) {
-  return {
-    ...initialFeedback,
-    name: profile?.full_name || "",
-    email: profile?.email || "",
-    phone: profile?.phone || "",
-    tester_type: profile ? testerTypeByRole[profile.role] || "Otro" : initialFeedback.tester_type,
-  };
-}
 
 function FaqItem({ question, answer }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="sl-faq-item">
-      <button type="button" className="sl-faq-q-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+    <div className="lp-faq-item">
+      <button className="lp-faq-q" type="button" onClick={() => setOpen(!open)}>
         {question}
-        <svg className={`sl-faq-chevron${open ? " open" : ""}`} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <polyline points="4 7 10 13 16 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg className={`lp-faq-chevron ${open ? "open" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
-      {open && <p className="sl-faq-a">{answer}</p>}
+      {open && <div className="lp-faq-a">{answer}</div>}
     </div>
   );
 }
 
-function FeedbackSection({ profile }) {
-  const [form, setForm] = useState(() => buildInitialFeedback(profile));
-  const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState(null);
+const faqs = [
+  { q: "¿Es gratis?", a: "Sí. RutaHogar es una herramienta orientativa completamente gratuita. No se requiere pago ni tarjeta de crédito." },
+  { q: "¿Necesito crear cuenta?", a: "No. Puedes obtener tu resultado sin registrarte. Si quieres guardar tu progreso, puedes crear una cuenta." },
+  { q: "¿Reemplaza una evaluación bancaria?", a: "No. RutaHogar es orientativo. Te da una idea de tu posición financiera, pero no constituye una precalificación formal." },
+  { q: "¿Mis datos están seguros?", a: "Sí. No consultamos bases de datos bancarias. Los datos que ingresas se procesan localmente y no se comparten." },
+  { q: "¿Qué es el score?", a: "Es un número de 0 a 100 que refleja qué tan preparado estás para un crédito hipotecario, basado en ingresos, ahorro, deuda y contexto." },
+];
 
-  useEffect(() => {
-    setForm(buildInitialFeedback(profile));
-    setStatus(null);
-  }, [profile?.id, profile?.full_name, profile?.email, profile?.phone, profile?.role]);
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const hasComment =
-      form.first_impression.trim() ||
-      form.confusing_part.trim() ||
-      form.improvement_suggestion.trim();
-
-    if (!hasComment) {
-      setStatus({
-        type: "error",
-        message: "Cuéntanos al menos una impresión, dificultad o sugerencia.",
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    setStatus(null);
-
-    try {
-      await submitFeedback(form);
-      setForm(buildInitialFeedback(profile));
-      setStatus({
-        type: "ok",
-        message: "Gracias, recibimos tu feedback.",
-      });
-    } catch (error) {
-      console.error(error);
-      setStatus({
-        type: "error",
-        message: "No pudimos registrar el feedback. Intenta nuevamente.",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <section className="sl-feedback-section">
-      <div className="sl-feedback-inner">
-        <div className="sl-feedback-copy">
-          <div className="sl-section-eyebrow">Feedback de testers</div>
-          <h2 className="sl-section-title">Ayúdanos a afinar RutaHogar</h2>
-          <p>
-            Tus comentarios nos ayudan a detectar si la propuesta se entiende,
-            qué parte del flujo genera dudas y qué deberíamos mejorar antes de
-            una versión final.
-          </p>
-          <ul className="sl-feedback-points">
-            <li><span>1</span> Claridad de la propuesta</li>
-            <li><span>2</span> Fricciones del primer recorrido</li>
-            <li><span>3</span> Mejoras para usuarios y equipos comerciales</li>
-          </ul>
-        </div>
-
-        <form className="sl-feedback-form" onSubmit={handleSubmit}>
-          <div className="sl-feedback-row">
-            <label>
-              Nombre opcional
-              <input
-                type="text"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                autoComplete="name"
-                placeholder="No informado"
-              />
-            </label>
-            <label>
-              Correo opcional
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                autoComplete="email"
-                placeholder="No informado"
-              />
-            </label>
-          </div>
-
-          <div className="sl-feedback-row">
-            <label>
-              Teléfono opcional
-              <input
-                type="tel"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                autoComplete="tel"
-                placeholder="No informado"
-              />
-            </label>
-            <label>
-              Perfil del tester
-              <select name="tester_type" value={form.tester_type} onChange={handleChange}>
-                {testerTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label>
-            Nota de claridad
-            <select name="clarity_rating" value={form.clarity_rating} onChange={handleChange}>
-              {[5, 4, 3, 2, 1].map((rating) => (
-                <option key={rating} value={rating}>{rating}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Primera impresión: ¿qué entendiste que hace RutaHogar?
-            <textarea
-              name="first_impression"
-              value={form.first_impression}
-              onChange={handleChange}
-            />
-          </label>
-
-          <label>
-            Parte confusa o difícil
-            <textarea
-              name="confusing_part"
-              value={form.confusing_part}
-              onChange={handleChange}
-            />
-          </label>
-
-          <label>
-            Sugerencia de mejora
-            <textarea
-              name="improvement_suggestion"
-              value={form.improvement_suggestion}
-              onChange={handleChange}
-            />
-          </label>
-
-          <div className="sl-feedback-actions">
-            <button type="submit" className="sl-btn-primary" disabled={submitting}>
-              {submitting ? "Enviando..." : "Enviar feedback"}
-            </button>
-            {status && (
-              <span className={`sl-feedback-status ${status.type}`}>
-                {status.message}
-              </span>
-            )}
-          </div>
-        </form>
-      </div>
-    </section>
-  );
-}
+const NAV_ITEMS = [
+  { id: "inicio", label: "Inicio" },
+  { id: "que-es", label: "Qué es RutaHogar" },
+  { id: "quienes-somos", label: "Quiénes somos" },
+  { id: "contacto", label: "Contacto" },
+];
 
 export default function LandingPage({
   profile,
@@ -597,7 +524,6 @@ export default function LandingPage({
   onLogin,
   onRegister,
   onDashboard,
-  onProfile,
   onLogout,
 }) {
   const isLoggedIn = Boolean(profile);
@@ -607,252 +533,377 @@ export default function LandingPage({
       ? "Continuar con mi perfil"
       : "Ir al dashboard";
 
+  const [activeSection, setActiveSection] = useState("inicio");
+  const [contactForm, setContactForm] = useState({ name: "", email: "", message: "" });
+
+  const handleNavClick = useCallback((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  useEffect(() => {
+    const sectionIds = NAV_ITEMS.map((item) => item.id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <style>{landingStyles}</style>
-      <div className="sl">
+      <div className="lp">
 
         {/* Nav */}
-        <nav className="sl-nav">
-          <img src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" className="sl-logo-img" />
-          <div className="sl-nav-actions">
-            {isLoggedIn ? (
-              <>
-                {onProfile && (
-                  <button type="button" className="sl-nav-secondary" onClick={onProfile}>Perfil</button>
-                )}
-                <button type="button" className="sl-nav-link" onClick={onLogout}>Cerrar sesión</button>
-              </>
-            ) : (
-              <>
-                <button type="button" className="sl-nav-secondary" onClick={onRegister}>Registrarse</button>
-                <button type="button" className="sl-nav-cta" onClick={onLogin}>Iniciar sesión</button>
-              </>
-            )}
+        <nav className="lp-nav">
+          <a className="lp-nav-brand" href="#inicio" onClick={(e) => { e.preventDefault(); handleNavClick("inicio"); }}>
+            <img className="lp-nav-brand-logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
+          </a>
+          <div className="lp-nav-right">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`lp-nav-tab ${activeSection === item.id ? "is-active" : ""}`}
+                type="button"
+                onClick={() => handleNavClick(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button className="lp-nav-cta" type="button" onClick={onStart}>
+              Evalúa tu perfil
+            </button>
           </div>
         </nav>
 
-        {/* 1. Hero */}
-        <section className="sl-hero">
-          <div className="sl-hero-inner">
-            <span className="sl-hero-pill">Precalificación inmobiliaria</span>
-            <h1>
-              Descubre si estás listo para <span>comprar tu primera vivienda</span>
-            </h1>
-            <p className="sl-hero-sub">
-              Responde unas preguntas y obtén tu score financiero en segundos.
-              Sin documentos, sin claves bancarias.
-            </p>
-            <div className="sl-hero-btns">
-              <button type="button" className="sl-btn-primary" onClick={onStart}>
-                {primaryActionLabel}
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <button type="button" className="sl-btn-ghost" onClick={isLoggedIn ? onDashboard : onLogin}>
-                {isLoggedIn ? "Ir al dashboard" : "Ya tengo cuenta"}
-              </button>
+        {/* Hero */}
+        <section className="lp-hero" id="inicio">
+          <div className="lp-hero-grid-pattern"></div>
+          <div className="lp-hero-inner">
+            <div className="lp-hero-copy">
+              <div className="lp-hero-eyebrow">
+                <span className="lp-hero-dot"></span>
+                Precalificación inmobiliaria
+              </div>
+              <h1>Tu score para <span className="gold">tu primera vivienda</span></h1>
+              <p className="lp-hero-sub">
+                Responde unas preguntas y obtén tu score financiero en segundos.
+                Sin documentos, sin claves bancarias.
+              </p>
+              <div className="lp-hero-actions">
+                <button className="lp-hero-btn-primary" type="button" onClick={onStart}>
+                  {primaryActionLabel}
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button className="lp-hero-btn-outline" type="button" onClick={isLoggedIn ? onDashboard : onLogin}>
+                  {isLoggedIn ? "Ir al dashboard" : "Ya tengo cuenta"}
+                </button>
+              </div>
             </div>
-            <div className="sl-hero-trust">
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M10 2l6 2v5c0 4-3 6-6 7-3-1-6-3-6-7V4z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-              </svg>
-              Orientativo · No consultamos
+
+            {/* Score Card */}
+            <div className="lp-score-card">
+              <div className="lp-sc-header">
+                <span className="lp-sc-label">Tu score orientativo</span>
+                <span className="lp-sc-badge">Alto</span>
+              </div>
+              <div className="lp-sc-arc">
+                <svg viewBox="0 0 200 110">
+                  <defs>
+                    <linearGradient id="arc-g" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" style={{stopColor:'#B8912E'}} />
+                      <stop offset="50%" style={{stopColor:'#D4A843'}} />
+                      <stop offset="100%" style={{stopColor:'#F0D68A'}} />
+                    </linearGradient>
+                  </defs>
+                  <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" strokeLinecap="round" />
+                  {/* Mismo trazado que la pista: pathLength lo normaliza a 100, así el
+                      dash marca el score sin depender de un punto final calculado a mano. */}
+                  <path d="M 20 100 A 80 80 0 0 1 180 100" pathLength="100" strokeDasharray="74 100" fill="none" stroke="url(#arc-g)" strokeWidth="10" strokeLinecap="round" />
+                </svg>
+                <div className="lp-sc-arc-val">
+                  <span className="lp-sc-arc-num">74</span>
+                  <span className="lp-sc-arc-total">/100</span>
+                </div>
+              </div>
+              <div className="lp-sc-factors">
+                <div className="lp-sc-factor"><span className="lp-sc-dot ok"></span><span className="lp-sc-factor-text">Ingresos estables</span></div>
+                <div className="lp-sc-factor"><span className="lp-sc-dot ok"></span><span className="lp-sc-factor-text">Ahorro para el pie</span></div>
+                <div className="lp-sc-factor"><span className="lp-sc-dot warn"></span><span className="lp-sc-factor-text">Continuidad laboral</span></div>
+              </div>
+              <div className="lp-sc-footer">
+                <span className="lp-sc-footer-text">Ejemplo orientativo</span>
+                <button className="lp-sc-footer-link" type="button" onClick={onStart}>
+                  Calcular el mío
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Stats */}
-        <section className="sl-stats">
-          <div className="sl-stats-grid">
-            <div className="sl-stat">
-              <div className="sl-stat-num">En Segundos</div>
-              <div className="sl-stat-label">Tenemos tu resultado</div>
-            </div>
-            <div className="sl-stat">
-              <div className="sl-stat-num">0</div>
-              <div className="sl-stat-label">Documentos requeridos</div>
-            </div>
-            <div className="sl-stat">
-              <div className="sl-stat-num">0–100</div>
-              <div className="sl-stat-label">Score orientativo</div>
-            </div>
-            <div className="sl-stat">
-              <div className="sl-stat-num">Gratis</div>
-              <div className="sl-stat-label">Sin costo, siempre</div>
-            </div>
+        <div className="lp-stats">
+          <div className="lp-stats-inner">
+            <div className="lp-stat"><div className="lp-stat-num">~30s</div><div className="lp-stat-label">Tiempo de calificación</div></div>
+            <div className="lp-stat"><div className="lp-stat-num">0</div><div className="lp-stat-label">Documentos requeridos</div></div>
+            <div className="lp-stat"><div className="lp-stat-num">0–100</div><div className="lp-stat-label">Rango de score</div></div>
+            <div className="lp-stat"><div className="lp-stat-num">$0</div><div className="lp-stat-label">Costo, siempre</div></div>
           </div>
-        </section>
+        </div>
 
-        {/* 2. Para quién es + score preview */}
-        <section className="sl-score-section">
-          <div className="sl-score-inner">
-            <div className="sl-score-copy">
-              <div className="sl-section-eyebrow">Para quién es</div>
-              <h2>Diseñado para el comprador de primera vivienda</h2>
-              <p>
-                Si estás dando los primeros pasos hacia tu hogar, RutaHogar te ayuda a
-                entender tu posición financiera antes de hablar con el banco.
-              </p>
-              <ul className="sl-score-list">
-                {[
-                  "Quieres saber si puedes comprar ahora",
-                  "Estás ahorrando para el pie de tu primera propiedad",
-                  "Quieres entender tu situación antes de ir al banco",
-                ].map((text) => (
-                  <li key={text}>
-                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                      <polyline points="4 10 8 14 16 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {text}
-                  </li>
-                ))}
+        {/* Qué es RutaHogar */}
+        <section className="lp-section lp-what" id="que-es">
+          <div className="lp-section-inner">
+            <div className="lp-section-eyebrow">Qué es RutaHogar</div>
+            <h2 className="lp-section-title">Una radiografía financiera de tu primera vivienda</h2>
+            <p className="lp-section-sub">RutaHogar no es un banco. Es una herramienta que te da claridad antes de dar el paso.</p>
+            <div className="lp-what-split">
+              <div className="lp-what-visual">
+                <div className="lp-what-visual-inner">
+                  <div className="lp-what-big-num">74</div>
+                  <div className="lp-what-big-label">Score orientativo de ejemplo</div>
+                </div>
+              </div>
+              <ul className="lp-what-points">
+                <li className="lp-what-point">
+                  <div className="lp-what-point-icon">
+                    <svg viewBox="0 0 20 20" fill="none"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z" stroke="currentColor" strokeWidth="1.5"/><path d="M10 6v4l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  </div>
+                  <div>
+                    <div className="lp-what-point-title">Resultado en segundos</div>
+                    <div className="lp-what-point-desc">Sin esperas, sin turnos, sin papeleo.</div>
+                  </div>
+                </li>
+                <li className="lp-what-point">
+                  <div className="lp-what-point-icon">
+                    <svg viewBox="0 0 20 20" fill="none"><path d="M10 2l6 2v5c0 4-3 6-6 7-3-1-6-3-6-7V4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div>
+                    <div className="lp-what-point-title">Orientativo, no vinculante</div>
+                    <div className="lp-what-point-desc">Una guía para entender tu posición, no una promesa.</div>
+                  </div>
+                </li>
+                <li className="lp-what-point">
+                  <div className="lp-what-point-icon">
+                    <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div>
+                    <div className="lp-what-point-title">Sin documentos</div>
+                    <div className="lp-what-point-desc">Solo datos que ya conoces. Sin liquidaciones ni claves bancarias.</div>
+                  </div>
+                </li>
+                <li className="lp-what-point">
+                  <div className="lp-what-point-icon">
+                    <svg viewBox="0 0 20 20" fill="none"><path d="M3 10l7-6 7 6M5 8.5V16a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <div>
+                    <div className="lp-what-point-title">Hecho para Chile</div>
+                    <div className="lp-what-point-desc">Diseñado para el mercado inmobiliario chileno y sus realidades.</div>
+                  </div>
+                </li>
               </ul>
             </div>
+          </div>
+        </section>
 
-            <div className="sl-score-card">
-              <div className="sl-score-preview-label">Tu score orientativo</div>
-              <div className="sl-score-top">
-                <div className="sl-score-ring">
-                  <span className="sl-score-ring-num">74</span>
-                  <span className="sl-score-ring-den">/100</span>
+        {/* Cómo funciona */}
+        <section className="lp-section lp-process">
+          <div className="lp-section-inner">
+            <h2 className="lp-section-title">Tres pasos, resultado inmediato</h2>
+            <p className="lp-section-sub">Sin trámites ni esperas. Completa el flujo en pocos minutos.</p>
+            <div className="lp-process-steps">
+              <div className="lp-process-step">
+                <div className="lp-process-step-num">1</div>
+                <div className="lp-process-step-title">Cuéntanos tu objetivo</div>
+                <div className="lp-process-step-desc">Qué tipo de propiedad buscas, en qué comuna y en qué plazo planeas comprar.</div>
+              </div>
+              <div className="lp-process-step">
+                <div className="lp-process-step-num">2</div>
+                <div className="lp-process-step-title">Ingresa tus datos</div>
+                <div className="lp-process-step-desc">Ingresos, deudas, ahorro y situación laboral. Datos aproximados, sin documentos.</div>
+              </div>
+              <div className="lp-process-step">
+                <div className="lp-process-step-num">3</div>
+                <div className="lp-process-step-title">Recibe tu score</div>
+                <div className="lp-process-step-desc">Score de 0 a 100, clasificación y recomendaciones personalizadas.</div>
+                <div className="lp-process-step-time">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>
+                  ~30 segundos
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Ventajas */}
+        <section className="lp-section">
+          <div className="lp-section-inner">
+            <h2 className="lp-section-title">¿Por qué usar RutaHogar?</h2>
+            <p className="lp-section-sub">Una forma simple y transparente de conocer tu posición financiera.</p>
+            <div className="lp-features-grid">
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>
+                </div>
+                <div className="lp-feature-title">Sin esperas</div>
+                <div className="lp-feature-desc">Tu score cuando lo necesitas, sin turnos ni demoras.</div>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div className="lp-feature-title">Privacidad total</div>
+                <div className="lp-feature-desc">No consultamos bases de datos. Tus datos quedan contigo.</div>
+              </div>
+              <div className="lp-feature-card is-wide">
                 <div>
-                  <span className="sl-score-badge-alto">Alto</span>
-                  <p className="sl-score-msg">Tu perfil está bien posicionado para iniciar el proceso de compra.</p>
+                  <div className="lp-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div className="lp-feature-title">Recomendaciones personalizadas</div>
+                  <div className="lp-feature-desc">No solo un número. Obtén acciones concretas para mejorar tu posición financiera y acercarte a tu primera vivienda.</div>
                 </div>
-              </div>
-              <div className="sl-score-bar-wrap">
-                <div className="sl-score-bar-track">
-                  <span className="sl-score-bar-fill" style={{ width: "74%" }} />
-                </div>
-                <div className="sl-score-bar-labels">
-                  <span>Bajo</span>
-                  <span>Medio</span>
-                  <span>Alto</span>
-                </div>
-              </div>
-              <div className="sl-score-factors">
-                <div className="sl-factor">
-                  <span className="sl-factor-dot ok" />
-                  <span className="sl-factor-label">Relación ingreso / dividendo saludable</span>
-                </div>
-                <div className="sl-factor">
-                  <span className="sl-factor-dot ok" />
-                  <span className="sl-factor-label">Ahorro suficiente para el pie</span>
-                </div>
-                <div className="sl-factor">
-                  <span className="sl-factor-dot warn" />
-                  <span className="sl-factor-label">Continuidad laboral por consolidar</span>
+                <div className="lp-feature-visual">
+                  <div>
+                    <div className="lp-feature-visual-num">+12</div>
+                    <div className="lp-feature-visual-label">Puntos potenciales de mejora</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 3. Cómo funciona */}
-        <section className="sl-steps-section">
-          <div className="sl-steps-inner">
-            <div className="sl-section-eyebrow">Cómo funciona</div>
-            <h2 className="sl-section-title">Tres pasos, resultado inmediato</h2>
-            <p className="sl-section-sub">Sin trámites ni esperas. Completa el flujo en pocos minutos.</p>
-            <div className="sl-steps-grid">
-              <div className="sl-step-card">
-                <div className="sl-step-num">1</div>
-                <h3 className="sl-step-title">Cuéntanos tu objetivo</h3>
-                <p className="sl-step-desc">Qué tipo de propiedad buscas, en qué comuna y en qué plazo planeas comprar.</p>
+        {/* Quiénes somos */}
+        <section className="lp-section lp-vision" id="quienes-somos">
+          <div className="lp-section-inner">
+            <h2 className="lp-section-title">Quiénes somos</h2>
+            <p className="lp-section-sub">Creemos que comprar tu primera vivienda no debería ser un misterio.</p>
+            <div className="lp-vision-grid">
+              <div className="lp-vision-card">
+                <div className="lp-vision-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+                <h3>Visión</h3>
+                <p>Ser la plataforma de orientación financiera e inmobiliaria más confiable de Chile, ayudando a cada comprador de primera vivienda a tomar decisiones informadas con claridad y confianza.</p>
               </div>
-              <div className="sl-step-card">
-                <div className="sl-step-num">2</div>
-                <h3 className="sl-step-title">Ingresa tus datos financieros</h3>
-                <p className="sl-step-desc">Ingresos, deudas, ahorro y situación laboral. Datos aproximados, sin documentos.</p>
-              </div>
-              <div className="sl-step-card">
-                <div className="sl-step-num">3</div>
-                <h3 className="sl-step-title">Recibe tu score</h3>
-                <p className="sl-step-desc">Score de 0 a 100, clasificación y recomendaciones personalizadas.</p>
-                <div className="sl-step-time">~30 segundos</div>
+              <div className="lp-vision-card">
+                <div className="lp-vision-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </div>
+                <h3>Misión</h3>
+                <p>Democratizar el acceso a la información financiera inmobiliaria, ofreciendo una herramienta gratuita, simple y transparente que ayuda a los chilenos a entender su posición real antes de solicitar un crédito hipotecario.</p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 4. Por qué RutaHogar */}
-        <section className="sl-benefits-section">
-          <div className="sl-benefits-inner">
-            <div className="sl-section-eyebrow">Ventajas</div>
-            <h2 className="sl-benefits-title">¿Por qué usar RutaHogar?</h2>
-            <p className="sl-benefits-sub">Una forma simple y transparente de conocer tu posición financiera.</p>
-            <div className="sl-benefits-grid">
-              <div className="sl-benefit">
-                <div className="sl-benefit-icon">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-                    <polyline points="12 7 12 12 16 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <h3 className="sl-benefit-title">Resultado en segundos</h3>
-                <p className="sl-benefit-desc">Sin esperas, sin trámites, sin turnos. Tu score cuando lo necesitas.</p>
+        {/* Preguntas frecuentes + Contacto */}
+        <section className="lp-section lp-faq" id="contacto">
+          <div className="lp-section-inner">
+            <div className="lp-section-eyebrow">Preguntas frecuentes</div>
+            <h2 className="lp-section-title">¿Tienes dudas?</h2>
+            <div className="lp-faq-grid">
+              <div className="lp-faq-list">
+                {faqs.map((faq) => (
+                  <FaqItem key={faq.q} question={faq.q} answer={faq.a} />
+                ))}
               </div>
-              <div className="sl-benefit">
-                <div className="sl-benefit-icon">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                    <polyline points="14 3 14 8 19 8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  </svg>
+              <div className="lp-contact-card">
+                <div className="lp-contact-title">Escríbenos</div>
+                <div className="lp-contact-desc">Resolvemos tus dudas personalizadamente. Completa el formulario y te contactaremos.</div>
+                <div className="lp-contact-field">
+                  <label className="lp-contact-label" htmlFor="lp-contact-name">Nombre</label>
+                  <input
+                    id="lp-contact-name"
+                    className="lp-contact-input"
+                    type="text"
+                    placeholder="Tu nombre"
+                    value={contactForm.name}
+                    onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                  />
                 </div>
-                <h3 className="sl-benefit-title">Sin documentos</h3>
-                <p className="sl-benefit-desc">Solo datos que ya conoces de memoria. Sin liquidaciones ni claves bancarias.</p>
-              </div>
-              <div className="sl-benefit">
-                <div className="sl-benefit-icon">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M12 3l7 2.5V11c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V5.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  </svg>
+                <div className="lp-contact-field">
+                  <label className="lp-contact-label" htmlFor="lp-contact-email">Email</label>
+                  <input
+                    id="lp-contact-email"
+                    className="lp-contact-input"
+                    type="email"
+                    placeholder="tu@correo.cl"
+                    value={contactForm.email}
+                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                  />
                 </div>
-                <h3 className="sl-benefit-title">Orientativo, no vinculante</h3>
-                <p className="sl-benefit-desc">No reemplaza una evaluación bancaria. Es una guía para entender tu posición.</p>
-              </div>
-              <div className="sl-benefit">
-                <div className="sl-benefit-icon">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M3 10l9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                    <polyline points="9 21 9 13 15 13 15 21" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                  </svg>
+                <div className="lp-contact-field">
+                  <label className="lp-contact-label" htmlFor="lp-contact-msg">Mensaje</label>
+                  <textarea
+                    id="lp-contact-msg"
+                    className="lp-contact-textarea"
+                    placeholder="¿En qué podemos ayudarte?"
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                  />
                 </div>
-                <h3 className="sl-benefit-title">Respaldado por EI</h3>
-                <p className="sl-benefit-desc">Desarrollado para el sector inmobiliario chileno.</p>
+                <button className="lp-contact-submit" type="button">
+                  Enviar mensaje
+                </button>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 5. FAQs */}
-        <section className="sl-faq-section">
-          <div className="sl-faq-inner">
-            <div className="sl-section-eyebrow">Preguntas frecuentes</div>
-            <h2 className="sl-section-title">¿Tienes dudas?</h2>
-            <div className="sl-faq-list">
-              {faqs.map((faq) => (
-                <FaqItem key={faq.q} question={faq.q} answer={faq.a} />
+        {/* Equipo */}
+        <section className="lp-section lp-team">
+          <div className="lp-section-inner">
+            <h2 className="lp-section-title">Nuestro Equipo</h2>
+            <p className="lp-section-sub">Un equipo comprometido con ayudar a los chilenos a alcanzar su hogar.</p>
+            <div className="lp-team-grid">
+              {[
+                { name: "Andrés Riquelme", role: "CEO & Fundador", initials: "AR" },
+                { name: "Francisco Mardones", role: "CTO", initials: "FM" },
+                { name: "Isaías Carte", role: "Director Comercial", initials: "IC" },
+                { name: "María José Soto", role: "UX/UI Designer", initials: "MS" },
+                { name: "Pedro Álvarez", role: "Desarrollador Full Stack", initials: "PA" },
+                { name: "Camila Retamal", role: "Data & QA Lead", initials: "CR" },
+              ].map((member) => (
+                <div className="lp-team-card" key={member.name}>
+                  <div className="lp-team-avatar">{member.initials}</div>
+                  <div className="lp-team-name">{member.name}</div>
+                  <div className="lp-team-role">{member.role}</div>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <FeedbackSection profile={profile} />
-
-        {/* Final CTA */}
-        <section className="sl-cta-section">
-          <div className="sl-cta-inner">
-            <h2>¿Listo para conocer tu score?</h2>
+        {/* CTA */}
+        <section className="lp-cta">
+          <div className="lp-cta-inner">
+            <h2>¿Listo para conocer <span className="gold">tu score</span>?</h2>
             <p>
               {isLoggedIn
                 ? "Tu sesión está activa y puedes continuar con tu precalificación."
                 : "Es gratis, toma unos minutos y no necesitas crear una cuenta para empezar."}
             </p>
-            <button type="button" className="sl-btn-white" onClick={onStart}>
+            <button className="lp-cta-btn" type="button" onClick={onStart}>
               {primaryActionLabel}
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -861,34 +912,66 @@ export default function LandingPage({
           </div>
         </section>
 
-        {/* 6. Respaldo EI */}
-        <section className="sl-ei-section">
-          <div className="sl-ei-label">Afiliados con</div>
-          <div className="sl-ei-grid">
-            {[
-              { name: "Echeverría Izquierdo", type: "Inmobiliaria" },
-              { name: "Yoyín", type: "Inmobiliaria" },
-              { name: "Yoyín", type: "Inmobiliaria" },
-              { name: "Yoyín", type: "Inmobiliaria" },
-              { name: "Yoyín", type: "Inmobiliaria" },
-              { name: "Yoyín", type: "Inmobiliaria" },
-            ].map((affiliate, index) => (
-              <div className="sl-ei-item" key={`${affiliate.name}-${index}`}>
-                <div className="sl-ei-name">{affiliate.name}</div>
-                <div className="sl-ei-type">{affiliate.type}</div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {/* Footer */}
+        <footer className="lp-footer">
+          <div className="lp-footer-top">
+            {/* Col 1: Logo + slogan */}
+            <div className="lp-footer-brand-col">
+              <img className="lp-footer-brand-logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
+              <p className="lp-footer-brand-slogan">Tu plataforma de orientación financiera e inmobiliaria para primera vivienda en Chile.</p>
+            </div>
 
-        {/* 7. Footer */}
-        <footer className="sl-footer">
-          <p className="sl-footer-note">
-            © 2025 RutaHogar · Herramienta orientativa, no constituye evaluación crediticia formal.
-          </p>
-          <button type="button" className="sl-footer-link" onClick={isLoggedIn ? onDashboard : onLogin}>
-            {isLoggedIn ? "Ir al dashboard" : "Iniciar sesión"}
-          </button>
+            {/* Col 2: Links */}
+            <div>
+              <div className="lp-footer-col-title">Navegación</div>
+              <div className="lp-footer-links-col">
+                <button className="lp-footer-link" type="button" onClick={() => handleNavClick("inicio")}>Inicio</button>
+                <button className="lp-footer-link" type="button" onClick={() => handleNavClick("que-es")}>Qué hacemos</button>
+                <button className="lp-footer-link" type="button" onClick={() => handleNavClick("quienes-somos")}>Quiénes somos</button>
+                <button className="lp-footer-link" type="button" onClick={() => handleNavClick("contacto")}>Contacto</button>
+              </div>
+            </div>
+
+            {/* Col 3: Social */}
+            <div>
+              <div className="lp-footer-col-title">Redes sociales</div>
+              <div className="lp-footer-social-col">
+                <button className="lp-footer-social-link" type="button">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                  YouTube
+                </button>
+                <button className="lp-footer-social-link" type="button">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>
+                  Instagram
+                </button>
+                <button className="lp-footer-social-link" type="button">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+                  TikTok
+                </button>
+                <button className="lp-footer-social-link" type="button">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                  LinkedIn
+                </button>
+              </div>
+            </div>
+
+            {/* Col 4: Partners */}
+            <div>
+              <div className="lp-footer-col-title">Somos parte de</div>
+              <div className="lp-footer-partners-col">
+                <div className="lp-footer-partner-placeholder">Logo UTFSM</div>
+                <div className="lp-footer-partner-placeholder">Logo Feria de Software</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lp-footer-bottom">
+            <span className="lp-footer-copy">© 2026 RutaHogar. Todos los derechos reservados.</span>
+            <div className="lp-footer-legal">
+              <button className="lp-footer-legal-link" type="button">Términos</button>
+              <button className="lp-footer-legal-link" type="button">Privacidad</button>
+            </div>
+          </div>
         </footer>
 
       </div>

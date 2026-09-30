@@ -9,9 +9,9 @@ import {
   isSupabaseDataConfigured,
 } from "./profileService";
 
-const PROFILE_KEY = "scoreleads_profile";
-const SESSION_KEY = "scoreleads_session";
-const ONBOARDING_KEY = "scoreleads_onboarding";
+const PROFILE_KEY = "RutaHogar_profile";
+const SESSION_KEY = "RutaHogar_session";
+const ONBOARDING_KEY = "RutaHogar_onboarding";
 
 export const roles = {
   user: "usuario",
@@ -119,7 +119,7 @@ export async function signIn({ email, password, role = roles.user }) {
   }
 
   const user = { id: `local-${email}`, email, created_at: new Date().toISOString(), user_metadata: { role } };
-  return saveSession({ user, access_token: "local-scoreleads-session" }, buildProfile(user, role));
+  return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, role));
 }
 
 export async function signUp({ email, password, role = roles.user, full_name = "", phone = "", birth_date = "" }) {
@@ -168,7 +168,7 @@ export async function signUp({ email, password, role = roles.user, full_name = "
     created_at: new Date().toISOString(),
     user_metadata: { role: normalizedRole, full_name, phone: normalizedPhone, birth_date: normalizedBirthDate },
   };
-  return saveSession({ user, access_token: "local-scoreleads-session" }, buildProfile(user, normalizedRole));
+  return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, normalizedRole));
 }
 
 export function getStoredAuth() {
@@ -192,12 +192,12 @@ export async function signOut() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(ONBOARDING_KEY);
-  localStorage.removeItem("scoreleads_evaluations");
-  localStorage.removeItem("scoreleads_scoring_history");
-  localStorage.removeItem("scoreleads_improvement_goals");
-  localStorage.removeItem("scoreleads_goal_progress");
-  localStorage.removeItem("scoreleads_arco_requests");
-  localStorage.removeItem("scoreleads_last_lead_check");
+  localStorage.removeItem("RutaHogar_evaluations");
+  localStorage.removeItem("RutaHogar_scoring_history");
+  localStorage.removeItem("RutaHogar_improvement_goals");
+  localStorage.removeItem("RutaHogar_goal_progress");
+  localStorage.removeItem("RutaHogar_arco_requests");
+  localStorage.removeItem("RutaHogar_last_lead_check");
   clearDataconsentKeys();
 }
 
@@ -205,7 +205,7 @@ function clearDataconsentKeys() {
   const toRemove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith("scoreleads_dataconsent")) {
+    if (key && key.startsWith("RutaHogar_dataconsent")) {
       toRemove.push(key);
     }
   }

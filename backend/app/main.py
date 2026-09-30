@@ -5,6 +5,12 @@ from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
 from .scoring import calculate_score
 from .properties_search import search_properties
+from .ai import (
+    generate_commercial_guidance,
+    generate_executive_summary,
+    generate_user_explanation,
+)
+
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
 VALID_CONTINUITY_VALUES = {"menos_6_meses", "entre_6_y_12_meses", "entre_1_y_3_anios", "mas_3_anios"}
@@ -29,6 +35,10 @@ VALID_RELATION_TYPES = {
 
 app = FastAPI(title="RutaHogar")
 
+# HU13 has its own authenticated contract; POST /score is unchanged.
+from .tracking.routes import router as tracking_router
+app.include_router(tracking_router)
+
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -41,14 +51,23 @@ LOCAL_FRONTEND_ORIGINS = [
 ]
 EXTRA_FRONTEND_ORIGINS = [
     origin.strip()
-    for origin in os.environ.get("SCORELEADS_ALLOWED_ORIGINS", "").split(",")
+    for origin in os.environ.get("RUTAHOGAR_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+
+# En entornos de despliegue real (Vercel production/preview) no exponer el regex
+# de IP LAN usado para desarrollo; solo en ejecución local o Vercel development.
+_is_deployed = os.environ.get("VERCEL_ENV") in {"production", "preview"}
+_ALLOW_ORIGIN_REGEX = (
+    r"https://.*\.vercel\.app"
+    if _is_deployed
+    else r"https://.*\.vercel\.app|http://\d+\.\d+\.\d+\.\d+:517[3-6]"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=LOCAL_FRONTEND_ORIGINS + EXTRA_FRONTEND_ORIGINS,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -295,3 +314,82 @@ async def properties_search_endpoint(payload: PropertySearchRequest):
         similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.0,
     )
 
+
+class ExplainRequest(ScoreRequest):
+    # "user": solo la explicación del usuario. "all": incluye también los
+    # textos del ejecutivo (resumen y guía comercial).
+    scope: str = "user"
+
+    @field_validator("scope")
+    @classmethod
+    def validate_scope(cls, value):
+        if value not in {"user", "all"}:
+            raise ValueError("Scope inválido")
+        return value
+
+
+@app.post("/score/explain")
+async def explain_endpoint(payload: ExplainRequest):
+    """
+    Regenera los textos de IA para una precalificación ya calculada.
+    Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
+    y devuelve únicamente los textos generados. Si un texto no pudo
+    generarse, su campo llega en null: el detalle del fallo nunca se expone
+    al cliente.
+    """
+    data = payload.model_dump(exclude={"scope"})
+    base = calculate_score(data, include_ai=False)
+
+    response = {
+        "score": base.get("score"),
+        "classification": base.get("classification"),
+        "ai_explanation": None,
+        "executive_summary": None,
+        "commercial_guidance": None,
+    }
+
+    response["ai_explanation"] = generate_user_explanation(
+        classification=base["classification"],
+        score=base["score"],
+        positive_indicators=base["positive_indicators"],
+        risks=base["risks"],
+    )
+
+    if payload.scope == "all":
+        response["executive_summary"] = generate_executive_summary(
+            classification=base["classification"],
+            score=base["score"],
+            positive_indicators=base["positive_indicators"],
+            risks=base["risks"],
+        )
+        response["commercial_guidance"] = generate_commercial_guidance(
+            classification=base["classification"],
+            score=base["score"],
+            positive_indicators=base["positive_indicators"],
+            risks=base["risks"],
+            recommendations=base["recommendations"],
+        )
+
+    return response
+
+
+# --- HU 9: interés en un proyecto ---
+# El catálogo de proyectos NO vive aquí. La fuente única es la tabla
+# `proyectos` de Supabase, que el frontend lee vía services/projectService.js
+# (contrato congelado en docs/project-catalog-contract.md). Antes existía en
+# este archivo un MOCK_PROYECTOS con cinco dicts y un GET /projects que lo
+# servía; se eliminó porque era una segunda fuente de proyectos, invisible para
+# el administrador que mantiene el catálogo. Ver
+# docs/stories/CATALOGO-UNICO-HU9/PLAN.md.
+
+
+class InterestRequest(BaseModel):
+    proyecto_id: str
+    contactar_ejecutivo: bool
+    email: Optional[str] = None
+
+@app.post("/interest")
+async def post_interest(payload: InterestRequest):
+    if payload.contactar_ejecutivo:
+        return {"status": "success", "message": "Notificación enviada al ejecutivo exitosamente."}
+    return {"status": "success", "message": "Interés guardado correctamente."}

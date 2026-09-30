@@ -2,16 +2,16 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import { formatFormValue } from "../constants";
+import {
+  calculateMortgageDividend,
+  REFERENTIAL_MORTGAGE_ANNUAL_RATE,
+  roundCurrency,
+} from "../lib/mortgage";
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
 
 const FALLBACK_UF_VALUE_CLP = 40695;
-const FALLBACK_MORTGAGE_ANNUAL_RATE = 0.049;
-const configuredMortgageRate = Number(import.meta.env.VITE_REFERENTIAL_MORTGAGE_RATE);
-const REFERENTIAL_MORTGAGE_ANNUAL_RATE =
-  Number.isFinite(configuredMortgageRate) && configuredMortgageRate > 0
-    ? configuredMortgageRate
-    : FALLBACK_MORTGAGE_ANNUAL_RATE;
 const DEBUG_SCORE_REQUESTS =
   import.meta.env.DEV && import.meta.env.VITE_DEBUG_SCORE === "true";
 
@@ -169,10 +169,6 @@ const integerFormattedFields = new Set([
   "property_value",
 ]);
 
-function roundCurrency(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
-
 function formatPercent(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return null;
@@ -226,36 +222,6 @@ function buildReferencePropertyValues(commune, ufValueClp) {
     property_value_source: referencePropertyValuesUf[commune]
       ? "referencia_comuna"
       : "referencia_general",
-  };
-}
-
-function calculateMortgageDividend({ propertyValueClp, savingsClp, termYears, annualRate }) {
-  const propertyValue = Number(propertyValueClp) || 0;
-  const principal = Math.max(0, propertyValue - (Number(savingsClp) || 0));
-  const months = Number(termYears) * 12;
-  const monthlyRate = Number(annualRate) / 12;
-
-  if (!Number.isFinite(months) || months <= 0 || propertyValue <= 0) {
-    return { dividend: null, principalClp: principal };
-  }
-
-  if (principal <= 0) {
-    return { dividend: 0, principalClp: principal };
-  }
-
-  if (!Number.isFinite(monthlyRate) || monthlyRate <= 0) {
-    return {
-      dividend: Math.round(principal / months),
-      principalClp: principal,
-    };
-  }
-
-  const compound = Math.pow(1 + monthlyRate, months);
-  const dividend = principal * ((monthlyRate * compound) / (compound - 1));
-
-  return {
-    dividend: Math.round(dividend),
-    principalClp: Math.round(principal),
   };
 }
 
@@ -321,20 +287,26 @@ export default function ScoreForm({
   onConsentAccept,
   onViewConsent,
   onBirthDateSave,
+  onBack,
+  initialDraft,
+  onDraftChange,
 }) {
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
   const storedBirthDate = normalizeBirthDate(
     birthDate || profile?.birth_date || profile?.fecha_nacimiento || "",
   );
-  const needsBirthDate = !storedBirthDate;
-  const [birthFields, setBirthFields] = useState({ birth_day: "", birth_month: "", birth_year: "" });
+  // La fecha de nacimiento pertenece al perfil autenticado; el flujo anónimo
+  // la solicita antes de la precalificación y luego se migra al crear la cuenta.
+  const needsBirthDate = isAnon && !storedBirthDate;
+  const contextCompleted = Boolean(onboardingData);
+  const [birthFields, setBirthFields] = useState(() => initialDraft?.birthFields || { birth_day: "", birth_month: "", birth_year: "" });
   const [activeDateDropdown, setActiveDateDropdown] = useState(null);
   const effectiveBirthDate = needsBirthDate ? buildBirthDateIso(birthFields) : storedBirthDate;
   const declaredAge = useMemo(() => calculateAge(effectiveBirthDate), [effectiveBirthDate]);
   const asksPropertyValue = buyerObjectives.has(objective);
 
-  const [form, setForm] = useState({
+  const defaultScoreForm = {
     ingreso_mensual: "",
     deuda_mensual: "",
     ahorro_disponible: "",
@@ -359,11 +331,16 @@ export default function ScoreForm({
     valor_vehiculos: "",
     valor_inmuebles: "",
     patrimonio_unit: "clp",
-  });
+  };
+
+  const [form, setForm] = useState(() => ({
+    ...defaultScoreForm,
+    ...(initialDraft?.form || {}),
+  }));
 
   // Estado paralelo solo para mostrar los valores formateados en pantalla
-  const [displayValues, setDisplayValues] = useState({});
-  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(false);
+  const [displayValues, setDisplayValues] = useState(() => initialDraft?.displayValues || {});
+  const [dividendWasManuallyEdited, setDividendWasManuallyEdited] = useState(Boolean(initialDraft?.dividendWasManuallyEdited));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -371,6 +348,12 @@ export default function ScoreForm({
   const [ufStatus, setUfStatus] = useState("fallback");
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
+  const [incomeTipVisible, setIncomeTipVisible] = useState(true);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const draftStep = Number(initialDraft?.currentStep);
+    if (Number.isFinite(draftStep) && draftStep >= 1 && draftStep <= 4) return draftStep;
+    return contextCompleted ? 2 : (needsBirthDate ? 1 : 2);
+  });
 
   const consentDate = consentTimestamp
     ? new Date(consentTimestamp).toLocaleDateString("es-CL", {
@@ -379,6 +362,16 @@ export default function ScoreForm({
       day: "numeric",
     })
     : null;
+
+  useEffect(() => {
+    onDraftChange?.({
+      form,
+      displayValues,
+      dividendWasManuallyEdited,
+      birthFields,
+      currentStep,
+    });
+  }, [birthFields, currentStep, displayValues, dividendWasManuallyEdited, form, onDraftChange]);
 
   const debtExceedsIncome =
     form.ingreso_mensual !== "" &&
@@ -708,14 +701,14 @@ export default function ScoreForm({
 
     if (form.complemento_renta && complementFieldsIncomplete) {
       setError(
-        "Completa los datos del complementario antes de calcular tu preevaluación.",
+        "Completa los datos del complementario antes de calcular tu precalificación.",
       );
       return false;
     }
 
     if (form.declara_patrimonio && patrimonioFieldsIncomplete) {
       setError(
-        "Completa la información de patrimonio antes de calcular tu preevaluación.",
+        "Completa la información de patrimonio antes de calcular tu precalificación.",
       );
       return false;
     }
@@ -1011,123 +1004,234 @@ export default function ScoreForm({
     }
   };
 
+  const totalSteps = 4;
+  const stepLabels = ["Contexto", "Finanzas", "Trabajo", "Resultado"];
+  const stepToRealStep = (s) => (needsBirthDate ? s : s + 1);
+
+  const canGoNext = () => {
+    if (currentStep === 1 && needsBirthDate && !contextCompleted) {
+      return Boolean(effectiveBirthDate);
+    }
+    if (currentStep === 2) {
+      if (!form.ingreso_mensual || form.ingreso_mensual === "") return false;
+      if (!form.deuda_mensual || form.deuda_mensual === "") return false;
+      if (!form.ahorro_disponible || form.ahorro_disponible === "") return false;
+      if (!form.plazo_credito_hipotecario) return false;
+      if (asksPropertyValue && (!form.property_value || form.property_value === "")) return false;
+      return true;
+    }
+    if (currentStep === 3) {
+      if (!form.tipo_contrato) return false;
+      if (!form.continuidad_laboral) return false;
+      if (!form.morosidad_actual) return false;
+      if (form.morosidad_actual === "si") {
+        if (form.monto_morosidad === "" || form.monto_morosidad === undefined) return false;
+        if (!form.antiguedad_morosidad) return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    if (currentStep < totalSteps) {
+      setError(null);
+      setCurrentStep((s) => s + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const goBack = () => {
+    if (currentStep === 2 && !needsBirthDate) {
+      onBack?.();
+      return;
+    }
+    if (currentStep > 1) {
+      setError(null);
+      setCurrentStep((s) => s - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const showFinancialBackButton = currentStep !== 2 || needsBirthDate || onBack;
+
   return (
-    <form onSubmit={submit} className="score-form">
-      {/* ── Fecha de nacimiento (solo usuarios anónimos) ── */}
-      {needsBirthDate && (
-        <div className="form-section">
-          <div>
-            <span className="eyebrow">Información personal</span>
-          </div>
-          <div className="form-grid">
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label>Fecha de nacimiento</label>
-                <FieldTooltip text="Tu edad se usa para calcular el plazo máximo del crédito hipotecario." />
-              </div>
-              <div className="birth-date-grid" onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget)) setActiveDateDropdown(null);
-              }}>
-                <BirthDateField
-                  name="birth_day"
-                  value={birthFields.birth_day}
-                  onChange={handleBirthFieldChange}
-                  onOpen={setActiveDateDropdown}
-                  onClose={() => setActiveDateDropdown(null)}
-                  onSelect={handleBirthFieldSelect}
-                  onBlur={() => normalizeBirthField("birth_day")}
-                  maxLength="2"
-                  placeholder="DD"
-                  ariaLabel="Día de nacimiento"
-                  options={dayOptions}
-                  activeDropdown={activeDateDropdown}
-                />
-                <BirthDateField
-                  name="birth_month"
-                  value={birthFields.birth_month}
-                  onChange={handleBirthFieldChange}
-                  onOpen={setActiveDateDropdown}
-                  onClose={() => setActiveDateDropdown(null)}
-                  onSelect={handleBirthFieldSelect}
-                  onBlur={() => normalizeBirthField("birth_month")}
-                  maxLength="2"
-                  placeholder="MM"
-                  ariaLabel="Mes de nacimiento"
-                  options={monthOptions}
-                  activeDropdown={activeDateDropdown}
-                />
-                <BirthDateField
-                  name="birth_year"
-                  value={birthFields.birth_year}
-                  onChange={handleBirthFieldChange}
-                  onOpen={setActiveDateDropdown}
-                  onClose={() => setActiveDateDropdown(null)}
-                  onSelect={handleBirthFieldSelect}
-                  maxLength="4"
-                  placeholder="AAAA"
-                  ariaLabel="Año de nacimiento"
-                  options={yearOptions}
-                  activeDropdown={activeDateDropdown}
-                />
-              </div>
+    <form onSubmit={submit} className="pre-wizard">
+      {/* Progress bar */}
+      <div className="pre-wizard-progress">
+        <div className="pre-wizard-progress-top">
+          <span className="pre-wizard-progress-label">Precalificación</span>
+          <span className="pre-wizard-progress-step">Paso {currentStep} de {totalSteps}</span>
+        </div>
+        <div className="pre-wizard-progress-bar">
+          <div className="pre-wizard-progress-fill" style={{ width: `${(currentStep / totalSteps) * 100}%` }} />
+        </div>
+      </div>
+
+      {/* Step indicators */}
+      <div className="pre-wizard-steps">
+        {stepLabels.map((label, i) => {
+          const stepNum = i + 1;
+          const isDone = (stepNum < currentStep) || (stepNum === 1 && contextCompleted && currentStep > 1);
+          const isActive = stepNum === currentStep;
+          return (
+            <div key={label} className={`pre-wizard-step${isDone ? " is-done" : ""}${isActive ? " is-active" : ""}`}>
+              <span className="pre-wizard-step-num">{isDone ? "✓" : stepNum}</span>
+              <span className="pre-wizard-step-label">{label}</span>
+              {stepNum < totalSteps && <span className="pre-wizard-step-line" />}
             </div>
+          );
+        })}
+      </div>
+
+      {/* ═══ Step 1: Datos personales ═══ */}
+      {needsBirthDate && currentStep === 1 && (
+        <div className="pre-wizard-card">
+          <div className="pre-wizard-card-header">
+            <div className="pre-wizard-card-eyebrow">Información personal</div>
+            <h2 className="pre-wizard-card-title">¿Cuándo naciste?</h2>
+            <p className="pre-wizard-card-desc">
+              Tu edad se usa para calcular el plazo máximo del crédito hipotecario.
+            </p>
+          </div>
+
+          <div className="pre-wizard-field">
+            <label className="pre-wizard-field-label">Fecha de nacimiento</label>
+            <div className="birth-date-grid" onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setActiveDateDropdown(null);
+            }}>
+              <BirthDateField
+                name="birth_day"
+                value={birthFields.birth_day}
+                onChange={handleBirthFieldChange}
+                onOpen={setActiveDateDropdown}
+                onClose={() => setActiveDateDropdown(null)}
+                onSelect={handleBirthFieldSelect}
+                onBlur={() => normalizeBirthField("birth_day")}
+                maxLength="2"
+                placeholder="DD"
+                ariaLabel="Día de nacimiento"
+                options={dayOptions}
+                activeDropdown={activeDateDropdown}
+              />
+              <BirthDateField
+                name="birth_month"
+                value={birthFields.birth_month}
+                onChange={handleBirthFieldChange}
+                onOpen={setActiveDateDropdown}
+                onClose={() => setActiveDateDropdown(null)}
+                onSelect={handleBirthFieldSelect}
+                onBlur={() => normalizeBirthField("birth_month")}
+                maxLength="2"
+                placeholder="MM"
+                ariaLabel="Mes de nacimiento"
+                options={monthOptions}
+                activeDropdown={activeDateDropdown}
+              />
+              <BirthDateField
+                name="birth_year"
+                value={birthFields.birth_year}
+                onChange={handleBirthFieldChange}
+                onOpen={setActiveDateDropdown}
+                onClose={() => setActiveDateDropdown(null)}
+                onSelect={handleBirthFieldSelect}
+                onBlur={() => normalizeBirthField("birth_year")}
+                maxLength="4"
+                placeholder="AAAA"
+                ariaLabel="Año de nacimiento"
+                options={yearOptions}
+                activeDropdown={activeDateDropdown}
+              />
+            </div>
+          </div>
+
+          <div className="pre-wizard-nav">
+            <div />
+            <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!effectiveBirthDate}>
+              Continuar
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
           </div>
         </div>
       )}
-      {/* ── Datos financieros ── */}
-      <div className="form-section">
-        <div>
-          <span className="eyebrow">Datos financieros</span>
-          <p>
-            Usa montos aproximados. No pedimos claves, documentos ni información
-            bancaria privada.
-          </p>
-        </div>
-        <div className="form-grid">
-          {/* Ingreso mensual */}
-          <div className="field-wrap">
-            <div className="field-label-row">
-              <label htmlFor="ingreso_mensual">Ingreso mensual</label>
-              <FieldTooltip text="Sueldo líquido o renta variable promedio de los últimos 6 meses." />
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              id="ingreso_mensual"
-              name="ingreso_mensual"
-              value={displayVal("ingreso_mensual")}
-              onChange={handleChange}
-              placeholder="Ej: 1.200.000"
-            />
+
+      {/* ═══ Step 2: Datos financieros ═══ */}
+      {currentStep === 2 && (
+        <div className="pre-wizard-card">
+          <div className="pre-wizard-card-header">
+            <div className="pre-wizard-card-eyebrow">Datos financieros</div>
+            <h2 className="pre-wizard-card-title">Tu situación financiera</h2>
+            <p className="pre-wizard-card-desc">
+              Usa montos aproximados. No pedimos claves, documentos ni información bancaria privada.
+            </p>
           </div>
 
-          {/* Deuda mensual */}
-          <div className="field-wrap">
-            <div className="field-label-row">
-              <label htmlFor="deuda_mensual">Deuda mensual</label>
-              <FieldTooltip text="Considera el total de tus compromisos financieros mensuales vigentes: créditos de consumo, automotrices e hipotecarios, cuota mínima de tarjetas de crédito, línea de crédito, avances o superavances, créditos estudiantiles, préstamos de cooperativas, cajas de compensación, casas comerciales y pensiones alimenticias. No considera gastos comunes, servicios básicos, alimentación ni otros gastos cotidianos." />
+          {incomeTipVisible && <div className="tip" style={{ marginBottom: '1.25rem' }}>
+            <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
+            <div className="tip__text">
+              <strong>Consejo:</strong> Usa tu ingreso líquido real. No incluyas propinas o bonos variables.
             </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              id="deuda_mensual"
-              name="deuda_mensual"
-              value={displayVal("deuda_mensual")}
-              onChange={handleChange}
-              placeholder="Ej: 150.000"
-              aria-invalid={debtExceedsIncome}
-            />
-            {debtExceedsIncome && (
-              <span id="debt-income-warning" className="field-warning">
-                {debtIncomeMessage}
-              </span>
-            )}
+            <button
+              type="button"
+              className="tip__toggle"
+              onClick={() => setIncomeTipVisible(false)}
+              aria-label="Cerrar consejo"
+              title="Cerrar consejo"
+            >
+              x
+            </button>
+          </div>}
+
+          {/* ── Datos financieros ── */}
+          <div className="pre-wizard-grid-2">
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="ingreso_mensual">
+                  Ingreso mensual
+                </label>
+                <FieldTooltip text="Sueldo líquido o renta variable promedio de los últimos 6 meses." />
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                id="ingreso_mensual"
+                name="ingreso_mensual"
+                value={displayVal("ingreso_mensual")}
+                onChange={handleChange}
+                placeholder="Ej: 1.200.000"
+              />
+            </div>
+
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="deuda_mensual">
+                  Deuda mensual
+                </label>
+                <FieldTooltip text="Considera el total de tus compromisos financieros mensuales vigentes: créditos de consumo, automotrices e hipotecarios, cuota mínima de tarjetas de crédito, línea de crédito, avances o superavances, créditos estudiantiles, préstamos de cooperativas, cajas de compensación, casas comerciales y pensiones alimenticias. No considera gastos comunes, servicios básicos, alimentación ni otros gastos cotidianos." />
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                id="deuda_mensual"
+                name="deuda_mensual"
+                value={displayVal("deuda_mensual")}
+                onChange={handleChange}
+                placeholder="Ej: 150.000"
+                aria-invalid={debtExceedsIncome}
+              />
+              {debtExceedsIncome && (
+                <span className="field-warning" style={{ color: '#B83232', fontSize: 12 }}>
+                  {debtIncomeMessage}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Ahorro disponible */}
-          <div className="field-wrap">
-            <div className="field-label-row">
-              <label htmlFor="ahorro_disponible">Ahorro disponible</label>
+          <div className="pre-wizard-field">
+            <div className="pre-wizard-field-label-row">
+              <label className="pre-wizard-field-label" htmlFor="ahorro_disponible">
+                Ahorro disponible
+              </label>
               <FieldTooltip text="Dinero disponible hoy para el pago inicial de la vivienda: ahorros propios, APV o Cuenta 2 que puedas usar. No incluyas apoyos no confirmados como si ya fueran ahorro disponible." />
             </div>
             <input
@@ -1140,17 +1244,16 @@ export default function ScoreForm({
               placeholder="Ej: 3.000.000"
             />
             {savingsDownPaymentLabel && (
-              <span className="field-help">
+              <span className="pre-wizard-field-hint">
                 Equivale aproximadamente al {savingsDownPaymentLabel} del valor objetivo.
               </span>
             )}
           </div>
 
-          {/* Monto estimado de la vivienda */}
           {asksPropertyValue && (
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="property_value">
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="property_value">
                   Monto estimado de la vivienda
                 </label>
                 <FieldTooltip text="Precio de venta aproximado de la propiedad que deseas adquirir." />
@@ -1163,11 +1266,8 @@ export default function ScoreForm({
                   name="property_value"
                   value={displayVal("property_value")}
                   onChange={handleChange}
-                  placeholder={
-                    form.property_value_unit === "uf"
-                      ? "Ej: 3.500"
-                      : "Ej: 136.500.000"
-                  }
+                  placeholder={form.property_value_unit === "uf" ? "Ej: 3.500" : "Ej: 136.500.000"}
+                  style={{ flex: 1 }}
                 />
                 <button
                   type="button"
@@ -1177,192 +1277,159 @@ export default function ScoreForm({
                   {form.property_value_unit === "uf" ? "UF" : "CLP"}
                 </button>
               </div>
-              <span className="field-help">
-                Puedes ingresarlo en UF o CLP. {ufHelpText}
-              </span>
+              {form.property_value && (
+                <span className="pre-wizard-field-hint">
+                  {form.property_value_unit === "uf"
+                    ? `Referencia: $${(Number(form.property_value) * ufValueClp).toLocaleString("es-CL")} CLP`
+                    : `Referencia: ${(Number(form.property_value) / ufValueClp).toFixed(2)} UF`}
+                  . {ufHelpText}
+                </span>
+              )}
             </div>
           )}
 
-          {/* Plazo estimado */}
-          <div
-            className={`field-wrap${showMortgageAgeWarning ? " field-with-warning" : ""}`}
-          >
-            <div className="field-label-row">
-              <label htmlFor="plazo_credito_hipotecario">
-                Plazo estimado del crédito hipotecario
-              </label>
-              <FieldTooltip text="Número de años en que planeas pagar el crédito. Los plazos más comunes van de 10 a 30 años." />
-            </div>
-            <select
-              id="plazo_credito_hipotecario"
-              name="plazo_credito_hipotecario"
-              value={form.plazo_credito_hipotecario}
-              onChange={handleChange}
-            >
-              <option value="">Selecciona una opción</option>
-              {mortgageTerms.map((term) => (
-                <option key={term} value={term}>
-                  {term} años
-                </option>
-              ))}
-            </select>
-            {showMortgageAgeWarning && (
-              <span className="field-warning">
-                Por tu edad declarada, el plazo hipotecario solicitado podría
-                verse limitado por condiciones asociadas al seguro de
-                desgravamen. Esto puede aumentar el dividendo mensual estimado.
-              </span>
-            )}
-          </div>
-
-          {/* Dividendo estimado */}
-          <div className="field-wrap calculated-field">
-            <div className="field-label-row">
-              <label htmlFor="dividendo_estimado">Dividendo estimado</label>
-              <FieldTooltip text="Cuota mensual referencial calculada con monto de vivienda, ahorro disponible, plazo y tasa hipotecaria referencial." />
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              id="dividendo_estimado"
-              name="dividendo_estimado"
-              value={displayVal("dividendo_estimado")}
-              onChange={handleChange}
-              placeholder={
-                calculatedDividend == null
-                  ? "Ej: 250.000"
-                  : "Calculado automaticamente"
-              }
-            />
-            <span className="field-help">
-              Calculado de forma referencial según monto de vivienda, ahorro
-              disponible y plazo del crédito. No corresponde a una oferta
-              bancaria formal.
-            </span>
-            <span className="field-help">
-              Si no lo sabes, puedes usar esta estimación desde valor, pie y plazo. Puedes modificarlo si ya tienes una simulación bancaria.
-            </span>
-            {dividendWasManuallyEdited && calculatedDividend != null && (
-              <button
-                type="button"
-                className="secondary-button compact-button calculated-reset"
-                onClick={useCalculatedDividend}
+          <div className="pre-wizard-grid-2">
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="plazo_credito_hipotecario">
+                  Plazo del crédito
+                </label>
+                <FieldTooltip text="Número de años en que planeas pagar el crédito. Los plazos más comunes van de 10 a 30 años." />
+              </div>
+              <select
+                id="plazo_credito_hipotecario"
+                name="plazo_credito_hipotecario"
+                value={form.plazo_credito_hipotecario}
+                onChange={handleChange}
               >
-                Usar cálculo referencial
+                <option value="">Selecciona un plazo</option>
+                {mortgageTerms.map((term) => (
+                  <option key={term} value={term}>{term} años</option>
+                ))}
+              </select>
+              {showMortgageAgeWarning && (
+                <span className="field-warning" style={{ color: '#C4841D', fontSize: 12 }}>
+                  Con {declaredAge} años, el plazo máximo recomendado es {Math.max(10, 70 - declaredAge)} años.
+                </span>
+              )}
+            </div>
+
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="dividendo_estimado">
+                  Dividendo estimado
+                </label>
+                <FieldTooltip text="Cuota mensual referencial calculada con monto de vivienda, ahorro disponible, plazo y tasa hipotecaria referencial." />
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                id="dividendo_estimado"
+                name="dividendo_estimado"
+                value={displayVal("dividendo_estimado")}
+                onChange={handleChange}
+                placeholder="Se calcula automáticamente"
+              />
+              {calculatedDividend != null && dividendWasManuallyEdited && (
+                <button type="button" className="pre-wizard-field-hint" onClick={useCalculatedDividend} style={{ background: 'none', border: 'none', color: 'var(--rh-gold-dark)', cursor: 'pointer', fontWeight: 600, padding: 0, textAlign: 'left', font: 'inherit' }}>
+                  Usar cálculo referencial: ${formatInteger(String(calculatedDividend))}
+                </button>
+              )}
+              {calculatedDividend != null && !dividendWasManuallyEdited && (
+                <span className="pre-wizard-field-hint">
+                  Dividendo referencial: ${formatInteger(String(calculatedDividend))} (tasa {formatPercent(REFERENTIAL_MORTGAGE_ANNUAL_RATE)} anual)
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="pre-wizard-nav">
+            {showFinancialBackButton ? (
+              <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Volver
               </button>
-            )}
+            ) : <div />}
+            <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
+              Continuar
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
           </div>
         </div>
-
-      </div>
-
-      {/* ── Trabajo y antecedentes ── */}
-      <div className="form-section">
-        <div>
-          <span className="eyebrow">Trabajo y antecedentes declarados</span>
-          <p>
-            La morosidad es autodeclarada y sólo se usa como señal orientativa.
-          </p>
-        </div>
-        <div className="form-grid">
-          {/* Tipo de contrato */}
-          <div className="field-wrap">
-            <div className="field-label-row">
-              <label htmlFor="tipo_contrato">Tipo de contrato</label>
-              <FieldTooltip text="Modalidad bajo la cual recibes tus ingresos actualmente." />
-            </div>
-            <select
-              id="tipo_contrato"
-              name="tipo_contrato"
-              value={form.tipo_contrato}
-              onChange={handleChange}
-            >
-              <option value="">Selecciona un tipo</option>
-              <option value="indefinido">Indefinido</option>
-              <option value="independiente">Independiente</option>
-              <option value="plazo_fijo">Plazo fijo</option>
-              <option value="honorarios_variable">Honorarios / variable</option>
-            </select>
+      )}
+      {/* ═══ Step 3: Trabajo y antecedentes ═══ */}
+      {currentStep === 3 && (
+        <div className="pre-wizard-card">
+          <div className="pre-wizard-card-header">
+            <div className="pre-wizard-card-eyebrow">Trabajo y antecedentes</div>
+            <h2 className="pre-wizard-card-title">Situación laboral</h2>
+            <p className="pre-wizard-card-desc">
+              La morosidad es autodeclarada y sólo se usa como señal orientativa.
+            </p>
           </div>
 
-          {/* Continuidad laboral */}
-          <div
-            className={`field-wrap${continuityAgeMismatch ? " field-with-warning" : ""}`}
-          >
-            <div className="field-label-row">
-              <label htmlFor="continuidad_laboral">Continuidad laboral</label>
-              <FieldTooltip text="Tiempo que llevas trabajando de forma continua en tu empleo o actividad actual." />
+          <div className="pre-wizard-grid-2">
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="tipo_contrato">Tipo de contrato</label>
+                <FieldTooltip text="Modalidad bajo la cual recibes tus ingresos actualmente." />
+              </div>
+              <select id="tipo_contrato" name="tipo_contrato" value={form.tipo_contrato} onChange={handleChange}>
+                <option value="">Selecciona un tipo</option>
+                <option value="indefinido">Indefinido</option>
+                <option value="independiente">Independiente</option>
+                <option value="plazo_fijo">Plazo fijo</option>
+                <option value="honorarios_variable">Honorarios / variable</option>
+              </select>
             </div>
-            <select
-              id="continuidad_laboral"
-              name="continuidad_laboral"
-              value={form.continuidad_laboral}
-              onChange={handleChange}
-            >
-              <option value="">Selecciona una opción</option>
-              <option value="menos_6_meses">Menos de 6 meses</option>
-              <option value="entre_6_y_12_meses">Entre 6 y 12 meses</option>
-              <option value="entre_1_y_3_anios">Entre 1 y 3 años</option>
-              <option value="mas_3_anios">Más de 3 años</option>
-            </select>
-            {continuityAgeMismatch && (
-              <span className="field-warning">
-                La continuidad laboral declarada no es coherente con tu edad
-                registrada. Revisa este dato antes de continuar.
-              </span>
-            )}
+
+            <div className="pre-wizard-field">
+              <div className="pre-wizard-field-label-row">
+                <label className="pre-wizard-field-label" htmlFor="continuidad_laboral">Continuidad laboral</label>
+                <FieldTooltip text="Tiempo que llevas trabajando de forma continua en tu empleo o actividad actual." />
+              </div>
+              <select id="continuidad_laboral" name="continuidad_laboral" value={form.continuidad_laboral} onChange={handleChange}>
+                <option value="">Selecciona una opción</option>
+                <option value="menos_6_meses">Menos de 6 meses</option>
+                <option value="entre_6_y_12_meses">Entre 6 y 12 meses</option>
+                <option value="entre_1_y_3_anios">Entre 1 y 3 años</option>
+                <option value="mas_3_anios">Más de 3 años</option>
+              </select>
+              {continuityAgeMismatch && (
+                <span className="pre-wizard-field-hint" style={{ color: '#B83232' }}>
+                  La continuidad laboral declarada no es coherente con tu edad registrada.
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Morosidad actual */}
-          <div className="field-wrap">
-            <div className="field-label-row">
-              <label htmlFor="morosidad_actual">Morosidad actual</label>
+          <div className="pre-wizard-field">
+            <div className="pre-wizard-field-label-row">
+              <label className="pre-wizard-field-label" htmlFor="morosidad_actual">Morosidad actual</label>
               <FieldTooltip text="Indica si tienes cuotas o pagos vencidos en este momento." />
             </div>
-            <select
-              id="morosidad_actual"
-              name="morosidad_actual"
-              value={form.morosidad_actual}
-              onChange={handleChange}
-            >
+            <select id="morosidad_actual" name="morosidad_actual" value={form.morosidad_actual} onChange={handleChange}>
               <option value="">Selecciona una opción</option>
               <option value="no">No</option>
               <option value="si">Sí</option>
             </select>
           </div>
 
-          {/* Monto de morosidad (condicional) */}
           {form.morosidad_actual === "si" && (
-            <>
-              <div className="field-wrap">
-                <div className="field-label-row">
-                  <label htmlFor="monto_morosidad">Monto de morosidad</label>
+            <div className="pre-wizard-grid-2">
+              <div className="pre-wizard-field">
+                <div className="pre-wizard-field-label-row">
+                  <label className="pre-wizard-field-label" htmlFor="monto_morosidad">Monto de morosidad</label>
                   <FieldTooltip text="Total aproximado de deuda morosa que tienes actualmente." />
                 </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  id="monto_morosidad"
-                  name="monto_morosidad"
-                  value={displayVal("monto_morosidad")}
-                  onChange={handleChange}
-                  placeholder="Ej: 250.000"
-                />
+                <input type="text" inputMode="numeric" id="monto_morosidad" name="monto_morosidad" value={displayVal("monto_morosidad")} onChange={handleChange} placeholder="Ej: 250.000" />
               </div>
-
-              <div className="field-wrap">
-                <div className="field-label-row">
-                  <label htmlFor="antiguedad_morosidad">
-                    Antigüedad de morosidad
-                  </label>
+              <div className="pre-wizard-field">
+                <div className="pre-wizard-field-label-row">
+                  <label className="pre-wizard-field-label" htmlFor="antiguedad_morosidad">Antigüedad de morosidad</label>
                   <FieldTooltip text="Hace cuánto tiempo tienes esta deuda morosa sin regularizar." />
                 </div>
-                <select
-                  id="antiguedad_morosidad"
-                  name="antiguedad_morosidad"
-                  value={form.antiguedad_morosidad}
-                  onChange={handleChange}
-                >
+                <select id="antiguedad_morosidad" name="antiguedad_morosidad" value={form.antiguedad_morosidad} onChange={handleChange}>
                   <option value="">Selecciona una opción</option>
                   <option value="menos_3_meses">Menos de 3 meses</option>
                   <option value="3_a_12_meses">3 a 12 meses</option>
@@ -1370,314 +1437,261 @@ export default function ScoreForm({
                   <option value="mas_3_anios">Más de 3 años</option>
                 </select>
               </div>
-            </>
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* ── Complemento de renta ── */}
-      <label className="check-row">
-        <input
-          type="checkbox"
-          name="complemento_renta"
-          checked={form.complemento_renta}
-          onChange={handleChange}
-        />
-        Complementar renta con una persona
-      </label>
+          {/* Complemento de renta */}
+          <div className="pre-wizard-divider" />
 
-      {form.complemento_renta && (
-        <div className="nested-fields">
-          <h4>Datos del complemento de renta</h4>
-          <div className="form-grid">
-            {/* Ingreso mensual complementario */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="ingreso_mensual_complementario">
-                  Ingreso mensual complementario
-                </label>
-                <FieldTooltip text="Sueldo líquido o renta promedio de la persona que complementa tu renta." />
+          <label className="pre-wizard-check-row">
+            <input type="checkbox" name="complemento_renta" checked={form.complemento_renta} onChange={handleChange} />
+            <span>Complementar renta con una persona</span>
+          </label>
+
+          {form.complemento_renta && (
+            <div className="pre-wizard-nested">
+              <div className="pre-wizard-nested-title">Datos del complemento de renta</div>
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="ingreso_mensual_complementario">Ingreso mensual complementario</label>
+                    <FieldTooltip text="Sueldo líquido o renta promedio de la persona que complementa tu renta." />
+                  </div>
+                  <input type="text" inputMode="numeric" id="ingreso_mensual_complementario" name="ingreso_mensual_complementario" value={displayVal("ingreso_mensual_complementario")} onChange={handleChange} placeholder="Ej: 800.000" />
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="deuda_mensual_complementario">Deuda mensual complementaria</label>
+                    <FieldTooltip text="Total de cuotas mensuales comprometidas de la persona complementaria." />
+                  </div>
+                  <input type="text" inputMode="numeric" id="deuda_mensual_complementario" name="deuda_mensual_complementario" value={displayVal("deuda_mensual_complementario")} onChange={handleChange} placeholder="Ej: 100.000" />
+                </div>
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                id="ingreso_mensual_complementario"
-                name="ingreso_mensual_complementario"
-                value={displayVal("ingreso_mensual_complementario")}
-                onChange={handleChange}
-                placeholder="Ej: 800.000"
-              />
-            </div>
-
-            {/* Deuda mensual complementaria */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="deuda_mensual_complementario">
-                  Deuda mensual complementaria
-                </label>
-                <FieldTooltip text="Total de cuotas mensuales comprometidas de la persona complementaria." />
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="tipo_contrato_complementario">Tipo de contrato complementario</label>
+                    <FieldTooltip text="Modalidad contractual de la persona que complementa la renta." />
+                  </div>
+                  <select id="tipo_contrato_complementario" name="tipo_contrato_complementario" value={form.tipo_contrato_complementario} onChange={handleChange}>
+                    <option value="">Selecciona un tipo</option>
+                    <option value="indefinido">Indefinido</option>
+                    <option value="independiente">Independiente</option>
+                    <option value="plazo_fijo">Plazo fijo</option>
+                    <option value="honorarios_variable">Honorarios / variable</option>
+                  </select>
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="continuidad_laboral_complementario">Continuidad laboral complementaria</label>
+                    <FieldTooltip text="Tiempo que lleva trabajando de forma continua la persona complementaria." />
+                  </div>
+                  <select id="continuidad_laboral_complementario" name="continuidad_laboral_complementario" value={form.continuidad_laboral_complementario} onChange={handleChange}>
+                    <option value="">Selecciona una opción</option>
+                    <option value="menos_6_meses">Menos de 6 meses</option>
+                    <option value="entre_6_y_12_meses">Entre 6 y 12 meses</option>
+                    <option value="entre_1_y_3_anios">Entre 1 y 3 años</option>
+                    <option value="mas_3_anios">Más de 3 años</option>
+                  </select>
+                </div>
               </div>
-              <input
-                type="text"
-                inputMode="numeric"
-                id="deuda_mensual_complementario"
-                name="deuda_mensual_complementario"
-                value={displayVal("deuda_mensual_complementario")}
-                onChange={handleChange}
-                placeholder="Ej: 100.000"
-              />
-            </div>
-
-            {/* Tipo de contrato complementario */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="tipo_contrato_complementario">
-                  Tipo de contrato complementario
-                </label>
-                <FieldTooltip text="Modalidad contractual de la persona que complementa la renta." />
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="morosidad_complementario">Morosidad complementaria</label>
+                    <FieldTooltip text="Indica si la persona complementaria tiene cuotas o pagos vencidos." />
+                  </div>
+                  <select id="morosidad_complementario" name="morosidad_complementario" value={form.morosidad_complementario} onChange={handleChange}>
+                    <option value="">Selecciona una opción</option>
+                    <option value="no">No</option>
+                    <option value="si">Sí</option>
+                  </select>
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="relacion_complementario">Relación complementaria</label>
+                    <FieldTooltip text="Vínculo que tienes con la persona que complementa tu renta." />
+                  </div>
+                  <select id="relacion_complementario" name="relacion_complementario" value={form.relacion_complementario} onChange={handleChange}>
+                    <option value="">Selecciona una relación</option>
+                    <option value="conyuge">Cónyuge</option>
+                    <option value="pareja_conviviente">Pareja conviviente</option>
+                    <option value="pareja_hijos_comun">Pareja con hijos en común</option>
+                    <option value="padre_madre">Padre/Madre</option>
+                    <option value="hijo_hija">Hijo/a</option>
+                    <option value="hermano_hermana">Hermano/a</option>
+                    <option value="otro_familiar">Otro familiar</option>
+                    <option value="amigo">Amigo/a</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                  {showComplementRelationWarning && (
+                    <span className="pre-wizard-field-hint" style={{ color: '#C4841D' }}>
+                      Esta relación puede requerir mayor respaldo en una evaluación hipotecaria formal.
+                    </span>
+                  )}
+                </div>
               </div>
-              <select
-                id="tipo_contrato_complementario"
-                name="tipo_contrato_complementario"
-                value={form.tipo_contrato_complementario}
-                onChange={handleChange}
-              >
-                <option value="">Selecciona un tipo</option>
-                <option value="indefinido">Indefinido</option>
-                <option value="independiente">Independiente</option>
-                <option value="plazo_fijo">Plazo fijo</option>
-                <option value="honorarios_variable">
-                  Honorarios / variable
-                </option>
-              </select>
-            </div>
-
-            {/* Continuidad laboral complementaria */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="continuidad_laboral_complementario">
-                  Continuidad laboral complementaria
-                </label>
-                <FieldTooltip text="Tiempo que lleva trabajando de forma continua la persona complementaria." />
-              </div>
-              <select
-                id="continuidad_laboral_complementario"
-                name="continuidad_laboral_complementario"
-                value={form.continuidad_laboral_complementario}
-                onChange={handleChange}
-              >
-                <option value="">Selecciona una opción</option>
-                <option value="menos_6_meses">Menos de 6 meses</option>
-                <option value="entre_6_y_12_meses">Entre 6 y 12 meses</option>
-                <option value="entre_1_y_3_anios">Entre 1 y 3 años</option>
-                <option value="mas_3_anios">Más de 3 años</option>
-              </select>
-            </div>
-
-            {/* Morosidad complementaria */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="morosidad_complementario">
-                  Morosidad complementaria
-                </label>
-                <FieldTooltip text="Indica si la persona complementaria tiene cuotas o pagos vencidos." />
-              </div>
-              <select
-                id="morosidad_complementario"
-                name="morosidad_complementario"
-                value={form.morosidad_complementario}
-                onChange={handleChange}
-              >
-                <option value="">Selecciona una opción</option>
-                <option value="no">No</option>
-                <option value="si">Sí</option>
-              </select>
-            </div>
-
-            {/* Relación complementaria */}
-            <div
-              className={`field-wrap${showComplementRelationWarning ? " field-with-warning" : ""}`}
-            >
-              <div className="field-label-row">
-                <label htmlFor="relacion_complementario">
-                  Relación complementaria
-                </label>
-                <FieldTooltip text="Vínculo que tienes con la persona que complementa tu renta." />
-              </div>
-              <select
-                id="relacion_complementario"
-                name="relacion_complementario"
-                value={form.relacion_complementario}
-                onChange={handleChange}
-              >
-                <option value="">Selecciona una relación</option>
-                <option value="conyuge">Cónyuge</option>
-                <option value="pareja_conviviente">Pareja conviviente</option>
-                <option value="pareja_hijos_comun">
-                  Pareja con hijos en común
-                </option>
-                <option value="padre_madre">Padre/Madre</option>
-                <option value="hijo_hija">Hijo/a</option>
-                <option value="hermano_hermana">Hermano/a</option>
-                <option value="otro_familiar">Otro familiar</option>
-                <option value="amigo">Amigo/a</option>
-                <option value="otro">Otro</option>
-              </select>
-              {showComplementRelationWarning && (
-                <span className="field-warning">
-                  Esta relación puede requerir mayor respaldo en una evaluación
-                  hipotecaria formal.
-                </span>
+              {showComplementMorosityWarning && (
+                <div className="pre-wizard-warning">
+                  Si la persona complementaria declara morosidad, no se considerará válida para mejorar el score orientativo.
+                </div>
               )}
             </div>
-          </div>
+          )}
 
-          {showComplementMorosityWarning && (
-            <div className="warning-box">
-              Si la persona complementaria declara morosidad, no se considerará
-              válida para mejorar el score orientativo.
+          {/* Patrimonio */}
+          <div className="pre-wizard-divider" />
+
+          <label className="pre-wizard-check-row">
+            <input type="checkbox" name="declara_patrimonio" checked={form.declara_patrimonio} onChange={handleChange} />
+            <span>Declarar patrimonio (Vehículos, Inmuebles, etc.)</span>
+          </label>
+
+          {form.declara_patrimonio && (
+            <div className="pre-wizard-nested">
+              <div className="pre-wizard-nested-header">
+                <span className="pre-wizard-nested-title" style={{ margin: 0 }}>Activos y Patrimonio</span>
+                <div className="pre-wizard-nested-actions">
+                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "clp" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "clp" && switchPatrimonioUnit()}>CLP</button>
+                  <button type="button" className={`pre-wizard-unit-btn${form.patrimonio_unit === "uf" ? " is-active" : ""}`} onClick={() => form.patrimonio_unit !== "uf" && switchPatrimonioUnit()}>UF</button>
+                </div>
+              </div>
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="valor_vehiculos">Valor total de vehículos</label>
+                    <FieldTooltip text="Valor comercial estimado de todos los vehículos de tu propiedad." />
+                  </div>
+                  <input type="text" inputMode="decimal" id="valor_vehiculos" name="valor_vehiculos" value={displayVal("valor_vehiculos")} onChange={handleChange} placeholder={form.patrimonio_unit === "uf" ? "Ej: 400" : "Ej: 15.000.000"} />
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="valor_inmuebles">Valor total de inmuebles / otros</label>
+                    <FieldTooltip text="Valor comercial estimado de propiedades u otros activos que poseas." />
+                  </div>
+                  <input type="text" inputMode="decimal" id="valor_inmuebles" name="valor_inmuebles" value={displayVal("valor_inmuebles")} onChange={handleChange} placeholder={form.patrimonio_unit === "uf" ? "Ej: 2.500" : "Ej: 100.000.000"} />
+                </div>
+              </div>
+              <span className="pre-wizard-field-hint">
+                Puedes ingresarlo en UF o CLP. {ufHelpText}
+              </span>
             </div>
           )}
-        </div>
-      )}
 
-      {/* ── Patrimonio ── */}
-      <label className="check-row">
-        <input
-          type="checkbox"
-          name="declara_patrimonio"
-          checked={form.declara_patrimonio}
-          onChange={handleChange}
-        />
-        Declarar patrimonio (Vehículos, Inmuebles, etc.)
-      </label>
-
-      {form.declara_patrimonio && (
-        <div className="nested-fields">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-            }}
-          >
-            <h4 style={{ margin: 0 }}>Activos y Patrimonio</h4>
-            <div className="unit-toggle-group">
-              <button
-                type="button"
-                className={`secondary-button compact-button ${form.patrimonio_unit === "clp" ? "is-active" : ""}`}
-                onClick={() =>
-                  form.patrimonio_unit !== "clp" && switchPatrimonioUnit()
-                }
-              >
-                CLP
-              </button>
-              <button
-                type="button"
-                className={`secondary-button compact-button ${form.patrimonio_unit === "uf" ? "is-active" : ""}`}
-                onClick={() =>
-                  form.patrimonio_unit !== "uf" && switchPatrimonioUnit()
-                }
-              >
-                UF
-              </button>
-            </div>
-          </div>
-          <div className="form-grid">
-            {/* Valor vehículos */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="valor_vehiculos">
-                  Valor total de vehículos
-                </label>
-                <FieldTooltip text="Valor comercial estimado de todos los vehículos de tu propiedad." />
-              </div>
-              <input
-                type="text"
-                inputMode="decimal"
-                id="valor_vehiculos"
-                name="valor_vehiculos"
-                value={displayVal("valor_vehiculos")}
-                onChange={handleChange}
-                placeholder={
-                  form.patrimonio_unit === "uf" ? "Ej: 400" : "Ej: 15.000.000"
-                }
-              />
-            </div>
-
-            {/* Valor inmuebles */}
-            <div className="field-wrap">
-              <div className="field-label-row">
-                <label htmlFor="valor_inmuebles">
-                  Valor total de inmuebles / otros
-                </label>
-                <FieldTooltip text="Valor comercial estimado de propiedades u otros activos que poseas." />
-              </div>
-              <input
-                type="text"
-                inputMode="decimal"
-                id="valor_inmuebles"
-                name="valor_inmuebles"
-                value={displayVal("valor_inmuebles")}
-                onChange={handleChange}
-                placeholder={
-                  form.patrimonio_unit === "uf"
-                    ? "Ej: 2.500"
-                    : "Ej: 100.000.000"
-                }
-              />
-            </div>
-          </div>
-          <p className="field-help">
-            Puedes ingresarlo en UF o CLP. {ufHelpText}
-          </p>
-        </div>
-      )}
-
-      {/* ── Consentimiento ── */}
-      {!isAnon && (consentGranted ? (
-        <div className="consent-info">
-          <span className="consent-info-icon">✓ </span>
-          <span>
-            Autorización de tratamiento de datos personales otorgada el{" "}
-            <strong>{consentDate}</strong>.
-            <button
-              type="button"
-              className="consent-ref-link"
-              onClick={() => setConsentModalOpen(true)}
-            >
-              Ver detalle
+          <div className="pre-wizard-nav">
+            <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Volver
             </button>
-          </span>
+            <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
+              Continuar
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          </div>
         </div>
-      ) : (
-        <div className="consent-required">
-          <p>
-            Debes aceptar la autorización de tratamiento de datos personales
-            antes de calcular tu score.
-          </p>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setConsentModalOpen(true)}
-          >
-            Aceptar autorización
-          </button>
+      )}
+
+      {/* ═══ Step 4: Consentimiento y cálculo ═══ */}
+      {currentStep === totalSteps && (
+        <div className="pre-wizard-card">
+          <div className="pre-wizard-card-header">
+            <div className="pre-wizard-card-eyebrow">Último paso</div>
+            <h2 className="pre-wizard-card-title">Autorización y cálculo</h2>
+            <p className="pre-wizard-card-desc">
+              Revisa tu información y acepta la autorización de tratamiento de datos para obtener tu precalificación.
+            </p>
+          </div>
+
+          {/* Summary */}
+          <div className="pre-wizard-summary">
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Ingreso mensual</span>
+              <span className="pre-wizard-summary-value">${displayVal("ingreso_mensual")}</span>
+            </div>
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Deuda mensual</span>
+              <span className="pre-wizard-summary-value">${displayVal("deuda_mensual")}</span>
+            </div>
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Ahorro disponible</span>
+              <span className="pre-wizard-summary-value">${displayVal("ahorro_disponible")}</span>
+            </div>
+            {form.property_value && (
+              <div className="pre-wizard-summary-row">
+                <span className="pre-wizard-summary-label">Vivienda estimada</span>
+                <span className="pre-wizard-summary-value">{displayVal("property_value")} {form.property_value_unit === "uf" ? "UF" : "CLP"}</span>
+              </div>
+            )}
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Dividendo estimado</span>
+              <span className="pre-wizard-summary-value">${displayVal("dividendo_estimado")}</span>
+            </div>
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Tipo de contrato</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.tipo_contrato, "—")}</span>
+            </div>
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Continuidad laboral</span>
+              <span className="pre-wizard-summary-value">{formatFormValue(form.continuidad_laboral, "—")}</span>
+            </div>
+            <div className="pre-wizard-summary-row">
+              <span className="pre-wizard-summary-label">Morosidad</span>
+              <span className="pre-wizard-summary-value">{form.morosidad_actual === "si" ? "Sí" : "No"}</span>
+            </div>
+          </div>
+
+          {/* Consent */}
+          <div className="pre-wizard-divider" />
+          <div className="pre-wizard-consent">
+            {!isAnon && (consentGranted ? (
+              <div className="consent-info">
+                <span className="consent-info-icon">✓ </span>
+                <span>
+                  Autorización de tratamiento de datos personales otorgada el <strong>{consentDate}</strong>.
+                  <button type="button" className="consent-ref-link" onClick={() => setConsentModalOpen(true)}>
+                    Ver detalle
+                  </button>
+                </span>
+              </div>
+            ) : (
+              <div className="consent-required">
+                <p>Debes aceptar la autorización de tratamiento de datos personales antes de calcular tu score.</p>
+                <button type="button" className="secondary-button" onClick={() => setConsentModalOpen(true)}>
+                  Aceptar autorización
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+
+          <div className="pre-wizard-nav">
+            <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Volver
+            </button>
+            <button
+              type="submit"
+              className="pre-wizard-btn-submit"
+              disabled={loading || debtExceedsIncome || !consentGranted}
+            >
+              {loading ? (
+                <>
+                  <span className="loading-spinner" />
+                  Calculando...
+                </>
+              ) : (
+                <>
+                  Calcular mi precalificación
+                  <svg viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      ))}
+      )}
 
-      <div className="form-actions">
-        <button
-          type="submit"
-          disabled={loading || debtExceedsIncome || !consentGranted}
-        >
-          Calcular score
-        </button>
-      </div>
-
-      {error && <div className="error-message">{error}</div>}
-
+      {/* Consent modal */}
       {consentModalOpen && (
         <div
           className="consent-modal-overlay"
@@ -1685,10 +1699,7 @@ export default function ScoreForm({
           aria-modal="true"
           onClick={() => setConsentModalOpen(false)}
         >
-          <div
-            className="consent-modal-content"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="consent-modal-content" onClick={(e) => e.stopPropagation()}>
             <DataConsent
               profile={profile}
               readonly={consentGranted}

@@ -79,5 +79,6 @@ export function buildRecommendations(evaluation) {
       ? result.structured_improvement_plan
       : [],
     user_explanation_deterministic: result.user_explanation_deterministic || "",
+    housing_benefits: result.housing_benefits || { applicable_benefits: [], summary: "", disclaimer: "" },
   };
 }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   DISCLAIMER_TEXTS,
   getChecklistForRegime,
@@ -9,6 +9,7 @@ import {
 export default function BankingChecklist({ evaluation, input: propInput, result: propResult, onNavigate }) {
   const result = evaluation?.result || propResult || {};
   const input = evaluation?.input || propInput || {};
+
 
   const initialRegime = useMemo(() => {
     const contract = (input.tipo_contrato || "").toLowerCase();
@@ -60,38 +61,42 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
   const completedCount = currentList.filter((i) => checked[i.id]).length;
   const progressPercent = Math.round((completedCount / (currentList.length || 1)) * 100);
 
-  // NOTA DE DOCUMENTACIÓN: 
-  // Actualmente un solo botón en el encabezado redirige a la Academia de forma general.
-  // Si en el futuro se desea que cada antecedente apunte a un artículo específico diferente, 
-  // se deben crear esos artículos detallados en `academyContent.js` y restaurar la lógica
-  // que pasaba `item.academyArticleId` a `onNavigate("academia", { articleId: ... })`.
   const handleOpenAcademia = (e) => {
     e.preventDefault();
     if (onNavigate) {
-      onNavigate("academia");
+      onNavigate("academia", { articleId: "docs-1" });
     }
   };
 
   return (
-    <section className="section-block banking-checklist-minimal">
-      <div className="section-heading compact" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+    <>
+      <header className="banking-checklist-heading-card">
         <div>
           <span className="eyebrow">Preparación Bancaria</span>
           <h2>Checklist Referencial de Antecedentes</h2>
           <p>Antecedentes referenciales para tu evaluación formal en la banca chilena.</p>
         </div>
         {onNavigate && (
-          <button type="button" className="secondary-button" onClick={handleOpenAcademia}>
-            <i className="ti ti-books" /> Ir a la Academia
-          </button>
+          <div className="academy-action-wrapper">
+            <button type="button" className="checklist-academy-button" onClick={handleOpenAcademia}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
+              </svg>
+              Academia
+            </button>
+            <span className="helper-text">
+              ¿Dónde obtener los documentos?
+            </span>
+          </div>
         )}
-      </div>
+      </header>
 
-      {/* Criterio E3: Safeguards S1, S5, S7 Banner */}
+      <section className="banking-checklist-minimal">
+      {/* Criterio E3: Safeguards S1, S5, S7, S8 Banner Consolidado */}
       <div className="minimal-disclaimer-banner" role="alert">
         <div className="disclaimer-body">
-          <strong>{DISCLAIMER_TEXTS.bannerTitle}</strong>
-          <span>{DISCLAIMER_TEXTS.bannerText}</span>
+          <span>{DISCLAIMER_TEXTS.consolidated}</span>
         </div>
       </div>
 
@@ -116,51 +121,26 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
 
         <div className="minimal-progress">
           <span>Preparados: {completedCount} / {currentList.length} ({progressPercent}%)</span>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+          <div className="progress-track" role="progressbar" aria-label="Avance del checklist" aria-valuemin="0" aria-valuemax={currentList.length} aria-valuenow={completedCount}>
+            <div className="progress-fill" style={{ width: String(progressPercent) + "%" }} />
           </div>
         </div>
       </div>
 
-      {/* Criterio E2: Compact Dynamic Priority Documents Block */}
-      {priorityItems.length > 0 && (
-        <div className="compact-priority-block">
-          <div className="priority-header-tag">Antecedentes Prioritarios para tu Perfil</div>
-          <ul className="priority-minimal-list">
-            {priorityItems.map((item) => (
-              <li key={`prio-${item.id}`} className={checked[item.id] ? "is-done" : ""}>
-                <div className="priority-row-content">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(checked[item.id])}
-                      onChange={() => toggleCheck(item.id)}
-                    />
-                    <div>
-                      <strong>{item.title}</strong>
-                      <span className="prio-reason"> — {item.priorityReason}</span>
-                    </div>
-                  </label>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Clean Full List */}
       <div className="minimal-checklist-group">
-        <h4 className="group-title">Antecedentes Generales y Laborales</h4>
+        <h4 className="group-title">Antecedentes generales y laborales</h4>
+        {priorityItems.length > 0 && <p className="minimal-checklist-priority-note">Los elementos marcados como prioritarios responden a antecedentes que conviene preparar primero según tu calificación.</p>}
         <ul className="checklist-minimal-rows">
           {currentList.map((item) => {
             const isPrio = item.mitigatesRisks.some((r) => activeRiskCodes.has(r)) ||
-                           item.mitigatesFactors.some((f) => activeFactors.has(f));
+              item.mitigatesFactors.some((f) => activeFactors.has(f));
             const isChecked = Boolean(checked[item.id]);
 
             return (
               <li
                 key={item.id}
-                className={`minimal-row ${isPrio ? "is-priority" : ""} ${isChecked ? "is-checked" : ""}`}
+                className={["minimal-row", isPrio ? "is-priority" : "", isChecked ? "is-checked" : ""].filter(Boolean).join(" ")}
               >
                 <div className="row-main-wrapper">
                   <label className="checkbox-label">
@@ -184,9 +164,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
         </ul>
       </div>
 
-      <div className="checklist-footer-note">
-        <p><i className="ti ti-info-circle" /> {DISCLAIMER_TEXTS.legalNote}</p>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

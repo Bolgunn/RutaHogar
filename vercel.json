@@ -4,6 +4,8 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/score", "destination": "/api/score" },
+    { "source": "/tracking", "destination": "/api/score" },
+    { "source": "/tracking/(.*)", "destination": "/api/score" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
