@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
@@ -337,6 +338,39 @@ async def market_reference_endpoint():
             "series": uf_source["series"],
         },
     }
+   data = payload.model_dump()
+    
+    # -------------------------------------------------------------
+    # REGLA DE BACKEND: Tanteo / Múltiples Intentos
+    # -------------------------------------------------------------
+    device_hash = data.get("device_id_hash")
+    intentos_previos = 0
+    
+    if device_hash:
+        try:
+            from .ml_fraud import get_supabase_client
+            supabase = get_supabase_client()
+            
+            # Calculamos la ventana de tiempo: hace 15 minutos
+            quince_minutos_atras = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+            
+            # Consultar a la base de datos cuántas evaluaciones tiene este dispositivo
+            # en los últimos 15 minutos
+            response = supabase.table("evaluations") \
+                .select("id", count="exact") \
+                .eq("financial_data->input->>device_id_hash", device_hash) \
+                .gte("created_at", quince_minutos_atras) \
+                .execute()
+                
+            intentos_previos = response.count if response.count is not None else 0
+        except Exception as e:
+            print(f"Error consultando historial de intentos: {e}")
+            
+    # Inyectamos el historial de intentos al payload para que el motor ML lo sepa
+    data["intentos_previos"] = intentos_previos
+    
+    result = calculate_score(data)
+    return result
 
 
 class ExplainRequest(ScoreRequest):
