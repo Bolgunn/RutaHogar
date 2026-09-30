@@ -28,6 +28,7 @@ def checked(call):
         status = {
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
+            "market_data_unavailable": 503,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 

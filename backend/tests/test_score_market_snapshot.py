@@ -36,7 +36,10 @@ def payload(**extra):
 
 
 def test_server_snapshot_wins_and_no_client_market_value_overrides(monkeypatch):
+    import app.market_data.bcch as bcch
+
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
+    monkeypatch.setattr(bcch.BCChClient, "fetch_snapshot", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("/score must not call BCCh")))
     result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(uf_value_clp=1))))
     assert result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"] == snapshot()
     assert result["financial_indicators"]["uf_value_clp"] == snapshot()["uf_value_clp"]
@@ -111,11 +114,24 @@ def test_empty_store_returns_503_without_scoring(monkeypatch):
     assert error.value.status_code == 503
 
 
-def test_explain_copies_saved_numbers_without_market_or_calculation(monkeypatch):
-    monkeypatch.setattr(main, "calculate_score", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not score")))
-    response = asyncio.run(main.explain_endpoint(main.ExplainRequest(result_context={"score": 77.5, "classification": "Alto", "positive_indicators": [], "risks": []}, consentimiento=True)))
-    assert response["score"] == 77.5 and response["classification"] == "Alto"
+def test_explain_recalculates_authoritatively_without_ai_scoring(monkeypatch):
+    authoritative = {"score": 42.0, "classification": "Bajo", "positive_indicators": [], "risks": [], "recommendations": []}
+    monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
+    monkeypatch.setattr(main, "calculate_score", lambda *_args, **kwargs: (
+        authoritative if kwargs.get("include_ai") is False and kwargs.get("market_snapshot") == snapshot()
+        else (_ for _ in ()).throw(AssertionError("explain must use the server snapshot and include_ai=False"))
+    ))
 
+    response = asyncio.run(main.explain_endpoint(main.ExplainRequest(**payload())))
+
+    assert response["score"] == 42.0 and response["classification"] == "Bajo"
+
+
+def test_explain_rejects_result_context_without_authoritative_score_inputs():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        main.ExplainRequest(result_context={"score": 100, "classification": "Alto"}, consentimiento=True)
 
 def test_initial_score_is_independent_of_comunas_and_declared_property_price():
     baseline = calculate_score(payload(), include_ai=False, market_snapshot=snapshot())

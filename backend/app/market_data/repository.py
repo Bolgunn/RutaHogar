@@ -38,6 +38,7 @@ class MarketSnapshotRepository:
         query = urlencode({
             "select": "id,snapshot,effective_date,fetched_at",
             "order": "effective_date.desc,fetched_at.desc,id.desc",
+            "limit": 10,
         })
         rows = self.transport("GET", f"{self.base_url}/rest/v1/market_snapshots?{query}")
         if not isinstance(rows, list):

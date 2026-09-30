@@ -10,7 +10,7 @@ os.environ["GROQ_API_KEY"] = ""
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.scoring_engine.indicators import calculate_financial_scope
-from app.scoring_engine.purchase_capacity import calculate_purchase_capacity
+from app.scoring_engine.purchase_capacity import capacity_limits, capacity_rule_margins, calculate_purchase_capacity
 
 DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text())
 
@@ -53,3 +53,16 @@ def test_alg9_invariants(case):
         assert result["capacidad_compra_estimada_uf"] == min(result["capacidad_por_renta_uf"], result["capacidad_por_pie_uf"])
     else:
         assert result["restriccion_vinculante"] is None
+
+
+def test_capacity_margins_reuse_the_same_bcch_limits():
+    data = DOCUMENT["cases"][0]["input"]
+    limits = capacity_limits(data)
+    result = calculate_purchase_capacity(data)
+    margins = capacity_rule_margins(data)
+
+    assert limits["supuestos"]["market_snapshot"] == data["market_snapshot"]
+    assert result["capacidad_por_renta_uf"] == round(limits["by_income"], 1)
+    assert result["capacidad_por_pie_uf"] == round(limits["by_savings"], 1)
+    assert margins[3] == limits["by_income"] - limits["by_savings"]
+    assert margins[4] == limits["assisted_by_income"] - limits["assisted_by_savings"]

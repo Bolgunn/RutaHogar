@@ -43,10 +43,39 @@ def complete_snapshot(state):
     return result
 
 
-def score_snapshot(snapshot):
-    from ..scoring import calculate_score
+def market_snapshot_from_result(result):
+    """Read the immutable BCCh bundle embedded in a prior evaluation result."""
+    from ..market_data.snapshot import SnapshotValidationError, validate_snapshot
 
-    return calculate_score(deepcopy(snapshot), include_ai=False)
+    candidate = (result or {}).get("financial_indicators", {}).get("capacidad_supuestos", {}).get("market_snapshot")
+    try:
+        return validate_snapshot(candidate)
+    except SnapshotValidationError:
+        return None
+
+
+def resolve_tracking_market_snapshot():
+    """I/O boundary for a new HU13 line; pure scoring never invokes this."""
+    from ..market_data.repository import MarketRepositoryError
+    from ..market_data.service import MarketSnapshotUnavailable, repository_from_environment, resolve_latest_valid_snapshot
+
+    try:
+        return resolve_latest_valid_snapshot(repository_from_environment())
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise TrackingError("market_data_unavailable") from exc
+
+
+def score_snapshot(snapshot, *, market_snapshot=None):
+    """Recalculate a complete HU13 state with one explicitly supplied BCCh bundle."""
+    from ..scoring import calculate_score
+    from ..market_data.snapshot import SnapshotValidationError, validate_snapshot
+
+    supplied = market_snapshot if market_snapshot is not None else (snapshot or {}).get("market_snapshot")
+    try:
+        resolved = validate_snapshot(supplied)
+    except SnapshotValidationError as exc:
+        raise TrackingError("market_data_unavailable") from exc
+    return calculate_score(deepcopy(snapshot), include_ai=False, market_snapshot=resolved)
 
 
 def provenance(result):

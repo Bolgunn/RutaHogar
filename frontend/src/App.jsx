@@ -614,11 +614,7 @@ export default function App() {
     try {
       const response = await axios.post(
         `${resolveApiBase()}/score/explain`,
-        {
-          result_context: evaluation.result,
-          consentimiento: evaluation.input?.consentimiento === true,
-          scope: "all",
-        },
+        { ...evaluation.input, scope: "all" },
         { timeout: 45000 },
       );
 

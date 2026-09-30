@@ -335,10 +335,8 @@ async def market_reference_endpoint():
     }
 
 
-class ExplainRequest(BaseModel):
-    """Narrative retry input. It deliberately contains a saved result, not score inputs."""
-    result_context: dict
-    consentimiento: bool
+class ExplainRequest(ScoreRequest):
+    # Narrative retry recalculates authoritative score inputs without spending AI.
     scope: str = "user"
 
     @field_validator("scope")
@@ -348,28 +346,17 @@ class ExplainRequest(BaseModel):
             raise ValueError("Scope inválido")
         return value
 
-    @field_validator("consentimiento")
-    @classmethod
-    def validate_explain_consent(cls, value):
-        if not value:
-            raise ValueError("El consentimiento es obligatorio")
-        return value
-
-    @field_validator("result_context")
-    @classmethod
-    def validate_result_context(cls, value):
-        if not isinstance(value, dict) or not isinstance(value.get("score"), (int, float)) or not isinstance(value.get("classification"), str):
-            raise ValueError("Se requiere el contexto histórico de resultado para regenerar la explicación")
-        return value
-
 
 @app.post("/score/explain")
 async def explain_endpoint(payload: ExplainRequest):
-    """
-    Regenera textos desde el contexto ya guardado. No calcula score ni resuelve
-    mercado; score/clasificación de respuesta son copias de dicho contexto.
-    """
-    base = payload.result_context
+    """Regenerate narratives from a server-calculated, non-AI score result."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if payload.market_snapshot_fetched_at and payload.market_snapshot_fetched_at != snapshot["fetched_at"]:
+        raise HTTPException(status_code=409, detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de generar la explicación.")
+    base = calculate_score(payload.model_dump(exclude={"scope"}), include_ai=False, market_snapshot=snapshot)
 
     response = {
         "score": base.get("score"),

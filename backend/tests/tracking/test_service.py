@@ -1,4 +1,6 @@
+import json
 from copy import deepcopy
+from pathlib import Path
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -6,6 +8,10 @@ import pytest
 
 from app.tracking.contracts import TrackingError
 from app.tracking.service import TrackingService
+
+
+def market_snapshot():
+    return json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
 
 
 def valid_snapshot():
@@ -58,7 +64,7 @@ def command(patch, previous=None, at="2026-01-01T00:00:00+00:00"):
 
 def service():
     repo = MemoryRepository()
-    return repo, TrackingService(repo, clock=lambda: datetime(2026, 3, 1, tzinfo=timezone.utc))
+    return repo, TrackingService(repo, clock=lambda: datetime(2026, 3, 1, tzinfo=timezone.utc), market_snapshot_resolver=market_snapshot)
 
 
 def test_projection_before_baseline_is_total_and_read_only():
@@ -115,7 +121,7 @@ def test_first_later_project_goal_freezes_target_and_enables_projection():
     assert repo.bundle["events"][0]["recorded_complete_snapshot"].get("project_goal") is None
     projected_snapshots = []
     real_scorer = app.scorer
-    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot))
+    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
     assert app.projection("u1")["cause"] != "missing_project_goal"
     assert projected_snapshots
     assert all(snapshot["property_value_clp"] == 120000000 for snapshot in projected_snapshots)
@@ -145,7 +151,7 @@ def test_later_project_evaluation_is_preserved_without_replacing_frozen_target()
 
     projected_snapshots = []
     real_scorer = app.scorer
-    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot))
+    app.scorer = lambda snapshot: (projected_snapshots.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
     app.projection("u1")
     assert projected_snapshots
     assert all(snapshot["property_value_clp"] == 100000000 for snapshot in projected_snapshots)
@@ -286,12 +292,32 @@ def test_invalid_or_stale_command_writes_nothing():
     assert repo.commits == 1
 
 
+def test_monthly_update_reuses_the_persisted_market_snapshot():
+    repo = MemoryRepository()
+    resolutions = []
+
+    def resolver():
+        resolutions.append("resolved")
+        return market_snapshot()
+
+    app = TrackingService(
+        repo, clock=lambda: datetime(2026, 3, 1, tzinfo=timezone.utc),
+        market_snapshot_resolver=resolver,
+    )
+    first = app.execute("u1", command(valid_snapshot()))
+    app.execute("u1", command({"ahorro_disponible": 2_000_000}, first["event_id"], "2026-02-01T00:00:00Z"))
+
+    assert resolutions == ["resolved"]
+    results = [row["financial_data"]["result"] for row in repo.bundle["evaluations"]]
+    assert results[0]["financial_indicators"]["capacidad_supuestos"]["market_snapshot"] == results[1]["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]
+
+
 def test_score_failure_writes_nothing():
     repo = MemoryRepository()
     def fail(_snapshot):
         raise RuntimeError("scorer unavailable")
     with pytest.raises(RuntimeError):
-        TrackingService(repo, scorer=fail).execute("u1", command(valid_snapshot()))
+        TrackingService(repo, scorer=fail, market_snapshot_resolver=market_snapshot).execute("u1", command(valid_snapshot()))
     assert repo.commits == 0
 
 

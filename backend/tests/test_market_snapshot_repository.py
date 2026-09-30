@@ -19,6 +19,8 @@ def test_repository_orders_resolution_and_persists_embedded_metadata():
     repository = MarketSnapshotRepository("https://example.test", "secret", transport)
     repository.list_candidates()
     repository.insert(snapshot())
-    assert parse_qs(urlsplit(calls[0][1]).query)["order"] == ["effective_date.desc,fetched_at.desc,id.desc"]
+    query = parse_qs(urlsplit(calls[0][1]).query)
+    assert query["order"] == ["effective_date.desc,fetched_at.desc,id.desc"]
+    assert query["limit"] == ["10"]
     assert calls[1][2]["snapshot"] == snapshot()
     assert calls[1][2]["effective_date"] == snapshot()["effective_date"]
