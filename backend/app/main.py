@@ -311,7 +311,7 @@ async def properties_search_endpoint(payload: PropertySearchRequest):
         max_price_uf=payload.max_price_uf,
         property_type=payload.property_type,
         limit=payload.limit or 10,
-        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.72,
+        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.50,
     )
 
 class ExplainRequest(ScoreRequest):

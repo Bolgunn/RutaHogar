@@ -182,7 +182,7 @@ export async function searchProperties({
         max_price_uf: maxPriceUf ? Number(maxPriceUf) : null,
         property_type: propertyType || null,
         limit: Number(limit) || 10,
-        similarity_threshold: Number(similarityThreshold) || 0.0,
+        similarity_threshold: Number(similarityThreshold) || 0.50,
       }),
     });
 

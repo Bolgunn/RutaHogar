@@ -107,13 +107,12 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
         else:
             sim -= 0.40
 
-    # Coincidencia de comuna en texto o intención
     req_c = intent.get("req_comuna")
     if req_c:
         if req_c in commune:
             sim += 0.25
         else:
-            sim -= 0.60
+            sim -= 2.0
     elif commune and commune in query_text.lower():
         sim += 0.15
 
