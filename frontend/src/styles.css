@@ -19159,3 +19159,77 @@ section-heading {
     justify-content: flex-start;
   }
 }
+
+/* Etapa comercial del lead (docs/stories/commercial-stage/PLAN.md) */
+.commercial-stage-pill {
+  background: rgba(19, 43, 74, 0.05);
+  color: #132b4a;
+}
+
+.commercial-stage-pill--contactado,
+.commercial-stage-pill--en_plan_mejora,
+.commercial-stage-pill--en_negociacion {
+  background: rgba(29, 78, 216, 0.07);
+  color: #1d4ed8;
+}
+
+.commercial-stage-pill--reserva,
+.commercial-stage-pill--venta_cerrada {
+  background: rgba(22, 101, 52, 0.06);
+  color: #166534;
+}
+
+.commercial-stage-pill--perdido {
+  background: rgba(107, 122, 142, 0.1);
+  color: var(--rh-text-muted);
+}
+
+.commercial-stage-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.commercial-stage-panel .admin-panel-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.commercial-stage-panel__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.commercial-stage-panel__form .field-warning,
+.commercial-stage-panel__form button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.commercial-stage-panel__history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.commercial-stage-panel__history li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--rh-border);
+}
+
+.commercial-stage-panel__history span {
+  color: var(--rh-text-muted);
+  font-size: 0.8rem;
+}
+
+.commercial-stage-panel__history p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

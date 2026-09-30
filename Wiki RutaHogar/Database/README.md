@@ -11,6 +11,7 @@ Supabase (PostgreSQL) project: **adgnxtjkqedtvkwcizzn** — East US (Ohio)
 | [[profiles]] | One row per authenticated user. Stores name, role, and onboarding answers. |
 | [[evaluations]] | One row per completed pre-qualification. Stores score, financial inputs, and AI explanation. |
 | [[improvement_goals]] | Improvement plan tasks linked to an evaluation. One user can have many goals. |
+| [[lead_commercial_stage]] | Commercial stage per (lead, inmobiliaria) plus its append-only history `commercial_stage_events`. Written only through the `change_commercial_stage` RPC. |
 
 ---
 
@@ -53,6 +54,7 @@ RLS policies use `profiles.role` to gate cross-user reads. The role value is nor
 | `profiles` | Own row + staff can read all | Own row | Own row (no field restriction) | — |
 | `evaluations` | Own row + staff can read all | Own row | Own row | Own row |
 | `improvement_goals` | Own row | Own row | Own row | Own row |
+| `lead_commercial_stage`, `commercial_stage_events` | Staff of the same inmobiliaria; global admin all; leads none | RPC only | RPC only (current stage); never (history) | Never |
 
 All three tables have `FORCE ROW LEVEL SECURITY = false` — service-role connections bypass RLS. Anon key connections respect RLS.
 
