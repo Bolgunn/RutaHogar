@@ -25,10 +25,10 @@ La autorización se manejará inyectando *Custom JWT Claims* desde Supabase Auth
 | **Perfil y Docs del Lead** | Lectura/Escritura (solo los suyos) | Lectura (solo leads asignados) | Lectura (solo leads de su inmobiliaria) | Lectura global (para soporte técnico) |
 | **Scoring Financiero** | Lectura (su propio resultado) | Lectura (solo leads asignados) | Lectura (solo leads de su inmobiliaria) | Lectura global (solo para auditoría/fraude) |
 | **Gestión de Negocios** | Sin acceso | Lectura/Escritura (sus negocios) | Lectura global (de su inmobiliaria) | Sin acceso |
-| **Bloqueo y Fraude de Leads** | Lectura (notificación de su estado) | Escritura (Solo emitir reportes/alertas) | Escritura (Bloquear leads de su inmobiliaria) | Escritura (Bloqueo global en la plataforma) |
+| **Detección de Fraude y Confiabilidad** | Sin acceso (oculto por seguridad) | Visualiza alertas y Reporta sospechas | Gestiona estados (En revisión, Silenciado, Reactivado) | Auditoría Global / Configuración de Motor ML |
 | **Config. Inmobiliaria** | Sin acceso | Sin acceso | Escritura (perfil de su empresa) | Lectura / Escritura |
 | **Usuarios y Roles** | Sin acceso | Sin acceso | Escritura (solo personal de su equipo) | Control total |
-| **Trazabilidad (Logs)** | Lectura (exportar sus datos) | Sin acceso | Lectura (auditoría de su inmobiliaria) | Lectura global de logs técnicos |
+| **Trazabilidad (Logs)** | Lectura (exportar sus datos) | Lectura (historial del lead asignado) | Lectura (auditoría de su inmobiliaria) | Lectura global de logs técnicos |
 
 ## 4\. Política de Privacidad y Derechos de los Titulares (ARCO+)
 
@@ -50,32 +50,32 @@ El panel de usuario del Lead debe contar con un módulo de privacidad conectado 
 * **Derecho de Supresión (Eliminación):** Endpoint `DELETE /api/v1/privacy/account`. Por requerimientos de trazabilidad de negocios y normativas financieras, **no se aplicará un borrado físico** de la base de datos si existe un historial comercial. Se aplicará un **Soft Delete** (Borrado Lógico) anonimizando los datos personales (ej. reemplazando el nombre por 'Usuario Eliminado', RUT en nulo) e invalidando el token en Supabase Auth, manteniendo los UUID para la integridad de las métricas de la inmobiliaria.
 
 
-### 5 Notas de Implementación Técnica sobre el Flujo de Fraude y Bloqueos:
+### 5. Notas de Implementación Técnica sobre el Flujo de Fraude y Confiabilidad:
 
-**A. Flujo de Reporte (Ejecutivo -> Admin):**
+**A. Flujo de Detección y Reporte (Motor ML -> Ejecutivo -> Admin):**
 
-* Técnicamente, el Ejecutivo Comercial no altera el estado de la cuenta del Lead (`is_blocked = true`). En su lugar, el endpoint en FastAPI `POST /api/v1/leads/{id}/reports` creará un registro en una tabla `lead_reports` con un motivo (ej. "Documentación presuntamente falsa").
-* Esto genera una alerta visible en el dashboard del Admin Inmobiliario o Admin Desarrollador.
+* Técnicamente, el sistema ya no utiliza booleanos simples como `is_blocked`. En su lugar, el perfil cuenta con un enumerador `reliability_status` (`normal`, `sospechoso`, `en_revision`, `silenciado`, `reactivado`).
+* El **Motor de ML (XGBoost)** marca automáticamente a `sospechoso` ante comportamientos anómalos (ej: tanteo excesivo, velocidad irreal).
+* El **Ejecutivo Comercial** NO puede alterar este estado de forma directa, pero puede usar el endpoint de Reporte para levantar sospechas manuales. Los leads sospechosos son ocultados de su vista principal para no perder tiempo comercial.
+* Esto genera una alerta visible en el panel exclusivo del **Admin Inmobiliario** (AdminReportedLeads).
 
-**B. Aislamiento por Inmobiliaria (Supabase RLS para Bloqueos):**
+**B. Gestión de Confiabilidad y Trazabilidad Inmutable:**
 
-* Para garantizar que un Admin Inmobiliario solo pueda bloquear a un lead que interactuó con sus proyectos, la política RLS en Supabase (o la validación en FastAPI) debe realizar un `JOIN` para verificar si existe una relación previa.
-* **Regla de validación:** El backend verificará: `SI (lead_id TIENE interes_en proyecto_id) Y (proyecto_id PERTENECE_A inmobiliaria_id del Admin) ENTONCES permitir_bloqueo()`.
-* El Admin Inmobiliario al ejecutar el bloqueo, cambiará el estado de la relación comercial con su inmobiliaria (ej. `status = 'blocked_by_inmobiliaria'`).
-* El Admin Desarrollador (tu equipo) es el único con el superpoder de hacer un `UPDATE users SET is_globally_banned = true WHERE id = X`, lo que le impedirá al lead iniciar sesión completamente en Ruta Hogar, notificándole del baneo mediante la lectura de ese estado.
-
+* El **Admin Inmobiliario** es el juez. A través de la API puede decidir cambiar el estado de un lead sospechoso a `en_revision` (mientras averigua), `silenciado` (descarte) o `reactivado` (falsa alarma). 
+* Toda modificación de estado requiere un motivo obligatorio (razón).
+* **Trazabilidad (Audit Trail):** Ningún estado se borra. Todos los cambios, reportes y bloqueos quedan registrados en la tabla inmutable de base de datos para la línea de tiempo del lead, asegurando explicabilidad (XAI) en todo momento.
 
 ## 6\. Mecanismo de Registro y Trazabilidad (Audit Logs)
 
 Para asegurar la "Responsabilidad Proactiva", el sistema no dependerá de logs a nivel de aplicación (que pueden fallar), sino de un sistema inmutable a nivel de base de datos.
 
-1. **Tabla de Auditoría:** Se desplegará la tabla `audit\\\\\\\_logs` en PostgreSQL para registrar: tabla afectada, acción (INSERT/UPDATE/DELETE), ID del registro, `old\\\\\\\_data` y `new\\\\\\\_data` (en formato `JSONB`), ID del usuario responsable, dirección IP y timestamp.
-2. **Triggers Inmutables:** Se crearán funciones PL/pgSQL acopladas a las tablas críticas (`users`, `financial\\\\\\\_profiles`, `business\\\\\\\_deals`). Cualquier alteración disparará automáticamente la inserción en `audit\\\\\\\_logs`.
-3. **Registro de Consentimientos:** Se creará la tabla `user\\\\\\\_consents` (relación 1:N con `users`) que registrará el UUID del usuario, la IP, el *User-Agent*, la marca de tiempo exacta y el hash o versión de la Política de Privacidad específica que el usuario aceptó en ese momento.
+1. **Tabla de Auditoría:** Se desplegará la tabla `audit\\\\_logs` en PostgreSQL para registrar: tabla afectada, acción (INSERT/UPDATE/DELETE), ID del registro, `old\\\\_data` y `new\\\\_data` (en formato `JSONB`), ID del usuario responsable, dirección IP y timestamp.
+2. **Triggers Inmutables:** Se crearán funciones PL/pgSQL acopladas a las tablas críticas (`users`, `financial\\\\_profiles`, `business\\\\_deals`). Cualquier alteración disparará automáticamente la inserción en `audit\\\\_logs`.
+3. **Registro de Consentimientos:** Se creará la tabla `user\\\\_consents` (relación 1:N con `users`) que registrará el UUID del usuario, la IP, el *User-Agent*, la marca de tiempo exacta y el hash o versión de la Política de Privacidad específica que el usuario aceptó en ese momento.
 
 ## 7\. Roadmap de Implementación y Stack para Sprint 2
 
-* **Paso 1 (DB - Supabase):** Crear migraciones SQL para estructurar la tabla `audit\\\\\\\_logs`, `user\\\\\\\_consents` y configurar los Triggers de base de datos.
+* **Paso 1 (DB - Supabase):** Crear migraciones SQL para estructurar la tabla `audit\\\\_logs`, `user\\\\_consents` y configurar los Triggers de base de datos.
 * **Paso 2 (DB - Supabase):** Habilitar RLS (*Row Level Security*) para restringir el acceso a los datos financieros basándose en el rol contenido en el JWT.
 * **Paso 3 (Backend - FastAPI/Node):** Desarrollar la integración con la API de validación de identidad, asegurando que el número de serie (si se solicita) no se persista.
 * **Paso 4 (Backend - FastAPI/Node):** Programar los endpoints de los derechos ARCO (`/export`, `/account` con lógica de *Soft Delete*).

@@ -10,6 +10,10 @@ DECLARE
   v_income numeric := 0;
   v_month jsonb;
   v_profile RECORD;
+  v_days_active numeric;
+  v_months_active numeric;
+  v_max_logical_savings numeric;
+  v_fraud_reason jsonb := NULL;
 BEGIN
   -- Extraer el array de meses registrados en el plan de ahorro
   v_new_progress := NEW.housing_plan->'progress'->'months';
@@ -34,29 +38,44 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- Verificar si el salto de ahorro en una sola actualización es muy grande
+  -- Verificar el comportamiento de ahorro
   IF v_new_total > v_old_total THEN
     -- Obtenemos el ingreso mensual del snapshot inicial
     v_income := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
     
-    -- REGLA SIMPLE: Si el ahorro ingresado de una vez es mayor a 3 veces el sueldo, es sospechoso
-    IF v_income > 0 AND (v_new_total - v_old_total) > (v_income * 3) THEN
+    IF v_income > 0 THEN
+      -- Calculamos la velocidad del tiempo
+      v_days_active := EXTRACT(EPOCH FROM (now() - NEW.created_at)) / 86400;
+      v_months_active := GREATEST(0, v_days_active / 30.0);
       
-      -- Obtenemos el estado actual del lead
-      SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
-      
-      -- Si el lead está normal o reactivado, lo marcamos para revisión
-      IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
-        UPDATE public.profiles 
-        SET reliability_status = 'en_revision', updated_at = now() 
-        WHERE id = NEW.user_id;
-      END IF;
-      
-      -- Inyectamos un flag en la evaluación para que el admin sepa por qué se marcó
-      NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || 
-        '"Avance irreal vs renta mensual en Plan de Mejora"'::jsonb;
-      NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
+      -- Techo máximo de la realidad: 3 sueldos iniciales + 1 sueldo entero por cada mes que ha pasado
+      v_max_logical_savings := (v_income * 3) + (v_income * v_months_active);
+
+      -- REGLA 1: Salto gigante en una sola petición (Regla original)
+      IF (v_new_total - v_old_total) > (v_income * 3) THEN
+        v_fraud_reason := '"Avance irreal vs renta mensual en Plan de Mejora"'::jsonb;
         
+      -- REGLA 2: Velocidad de ahorro imposible / Smurfing (Micro-transacciones para evadir regla 1)
+      ELSIF v_new_total > v_max_logical_savings THEN
+        v_fraud_reason := '"Velocidad de ahorro matemáticamente imposible (Smurfing detectado)"'::jsonb;
+      END IF;
+
+      -- Si se violó alguna regla, castigamos
+      IF v_fraud_reason IS NOT NULL THEN
+        -- Obtenemos el estado actual del lead
+        SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+        
+        -- Si el lead está normal o reactivado, lo marcamos para revisión
+        IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+          UPDATE public.profiles 
+          SET reliability_status = 'en_revision', updated_at = now() 
+          WHERE id = NEW.user_id;
+        END IF;
+        
+        -- Inyectamos el flag en la evaluación
+        NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || v_fraud_reason;
+        NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
+      END IF;
     END IF;
   END IF;
 
