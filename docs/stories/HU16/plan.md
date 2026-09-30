@@ -232,36 +232,39 @@ Políticas RLS:
 
 ---
 
+
 ## 6. Estado de Implementación Final (Ejecutado)
 
-Durante el desarrollo e implementación final de la HU16, se tomaron decisiones arquitectónicas críticas que modificaron sutilmente el plan original para optimizar rendimiento, adherencia a la ley y explicabilidad (XAI).
+Durante el desarrollo e implementación final de la HU16, se construyó un ecosistema de detección de fraude de doble capa (Backend + Base de Datos) diseñado para ser seguro, adaptativo y, sobre todo, **explicable (XAI)**.
 
-### 6.1. Detección de Bots y Privacidad (Geolocalización descartada)
-Originalmente se propuso capturar la IP y la geolocalización de la solicitud para compararla con la comuna declarada. Esta idea fue **descartada** por dos motivos:
-1. **Precisión técnica:** En Chile, las IPs móviles son altamente dinámicas y rara vez coinciden con precisión de comuna.
-2. **Privacidad (Ley 19.628):** Para evitar recabar más datos personales de los necesarios y evitar tener que declarar políticas invasivas en la fase inicial del embudo.
+A continuación, se detalla la arquitectura de las barreras anti-fraude operativas:
 
-En su lugar, el sistema detecta bots de manera limpia usando:
-* `time_to_submit_ms`: Se inyectó un timestamp en el frontend `ScoreForm.jsx` para calcular los milisegundos que demora el usuario en llenar el formulario. Llenados instantáneos (< 2-3 seg) se penalizan fuertemente como bots.
-* `device_id_hash`: Un hash ofuscado local del navegador para detectar exceso de solicitudes masivas desde el mismo dispositivo.
+### 6.1. Variables Comportamentales Clave
+Se descartó la geolocalización por temas de privacidad (Ley 19.628) y precisión. En su lugar, el sistema vigila variables de comportamiento:
+1. **`time_to_submit_ms`**: El tiempo exacto (en milisegundos) que demora el usuario entre que abre el formulario y lo envía. Permite detectar scripts que inyectan datos de golpe.
+2. **`device_id_hash`**: Identificador ofuscado del navegador/dispositivo. Permite correlacionar múltiples envíos de un mismo atacante aunque cambie su RUT o IP.
+3. **`intentos_previos`**: Variable generada en tiempo real por el Backend, contando cuántas veces ha participado el `device_id_hash` en una ventana de tiempo de 15 minutos.
 
-### 6.2. Motor de Clasificación y Explicabilidad (XAI)
-En lugar de depender exclusivamente de validaciones hardcodeadas (reglas manuales descritas en la sección 3.2), se integró el concepto en el backend mediante un **modelo basado en árboles (XGBoost) soportado por explicabilidad SHAP**:
-- `fraud_score_probability`: El backend calcula y devuelve un porcentaje real de probabilidad de que el lead sea inconsistente o automatizado.
-- `shap_top_factors`: Para no ser una "caja negra" inauditable (lo cual es vital para el Administrador Inmobiliario), el modelo extrae el top de atributos que más pesaron en esa alta probabilidad de fraude (ej: "Ahorro irreal vs renta declarada", "Tiempo de llenado anormalmente bajo").
+### 6.2. Capa 1: El Cerebro en el Backend (XGBoost + Fallback)
+Toda evaluación que entra al sistema es escaneada por el módulo `ml_fraud.py` en Python, el cual opera con un relevo inteligente:
 
-### 6.3. Consistencia Eventual y Tolerancia a Fallos
-Para evitar problemas de "doble escritura" (si falla la red entre el motor ML de Python y la persistencia en Supabase/PostgreSQL), se optó por un modelo de **Consistencia Eventual**:
-1. El backend guarda los atributos estadísticos brutos (`fraud_score_probability` y `shap_top_factors`) en la tabla `evaluations`.
-2. Un script barrendero en Base de Datos (`sweep_fraudulent_leads()`) procesa periódicamente a todos los leads que tengan un umbral mayor al 80% de probabilidad de fraude y actualiza el estado del perfil automáticamente a `reliability_status = 'sospechoso'`. 
-3. De esta forma la BD es autónoma para actualizar los estados de los leads que hayan quedado huérfanos por cortes de red.
+*   **Sistema de Fallback (Reglas Duras Temporales):** Mientras el sistema acumula los primeros reportes históricos, opera con reglas estrictas:
+    *   **Anti-Bot (Velocidad):** Si `time_to_submit` < 5 segundos = 95% Fraude.
+    *   **Anti-Fuerza Bruta (Tanteo temporal):** Antes de evaluar, el Backend hace un `COUNT` en Supabase de los intentos del `device_id_hash` en los **últimos 15 minutos**. Si son más de 3, se bloquea con 99% Fraude.
+*   **Machine Learning Adaptativo (XGBoost):** El sistema expone el endpoint `/score/retrain`. Al ser llamado, el modelo entrena un árbol de decisiones con el historial real. Una vez entrenado, el Fallback se apaga, y XGBoost comienza a encontrar correlaciones invisibles.
+*   **Explicabilidad (SHAP):** En todos los casos, el modelo usa la librería SHAP para inyectar en la base de datos la *razón exacta* del bloqueo (ej: "Velocidad anormal", "Tanteo detectado"), cumpliendo con la necesidad del administrador de saber *por qué* un lead es sospechoso.
 
-### 6.4. Separación de Roles (E3 y E4 implementadas)
-- **Ejecutivos (`DashboardLeads.jsx`):** Se les aplicó un filtro estricto. Los leads con estado `sospechoso` o `en_revision` son ocultados por defecto de sus bandejas, evitando la pérdida de tiempo comercial.
-- **Administradores (`AdminReportedLeads.jsx`):** Se creó una visualización dedicada bajo un RPC `get_reported_leads_for_admin`. El administrador ve un bloque de alerta roja (Alert badge) detallando exactamente la probabilidad y los factores SHAP encontrados. Tiene potestad para decidir Reactivar (devuelve el lead a los ejecutivos) o Silenciar/Descartar permanentemente.
+### 6.3. Capa 2: Defensas Absolutas en Base de Datos (Supabase)
+Para proteger el ecosistema de ataques prolongados ("Smurfing" o engaños lentos) y caídas de red, se implementaron mecanismos nativos en SQL:
 
-### 6.5. Regla de Negocio para Avances en el Plan de Mejora (Hard Rule en BD)
-Para proteger el **Plan de Mejora** de saltos irreales (ej. un usuario reportando que ahorró 50 millones en 1 día) sin sobrecargar el motor ML principal de evaluaciones, se implementó una **Regla de Negocio Simple (Hard Rule)** a nivel de Base de Datos.
-- Se agregó un trigger (`check_housing_plan_progress`) en la tabla `evaluations`.
-- **Condición:** `SI (monto_ahorrado_nuevo - monto_ahorrado_anterior) > (renta_mensual_declarada * 3)`.
-- **Acción:** El trigger mueve al lead a estado `en_revision` e inyecta un 100% de probabilidad de fraude con el factor "Avance irreal vs renta mensual en Plan de Mejora" para alertar al Administrador.
+*   **Trigger de Velocidad de Ahorro Máxima (Anti-Smurfing):** 
+    Para evitar que un usuario burle las reglas haciendo decenas de pequeños incrementos en su "Plan de Mejora", el Trigger `check_housing_plan_progress` mide la realidad física.
+    Calcula el tiempo activo y establece un techo máximo de ahorro: `3 sueldos iniciales + (1 sueldo * meses_activos)`. Si el acumulado total del ahorro supera este límite absoluto del tiempo, el lead es marcado como fraude por *"Velocidad de ahorro matemáticamente imposible"*.
+*   **Barrendero de Consistencia Eventual (Sweeper):**
+    Una función programada (`sweep_fraudulent_leads()`) que busca leads que el Backend Python marcó como `fraud_score >= 80%` pero que no lograron ser actualizados en Supabase por el Frontend (por cortes de internet). Este barrendero los encuentra y actualiza su estado a `sospechoso` para garantizar que nadie escape de la revisión.
+
+### 6.4. Separación de Roles y Testing
+- **Ejecutivos vs Administradores:** Los leads clasificados como `sospechoso` desaparecen de las bandejas comerciales y caen exclusivamente en el panel Admin.
+- **Testing Automatizado:** Se crearon suites de prueba en ambos lados:
+  - `backend/test_fraude.py` (ejecutable vía `make test-fraude`): Verifica el bloqueo de bots y tanteos sin ensuciar la base de datos (in-memory test).
+  - `supabase/test_hu16_rules.sql`: Transacción con `ROLLBACK` para validar que el Trigger de Ahorro y el Barrendero funcionen a nivel SQL.
