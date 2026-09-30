@@ -99,54 +99,6 @@ const buyerObjectives = new Set([
   "prepararme",
   "evaluar_capacidad",
 ]);
-const referencePropertyValuesUf = {
-  Buin: 2800,
-  "Calera de Tango": 4300,
-  Cerrillos: 3000,
-  "Cerro Navia": 2400,
-  Colina: 3800,
-  Conchalí: 2800,
-  "El Bosque": 2300,
-  "Estación Central": 3100,
-  Huechuraba: 4700,
-  Independencia: 3300,
-  "La Cisterna": 3200,
-  "La Florida": 3900,
-  "La Granja": 2500,
-  "La Pintana": 2200,
-  "La Reina": 7200,
-  Lampa: 3000,
-  "Las Condes": 9200,
-  "Lo Barnechea": 10500,
-  "Lo Espejo": 2200,
-  "Lo Prado": 2700,
-  Macul: 4100,
-  Maipú: 3600,
-  Melipilla: 2400,
-  Ñuñoa: 6200,
-  "Padre Hurtado": 3000,
-  Paine: 2700,
-  "Pedro Aguirre Cerda": 2600,
-  Peñaflor: 2900,
-  Peñalolén: 4700,
-  Pirque: 4300,
-  Providencia: 7600,
-  Pudahuel: 2900,
-  "Puente Alto": 3100,
-  Quilicura: 3200,
-  "Quinta Normal": 3300,
-  Recoleta: 3400,
-  Renca: 2600,
-  "San Bernardo": 2800,
-  "San Joaquín": 3500,
-  "San José de Maipo": 3300,
-  "San Miguel": 4500,
-  "San Ramón": 2400,
-  Santiago: 3800,
-  Talagante: 3100,
-  Vitacura: 12000,
-};
-const DEFAULT_REFERENCE_PROPERTY_VALUE_UF = 3500;
 const weakComplementRelations = new Set(["amigo", "otro"]);
 const continuityMinimumYears = {
   menos_6_meses: 0,
@@ -217,23 +169,6 @@ function buildPropertyValues(value, unit, ufValueClp) {
     property_value_unit: unit,
     property_value_uf: roundCurrency(valueUf),
     property_value_clp: Math.round(valueClp),
-  };
-}
-
-function buildReferencePropertyValues(commune, ufValueClp) {
-  const referenceUf =
-    referencePropertyValuesUf[commune] || DEFAULT_REFERENCE_PROPERTY_VALUE_UF;
-  return {
-    property_value: referenceUf,
-    property_value_unit: "uf",
-    property_value_uf: referenceUf,
-    property_value_clp:
-      Number.isFinite(ufValueClp) && ufValueClp > 0
-        ? Math.round(referenceUf * ufValueClp)
-        : undefined,
-    property_value_source: referencePropertyValuesUf[commune]
-      ? "referencia_comuna"
-      : "referencia_general",
   };
 }
 
@@ -431,10 +366,8 @@ export default function ScoreForm({
 
   const propertyValuesForDividend = useMemo(
     () =>
-      asksPropertyValue
-        ? buildPropertyValues(form.property_value, form.property_value_unit, ufValueClp)
-        : buildReferencePropertyValues(targetCommune, ufValueClp),
-    [asksPropertyValue, form.property_value, form.property_value_unit, targetCommune, ufValueClp],
+      buildPropertyValues(form.property_value, form.property_value_unit, ufValueClp),
+    [form.property_value, form.property_value_unit, ufValueClp],
   );
   const mortgageEstimate = useMemo(
     () =>
