@@ -1,6 +1,5 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
-<<<<<<< HEAD
 import { ensureUserProfile, getAuthenticatedUser } from "./profileService";
 import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
 
@@ -13,8 +12,8 @@ function cloneJson(value, fallback) {
   }
 }
 
-// HU13's event API remains the persistence authority. The helper preserves the
-// exact server-resolved bundle when an immutable evaluation payload is built.
+// HU13 events remain the persistence authority; the helper preserves the
+// exact server-resolved market bundle in an immutable evaluation payload.
 export function buildFinancialDataSnapshot(evaluationPayload) {
   const input = cloneJson(evaluationPayload.input, {});
   const result = cloneJson(evaluationPayload.result, {});
@@ -28,67 +27,6 @@ export function buildFinancialDataSnapshot(evaluationPayload) {
     calculated_at: new Date().toISOString(),
   };
 }
-=======
-import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
-import { buildScoringHistoryRow, readLocalScoringHistory, writeLocalScoringHistory } from "./getScoringHistory";
-
-const EVALUATIONS_KEY = "RutaHogar_evaluations";
-const SUPABASE_CLASSIFICATIONS = new Set(["Alto", "Medio", "Bajo"]);
-
-function readLocalEvaluations() {
-  try {
-    return (JSON.parse(localStorage.getItem(EVALUATIONS_KEY)) || []).map(normalizeLocalEvaluation);
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalEvaluations(evaluations) {
-  localStorage.setItem(EVALUATIONS_KEY, JSON.stringify(evaluations));
-}
-
-function cloneJson(value, fallback) {
-  if (value === undefined || value === null) return fallback;
-
-  try {
-    return JSON.parse(JSON.stringify(value));
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeScoreForSupabase(score) {
-  const numericScore = Number(score);
-  if (!Number.isFinite(numericScore)) return 0;
-  return Math.max(0, Math.min(100, Math.round(numericScore)));
-}
-
-function normalizeClassificationForSupabase(result = {}) {
-  if (SUPABASE_CLASSIFICATIONS.has(result.classification)) return result.classification;
-  if (SUPABASE_CLASSIFICATIONS.has(result.original_classification)) return result.original_classification;
-  return "Bajo";
-}
-
-function resolveCalculationReason(evaluationPayload) {
-  return evaluationPayload.calculation_reason || evaluationPayload.calculationReason || evaluationPayload.reason || "new_evaluation";
-}
-
-export function buildFinancialDataSnapshot(evaluationPayload) {
-  const input = cloneJson(evaluationPayload.input, {});
-  const result = cloneJson(evaluationPayload.result, {});
-  const calculationReason = resolveCalculationReason(evaluationPayload);
-
-  return {
-    ...input,
-    input,
-    input_snapshot: input,
-    result,
-    result_snapshot: result,
-    calculation_reason: calculationReason,
-    calculated_at: new Date().toISOString(),
-  };
-}
->>>>>>> 701938b (feat(scoring): persist BCCh market snapshots)
 
 export function normalizeEvaluation(row, contactsMap = {}) {
   if (!row) return null;
