@@ -299,7 +299,7 @@ class PropertySearchRequest(BaseModel):
     max_price_uf: Optional[float] = None
     property_type: Optional[str] = None
     limit: Optional[int] = 10
-    similarity_threshold: Optional[float] = 0.0
+    similarity_threshold: Optional[float] = 0.72
 
 
 @app.post("/api/properties/search")
@@ -311,9 +311,8 @@ async def properties_search_endpoint(payload: PropertySearchRequest):
         max_price_uf=payload.max_price_uf,
         property_type=payload.property_type,
         limit=payload.limit or 10,
-        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.0,
+        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.72,
     )
-
 
 class ExplainRequest(ScoreRequest):
     # "user": solo la explicación del usuario. "all": incluye también los

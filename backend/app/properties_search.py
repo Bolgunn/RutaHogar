@@ -62,6 +62,12 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
             intent["req_max_uf"] = float(m_uf.group(1))
         except ValueError:
             pass
+    # 5. Comunas comunes
+    comunas = ["santiago", "providencia", "ñuñoa", "las condes", "la florida", "san miguel", "vitacura", "macul", "peñalolén", "lo barnechea", "recoleta", "estación central"]
+    for c in comunas:
+        if c in q:
+            intent["req_comuna"] = c
+            break
 
     return intent
 
@@ -101,11 +107,17 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
         else:
             sim -= 0.40
 
-    # Coincidencia de comuna en texto
-    if commune and commune in query_text.lower():
+    # Coincidencia de comuna en texto o intención
+    req_c = intent.get("req_comuna")
+    if req_c:
+        if req_c in commune:
+            sim += 0.25
+        else:
+            sim -= 0.60
+    elif commune and commune in query_text.lower():
         sim += 0.15
 
-    return max(0.01, min(0.99, float(sim)))
+    return max(0.0, min(0.99, float(sim)))
 
 
 def generate_text_embedding(text: str) -> List[float]:
@@ -353,7 +365,7 @@ def _query_supabase_proyectos_rag(
                         if r_vec and isinstance(r_vec, list) and len(r_vec) == len(query_vec):
                             r["similarity"] = calculate_cosine_similarity(query_vec, r_vec)
                         else:
-                            r["similarity"] = 0.75
+                            r["similarity"] = 0.0
                     rows.sort(key=lambda x: x.get("similarity", 0), reverse=True)
                     return rows
     except Exception:

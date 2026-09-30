@@ -1,24 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { searchProperties } from "../services/propertyService";
 
+const POPULAR_QUERIES = [
+  "Departamento 2 dormitorios en Santiago cerca del metro",
+  "Moderno 1D1B en Providencia para inversionista",
+  "Departamento 3D2B amplio en Ñuñoa con estacionamiento",
+  "Casa con jardín en Las Condes",
+  "Departamento económico en La Florida para primera vivienda",
+];
+
+const COMMUNES = [
+  "Santiago", "Providencia", "Ñuñoa", "Las Condes",
+  "La Florida", "San Miguel", "Vitacura", "Macul",
+  "Peñalolén", "Lo Barnechea", "Recoleta", "Estación Central",
+];
+
 export default function PropertySearch({ evaluation, onStartEvaluation, onNavigate }) {
   const [query, setQuery] = useState("");
   const [commune, setCommune] = useState("");
   const [maxPriceUf, setMaxPriceUf] = useState("");
   const [propertyType, setPropertyType] = useState("");
-  
   const [resultsLimit, setResultsLimit] = useState(12);
   const [loading, setLoading] = useState(false);
   const [resultsData, setResultsData] = useState(null);
   const [error, setError] = useState("");
-
-  const popularQueries = [
-    "Departamento 2 dormitorios en Santiago cerca del metro",
-    "Moderno 1D1B en Providencia para inversionista",
-    "Departamento 3D2B amplio en Ñuñoa con estacionamiento",
-    "Casa con jardín y piscina en Las Condes",
-    "Departamento económico en La Florida para primera vivienda"
-  ];
+  const [selectedProperty, setSelectedProperty] = useState(null);
 
   const handleSearch = async (
     overrideQuery = null,
@@ -27,41 +33,28 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
     overrideMaxPrice = null,
     overridePropertyType = null
   ) => {
-    let qToUse = typeof overrideQuery === "string" ? overrideQuery : query;
-    if (!qToUse || !qToUse.trim()) {
-      qToUse = "departamento";
-    }
-    const limitToUse = typeof overrideLimit === "number" ? overrideLimit : resultsLimit;
-    const communeToUse = overrideCommune !== null ? overrideCommune : commune;
-    const maxPriceToUse = overrideMaxPrice !== null ? overrideMaxPrice : (maxPriceUf ? Number(maxPriceUf) : null);
-    const typeToUse = overridePropertyType !== null ? overridePropertyType : propertyType;
+    let q = typeof overrideQuery === "string" ? overrideQuery : query;
+    if (!q || !q.trim()) q = "departamento";
+    const limit = typeof overrideLimit === "number" ? overrideLimit : resultsLimit;
+    const com = overrideCommune !== null ? overrideCommune : commune;
+    const price = overrideMaxPrice !== null ? overrideMaxPrice : (maxPriceUf ? Number(maxPriceUf) : null);
+    const type = overridePropertyType !== null ? overridePropertyType : propertyType;
 
     setLoading(true);
     setError("");
-
     try {
-      const data = await searchProperties({
-        query: qToUse,
-        commune: communeToUse,
-        maxPriceUf: maxPriceToUse,
-        propertyType: typeToUse,
-        limit: limitToUse,
-      });
+      const data = await searchProperties({ query: q, commune: com, maxPriceUf: price, propertyType: type, limit });
       setResultsData(data);
     } catch (err) {
       console.error(err);
-      setError("Ocurrió un error al buscar propiedades. Intenta nuevamente.");
+      setError("No fue posible conectar con el buscador. Verifica tu conexión e intenta nuevamente.");
     } finally {
       setLoading(false);
     }
   };
 
-
   useEffect(() => {
-    // Carga inicial de catálogo por defecto
-    const initQ = "departamento";
-    setQuery(initQ);
-    handleSearch(initQ, 12);
+    handleSearch("departamento", 12);
   }, []);
 
   const handleQuickQuery = (q) => {
@@ -76,220 +69,264 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
         property_value_unit: "uf",
         comuna_objetivo: item.commune,
         property_type: item.property_type,
-        tiene_propiedad_vista: true
+        tiene_propiedad_vista: true,
       });
     } else if (onNavigate) {
       onNavigate("evaluate");
     }
   };
 
-  return (
-    <div className="property-search-page">
-      {/* Encabezado del Portal */}
-      <section className="portal-hero">
-        <div className="portal-hero-badge">
-          <span className="sparkle-icon">✨</span> Búsqueda Inteligente RAG (IA)
-        </div>
-        <h1>Portal Inmobiliario Inteligente</h1>
-        <p className="portal-hero-subtitle">
-          Describe lo que buscas en lenguaje natural y encuentra propiedades del catálogo extraído desde Portal Inmobiliario.
-          Evalúa en un clic tu compatibilidad financiera con <strong>RutaHogar</strong>.
-        </p>
+  const handleClearFilters = () => {
+    setQuery("");
+    setCommune("");
+    setMaxPriceUf("");
+    setPropertyType("");
+    setResultsLimit(12);
+    handleSearch("departamento", 12, "", null, "");
+  };
 
-        {/* Buscador de lenguaje natural */}
-        <div className="natural-search-box">
-          <div className="search-input-wrapper">
-            <span className="search-icon">🔍</span>
+  return (
+    <div className="portal-page">
+
+      {/* Encabezado */}
+      <header className="portal-page__header">
+        <div className="portal-page__header-text">
+          <span className="eyebrow">Busqueda RAG — Inteligencia Artificial</span>
+          <h1>Portal Inmobiliario</h1>
+          <p className="portal-page__subtitle">
+            Describe en lenguaje natural la propiedad que buscas. El motor semántico
+            encuentra las coincidencias mas relevantes del catalogo y te permite
+            evaluar tu compatibilidad financiera con RutaHogar.
+          </p>
+        </div>
+      </header>
+
+      {/* Buscador */}
+      <section className="portal-search-section">
+        <div className="portal-search-box">
+          <div className="portal-search-input-row">
+            <svg className="portal-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
             <input
+              id="portal-query-input"
               type="text"
-              className="search-input-field"
-              placeholder="Ej: Departamento 2 dormitorios en Santiago centro cerca del metro bajo 3000 UF..."
+              className="portal-search-input"
+              placeholder="Ej: Departamento 2 dormitorios en Santiago bajo 3000 UF..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              aria-label="Consulta de búsqueda en lenguaje natural"
             />
             <button
               type="button"
-              className="primary-button search-action-btn"
+              className="primary-button portal-search-btn"
               onClick={() => handleSearch()}
               disabled={loading}
             >
-              {loading ? "Buscando..." : "Buscar con IA"}
+              {loading ? "Buscando..." : "Buscar"}
             </button>
           </div>
 
-          {/* Sugerencias de búsqueda rápida */}
-          <div className="popular-queries-chips">
-            <span className="chips-label">Sugerencias:</span>
-            {popularQueries.map((pq, idx) => (
-              <button
-                key={idx}
-                type="button"
-                className="query-chip"
-                onClick={() => handleQuickQuery(pq)}
-              >
-                {pq}
-              </button>
-            ))}
+          <div className="portal-suggestions-row">
+            <span className="portal-suggestions-label">Sugerencias:</span>
+            <div className="portal-suggestions-list">
+              {POPULAR_QUERIES.map((pq, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className="portal-suggestion-chip"
+                  onClick={() => handleQuickQuery(pq)}
+                >
+                  {pq}
+                </button>
+              ))}
+            </div>
           </div>
+        </div>
 
-          {/* Filtros avanzados secundarios */}
-          <div className="advanced-filters-row">
-            <div className="filter-group">
-              <label>Comuna:</label>
-              <select value={commune} onChange={(e) => setCommune(e.target.value)}>
-                <option value="">Todas las comunas</option>
-                <option value="Santiago">Santiago</option>
-                <option value="Providencia">Providencia</option>
-                <option value="Ñuñoa">Ñuñoa</option>
-                <option value="Las Condes">Las Condes</option>
-                <option value="La Florida">La Florida</option>
-                <option value="San Miguel">San Miguel</option>
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label>Tipo de propiedad:</label>
-              <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
-                <option value="">Todos los tipos</option>
-                <option value="departamento">Departamento</option>
-                <option value="casa">Casa</option>
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label>Máximo UF:</label>
-              <input
-                type="number"
-                placeholder="Ej: 4000"
-                value={maxPriceUf}
-                onChange={(e) => setMaxPriceUf(e.target.value)}
-              />
-            </div>
-
-            <div className="filter-group">
-              <label>Cantidad a mostrar:</label>
-              <select
-                value={resultsLimit}
-                onChange={(e) => {
-                  const newLimit = Number(e.target.value);
-                  setResultsLimit(newLimit);
-                  handleSearch(null, newLimit);
-                }}
-              >
-                <option value={12}>12 resultados</option>
-                <option value={24}>24 resultados</option>
-                <option value={48}>48 resultados</option>
-                <option value={100}>100 resultados</option>
-                <option value={200}>Todos los resultados</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              onClick={() => handleSearch()}
+        {/* Filtros */}
+        <div className="portal-filters-row">
+          <div className="portal-filter-group">
+            <label htmlFor="portal-filter-commune">Comuna</label>
+            <select
+              id="portal-filter-commune"
+              value={commune}
+              onChange={(e) => setCommune(e.target.value)}
             >
-              Aplicar filtros
-            </button>
+              <option value="">Todas las comunas</option>
+              {COMMUNES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
+
+          <div className="portal-filter-group">
+            <label htmlFor="portal-filter-type">Tipo de propiedad</label>
+            <select
+              id="portal-filter-type"
+              value={propertyType}
+              onChange={(e) => setPropertyType(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              <option value="departamento">Departamento</option>
+              <option value="casa">Casa</option>
+            </select>
+          </div>
+
+          <div className="portal-filter-group">
+            <label htmlFor="portal-filter-price">Maximo UF</label>
+            <input
+              id="portal-filter-price"
+              type="number"
+              placeholder="Ej: 4000"
+              value={maxPriceUf}
+              onChange={(e) => setMaxPriceUf(e.target.value)}
+            />
+          </div>
+
+          <div className="portal-filter-group">
+            <label htmlFor="portal-filter-limit">Resultados</label>
+            <select
+              id="portal-filter-limit"
+              value={resultsLimit}
+              onChange={(e) => {
+                const newLimit = Number(e.target.value);
+                setResultsLimit(newLimit);
+                handleSearch(null, newLimit);
+              }}
+            >
+              <option value={12}>12 resultados</option>
+              <option value={24}>24 resultados</option>
+              <option value={48}>48 resultados</option>
+              <option value={100}>100 resultados</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className="secondary-button portal-filter-apply-btn"
+            onClick={() => handleSearch()}
+          >
+            Aplicar filtros
+          </button>
         </div>
       </section>
 
-      {/* Criterio E4: Aviso visible de carácter referencial */}
-      <div className="referential-disclaimer-banner" id="referential-disclaimer">
-        <div className="disclaimer-icon">ℹ️</div>
-        <div className="disclaimer-content">
-          <strong>Aviso Importante (Información Referencial):</strong>{" "}
+      {/* Aviso referencial */}
+      <div className="portal-disclaimer" role="note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>
+          <strong>Informacion referencial.</strong>{" "}
           {resultsData?.disclaimer ||
-            "La información exhibida sobre las propiedades es de carácter referencial e informativa, extraída automáticamente desde fuentes públicas de Portal Inmobiliario. Te recomendamos verificar directamente en la fuente original o con el ejecutivo comercial las condiciones actualizadas del inmueble y evaluar tu calificación crediticia en RutaHogar."}
-        </div>
+            "Los datos exhibidos provienen de fuentes publicas de Portal Inmobiliario y son de caracter informativo. Verifica condiciones actualizadas directamente con la fuente o con el ejecutivo comercial antes de tomar decisiones financieras."}
+        </span>
       </div>
 
-      {/* Resultados de Búsqueda */}
-      <section className="results-section">
+      {/* Resultados */}
+      <section className="portal-results-section">
         {loading ? (
-          <div className="loading-spinner-box">
-            <div className="spinner"></div>
-            <p>Procesando vector de búsqueda y ordenando por relevancia semántica...</p>
+          <div className="portal-loading-state">
+            <div className="portal-spinner" aria-hidden="true" />
+            <p>Procesando consulta semantica...</p>
           </div>
         ) : error ? (
-          <div className="error-alert">{error}</div>
-        ) : resultsData && resultsData.results && resultsData.results.length > 0 ? (
+          <div className="portal-error-state" role="alert">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>{error}</span>
+          </div>
+        ) : resultsData?.results?.length > 0 ? (
           <>
-            <div className="results-header">
-              <h2>Resultados encontrados ({resultsData.total})</h2>
-              <span className="results-ordering-tag">
-                ✓ Ordenados por relevancia semántica (RAG)
-              </span>
+            <div className="portal-results-header">
+              <h2 className="portal-results-title">
+                {resultsData.total} propiedades encontradas
+              </h2>
+              <span className="portal-results-tag">Ordenados por relevancia semantica</span>
             </div>
 
-            <div className="properties-grid">
+            <div className="portal-properties-grid">
               {resultsData.results.map((prop) => {
                 const simPercent = Math.round((prop.similarity || 0.8) * 100);
                 return (
-                  <article key={prop.id} className="property-card" id={`property-card-${prop.id}`}>
-                    <div className="property-card-image-wrap">
+                  <article 
+                    key={prop.id} 
+                    className="portal-property-card" 
+                    id={`property-card-${prop.id}`}
+                    onClick={(e) => {
+                      if (!e.target.closest('.portal-card-actions')) {
+                        setSelectedProperty(prop);
+                      }
+                    }}
+                  >
+                    <div className="portal-card-image-wrap">
                       <img
-                        src={prop.image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2"}
+                        src={prop.image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80"}
                         alt={prop.title}
-                        className="property-card-img"
+                        className="portal-card-img"
                         loading="lazy"
                       />
-                      <div className="similarity-badge">
-                        🎯 {simPercent}% Relevancia
-                      </div>
-                      <div className="property-type-tag">
-                        {prop.property_type?.toUpperCase() || "DEPARTAMENTO"}
-                      </div>
+                      <span className="portal-relevance-badge">{simPercent}% relevancia</span>
+                      <span className="portal-type-tag">{prop.property_type?.toUpperCase() || "DEPARTAMENTO"}</span>
                     </div>
 
-                    <div className="property-card-body">
-                      <div className="property-commune-row">
-                        <span className="commune-pin">📍 {prop.commune}</span>
-                        <span className="source-label">{prop.source || "Portal Inmobiliario"}</span>
+                    <div className="portal-card-body">
+                      <div className="portal-card-meta-row">
+                        <span className="portal-commune-label">{prop.commune}</span>
+                        <span className="portal-source-label">{prop.source || "Portal Inmobiliario"}</span>
                       </div>
 
-                      <h3 className="property-title">{prop.title}</h3>
-                      <p className="property-address">{prop.address || prop.commune}</p>
+                      <h3 className="portal-card-title">{prop.title}</h3>
+                      {prop.address && (
+                        <p className="portal-card-address">{prop.address}</p>
+                      )}
 
-                      <p className="property-description">
-                        {prop.description}
-                      </p>
+                      <p className="portal-card-description">{prop.description}</p>
 
-                      <div className="property-features">
-                        <span className="feature-pill">🛏️ {prop.bedrooms} Dorm.</span>
-                        <span className="feature-pill">🚿 {prop.bathrooms} Baños</span>
-                        <span className="feature-pill">📐 {prop.surface_m2} m²</span>
+                      <div className="portal-card-features">
+                        {prop.bedrooms != null && (
+                          <span className="portal-feature-tag">{prop.bedrooms} dorm.</span>
+                        )}
+                        {prop.bathrooms != null && (
+                          <span className="portal-feature-tag">{prop.bathrooms} {prop.bathrooms === 1 ? "bano" : "banos"}</span>
+                        )}
+                        {prop.surface_m2 != null && (
+                          <span className="portal-feature-tag">{prop.surface_m2} m²</span>
+                        )}
                       </div>
 
-                      <div className="property-price-box">
-                        <div className="price-uf">{prop.price_uf ? `${prop.price_uf.toLocaleString('es-CL')} UF` : 'Consultar UF'}</div>
-                        <div className="price-clp">
-                          {prop.price_clp ? `$ ${Math.round(prop.price_clp).toLocaleString('es-CL')}` : ''}
-                        </div>
+                      <div className="portal-card-price">
+                        <span className="portal-price-uf">
+                          {prop.price_uf ? `${prop.price_uf.toLocaleString("es-CL")} UF` : "Consultar precio"}
+                        </span>
+                        {prop.price_clp && (
+                          <span className="portal-price-clp">
+                            $ {Math.round(prop.price_clp).toLocaleString("es-CL")}
+                          </span>
+                        )}
                       </div>
 
-                      {/* Criterios E2 y E3: CTA para evaluar compatibilidad en RutaHogar */}
-                      <div className="property-cta-wrapper">
+                      <div className="portal-card-actions">
                         <button
                           type="button"
-                          className="primary-button property-qualify-btn"
+                          className="primary-button portal-qualify-btn"
                           onClick={() => handleApplyToProperty(prop)}
                           id={`cta-qualify-${prop.id}`}
                         >
-                          ✨ {prop.cta_text || "Ver si califico para este departamento"}
+                          {prop.cta_text || "Ver si califico para esta propiedad"}
                         </button>
-
                         {prop.url && (
                           <a
                             href={prop.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="external-link-btn"
-                            title="Ver publicación en origen"
+                            className="portal-external-link"
                           >
-                            Ver en origen ↗
+                            Ver publicacion original
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
                           </a>
                         )}
                       </div>
@@ -299,57 +336,153 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
               })}
             </div>
 
-            {resultsData && resultsData.results && resultsData.results.length > 0 && (
-              <div className="load-more-container" style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
-                {resultsData.results.length < resultsData.total ? (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    style={{ padding: "12px 28px", fontWeight: "700" }}
-                    onClick={() => {
-                      const nextLimit = resultsLimit + 24;
-                      setResultsLimit(nextLimit);
-                      handleSearch(query || "departamento", nextLimit);
-                    }}
-                  >
-                    📥 Cargar más propiedades (Mostrando {resultsData.results.length} de {resultsData.total})
-                  </button>
-                ) : (
-                  <div className="all-loaded-badge" style={{ padding: "10px 20px", background: "#f1f5f9", borderRadius: "20px", color: "#475569", fontWeight: "700", fontSize: "0.9rem" }}>
-                    ✓ Mostrando las {resultsData.total} propiedades encontradas en Supabase
+            {resultsData.results.length < resultsData.total && (
+              <div className="portal-load-more">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    const nextLimit = resultsLimit + 24;
+                    setResultsLimit(nextLimit);
+                    handleSearch(query || "departamento", nextLimit);
+                  }}
+                >
+                  Cargar mas propiedades
+                  <span className="portal-load-more-count">
+                    Mostrando {resultsData.results.length} de {resultsData.total}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {resultsData.results.length >= resultsData.total && (
+              <p className="portal-all-loaded">
+                Se muestran las {resultsData.total} propiedades que coinciden con tu busqueda.
+              </p>
+            )}
+          </>
+        ) : resultsData != null ? (
+          <div className="empty-state" id="empty-results-view">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <strong>Sin resultados para esta busqueda</strong>
+            <p>
+              {resultsData?.suggestion ||
+                "Intenta con terminos mas amplios, cambia la comuna o aumenta el presupuesto en UF."}
+            </p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={handleClearFilters}
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      {/* Modal de Detalle de Propiedad */}
+      {selectedProperty && (
+        <div className="portal-modal-overlay" onClick={() => setSelectedProperty(null)}>
+          <div className="portal-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="portal-modal-close" 
+              onClick={() => setSelectedProperty(null)}
+              aria-label="Cerrar detalles"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            
+            <div className="portal-modal-image-container">
+              <img 
+                src={selectedProperty.image_url || "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80"} 
+                alt={selectedProperty.title}
+                className="portal-modal-image"
+              />
+              <div className="portal-modal-badge">{selectedProperty.property_type?.toUpperCase() || "DEPARTAMENTO"}</div>
+            </div>
+
+            <div className="portal-modal-body">
+              <div className="portal-modal-header-info">
+                <span className="portal-modal-commune">📍 {selectedProperty.commune}</span>
+                <span className="portal-modal-source">{selectedProperty.source || "Portal Inmobiliario"}</span>
+              </div>
+              
+              <h2 className="portal-modal-title">{selectedProperty.title}</h2>
+              {selectedProperty.address && (
+                <p className="portal-modal-address">{selectedProperty.address}</p>
+              )}
+
+              <div className="portal-modal-price-box">
+                <div className="portal-modal-price-uf">
+                  {selectedProperty.price_uf ? `${selectedProperty.price_uf.toLocaleString("es-CL")} UF` : "Consultar precio"}
+                </div>
+                {selectedProperty.price_clp && (
+                  <div className="portal-modal-price-clp">
+                    $ {Math.round(selectedProperty.price_clp).toLocaleString("es-CL")}
                   </div>
                 )}
               </div>
-            )}
-          </>
-        ) : (
-          /* Criterio E5: Estado de resultados vacíos */
-          <div className="empty-results-card" id="empty-results-view">
-            <div className="empty-icon">🔍</div>
-            <h3>No encontramos propiedades que coincidan</h3>
-            <p className="empty-suggestion">
-              {resultsData?.suggestion ||
-                "No se encontraron propiedades para tu consulta. Te sugerimos modificar restricciones o comuna, ampliar el presupuesto en UF o usar términos más amplios."}
-            </p>
-            <div className="empty-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setQuery("");
-                  setCommune("");
-                  setMaxPriceUf("");
-                  setPropertyType("");
-                  setResultsLimit(12);
-                  handleSearch("departamento", 12, "", null, "");
-                }}
-              >
-                Limpiar filtros y ver todo
-              </button>
+
+              <div className="portal-modal-features">
+                {selectedProperty.bedrooms != null && (
+                  <div className="portal-modal-feature">
+                    <span className="feature-icon">🛏️</span>
+                    <span className="feature-value">{selectedProperty.bedrooms}</span>
+                    <span className="feature-label">Dormitorios</span>
+                  </div>
+                )}
+                {selectedProperty.bathrooms != null && (
+                  <div className="portal-modal-feature">
+                    <span className="feature-icon">🚿</span>
+                    <span className="feature-value">{selectedProperty.bathrooms}</span>
+                    <span className="feature-label">Baños</span>
+                  </div>
+                )}
+                {selectedProperty.surface_m2 != null && (
+                  <div className="portal-modal-feature">
+                    <span className="feature-icon">📐</span>
+                    <span className="feature-value">{selectedProperty.surface_m2}</span>
+                    <span className="feature-label">m² útiles</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="portal-modal-description">
+                <h3>Descripción</h3>
+                <p>{selectedProperty.description}</p>
+              </div>
+
+              <div className="portal-modal-actions">
+                <button
+                  type="button"
+                  className="primary-button portal-modal-main-btn"
+                  onClick={() => {
+                    handleApplyToProperty(selectedProperty);
+                    setSelectedProperty(null);
+                  }}
+                >
+                  {selectedProperty.cta_text || "Ver si califico para esta propiedad"}
+                </button>
+                {selectedProperty.url && (
+                  <a
+                    href={selectedProperty.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="secondary-button portal-modal-secondary-btn"
+                  >
+                    Ver en {selectedProperty.source || "Portal Inmobiliario"} ↗
+                  </a>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }
