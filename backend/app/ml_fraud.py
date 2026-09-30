@@ -21,6 +21,7 @@ def _extract_features(data: Dict) -> pd.DataFrame:
     """Extrae las variables de comportamiento para el modelo."""
     return pd.DataFrame([{
         "time_to_submit": float(data.get("time_to_submit", 30)),
+        "intentos_previos": float(data.get("intentos_previos", 0)),
         "ingreso_mensual": float(data.get("ingreso_mensual", 0)),
         "deuda_mensual": float(data.get("deuda_mensual", 0)),
         "edad": float(data.get("edad", 30)),
@@ -42,9 +43,13 @@ def predict_fraud_xgboost(data: Dict) -> Tuple[float, List[str]]:
         _xgb_model = xgb.XGBClassifier()
         _xgb_model.load_model(MODEL_PATH)
         
-    # Si aún no hay modelo (ej: primer día), usamos Fallback matemático pero con la estructura prometida
+    # Si aún no hay modelo (ej: primer día), usamos Fallback matemático
+    intentos = data.get("intentos_previos", 0)
+    
     if _xgb_model is None:
-        if time_to_submit < 5:
+        if intentos > 3:
+            return 99.0, [f"Tanteo detectado: El dispositivo ha intentado {intentos} evaluaciones (Fallback)."]
+        elif time_to_submit < 5:
             return 95.0, ["Tiempo de llenado anormalmente bajo (<5s). Posible script automátizado (Fallback)."]
         elif time_to_submit < 10:
             return 60.0, ["Tiempo de llenado rápido (<10s). Posible autocompletado (Fallback)."]
