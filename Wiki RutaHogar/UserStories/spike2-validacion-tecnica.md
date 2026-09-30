@@ -143,13 +143,13 @@ plataforma.
 
 ## Estado
 
-Spike en curso. E2 y E4 tienen documento de investigación en `docs/research/`, pendiente de revisión del equipo; el resto de los frentes aún no tiene documento de cierre.
+Spike no iniciado. Ningún frente tiene documento de cierre en `docs/research/`.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
 | `E1` | ❌ | No existe matriz de permisos documentada ni política de privacidad escrita. |
-| `E2` | ⚠️ | Investigación entregada, pendiente de revisión del equipo: [E2 — Auditoría e historial versionado](../../docs/research/spike2-e2-auditoria-historial-versionado.md). |
+| `E2` | ❌ | Sin definición de modelo de eventos ni de versionado de evaluaciones. |
 | `E3` | ⚠️ | `docs/crm-integration.md` es punto de partida; faltan credenciales, límites y comportamiento ante fallo. |
-| `E4` | ⚠️ | Investigación entregada, pendiente de revisión del equipo: [E4 — Fuentes de datos externas](../../docs/research/spike2-e4-external-data-sources.md). UF, tasas y precios referenciales siguen siendo constantes en el código. |
+| `E4` | ❌ | UF, tasas y precios referenciales siguen siendo constantes en el código. |
 | `E5` | ❌ | Sin levantamiento de flujos ni inventario de fricciones. |
 | `E6` | ❌ | El corredor no está modelado como actor. |
