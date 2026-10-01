@@ -8,3 +8,4 @@ shap>=0.42.0
 pandas>=2.0.0
 supabase>=2.0.0
 httpx>=0.24.0
+python-dotenv>=1.0.0

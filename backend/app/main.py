@@ -1,4 +1,9 @@
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde el archivo .env local si existe
+load_dotenv()
+
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from fastapi import FastAPI
@@ -296,28 +301,49 @@ async def score_endpoint(payload: ScoreRequest):
     device_hash = data.get("device_id_hash")
     intentos_previos = 0
     
+    ahorro_previo = None
+
     if device_hash:
         try:
             from .ml_fraud import get_supabase_client
             supabase = get_supabase_client()
             
-            # Calculamos la ventana de tiempo: hace 15 minutos
-            quince_minutos_atras = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+            hace_24_horas = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
             
-            # Consultar a la base de datos cuántas evaluaciones tiene este dispositivo
-            # en los últimos 15 minutos
             response = supabase.table("evaluations") \
-                .select("id", count="exact") \
+                .select("financial_data, created_at") \
                 .eq("financial_data->input->>device_id_hash", device_hash) \
-                .gte("created_at", quince_minutos_atras) \
+                .gte("created_at", hace_24_horas) \
+                .order("created_at", desc=False) \
                 .execute()
                 
-            intentos_previos = response.count if response.count is not None else 0
+            filas = response.data if response.data else []
+            
+            quince_minutos_atras = datetime.now(timezone.utc) - timedelta(minutes=15)
+            intentos_15m = 0
+            
+            for f in filas:
+                dt = datetime.fromisoformat(f["created_at"].replace("Z", "+00:00"))
+                if dt >= quince_minutos_atras:
+                    intentos_15m += 1
+                
+                if ahorro_previo is None:
+                    fin_data = f.get("financial_data") or {}
+                    inp = fin_data.get("input") or {}
+                    ah_disp = inp.get("ahorro_disponible")
+                    if ah_disp is not None:
+                        ahorro_previo = float(ah_disp)
+            
+            intentos_previos = intentos_15m
+                
         except Exception as e:
             print(f"Error consultando historial de intentos: {e}")
             
     # Inyectamos el historial de intentos al payload para que el motor ML lo sepa
     data["intentos_previos"] = intentos_previos
+    
+    if ahorro_previo is not None:
+        data["ahorro_previo_24h"] = ahorro_previo
     
     result = calculate_score(data)
     return result
