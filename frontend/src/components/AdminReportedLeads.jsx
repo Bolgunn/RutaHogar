@@ -133,13 +133,17 @@ export default function AdminReportedLeads({ profile }) {
                 {lead.fraud_score_probability >= 80 && (
                   <div style={{ marginTop: "0.5rem", padding: "0.5rem", background: "#fdeded", border: "1px solid #ef5350", borderRadius: "4px", fontSize: "0.85rem", color: "#d32f2f" }}>
                     <strong><i className="ti ti-robot" /> Alerta de Inconsistencia (Automática):</strong> Riesgo detectado del {lead.fraud_score_probability}%
-                    {lead.shap_top_factors && typeof lead.shap_top_factors === 'object' && (
+                    {lead.shap_top_factors && (
                       <ul style={{ margin: "0.25rem 0 0 1.5rem", padding: 0 }}>
-                        {Object.entries(lead.shap_top_factors).map(([key, value]) => (
-                          <li key={key}>
-                            {key}: impacto de {Number(value) > 0 ? "+" : ""}{Number(value).toFixed(2)}
-                          </li>
-                        ))}
+                        {Array.isArray(lead.shap_top_factors)
+                          ? lead.shap_top_factors.map((factor, idx) => (
+                              <li key={idx}>{typeof factor === "string" ? factor : JSON.stringify(factor)}</li>
+                            ))
+                          : Object.entries(lead.shap_top_factors).map(([key, value]) => (
+                              <li key={key}>
+                                {key}: {Number.isFinite(Number(value)) ? `impacto de ${Number(value) > 0 ? "+" : ""}${Number(value).toFixed(2)}` : String(value)}
+                              </li>
+                            ))}
                       </ul>
                     )}
                   </div>

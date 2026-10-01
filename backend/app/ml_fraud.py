@@ -57,7 +57,9 @@ def predict_fraud_xgboost(data: Dict) -> Tuple[float, List[str]]:
     
     if _xgb_model is None:
         if ahorro_previo is not None and ahorro_actual > (ahorro_previo + (renta * 3)):
-            return 99.0, [f"Avance de ahorro irreal detectado en 24h: subió de {ahorro_previo} a {ahorro_actual} (Fallback)."]
+            prev_fmt = f"${int(ahorro_previo):,}".replace(",", ".")
+            act_fmt = f"${int(ahorro_actual):,}".replace(",", ".")
+            return 99.0, [f"Avance de ahorro irreal detectado en 24h: subió de {prev_fmt} a {act_fmt} (Fallback)."]
         elif intentos > 3:
             return 99.0, [f"Tanteo detectado: El dispositivo ha intentado {intentos} evaluaciones (Fallback)."]
         elif time_to_submit < 5:

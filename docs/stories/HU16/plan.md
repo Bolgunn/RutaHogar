@@ -265,6 +265,20 @@ Para proteger el ecosistema de ataques prolongados ("Smurfing" o engaños lentos
 
 ### 6.4. Separación de Roles y Testing
 - **Ejecutivos vs Administradores:** Los leads clasificados como `sospechoso` desaparecen de las bandejas comerciales y caen exclusivamente en el panel Admin.
-- **Testing Automatizado:** Se crearon suites de prueba en ambos lados:
-  - `backend/test_fraude.py` (ejecutable vía `make test-fraude`): Verifica el bloqueo de bots y tanteos sin ensuciar la base de datos (in-memory test).
-  - `supabase/test_hu16_rules.sql`: Transacción con `ROLLBACK` para validar que el Trigger de Ahorro y el Barrendero funcionen a nivel SQL.
+- **Testing Automatizado:** Se han implementado y ampliado suites de prueba estructuradas para garantizar la fiabilidad del sistema de fraude:
+  - `backend/tests/test_ml_fraud.py` (Pytest): Verifica el modelo de Machine Learning (`predict_fraud_xgboost`) y sus reglas de Fallback sin requerir conexión a la base de datos viva (tests unitarios in-memory).
+    - **Funcionalidades probadas:**
+      1. *Usuario normal:* Verifica que no se marquen falsos positivos.
+      2. *Tanteo:* Valida la regla de `intentos_previos > 3` (retorna 99.0%).
+      3. *Bot / Script:* Valida el llenado en menos de 5 segundos (`time_to_submit < 5`, retorna 95.0%).
+      4. *Avance irreal de ahorro:* Comprueba la relación del salto de ahorro contra los ingresos (retorna 99.0%).
+    - **Cómo ejecutar:** `python -m pytest backend/tests/test_ml_fraud.py -v` (requiere tener instalado `pytest`).
+  - `backend/test_fraude.py` (ejecutable vía `make test-fraude` o `python backend/test_fraude.py`): Suite de integración automatizada completa contra el backend FastAPI (usando `TestClient`).
+    - **Casos probados:**
+      1. *[TEST 1] Usuario Normal:* Valida llenado pausado (45s) sin alertas previas (`fraud_score` < 20%).
+      2. *[TEST 2] Ataque Bot/Script:* Valida llenado express (< 5s) activando bloqueo por velocidad (`fraud_score` >= 95%).
+      3. *[TEST 3] Tanteo de Parámetros:* Simula 4 intentos rápidos desde un mismo dispositivo en 15 min (`fraud_score` >= 99%).
+      4. *[TEST 4] Salto de Ahorro Irreal:* Simula salto de $3M a $20M en 24h con sueldo de $1.2M (`fraud_score` >= 99% con formato en pesos chilenos).
+      5. *[TEST 5] Reentrenamiento ML:* Valida el endpoint `POST /score/retrain` que descarga los leads de Supabase y ajusta el modelo XGBoost.
+  - `backend/tests/test_ml_fraud.py`: Pruebas unitarias in-memory para el motor `predict_fraud_xgboost` con Pytest.
+  - `supabase/test_hu16_rules.sql`: Transacción con `ROLLBACK` para validar que el Trigger de Ahorro y el Barrendero funcionen a nivel SQL en la base de datos.
