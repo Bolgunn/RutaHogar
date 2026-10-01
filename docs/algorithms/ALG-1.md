@@ -2,11 +2,11 @@
 
 | Field | Value |
 | :---- | :---- |
-| **Version** | Design draft; baseline ALGORITHM_VERSION = `1.1.0-prep`, runtime SCORING_VERSION = `1.1.0`. New runtime version pending implementation. |
-| **Runs on / implemented in** | Backend · `components.py`, `constants.py`, aggregation in `scoring.py`. Redesign not implemented. |
-| **Cases** | `ALG-1-cases.json` · 10 scenarios plus 4 branch variants; no runner added |
-| **Open assumptions** | 0 business decisions · closed log and PLAN handoff below |
-| **Last changed** | 2026-09-18 · close financial completeness, complementary debt, zero-capacity and market-failure decisions |
+| **Version** | Runtime `ALGORITHM_VERSION = 1.2.0` and `SCORING_VERSION = 1.2.0`; ALG-1 is implemented. |
+| **Runs on / implemented in** | Backend · `components.py`, `indicators.py`, `purchase_capacity.py` and orchestration in `scoring.py`. |
+| **Cases** | `ALG-1-cases.json` · asserted by `backend/tests/test_initial_scoring.py`. |
+| **Open assumptions** | 0 business decisions · closed log retained below. |
+| **Last changed** | 2026-09-30 · align active contract with BCCh snapshot runtime and HU13 provenance |
 
 ## Purpose
 
@@ -18,7 +18,13 @@ it is not a new score component, bonus or penalty.
 Both `comuna_objetivo` and the second comuna are catalog/matching preferences only.
 Changing, adding or removing either must not alter initial components, blockers, score or
 classification. No initial scoring path may use comuna prices or their average as a fallback.
-This is a future specification; no product code or `POST /score` contract is changed.
+This is the active runtime contract. The endpoint resolves a valid market snapshot before entering the pure scoring engine; no scoring result is fabricated when that precondition fails.
+
+## Housing target and market reference
+
+Initial scoring never infers a housing price from `comuna_objetivo`, an alternative comuna or any price table. Those fields are catalog and matching preferences only. A housing/project objective must be declared explicitly. An explicit CLP value is preserved; an explicit UF value is converted with `uf_value_clp` from the resolved BCCh market snapshot.
+
+ALG-9 uses the same snapshot UF, mortgage rate, LTV and reference term. The snapshot is resolved at the infrastructure boundary, validated before use, and then passed unchanged to the pure scoring engine, HU13 recalculation and each projection milestone. A missing or invalid persisted snapshot prevents a completed score through a controlled error. Local fixture data is available only when `MARKET_SNAPSHOT_ALLOW_FIXTURE=true` for development or tests; it is validated and marked fixture-only, never a production fallback. Completed historical evaluations retain their snapshot provenance and are not silently recomputed with later market data.
 
 ## Inputs → outputs
 
@@ -150,9 +156,7 @@ Other conditions add nothing. Apply all applicable rows after early returns, the
 
 ### Data quality
 
-The current code splits completeness into 80 points for key fields plus up to 20 for optional
-property/comuna fields. That split is superseded by the user's financial-only completeness decision.
-The target formula is:
+The implemented financial-only completeness formula is:
 
 `calidad_datos = round(clamp(100 * completed_financial_fields / 9 - penalty, 0, 100), 1)`
 
@@ -221,30 +225,8 @@ No new blocker or classification is introduced.
 | A3 | Income capacity <=0 implies mortgage pie_ratio=0, preserving nominal savings; invalid snapshot never fabricates score | User decision | 2026-09-18 | Market-data failure is confused with computed zero capacity | confirmed |
 | A4 | Include complementary monthly debt exactly when its income is considered, consistently in ALG-1/ALG-9 | User decision; common accepted financial scope | 2026-09-18 | Either path uses different eligibility or double-counts debt | closed; supersedes principal-only ALG-1 / unconditional ALG-9 debt |
 
-## PLAN handoff
+## Historical notes
 
-No business-rule assumption blocks writing the PLAN. It must reference these decisions and
-plan snapshot resolution/storage, controlled-failure transport using the existing API error path,
-shared financial normalization, fixture-runner adaptation and runtime versioning. It must not
-invent a score/classification for service unavailability, reopen weights/thresholds, or recalculate
-historical evaluations. No PLAN or implementation is produced in this task.
+The pre-BCCh design notes formerly following this log are retained by their assumptions above, not as a description of the active runtime. In particular, prior alternatives that resolved a price by comuna, used `PRECIOS_REFERENCIA_UF`, split data quality into property/comuna bonuses, or deferred snapshot storage are superseded by the implemented contract in this document. They must not be used as runtime or numeric authority.
 
-## Contradictions with current code
-
-- `property_value.py` resolves declared prices, then comuna prices, then their average.
-  `scoring.py` also uses `PRECIOS_REFERENCIA_UF` for legacy risks/recommendations and patrimony.
-  Replacing only the ratio would leave other evaluation paths dependent on comuna.
-- `indicators.py` derives pie from property value. ALG-9 currently runs afterwards without
-  replacing that ratio. Future dependency order: resolve income → ALG-9 → financial savings
-  indicators → blockers → components → aggregation.
-- `calidad_datos` currently rewards comuna/property presence and uses the 80+optional split;
-  A2 replaces it with financial-only completeness while preserving its component weight.
-- `indicators.py` ignores complementary debt, while ALG-9 adds it regardless of income
-  acceptance. Both conflict with the now-closed common financial-scope rule.
-- The orchestrator still executes legacy additive calculations but overwrites their score
-  with the weighted result. `backend/app/REGLAS_SCORING.md` describes the old base-50, 70/40
-  model; it is historical source material, not this specification's numeric authority.
-- Constants describe preparatory layers although the orchestrator calls them. Feeding capacity
-  into initial score changes a rule: the old additive-only version rationale no longer applies.
-- Snapshot storage, controlled-failure wiring and new runtime version require a later build.
-  This document does not change the API, storage, product code or historical evaluations.
+The active dependency order is: resolve and validate a market snapshot, normalize the declared financial scope, run ALG-9, derive savings indicators and blockers, calculate components, then aggregate. This order keeps market provenance reproducible without changing ALG-1 weights, thresholds, caps or classifications.
