@@ -3,6 +3,31 @@ import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, s
 import { ensureUserProfile, getAuthenticatedUser } from "./profileService";
 import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
 
+function cloneJson(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
+}
+
+// HU13 events remain the persistence authority; the helper preserves the
+// exact server-resolved market bundle in an immutable evaluation payload.
+export function buildFinancialDataSnapshot(evaluationPayload) {
+  const input = cloneJson(evaluationPayload.input, {});
+  const result = cloneJson(evaluationPayload.result, {});
+  return {
+    ...input,
+    input,
+    input_snapshot: input,
+    result,
+    result_snapshot: result,
+    calculation_reason: evaluationPayload.calculation_reason || evaluationPayload.calculationReason || evaluationPayload.reason || "new_evaluation",
+    calculated_at: new Date().toISOString(),
+  };
+}
+
 export function normalizeEvaluation(row, contactsMap = {}) {
   if (!row) return null;
 

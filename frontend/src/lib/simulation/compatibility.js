@@ -1,4 +1,3 @@
-const DEFAULT_UF_CLP = 40695;
 const MIN_DOWN_PAYMENT_RATE = 0.10;
 const RECOMMENDED_DOWN_PAYMENT_RATE = 0.20;
 const PRUDENT_DIVIDEND_RATE = 0.25;
@@ -46,7 +45,7 @@ function normalizeType(value) {
 }
 
 function getUfValue(input = {}) {
-  return toNumber(input.uf_value_clp) || DEFAULT_UF_CLP;
+  return toNumber(input.uf_value_clp);
 }
 
 export function projectToScenario(project, ufValueClp) {
@@ -65,7 +64,7 @@ export function projectToScenario(project, ufValueClp) {
 }
 
 export function getScenarioFromManualValue(value, ufValueClp, unit = "uf") {
-  const safeUfValueClp = toNumber(ufValueClp) || DEFAULT_UF_CLP;
+  const safeUfValueClp = toNumber(ufValueClp);
   const normalizedUnit = normalizeText(unit);
   const numericValue = toNumber(value);
   const isClp = normalizedUnit === "clp";
@@ -524,8 +523,13 @@ function getGapAmount(evaluation) {
 }
 
 export function buildSimulationContext(evaluation, onboarding) {
+  const persistedMarketSnapshot =
+    evaluation?.result?.financial_indicators?.capacidad_supuestos?.market_snapshot;
   return {
     ...(evaluation?.input || {}),
+    uf_value_clp:
+      toNumber(persistedMarketSnapshot?.uf_value_clp) ||
+      toNumber(evaluation?.input?.uf_value_clp),
     plazo_compra: onboarding?.plazo_compra || evaluation?.onboarding?.plazo_compra || evaluation?.input?.plazo_compra,
     comuna_objetivo:
       onboarding?.comuna_interes ||
@@ -604,4 +608,4 @@ export function getMaxValueRange(input = {}) {
   };
 }
 
-export { DEFAULT_UF_CLP, HIGH_DEBT_RATE };
+export { HIGH_DEBT_RATE };

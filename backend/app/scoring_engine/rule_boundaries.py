@@ -13,6 +13,7 @@ from .indicators import calculate_financial_indicators
 from .project_fit import PROJECT_BLOCKER_CODES
 from .property_value import resolve_property_value_clp
 from .purchase_capacity import capacity_rule_margins
+from ..market_data.snapshot import validate_snapshot
 from ..tracking.contracts import parse_time
 
 DAY_MICROSECONDS = timedelta(days=1) // timedelta(microseconds=1)
@@ -20,6 +21,9 @@ TICK = timedelta(microseconds=1)
 
 
 class RuleBoundaryProvider:
+    def __init__(self, market_snapshot=None):
+        self.market_snapshot = validate_snapshot(market_snapshot) if market_snapshot is not None else None
+
     def held_blocker(self, _state, result):
         # Only the project-fit age/term blocker is held under this numeric contract.
         return any(row["code"] in PROJECT_BLOCKER_CODES and row["code"] == "edad_plazo_riesgoso"
@@ -54,7 +58,10 @@ class RuleBoundaryProvider:
             return state
 
         def indicators(state):
-            return calculate_financial_indicators(state, resolve_property_value_clp(state)["property_value_clp"])
+            if self.market_snapshot is None:
+                return calculate_financial_indicators(state)
+            value = resolve_property_value_clp(state, self.market_snapshot["uf_value_clp"])
+            return calculate_financial_indicators(state, value["property_value_clp"], self.market_snapshot["uf_value_clp"])
 
         def predicates(state):
             ind = indicators(state)
@@ -84,7 +91,7 @@ class RuleBoundaryProvider:
         cuts |= add_roots(predicates, cuts)
 
         def capacity_predicates(state):
-            return capacity_rule_margins(state, indicators(state))
+            return capacity_rule_margins(state, indicators(state), self.market_snapshot)
 
         tick_days = 1 / DAY_MICROSECONDS
 
