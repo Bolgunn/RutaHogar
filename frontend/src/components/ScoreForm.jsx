@@ -896,7 +896,7 @@ export default function ScoreForm({
         market_snapshot_fetched_at: marketReference.snapshot_fetched_at,
         plazo_compra: normalizePurchaseTermForScore(onboardingData?.plazo_compra),
         tiene_propiedad_vista: onboardingData?.tiene_propiedad_vista === true,
-        time_to_submit: timeToSubmitSeconds,
+        time_to_submit: Math.floor(timeToSubmitSeconds),
         device_id_hash: deviceIdHash,
       };
       scorePayload = payload;

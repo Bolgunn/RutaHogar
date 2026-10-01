@@ -204,6 +204,8 @@ const buildFinancialInput = (input = {}) => ({
   pie_en_cuotas_interes: input.pie_en_cuotas_interes,
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
+  time_to_submit: input.time_to_submit,
+  device_id_hash: input.device_id_hash,
 });
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`

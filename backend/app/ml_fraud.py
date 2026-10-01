@@ -13,8 +13,14 @@ _xgb_model = None
 
 def get_supabase_client() -> Client:
     # Usamos las variables de entorno o mock
-    url: str = os.environ.get("SUPABASE_URL", "http://localhost:54321")
-    key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "dummy")
+    url: str = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL") or "http://localhost:54321"
+    
+    # Primero buscamos la llave de servicio. Si no está, intentamos la publica
+    key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not key:
+        print("WARNING: SUPABASE_SERVICE_ROLE_KEY no está configurada. Usando anon key. Debido a las políticas RLS, el backend no podrá leer el historial de evaluaciones del usuario y el antifraude no funcionará correctamente.")
+        key = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("VITE_SUPABASE_PUBLISHABLE_KEY") or "dummy"
+        
     return create_client(url, key)
 
 def _extract_features(data: Dict) -> pd.DataFrame:
@@ -43,11 +49,16 @@ def predict_fraud_xgboost(data: Dict) -> Tuple[float, List[str]]:
         _xgb_model = xgb.XGBClassifier()
         _xgb_model.load_model(MODEL_PATH)
         
-    # Si aún no hay modelo (ej: primer día), usamos Fallback matemático
+    # Si aún no hay modelo, usamos Fallback matemático para explicabilidad
     intentos = data.get("intentos_previos", 0)
+    ahorro_actual = features["ahorro_disponible"].iloc[0] if "ahorro_disponible" in features else 0
+    ahorro_previo = data.get("ahorro_previo_24h")
+    renta = features["ingreso_mensual"].iloc[0] if "ingreso_mensual" in features else 0
     
     if _xgb_model is None:
-        if intentos > 3:
+        if ahorro_previo is not None and ahorro_actual > (ahorro_previo + (renta * 3)):
+            return 99.0, [f"Avance de ahorro irreal detectado en 24h: subió de {ahorro_previo} a {ahorro_actual} (Fallback)."]
+        elif intentos > 3:
             return 99.0, [f"Tanteo detectado: El dispositivo ha intentado {intentos} evaluaciones (Fallback)."]
         elif time_to_submit < 5:
             return 95.0, ["Tiempo de llenado anormalmente bajo (<5s). Posible script automátizado (Fallback)."]
