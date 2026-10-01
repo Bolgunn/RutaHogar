@@ -330,3 +330,51 @@ def test_goal_regression_preserves_completion_evidence():
     assert goal["action_status"] == "pendiente"
     assert goal["evidence"]["ever_completed"]
     assert goal["evidence"]["currently_regressed"]
+
+
+def test_projection_reuses_one_persisted_snapshot_across_all_milestones(monkeypatch):
+    from app.market_data import bcch
+
+    repo = MemoryRepository()
+    stable = market_snapshot()
+    changed = {**deepcopy(stable), "uf_value_clp": stable["uf_value_clp"] + 1_000}
+    external_source = {"snapshot": deepcopy(stable)}
+    resolutions = []
+    received = []
+    mutate_during_projection = {"value": False}
+
+    def resolver():
+        resolutions.append(deepcopy(external_source["snapshot"]))
+        return deepcopy(external_source["snapshot"])
+
+    monkeypatch.setattr(
+        bcch.BCChClient,
+        "fetch_snapshot",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("projection must not call BCCh")),
+    )
+    app = TrackingService(
+        repo,
+        clock=lambda: datetime(2026, 3, 1, tzinfo=timezone.utc),
+        market_snapshot_resolver=resolver,
+    )
+    first = app.execute("u1", command(valid_snapshot()))
+    app.execute("u1", command({"ahorro_disponible": 2_000_000}, first["event_id"], "2026-02-01T00:00:00Z"))
+
+    assert len(resolutions) == 1
+    real_score = app._score
+
+    def recording_score(snapshot, market_snapshot):
+        received.append(deepcopy(market_snapshot))
+        if mutate_during_projection["value"] and len(received) == 1:
+            external_source["snapshot"] = deepcopy(changed)
+        return real_score(snapshot, market_snapshot)
+
+    app._score = recording_score
+    mutate_during_projection["value"] = True
+    projection = app.projection("u1", "2026-03-01T00:00:00Z")
+
+    assert projection["milestones"]
+    assert len(received) > 1
+    assert all(snapshot == stable for snapshot in received)
+    assert external_source["snapshot"] == changed
+    assert len(resolutions) == 1
