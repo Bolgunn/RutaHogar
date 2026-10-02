@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAccessibleAlternatives,
-  DEFAULT_UF_CLP,
   evaluateScenario,
   projectToScenario,
 } from "../compatibility";
@@ -14,7 +13,7 @@ import { catalogProjectToSimulation } from "../projectAdapter";
 // Los casos esperados salen de la tabla "Casos de prueba manuales" de
 // docs/stories/HU6-simulacion-compatibilidad/REGLAS_HU6.md.
 
-const UF = DEFAULT_UF_CLP;
+const UF = 40695;
 
 function catalogRow(overrides = {}) {
   return {

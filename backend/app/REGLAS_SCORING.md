@@ -210,31 +210,28 @@ Esta regla permite distinguir entre un usuario con capacidad de pago real y un u
 
 ---
 
-## 7. Regla de valor de vivienda objetivo
+## 7. Regla de valor de vivienda o proyecto declarado
 
-### 7.1 Orden de prioridad para obtener el valor objetivo
+### 7.1 Fuente explícita del objetivo
 
-El scoring calcula el valor de vivienda objetivo usando este orden:
+El valor de vivienda se usa sólo para la vista de ajuste de proyecto, beneficios y proyecciones que lo requieran. Nunca se infiere a partir de `comuna_objetivo`.
 
-1. Si existe `property_value_clp`, usa ese valor.
-2. Si no existe valor declarado, usa el precio referencial en UF según `comuna_objetivo`.
-3. Si no hay valor declarado ni comuna con referencia, usa una regla simple de respaldo basada en ahorro versus dividendo.
+1. Si existe `property_value_clp`, se respeta ese valor declarado.
+2. Si existe `property_value_uf`, se convierte con `uf_value_clp` del mismo snapshot BCCh validado que usa el scoring.
+3. Los pares genéricos `property_value` y `property_value_unit` siguen la misma conversión explícita.
+4. Si no hay valor o proyecto declarado, el objetivo queda sin valor (`unknown`); la comuna es sólo una preferencia geográfica.
 
-### 7.2 Fórmula con valor declarado
-
-```text
-precio_objetivo_clp = property_value_clp
-```
-
-### 7.3 Fórmula con comuna objetivo
+### 7.2 Conversión UF declarada
 
 ```text
-precio_objetivo_clp = PRECIOS_REFERENCIA_UF[comuna_objetivo] * VALOR_UF_CLP
+precio_objetivo_clp = property_value_uf * market_snapshot.uf_value_clp
 ```
 
-### 7.4 Advertencia importante
+No existe `PRECIOS_REFERENCIA_UF` ni una tabla equivalente como respaldo financiero. El usuario debe declarar el valor o seleccionar un proyecto con valor explícito.
 
-Los valores por comuna del código son referenciales. No son tasaciones reales ni precios garantizados. Deben usarse solo para orientación y simulación temprana.
+### 7.3 Interpretación
+
+El valor declarado no altera artificialmente el score inicial de capacidad. Permite contextualizar proyecto, pie y beneficios, siempre con la misma UF BCCh de la evaluación reproducible.
 
 ---
 
@@ -294,20 +291,11 @@ Esta regla sirve para comparar si el ahorro actual permite acercarse al valor de
 
 ---
 
-## 9. Regla de respaldo cuando no existe valor de vivienda ni comuna referencial
+## 9. Ausencia de valor de vivienda declarado
 
-Si no existe `property_value_clp` ni precio referencial por comuna, el scoring usa una regla simple:
+Cuando no se declaró un valor ni se seleccionó un proyecto con precio explícito, RutaHogar no fabrica un precio objetivo. Las métricas que requieren ese valor se mantienen sin objetivo y se solicita declararlo para una comparación de proyecto o beneficio.
 
-```text
-ahorro_disponible < dividendo_estimado
-```
-
-| Condición | Efecto |
-|---|---:|
-| Ahorro menor al dividendo estimado | `-10` puntos |
-| Ahorro igual o superior al dividendo | Indicador positivo |
-
-Esta regla es más débil y debería considerarse solo como respaldo. Para una evaluación más útil, conviene contar con valor de vivienda, comuna objetivo o proyecto seleccionado.
+La comuna objetivo puede conservarse como preferencia de búsqueda, pero cambiarla por sí sola no cambia el objetivo financiero.
 
 ---
 
@@ -953,7 +941,7 @@ Podrías revisar si existe una ruta de beneficio habitacional aplicable a tu cas
 ### 21.2 Brechas detectadas
 
 - El valor UF está fijo en el código y debería ser configurable.
-- Los precios por comuna son referenciales y deberían documentarse o actualizarse.
+- No se infiere un precio de vivienda por comuna: los proyectos o valores declarados son explícitos y la conversión UF/CLP usa el snapshot BCCh validado.
 - No calcula explícitamente brechas numéricas de ajuste mínimo.
 - No calcula valor máximo financiable desde tasa/plazo/seguros.
 - No separa completamente reglas para usuario y reglas comerciales.

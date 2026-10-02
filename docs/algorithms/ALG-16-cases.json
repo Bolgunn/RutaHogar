@@ -1,0 +1,64 @@
+{
+  "algorithm": "ALG-16",
+  "version": "hu14-lead-comparison-v1",
+  "nota": "Casos documentales alineados con frontend/src/lib/matching/__tests__/leadComparison.test.js. Cada caso llama buildLeadProjectComparison(leads, project).",
+  "cases": [
+    {
+      "name": "sin_proyecto_no_hay_comparacion",
+      "por_que": "R1. E3 es proyecto-especifico; sin proyecto la comparacion no tiene sentido.",
+      "input": {
+        "leads": [{ "id": "l1", "result": { "score": 90, "classification": "Alto" } }],
+        "project": null
+      },
+      "expect": []
+    },
+    {
+      "name": "dos_leads_con_score_capacidad_y_afinidad",
+      "por_que": "R2 y R3. La comparacion debe mostrar score general y evidencia de proyecto desde ALG-10.",
+      "input": {
+        "project": { "id": "p1", "nombre": "Proyecto Norte", "comuna": "Macul", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3600 },
+        "leads": "dos evaluaciones con capacidad suficiente bajo ALG-10"
+      },
+      "expect": {
+        "count": 2,
+        "fields_present": ["score", "classification", "capacity.valueUf", "capacity.reachesMin", "affinity.value", "affinity.classification"]
+      }
+    },
+    {
+      "name": "comuna_no_declarada_es_factor_dificil",
+      "por_que": "R4 y R7. Si la comuna del proyecto no aparece en preferencias/contexto, debe quedar como dificultad.",
+      "input": {
+        "project": { "id": "p1", "nombre": "Proyecto Norte", "comuna": "Macul", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3600 },
+        "lead": { "input": { "comuna_objetivo": "Nunoa" }, "onboarding": { "comuna_alternativa": "La Florida" } }
+      },
+      "expect": {
+        "affinity.communeDeclared": false,
+        "difficult_contains": "La comuna del proyecto no esta dentro de sus opciones declaradas."
+      }
+    },
+    {
+      "name": "comuna_desde_contexto_o_preferencias",
+      "por_que": "R4. La comparacion debe leer comuna desde contexto/preferencias, no solo onboarding basico.",
+      "input": {
+        "project": { "id": "p1", "nombre": "Proyecto Norte", "comuna": "Macul", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3600 },
+        "lead": { "context": { "comuna_objetivo": "Macul" }, "preferences": { "comuna_interes": "Macul" } }
+      },
+      "expect": {
+        "affinity.communeDeclared": true
+      }
+    },
+    {
+      "name": "capacidad_requiere_antecedentes_es_dificultad",
+      "por_que": "R7. Si ALG-10 excluye por antecedentes faltantes, la comparacion debe mostrarlo como dificultad.",
+      "input": {
+        "project": { "id": "p1", "nombre": "Proyecto Norte", "comuna": "Macul", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3600 },
+        "lead": { "result": { "financial_indicators": { "capacidad_status": "requires_info" } } }
+      },
+      "expect": {
+        "capacity.valueUf": null,
+        "capacity.exclusion": "capacidad_requiere_antecedentes",
+        "difficult_contains": "Faltan antecedentes para calcular capacidad."
+      }
+    }
+  ]
+}

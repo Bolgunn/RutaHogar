@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
-import { buildSimulationContext, DEFAULT_UF_CLP } from "../lib/simulation/compatibility";
+import { buildSimulationContext } from "../lib/simulation/compatibility";
 import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { getAvailableProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
+import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
+import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -67,7 +69,7 @@ function ProjectsCarousel({ children }) {
   );
 }
 
-export default function ProjectsCatalog({ evaluationBase, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
+export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -117,13 +119,11 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
   }, [favorites, userId]);
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
-  const ufValueClp = Number(context?.uf_value_clp) || DEFAULT_UF_CLP;
-  const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
-    ? evaluationBase.input.project_goal
-    : null;
+  const ufValueClp = Number(context?.uf_value_clp) || 0;
+  const currentGoal = getCurrentProjectGoal(evaluationBase);
   const currentGoalProject = useMemo(() => {
-    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
     if (currentGoal) return projects.find((project) => project.id === currentGoal.id) || currentGoal;
+    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
 
     // Las metas previas a project_goal no tenían identificador. Solo se
     // recuperan si el valor UF identifica de forma única al proyecto actual.
@@ -131,6 +131,12 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
     const matches = projects.filter((project) => Number(project.precio_min_uf) === valueUf);
     return matches.length === 1 ? matches[0] : null;
   }, [currentGoal, evaluationBase?.input?.property_value, evaluationBase?.input?.property_value_source, evaluationBase?.input?.property_value_uf, projects]);
+  const frozenGoalProject = useMemo(() => {
+    if (!frozenTrackingTarget || typeof frozenTrackingTarget !== "object") return null;
+    return projects.find((project) => project.id === frozenTrackingTarget.id) || frozenTrackingTarget;
+  }, [frozenTrackingTarget, projects]);
+  const hasDifferentCurrentGoal = Boolean(frozenGoalProject && currentGoalProject
+    && frozenGoalProject.id !== currentGoalProject.id);
   const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
   const communes = useMemo(() => [...new Set(projects.map((project) => project.comuna).filter(Boolean))].sort(), [projects]);
   const visibleProjects = useMemo(() => {
@@ -172,18 +178,36 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
     ) : !projects.length ? (
       <div className="admin-compact-empty"><strong>No hay proyectos disponibles.</strong><p>Vuelve más tarde para revisar nuevas alternativas.</p></div>
     ) : <>
-      {currentGoalProject && <section className="projects-current-goal" aria-labelledby="current-goal-title">
+      {frozenGoalProject && <section className="projects-current-goal projects-current-goal--frozen" aria-labelledby="frozen-goal-title">
         <div className="projects-current-goal__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></div>
         <div className="projects-current-goal__content">
-          <span className="eyebrow">Tu meta actual</span>
+          <span className="eyebrow">Objetivo de proyección</span>
+          <h2 id="frozen-goal-title">{frozenGoalProject.nombre || frozenGoalProject.id}</h2>
+          <p>{frozenGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(frozenGoalProject)}</p>
+          {frozenGoalProject.inmobiliaria && <p className="projects-current-goal__developer">Inmobiliaria: {frozenGoalProject.inmobiliaria}</p>}
+          <div className="projects-current-goal__details">
+            <span>{propertyLabels[frozenGoalProject.tipo_vivienda] || frozenGoalProject.tipo_vivienda || "Vivienda"}</span>
+            {frozenGoalProject.estado && <span>{availabilityLabel(frozenGoalProject.estado)}</span>}
+            {formatDeliveryMonth(frozenGoalProject.entrega_estimada) && <span>Entrega {formatDeliveryMonth(frozenGoalProject.entrega_estimada)}</span>}
+          </div>
+        </div>
+        {projects.some((project) => project.id === frozenGoalProject.id) && <button type="button" className="secondary-button compact-button" onClick={() => setSelectedProjectId(frozenGoalProject.id)}>Ver compatibilidad</button>}
+      </section>}
+      {currentGoalProject && hasDifferentCurrentGoal && <section className="projects-current-goal" aria-labelledby="current-goal-title">
+        <div className="projects-current-goal__marker"><i className="ti ti-heart" aria-hidden="true" /></div>
+        <div className="projects-current-goal__content">
+          <span className="eyebrow">Preferencia de última evaluación</span>
           <h2 id="current-goal-title">{currentGoalProject.nombre}</h2>
           <p>{currentGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(currentGoalProject)}</p>
-          {currentGoalProject.inmobiliaria && <p className="projects-current-goal__developer">Inmobiliaria: {currentGoalProject.inmobiliaria}</p>}
-          <div className="projects-current-goal__details">
-            <span>{propertyLabels[currentGoalProject.tipo_vivienda] || currentGoalProject.tipo_vivienda || "Vivienda"}</span>
-            <span>{availabilityLabel(currentGoalProject.estado)}</span>
-            {formatDeliveryMonth(currentGoalProject.entrega_estimada) && <span>Entrega {formatDeliveryMonth(currentGoalProject.entrega_estimada)}</span>}
-          </div>
+        </div>
+        {projects.some((project) => project.id === currentGoalProject.id) && <button type="button" className="secondary-button compact-button" onClick={() => setSelectedProjectId(currentGoalProject.id)}>Ver compatibilidad</button>}
+      </section>}
+      {currentGoalProject && !hasDifferentCurrentGoal && !frozenGoalProject && <section className="projects-current-goal" aria-labelledby="current-goal-title">
+        <div className="projects-current-goal__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></div>
+        <div className="projects-current-goal__content">
+          <span className="eyebrow">Tu preferencia actual</span>
+          <h2 id="current-goal-title">{currentGoalProject.nombre}</h2>
+          <p>{currentGoalProject.comuna || "Comuna sin dato"} · {formatProjectPrice(currentGoalProject)}</p>
         </div>
         {projects.some((project) => project.id === currentGoalProject.id) && <button type="button" className="secondary-button compact-button" onClick={() => setSelectedProjectId(currentGoalProject.id)}>Ver compatibilidad</button>}
       </section>}
@@ -211,7 +235,7 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
              const isFavorite = favorites.includes(project.id);
-             const isCurrentGoal = currentGoalProject?.id === project.id;
+             const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
           {userId && (
@@ -226,14 +250,13 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
           )}
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong>Meta actual</strong>}</div>
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}</div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
             <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
-            <p className="project-catalog-card__description">{project.descripcion_corta || "Revisa su compatibilidad con tu calificación y define si quieres incorporarlo a tu plan."}</p>
             {context ? (
               <div className="project-catalog-card__actions">
                 <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
@@ -249,6 +272,10 @@ export default function ProjectsCatalog({ evaluationBase, onboarding, userId, co
         </ProjectsCarousel>
       </section>}
     </>}
+    <div className="simulation-disclaimer projects-catalog-disclaimer">
+      <i className="ti ti-info-circle" aria-hidden="true" />
+      <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
+    </div>
     {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} />}
   </section>;
 }

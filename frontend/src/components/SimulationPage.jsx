@@ -16,6 +16,8 @@ import {
 import { getAvailableProjects } from "../services/projectService";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { plazoLabels, propertyLabels } from "../constants";
+import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
+import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
 const MAX_MANUAL_UF_VALUE = 9999999;
@@ -450,7 +452,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
   );
-  const ufValueClp = Number(context.uf_value_clp) || 40695;
+  const ufValueClp = Number(context.uf_value_clp) || 0;
+  const currentProjectGoal = getCurrentProjectGoal(evaluation);
   const [mode, setMode] = useState("project");
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
@@ -727,8 +730,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       </div>
 
       <div className="simulation-disclaimer">
-        <i className="ti ti-info-circle"></i>
-        Esta simulación es referencial y se basa en datos declarados. No corresponde a aprobación bancaria, preaprobación, tasación ni cotización formal.
+        <i className="ti ti-info-circle" aria-hidden="true" />
+        <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
       </div>
 
       <div className="simulation-layout">
@@ -884,9 +887,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                       ? ` · Entrega estimada: ${formatDeliveryMonth(scenario.project.entrega_estimada)}`
                       : ""}
                   </p>
-                  {scenario.project.descripcion_corta ? (
-                    <p className="simulation-estimate-note">{scenario.project.descripcion_corta}</p>
-                  ) : null}
                 </>
               ) : null}
             </div>
@@ -972,9 +972,6 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         <div className="section-heading compact">
           <span className="eyebrow">Alternativas referenciales</span>
           <h2 className="recommendation-section-title"><i className="ti ti-home-search"></i> Opciones más accesibles</h2>
-          <p>
-            Ordenadas por compatibilidad, menor brecha, comuna y tipo de vivienda preferidos. El horizonte ajusta mensajes, no cambia el score.
-          </p>
         </div>
 
         {targetProject ? (
@@ -1000,43 +997,47 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         )}
 
         <AlternativesCarousel>
-          {alternatives.map((item) => (
-            <article className="alternative-card simulation-alternative" key={item.project.id}>
-              <ProjectImagePlaceholder result={item} compact />
-              <div>
-                <span className={`simulation-status ${statusClass[item.status] || "adjust"}`}>{item.status}</span>
-                <h3>{item.project.nombre}</h3>
-                <p>{item.project.comuna} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda}</p>
-              </div>
-              <strong>{formatProjectPrice(item.project)} · {formatClp(item.valueClp)}</strong>
-              <p>Brecha principal: {getGapLabel(item.mainGap)}</p>
-              <p>Pie mínimo: {formatUfClp(item.pieMinimoUf, item.pieMinimo)}</p>
-              {item.preference.communeMatch ? <span className="alternative-benefit">Coincide con tu comuna objetivo</span> : null}
-              {item.preference.typeMatch ? <span className="alternative-benefit">Coincide con tu tipo de vivienda</span> : null}
-              {item.project.entrega_estimada ? (
-                <p>Entrega estimada: {formatDeliveryMonth(item.project.entrega_estimada)}</p>
-              ) : null}
-              <small>{item.project.descripcion_corta}</small>
-              <div className="alternative-actions">
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  disabled={mode === "project" && item.project.id === selectedProjectId}
-                  title={mode === "project" && item.project.id === selectedProjectId ? "Este es el escenario actual." : undefined}
-                  onClick={() => handleCompareAlternative(item)}
-                >
-                  {mode === "project" && item.project.id === selectedProjectId ? "Escenario actual" : "Comparar con escenario actual"}
-                </button>
-                <button
-                  className={`compact-button target-project-button ${targetProjectId === item.project.id ? "is-selected" : ""}`}
-                  type="button"
-                  onClick={() => handleSelectTargetProject(item)}
-                >
-                  {targetProjectId === item.project.id ? "Proyecto objetivo seleccionado" : "Seleccionar como proyecto objetivo"}
-                </button>
-              </div>
-            </article>
-          ))}
+          {alternatives.map((item) => {
+            const isCurrentGoal = isCurrentProjectGoal(item.project, currentProjectGoal);
+            return (
+              <article className={`alternative-card simulation-alternative ${isCurrentGoal ? "is-current-goal" : ""}`} key={item.project.id}>
+                <ProjectImagePlaceholder result={item} compact />
+                <div className="simulation-alternative__heading">
+                  <span className={`simulation-status ${statusClass[item.status] || "adjust"}`}>{item.status}</span>
+                  {isCurrentGoal ? <span className="project-goal-badge">Meta actual</span> : null}
+                  <h3>{item.project.nombre}</h3>
+                  <p>{item.project.comuna} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda}</p>
+                </div>
+                <strong>{formatProjectPrice(item.project)} · {formatClp(item.valueClp)}</strong>
+                <p>Brecha principal: {getGapLabel(item.mainGap)}</p>
+                <p>Pie mínimo: {formatUfClp(item.pieMinimoUf, item.pieMinimo)}</p>
+                {item.preference.communeMatch ? <span className="alternative-benefit">Coincide con tu comuna objetivo</span> : null}
+                {item.preference.typeMatch ? <span className="alternative-benefit">Coincide con tu tipo de vivienda</span> : null}
+                {item.project.entrega_estimada ? (
+                  <p>Entrega estimada: {formatDeliveryMonth(item.project.entrega_estimada)}</p>
+                ) : null}
+                <small>{item.project.descripcion_corta}</small>
+                <div className="alternative-actions">
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    disabled={mode === "project" && item.project.id === selectedProjectId}
+                    title={mode === "project" && item.project.id === selectedProjectId ? "Este es el escenario actual." : undefined}
+                    onClick={() => handleCompareAlternative(item)}
+                  >
+                    {mode === "project" && item.project.id === selectedProjectId ? "Escenario actual" : "Comparar con escenario actual"}
+                  </button>
+                  <button
+                    className={`compact-button target-project-button ${targetProjectId === item.project.id ? "is-selected" : ""}`}
+                    type="button"
+                    onClick={() => handleSelectTargetProject(item)}
+                  >
+                    {targetProjectId === item.project.id ? "Proyecto objetivo seleccionado" : "Seleccionar como proyecto objetivo"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </AlternativesCarousel>
       </div>
 

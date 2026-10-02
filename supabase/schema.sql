@@ -193,6 +193,12 @@ alter table public.evaluations enable row level security;
 alter table public.improvement_goals enable row level security;
 alter table public.scoring_history enable row level security;
 
+-- Los privilegios habilitan las operaciones; las policies RLS de abajo siguen
+-- limitando las filas visibles y modificables para authenticated.
+grant select, insert, update, delete
+on table public.evaluations
+to authenticated;
+
 -- Helper SECURITY DEFINER: lee el rol del usuario sin disparar RLS
 create or replace function public.get_my_role()
 returns text
@@ -208,7 +214,7 @@ drop policy if exists "Profiles select own" on public.profiles;
 create policy "Profiles select own"
 on public.profiles
 for select
-using (auth.uid() = id::uuid);
+using (auth.uid() = id);
 
 drop policy if exists "Profiles insert own" on public.profiles;
 create policy "Profiles insert own"
@@ -253,10 +259,10 @@ create policy "Evaluations select own"
   on public.evaluations
   for select
   using (
-      (auth.uid() = user_id)
-      or
-      (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
-    );
+    (auth.uid() = user_id)
+    or
+    (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
+  );
 
 drop policy if exists "Evaluations insert own" on public.evaluations;
 create policy "Evaluations insert own"
@@ -297,7 +303,7 @@ drop policy if exists "Improvement goals select own" on public.improvement_goals
 create policy "Improvement goals select own"
 on public.improvement_goals
 for select
-using (auth.uid() = user_id::uuid);
+using (auth.uid() = user_id);
 
 drop policy if exists "Improvement goals insert own" on public.improvement_goals;
 create policy "Improvement goals insert own"
@@ -329,6 +335,12 @@ create policy "Scoring history select own"
 on public.scoring_history
 for select
 using (auth.uid() = user_id::uuid);
+
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+create policy "Scoring history select staff"
+  on public.scoring_history
+  for select
+  using (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text]));
 
 -- Migracion: endurecer FK para evitar borrado en cascada del historial inmutable.
 alter table public.scoring_history
@@ -396,6 +408,16 @@ create table if not exists public.proyecto_ejecutivos (
 
 create index if not exists proyecto_ejecutivos_ejecutivo_idx
   on public.proyecto_ejecutivos (ejecutivo_id);
+
+create table if not exists public.proyecto_favoritos (
+  usuario_id uuid not null references public.profiles(id) on delete cascade,
+  proyecto_id uuid not null references public.proyectos(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (usuario_id, proyecto_id)
+);
+
+create index if not exists proyecto_favoritos_usuario_idx
+  on public.proyecto_favoritos (usuario_id);
 
 create or replace function public.get_my_inmobiliaria()
 returns uuid
@@ -653,6 +675,7 @@ grant execute on function public.resolve_pending_executives() to authenticated;
 alter table public.inmobiliarias enable row level security;
 alter table public.proyectos enable row level security;
 alter table public.proyecto_ejecutivos enable row level security;
+alter table public.proyecto_favoritos enable row level security;
 
 drop policy if exists "Inmobiliarias select staff" on public.inmobiliarias;
 create policy "Inmobiliarias select staff"
@@ -708,6 +731,15 @@ create policy "Proyectos select tenant"
     )
   );
 
+drop policy if exists "Proyectos select lead" on public.proyectos;
+create policy "Proyectos select lead"
+  on public.proyectos
+  for select
+  using (
+    public.get_my_role() = 'usuario'
+    and estado <> 'agotado'
+  );
+
 drop policy if exists "Proyectos insert admin tenant" on public.proyectos;
 create policy "Proyectos insert admin tenant"
   on public.proyectos
@@ -751,6 +783,24 @@ create policy "Proyecto ejecutivos select tenant"
       )
     )
   );
+
+drop policy if exists "Proyecto favoritos select propio" on public.proyecto_favoritos;
+create policy "Proyecto favoritos select propio"
+  on public.proyecto_favoritos
+  for select
+  using (usuario_id = auth.uid());
+
+drop policy if exists "Proyecto favoritos insert propio" on public.proyecto_favoritos;
+create policy "Proyecto favoritos insert propio"
+  on public.proyecto_favoritos
+  for insert
+  with check (usuario_id = auth.uid());
+
+drop policy if exists "Proyecto favoritos delete propio" on public.proyecto_favoritos;
+create policy "Proyecto favoritos delete propio"
+  on public.proyecto_favoritos
+  for delete
+  using (usuario_id = auth.uid());
 
 -- Cierra el hueco multi-tenant en profiles: el admin con inmobiliaria asignada
 -- solo ve/edita ejecutivos de su inmobiliaria; el admin global conserva todo.
@@ -866,6 +916,24 @@ $$;
 
 grant execute on function public.list_inmobiliaria_executives(uuid) to authenticated;
 
+create or replace function public.find_user_id_by_email(p_email text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select u.id
+  from auth.users u
+  where lower(u.email) = lower(trim(coalesce(p_email, '')))
+  limit 1;
+$$;
+
+revoke execute on function public.find_user_id_by_email(text) from public;
+revoke execute on function public.find_user_id_by_email(text) from anon;
+revoke execute on function public.find_user_id_by_email(text) from authenticated;
+grant execute on function public.find_user_id_by_email(text) to service_role;
+
 -- =============================================================
 -- Solicitudes ARCO: solo el admin global
 -- =============================================================
@@ -885,6 +953,25 @@ $$;
 
 grant execute on function public.is_global_admin() to authenticated;
 
+-- Complete public BCCh bundles used only by backend service credentials.
+create table if not exists public.market_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  snapshot jsonb not null check (jsonb_typeof(snapshot) = 'object'),
+  effective_date date not null,
+  fetched_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  constraint market_snapshots_embedded_metadata_check check (
+    snapshot->>'effective_date' = effective_date::text
+    and (snapshot->>'fetched_at')::timestamptz = fetched_at
+  )
+);
+
+create index if not exists market_snapshots_resolution_idx
+  on public.market_snapshots (effective_date desc, fetched_at desc, id desc);
+
+alter table public.market_snapshots enable row level security;
+revoke all on table public.market_snapshots from anon, authenticated;
+
 drop policy if exists "ARCO select admin" on public.arco_requests;
 create policy "ARCO select admin"
   on public.arco_requests
@@ -897,3 +984,748 @@ create policy "ARCO update admin"
   for update
   using (public.is_global_admin())
   with check (public.is_global_admin());
+
+-- HU13: immutable source facts. Apply manually after review; no legacy backfill.
+begin;
+
+create unique index if not exists evaluations_id_user_unique on public.evaluations(id, user_id);
+create table if not exists public.tracking_plans (
+  id uuid primary key,
+  user_id uuid not null unique references public.profiles(id),
+  baseline_evaluation_id uuid not null,
+  root_event_id uuid not null,
+  baseline_at timestamptz not null,
+  original_plan_snapshot jsonb not null,
+  target_project_snapshot jsonb,
+  provenance jsonb not null,
+  created_at timestamptz not null default clock_timestamp(),
+  unique(id, user_id),
+  foreign key(baseline_evaluation_id, user_id) references public.evaluations(id, user_id)
+);
+
+create table if not exists public.tracking_events (
+  event_id uuid primary key,
+  plan_id uuid not null,
+  user_id uuid not null,
+  event_kind text not null check (event_kind in ('baseline', 'data_update', 'evaluation', 'correction')),
+  effective_at timestamptz not null,
+  recorded_at timestamptz not null default clock_timestamp(),
+  reason text not null check (length(trim(reason)) > 0),
+  patch jsonb not null check (jsonb_typeof(patch) = 'object'),
+  recorded_complete_snapshot jsonb not null check (jsonb_typeof(recorded_complete_snapshot) = 'object'),
+  previous_event_id uuid,
+  correction_of_event_id uuid,
+  correction_effect text check (correction_effect in ('replace', 'annul')),
+  evaluation_id uuid,
+  canonical_request jsonb,
+  command_result jsonb,
+  algorithm_version text not null,
+  provenance jsonb not null,
+  unique(event_id, plan_id, user_id),
+  foreign key(plan_id, user_id) references public.tracking_plans(id, user_id),
+  foreign key(evaluation_id, user_id) references public.evaluations(id, user_id),
+  foreign key(previous_event_id, plan_id, user_id)
+    references public.tracking_events(event_id, plan_id, user_id),
+  foreign key(correction_of_event_id, plan_id, user_id)
+    references public.tracking_events(event_id, plan_id, user_id),
+  check (previous_event_id is distinct from event_id),
+  check (correction_of_event_id is distinct from event_id),
+  check ((event_kind = 'correction' and correction_of_event_id is not null and correction_effect is not null)
+      or (event_kind <> 'correction' and correction_of_event_id is null and correction_effect is null)),
+  check (correction_effect is distinct from 'annul' or patch = '{}'::jsonb)
+);
+
+alter table public.tracking_plans drop constraint if exists tracking_plans_root_fk;
+alter table public.tracking_plans add constraint tracking_plans_root_fk
+  foreign key(root_event_id, id, user_id)
+  references public.tracking_events(event_id, plan_id, user_id) deferrable initially deferred;
+
+create index if not exists tracking_events_effective_idx
+  on public.tracking_events(user_id, plan_id, effective_at, recorded_at, event_id);
+create index if not exists tracking_events_audit_idx
+  on public.tracking_events(user_id, plan_id, recorded_at, event_id);
+create index if not exists tracking_events_correction_idx
+  on public.tracking_events(correction_of_event_id);
+create unique index if not exists tracking_events_evaluation_unique
+  on public.tracking_events(evaluation_id) where evaluation_id is not null;
+create unique index if not exists tracking_events_baseline_unique
+  on public.tracking_events(plan_id) where event_kind = 'baseline';
+
+alter table public.improvement_goals
+  add column if not exists tracking_plan_id uuid,
+  add column if not exists baseline_event_id uuid,
+  add column if not exists source_action_type text,
+  add column if not exists source_ordinal integer,
+  add column if not exists metric text,
+  add column if not exists goal_type text,
+  add column if not exists direction text,
+  add column if not exists initial_value jsonb,
+  add column if not exists target_value jsonb,
+  add column if not exists unit text,
+  add column if not exists target_at timestamptz,
+  add column if not exists verification_kind text,
+  add column if not exists verification_source jsonb,
+  add column if not exists definition_version text;
+create unique index if not exists improvement_goals_id_plan_user_unique
+  on public.improvement_goals(id, tracking_plan_id, user_id);
+alter table public.improvement_goals drop constraint if exists improvement_goals_tracking_fk;
+alter table public.improvement_goals add constraint improvement_goals_tracking_fk
+  foreign key(tracking_plan_id, user_id) references public.tracking_plans(id, user_id);
+alter table public.improvement_goals drop constraint if exists improvement_goals_baseline_fk;
+alter table public.improvement_goals add constraint improvement_goals_baseline_fk
+  foreign key(baseline_event_id, tracking_plan_id, user_id)
+  references public.tracking_events(event_id, plan_id, user_id);
+alter table public.improvement_goals drop constraint if exists improvement_goals_tracking_contract;
+alter table public.improvement_goals add constraint improvement_goals_tracking_contract check (
+  tracking_plan_id is null or (
+    baseline_event_id is not null and source_action_type is not null and source_ordinal is not null
+    and goal_type in ('numeric', 'boolean', 'categorical') and goal_type is not null
+    and verification_kind in ('automatic', 'manual') and verification_kind is not null
+    and target_value is not null and definition_version is not null
+    and (goal_type <> 'numeric' or
+      (direction in ('increase', 'reduce') and direction is not null and initial_value is not null))
+    and (verification_kind <> 'automatic' or verification_source is not null)
+  )
+);
+
+create table if not exists public.improvement_goal_events (
+  event_id uuid primary key,
+  goal_id uuid not null,
+  plan_id uuid not null,
+  user_id uuid not null,
+  confirmed boolean not null,
+  effective_at timestamptz not null,
+  recorded_at timestamptz not null default clock_timestamp(),
+  reason text not null check(length(trim(reason)) > 0),
+  source_event_id uuid not null,
+  canonical_request jsonb not null,
+  foreign key(goal_id, plan_id, user_id) references public.improvement_goals(id, tracking_plan_id, user_id),
+  foreign key(source_event_id, plan_id, user_id) references public.tracking_events(event_id, plan_id, user_id)
+);
+
+create table if not exists public.evaluation_events (
+  event_id uuid primary key,
+  evaluation_id uuid not null,
+  user_id uuid not null,
+  kind text not null,
+  payload jsonb not null,
+  effective_at timestamptz not null,
+  recorded_at timestamptz not null default clock_timestamp(),
+  provenance jsonb not null,
+  foreign key(evaluation_id, user_id) references public.evaluations(id, user_id)
+);
+
+alter table public.evaluations drop constraint if exists evaluations_classification_check;
+alter table public.evaluations add constraint evaluations_classification_check
+  check (classification in ('Alto', 'Medio', 'Bajo', 'Requiere antecedentes'));
+alter table public.scoring_history drop constraint if exists scoring_history_classification_check;
+alter table public.scoring_history add constraint scoring_history_classification_check
+  check (classification in ('Alto', 'Medio', 'Bajo', 'Requiere antecedentes'));
+alter table public.scoring_history add column if not exists events jsonb not null default '[]'::jsonb;
+
+alter table public.tracking_plans enable row level security;
+alter table public.tracking_events enable row level security;
+alter table public.improvement_goal_events enable row level security;
+alter table public.evaluation_events enable row level security;
+
+drop policy if exists "Tracking plans select own" on public.tracking_plans;
+create policy "Tracking plans select own" on public.tracking_plans
+  for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Tracking events select own" on public.tracking_events;
+create policy "Tracking events select own" on public.tracking_events
+  for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Goal events select own" on public.improvement_goal_events;
+create policy "Goal events select own" on public.improvement_goal_events
+  for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Evaluation events select own" on public.evaluation_events;
+create policy "Evaluation events select own" on public.evaluation_events
+  for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
+create policy "Evaluation events select staff" on public.evaluation_events
+  for select to authenticated using (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text]));
+
+-- Disable legacy mutation policies rather than leave permissive alternatives.
+drop policy if exists "Evaluations update own" on public.evaluations;
+create policy "Evaluations update own" on public.evaluations
+  for update using (false) with check (false);
+drop policy if exists "Evaluations delete own" on public.evaluations;
+create policy "Evaluations delete own" on public.evaluations
+  for delete using (false);
+drop policy if exists "Scoring history update own" on public.scoring_history;
+create policy "Scoring history update own" on public.scoring_history
+  for update using (false) with check (false);
+drop policy if exists "Improvement goals insert own" on public.improvement_goals;
+create policy "Improvement goals insert own" on public.improvement_goals
+  for insert with check (auth.uid() = user_id and tracking_plan_id is null);
+drop policy if exists "Improvement goals update own" on public.improvement_goals;
+create policy "Improvement goals update own" on public.improvement_goals
+  for update using (auth.uid() = user_id and tracking_plan_id is null)
+  with check (auth.uid() = user_id and tracking_plan_id is null);
+drop policy if exists "Improvement goals delete own" on public.improvement_goals;
+create policy "Improvement goals delete own" on public.improvement_goals
+  for delete using (auth.uid() = user_id and tracking_plan_id is null);
+
+revoke insert, update, delete on public.tracking_plans, public.tracking_events,
+  public.improvement_goal_events, public.evaluation_events from anon, authenticated;
+grant select on public.tracking_plans, public.tracking_events,
+  public.improvement_goal_events, public.evaluation_events to authenticated;
+grant select, insert on public.tracking_plans, public.tracking_events,
+  public.improvement_goal_events, public.evaluation_events to service_role;
+revoke insert, update, delete on public.evaluations, public.scoring_history from anon, authenticated;
+
+create or replace function public.hu13_reject_mutation()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if tg_table_name = 'tracking_plans' and tg_op = 'UPDATE'
+     and to_jsonb(old)->'target_project_snapshot' = 'null'::jsonb
+     and jsonb_typeof(to_jsonb(new)->'target_project_snapshot') = 'object'
+     and to_jsonb(new)->'target_project_snapshot' <> '{}'::jsonb
+     and (to_jsonb(new) - 'target_project_snapshot') = (to_jsonb(old) - 'target_project_snapshot') then
+    return new;
+  end if;
+  if tg_table_name = 'improvement_goals' then
+    if old.tracking_plan_id is null then
+      if tg_op = 'DELETE' then return old; end if;
+      return new;
+    end if;
+  end if;
+  raise exception 'immutable_history' using errcode = '23514';
+end;
+$$;
+
+do $$
+declare relation_name text;
+begin
+  foreach relation_name in array array[
+    'tracking_plans', 'tracking_events', 'improvement_goal_events',
+    'evaluation_events', 'evaluations', 'scoring_history', 'improvement_goals'
+  ] loop
+    execute format('drop trigger if exists hu13_immutable on public.%I', relation_name);
+    execute format(
+      'create trigger hu13_immutable before update or delete on public.%I
+       for each row execute function public.hu13_reject_mutation()', relation_name
+    );
+  end loop;
+end;
+$$;
+
+-- The backend validates the bearer subject; only service_role can call these RPCs.
+-- One read statement observes a consistent database snapshot.
+create or replace function public.hu13_read(p_user_id uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'plan', (select to_jsonb(p) from tracking_plans p where user_id = p_user_id),
+    'events', coalesce((select jsonb_agg(to_jsonb(e) order by recorded_at, event_id)
+      from tracking_events e where user_id = p_user_id), '[]'::jsonb),
+    'goals', coalesce((select jsonb_agg(to_jsonb(g) order by source_ordinal)
+      from improvement_goals g where user_id = p_user_id and tracking_plan_id is not null), '[]'::jsonb),
+    'goal_events', coalesce((select jsonb_agg(to_jsonb(g) order by effective_at, recorded_at, event_id)
+      from improvement_goal_events g where user_id = p_user_id), '[]'::jsonb),
+    'evaluations', coalesce((select jsonb_agg(to_jsonb(e))
+      from evaluations e where user_id = p_user_id), '[]'::jsonb),
+    'revision', (select event_id from tracking_events where user_id = p_user_id
+      order by recorded_at desc, event_id desc limit 1)
+  );
+$$;
+
+create or replace function public.hu13_commit(
+  p_user_id uuid, p_command jsonb, p_expected_revision uuid, p_records jsonb
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  existing tracking_events%rowtype;
+  current_revision uuid;
+  plan_id_value uuid;
+  frozen_target_project jsonb;
+  item jsonb;
+  result jsonb;
+  plan_data jsonb := p_records->'plan';
+  stamp timestamptz;
+begin
+  -- The profile lock also serializes two competing first-baseline commands.
+  perform 1 from profiles where id = p_user_id for update;
+  if not found then raise exception 'not_found'; end if;
+  select * into existing from tracking_events where event_id = (p_command->>'event_id')::uuid;
+  if found then
+    if existing.user_id <> p_user_id then raise exception 'owner_mismatch'; end if;
+    if existing.canonical_request is distinct from p_command then raise exception 'idempotency_conflict'; end if;
+    return existing.command_result;
+  end if;
+  select event_id into current_revision from tracking_events where user_id = p_user_id
+    order by recorded_at desc, event_id desc limit 1;
+  if current_revision is distinct from p_expected_revision then raise exception 'lineage_conflict'; end if;
+  select id, nullif(target_project_snapshot, 'null'::jsonb) into plan_id_value, frozen_target_project
+    from tracking_plans where user_id = p_user_id for update;
+  if plan_id_value is null then
+    plan_id_value := (plan_data->>'id')::uuid;
+    if plan_id_value is null then raise exception 'invalid_baseline'; end if;
+  elsif plan_data is not null and plan_data <> 'null'::jsonb then
+    raise exception 'immutable_baseline';
+  end if;
+  result := p_records->'result';
+  if result is null or jsonb_array_length(p_records->'events') < 1
+    or (p_records->'events'->0->>'event_id')::uuid <> (p_command->>'event_id')::uuid then
+    raise exception 'invalid_command';
+  end if;
+  for item in select value from jsonb_array_elements(p_records->'evaluations') loop
+    insert into evaluations(id, user_id, score, classification, financial_data, recommendations, explanation)
+    values ((item->>'id')::uuid, p_user_id, round((item->'result'->>'score')::numeric),
+      item->'result'->>'classification',
+      jsonb_build_object('input', item->'snapshot', 'result', item->'result', 'provenance', item->'provenance'),
+      coalesce(item->'result'->'recommendations', '[]'::jsonb), item->'result'->>'explanation');
+    insert into scoring_history(evaluation_id, user_id, score, classification, snapshot,
+      component_scores, algorithm_version, channel)
+    values ((item->>'id')::uuid, p_user_id, round((item->'result'->>'score')::numeric),
+      item->'result'->>'classification',
+      jsonb_build_object('input', item->'snapshot', 'result', item->'result', 'provenance', item->'provenance'),
+      item->'result'->'component_scores', item->'result'->>'algorithm_version', 'web');
+  end loop;
+  if plan_data is not null and plan_data <> 'null'::jsonb then
+    insert into tracking_plans(id, user_id, baseline_evaluation_id, root_event_id, baseline_at,
+      original_plan_snapshot, target_project_snapshot, provenance)
+    values (plan_id_value, p_user_id, (plan_data->>'baseline_evaluation_id')::uuid,
+      (plan_data->>'root_event_id')::uuid, (plan_data->>'baseline_at')::timestamptz,
+      plan_data->'original_plan_snapshot', nullif(plan_data->'target_project_snapshot', 'null'::jsonb),
+      plan_data->'provenance');
+  elsif frozen_target_project is null
+      and jsonb_typeof(p_records->'target_project_snapshot') = 'object'
+      and p_records->'target_project_snapshot' <> '{}'::jsonb then
+    update tracking_plans
+      set target_project_snapshot = p_records->'target_project_snapshot'
+      where id = plan_id_value and nullif(target_project_snapshot, 'null'::jsonb) is null;
+  end if;
+  for item in select value from jsonb_array_elements(p_records->'events') loop
+    stamp := clock_timestamp();
+    -- Relations must name already inserted rows, preventing cycles among new events.
+    if item->>'previous' is not null and not exists (
+      select 1 from tracking_events where event_id = (item->>'previous')::uuid
+        and plan_id = plan_id_value and user_id = p_user_id
+    ) then raise exception 'invalid_lineage'; end if;
+    if item->>'correction_of' is not null and not exists (
+      select 1 from tracking_events where event_id = (item->>'correction_of')::uuid
+        and plan_id = plan_id_value and user_id = p_user_id
+    ) then raise exception 'invalid_lineage'; end if;
+    insert into tracking_events(event_id, plan_id, user_id, event_kind, effective_at,
+      recorded_at, reason, patch, recorded_complete_snapshot, previous_event_id,
+      correction_of_event_id, correction_effect, evaluation_id, canonical_request,
+      command_result, algorithm_version, provenance)
+    values ((item->>'event_id')::uuid, plan_id_value, p_user_id, item->>'event_kind',
+      (item->>'effective_at')::timestamptz, stamp, item->>'reason', item->'patch',
+      item->'recorded_complete_snapshot', (item->>'previous')::uuid,
+      (item->>'correction_of')::uuid, item->>'correction_effect', (item->>'evaluation_id')::uuid,
+      p_command, result, item->>'algorithm_version', item->'provenance');
+  end loop;
+  for item in select value from jsonb_array_elements(p_records->'goals') loop
+    insert into improvement_goals(id, user_id, evaluation_id, title, description, progress_data,
+      tracking_plan_id, baseline_event_id, source_action_type, source_ordinal, metric,
+      goal_type, direction, initial_value, target_value, unit, target_at, verification_kind,
+      verification_source, definition_version)
+    values ((item->>'id')::uuid, p_user_id, (plan_data->>'baseline_evaluation_id')::uuid,
+      item->>'title', item->>'description', item, plan_id_value, (plan_data->>'root_event_id')::uuid,
+      item->>'source_action_type', (item->>'source_ordinal')::integer, item->>'source',
+      item->>'type', item->>'direction', item->'initial_value', item->'target_value', item->>'unit',
+      (item->>'target_at')::timestamptz,
+      case when (item->>'verifiable')::boolean then 'automatic' else 'manual' end,
+      item->'source', item->>'definition_version');
+  end loop;
+  return result;
+end;
+$$;
+
+create or replace function public.hu13_confirm_goal(p_user_id uuid, p_goal_id uuid, p_command jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare goal improvement_goals%rowtype; existing improvement_goal_events%rowtype; source_id uuid;
+begin
+  perform 1 from profiles where id = p_user_id for update;
+  select * into goal from improvement_goals
+    where id = p_goal_id and user_id = p_user_id and tracking_plan_id is not null;
+  if not found then raise exception 'not_found'; end if;
+  if goal.verification_kind <> 'manual' then raise exception 'verifiable_data_contradiction'; end if;
+  select * into existing from improvement_goal_events where event_id = (p_command->>'event_id')::uuid;
+  if found then
+    if existing.user_id <> p_user_id then raise exception 'owner_mismatch'; end if;
+    if existing.goal_id <> p_goal_id or existing.canonical_request <> p_command then
+      raise exception 'idempotency_conflict';
+    end if;
+    return to_jsonb(existing);
+  end if;
+  select event_id into source_id from tracking_events where user_id = p_user_id
+    order by recorded_at desc, event_id desc limit 1;
+  insert into improvement_goal_events(event_id, goal_id, plan_id, user_id, confirmed,
+    effective_at, reason, source_event_id, canonical_request)
+  values ((p_command->>'event_id')::uuid, p_goal_id, goal.tracking_plan_id, p_user_id,
+    (p_command->>'confirmed')::boolean, (p_command->>'effective_at')::timestamptz,
+    p_command->>'reason', source_id, p_command) returning * into existing;
+  return to_jsonb(existing);
+end;
+$$;
+
+create or replace function public.hu13_annotate_evaluation(p_user_id uuid, p_evaluation_id uuid, p_command jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare existing evaluation_events%rowtype;
+begin
+  perform 1 from profiles where id = p_user_id for update;
+  perform 1 from evaluations where id = p_evaluation_id and user_id = p_user_id;
+  if not found then raise exception 'not_found'; end if;
+  if p_command->>'kind' not in ('plan_accepted', 'narrative', 'housing_plan', 'milestone') then
+    raise exception 'invalid_annotation';
+  end if;
+  select * into existing from evaluation_events where event_id = (p_command->>'event_id')::uuid;
+  if found then
+    if existing.user_id <> p_user_id then raise exception 'owner_mismatch'; end if;
+    if existing.evaluation_id <> p_evaluation_id or existing.provenance->'command' <> p_command then
+      raise exception 'idempotency_conflict';
+    end if;
+    return to_jsonb(existing);
+  end if;
+  insert into evaluation_events(event_id, evaluation_id, user_id, kind, payload, effective_at, provenance)
+  values ((p_command->>'event_id')::uuid, p_evaluation_id, p_user_id, p_command->>'kind',
+    p_command->'payload', (p_command->>'effective_at')::timestamptz, jsonb_build_object('command', p_command))
+  returning * into existing;
+  return to_jsonb(existing);
+end;
+$$;
+
+revoke all on function public.hu13_read(uuid),
+  public.hu13_commit(uuid, jsonb, uuid, jsonb),
+  public.hu13_confirm_goal(uuid, uuid, jsonb),
+  public.hu13_annotate_evaluation(uuid, uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.hu13_read(uuid),
+  public.hu13_commit(uuid, jsonb, uuid, jsonb),
+  public.hu13_confirm_goal(uuid, uuid, jsonb),
+  public.hu13_annotate_evaluation(uuid, uuid, jsonb) to service_role;
+
+commit;
+
+-- =============================================================
+-- RutaHogar — Etapa comercial del lead por inmobiliaria
+-- =============================================================
+-- Espejo de migrations/20260930120000_commercial_stage.sql (sin el backfill,
+-- que solo aplica a bases con datos). Diseño: docs/stories/commercial-stage/PLAN.md.
+
+
+create table if not exists public.commercial_stage_events (
+  id uuid primary key default gen_random_uuid(),
+  occurred_at timestamptz not null default clock_timestamp(),
+  subject_user_id uuid not null,
+  inmobiliaria_id uuid not null references public.inmobiliarias(id) on delete restrict,
+  actor_id uuid,
+  actor_role text not null,
+  stage_before text,
+  stage_after text not null,
+  reason text,
+  source text not null,
+  constraint commercial_stage_events_actor_role_check
+    check (actor_role in ('ejecutivo', 'admin', 'admin_inmobiliario', 'sistema')),
+  constraint commercial_stage_events_system_actor_check
+    check ((actor_role = 'sistema') = (actor_id is null)),
+  constraint commercial_stage_events_stage_before_check
+    check (stage_before in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido')),
+  constraint commercial_stage_events_stage_after_check
+    check (stage_after in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido')),
+  constraint commercial_stage_events_change_check
+    check (stage_before is distinct from stage_after),
+  constraint commercial_stage_events_source_check
+    check (source in ('web', 'backend', 'job', 'backfill'))
+);
+
+create index if not exists commercial_stage_events_pair_idx
+  on public.commercial_stage_events (subject_user_id, inmobiliaria_id, occurred_at, id);
+create index if not exists commercial_stage_events_tenant_idx
+  on public.commercial_stage_events (inmobiliaria_id, occurred_at);
+
+create table if not exists public.lead_commercial_stage (
+  subject_user_id uuid not null,
+  inmobiliaria_id uuid not null references public.inmobiliarias(id) on delete restrict,
+  stage text not null,
+  last_event_id uuid not null references public.commercial_stage_events(id),
+  updated_at timestamptz not null,
+  primary key (subject_user_id, inmobiliaria_id),
+  constraint lead_commercial_stage_stage_check
+    check (stage in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido'))
+);
+
+create index if not exists lead_commercial_stage_tenant_idx
+  on public.lead_commercial_stage (inmobiliaria_id, stage);
+
+-- Única definición de "lead de una inmobiliaria". Es la regla de comunas del
+-- PR #97 con dos correcciones: lee las columnas reales (evaluations no tiene
+-- `input`) y no incluye la rama "alguien de mi inmobiliaria ya escribió
+-- historial sobre este lead", que permitía a un ejecutivo ampliarse el alcance
+-- a sí mismo. Suma los proyectos favoritos del lead. HU 16 y H14 deberían
+-- reutilizarla en vez de definir otra.
+create or replace function public.lead_belongs_to_inmobiliaria(p_lead uuid, p_inmobiliaria uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = p_lead
+      and p.role = 'usuario'
+      and p_inmobiliaria is not null
+      and (
+        exists (
+          select 1
+          from public.proyecto_favoritos f
+          join public.proyectos pr on pr.id = f.proyecto_id
+          where f.usuario_id = p.id
+            and pr.inmobiliaria_id = p_inmobiliaria
+        )
+        or exists (
+          select 1
+          from public.proyectos pr
+          where pr.inmobiliaria_id = p_inmobiliaria
+            and lower(trim(pr.comuna)) in (
+              select lower(trim(declared.comuna))
+              from (
+                select e.target_commune as comuna from public.evaluations e where e.user_id = p.id
+                union all
+                select e.alternative_commune from public.evaluations e where e.user_id = p.id
+                union all
+                select e.financial_data -> 'input' ->> 'comuna_objetivo' from public.evaluations e where e.user_id = p.id
+                union all
+                select p.onboarding_data ->> 'comuna_interes'
+                union all
+                select p.onboarding_data ->> 'comuna_alternativa'
+              ) declared
+              where nullif(trim(declared.comuna), '') is not null
+            )
+        )
+      )
+  );
+$$;
+
+create or replace function public.lead_in_my_inmobiliaria(p_lead uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.lead_belongs_to_inmobiliaria(p_lead, public.get_my_inmobiliaria());
+$$;
+
+-- Reglas de transición (docs/stories/commercial-stage/PLAN.md). El mensaje de
+-- cada excepción es un código estable que el frontend traduce.
+create or replace function public.commercial_stage_transition_check(
+  p_from text,
+  p_to text,
+  p_role text,
+  p_reason text
+) returns void
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  stage_order constant text[] := array['nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada'];
+  from_rank integer := array_position(stage_order, p_from);
+  to_rank integer := array_position(stage_order, p_to);
+  has_reason boolean := length(trim(coalesce(p_reason, ''))) > 0;
+begin
+  if p_to is null or (to_rank is null and p_to <> 'perdido') then
+    raise exception 'invalid_stage';
+  end if;
+  if p_from = p_to then
+    raise exception 'same_stage';
+  end if;
+
+  if p_from = 'venta_cerrada' then
+    if p_to <> 'perdido' then raise exception 'invalid_transition'; end if;
+    if coalesce(p_role, '') not in ('admin', 'admin_inmobiliario') then
+      raise exception 'admin_required' using errcode = '42501';
+    end if;
+    if not has_reason then raise exception 'reason_required'; end if;
+    return;
+  end if;
+
+  if p_from = 'perdido' then
+    if p_to = 'venta_cerrada' then raise exception 'invalid_transition'; end if;
+    if not has_reason then raise exception 'reason_required'; end if;
+    return;
+  end if;
+
+  if (p_to = 'perdido' or to_rank < from_rank) and not has_reason then
+    raise exception 'reason_required';
+  end if;
+end;
+$$;
+
+create or replace function public.change_commercial_stage(
+  p_lead uuid,
+  p_to_stage text,
+  p_reason text default null,
+  p_expected_stage text default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_id uuid := auth.uid();
+  caller_role text := public.get_my_role();
+  caller_tenant uuid := public.get_my_inmobiliaria();
+  current_stage text;
+  saved public.commercial_stage_events;
+begin
+  -- El tenant sale siempre de la sesión, nunca de un parámetro. El admin
+  -- global (sin inmobiliaria) lee todo pero no escribe.
+  if caller_id is null
+     or coalesce(caller_role, '') not in ('ejecutivo', 'admin', 'admin_inmobiliario')
+     or caller_tenant is null then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  if not public.lead_belongs_to_inmobiliaria(p_lead, caller_tenant) then
+    raise exception 'lead_not_in_scope' using errcode = '42501';
+  end if;
+
+  -- Serializa también la primera escritura de un par, cuando aún no hay fila
+  -- que bloquear con FOR UPDATE.
+  perform pg_advisory_xact_lock(hashtextextended(p_lead::text || ':' || caller_tenant::text, 0));
+
+  select stage into current_stage
+  from public.lead_commercial_stage
+  where subject_user_id = p_lead and inmobiliaria_id = caller_tenant
+  for update;
+  current_stage := coalesce(current_stage, 'nuevo');
+
+  if p_expected_stage is not null and p_expected_stage <> current_stage then
+    raise exception 'stale_stage';
+  end if;
+
+  perform public.commercial_stage_transition_check(current_stage, p_to_stage, caller_role, p_reason);
+
+  insert into public.commercial_stage_events (
+    subject_user_id, inmobiliaria_id, actor_id, actor_role,
+    stage_before, stage_after, reason, source
+  ) values (
+    p_lead, caller_tenant, caller_id, caller_role,
+    current_stage, p_to_stage, nullif(trim(p_reason), ''), 'web'
+  )
+  returning * into saved;
+
+  insert into public.lead_commercial_stage (subject_user_id, inmobiliaria_id, stage, last_event_id, updated_at)
+  values (p_lead, caller_tenant, p_to_stage, saved.id, saved.occurred_at)
+  on conflict (subject_user_id, inmobiliaria_id) do update
+    set stage = excluded.stage,
+        last_event_id = excluded.last_event_id,
+        updated_at = excluded.updated_at;
+
+  return jsonb_build_object('stage', saved.stage_after, 'event_id', saved.id, 'occurred_at', saved.occurred_at);
+end;
+$$;
+
+-- El historial no se edita ni se borra (ISO 27001 A.8.15, Spike §5.2). La
+-- única excepción prevista es el procedimiento de supresión del §5.8, que
+-- corre como dueño de la tabla y deshabilita este trigger en su transacción.
+create or replace function public.commercial_stage_reject_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'immutable_history' using errcode = '23514';
+end;
+$$;
+
+drop trigger if exists commercial_stage_events_immutable on public.commercial_stage_events;
+create trigger commercial_stage_events_immutable
+  before update or delete on public.commercial_stage_events
+  for each row execute function public.commercial_stage_reject_mutation();
+
+-- Privilegios (H12): los roles del navegador solo leen, y RLS acota qué.
+alter table public.commercial_stage_events enable row level security;
+alter table public.lead_commercial_stage enable row level security;
+
+revoke all on public.commercial_stage_events, public.lead_commercial_stage from anon, authenticated;
+grant select on public.commercial_stage_events, public.lead_commercial_stage to authenticated;
+grant select, insert on public.commercial_stage_events to service_role;
+grant select, insert, update on public.lead_commercial_stage to service_role;
+
+-- El personal ve las etapas de su inmobiliaria; el admin global, todas. El
+-- lead no tiene política: los motivos son notas internas del personal.
+drop policy if exists "Commercial stage events select tenant" on public.commercial_stage_events;
+create policy "Commercial stage events select tenant"
+  on public.commercial_stage_events
+  for select
+  to authenticated
+  using (
+    (
+      public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario')
+      and public.get_my_inmobiliaria() = inmobiliaria_id
+    )
+    or (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null)
+  );
+
+drop policy if exists "Lead commercial stage select tenant" on public.lead_commercial_stage;
+create policy "Lead commercial stage select tenant"
+  on public.lead_commercial_stage
+  for select
+  to authenticated
+  using (
+    (
+      public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario')
+      and public.get_my_inmobiliaria() = inmobiliaria_id
+    )
+    or (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null)
+  );
+
+revoke all on function public.lead_belongs_to_inmobiliaria(uuid, uuid),
+  public.lead_in_my_inmobiliaria(uuid),
+  public.commercial_stage_transition_check(text, text, text, text),
+  public.change_commercial_stage(uuid, text, text, text),
+  public.commercial_stage_reject_mutation() from public, anon, authenticated;
+grant execute on function public.lead_in_my_inmobiliaria(uuid),
+  public.change_commercial_stage(uuid, text, text, text) to authenticated;
+grant execute on function public.lead_belongs_to_inmobiliaria(uuid, uuid),
+  public.change_commercial_stage(uuid, text, text, text) to service_role;
+
+-- Backfill (decisión Q5): cada lead con evaluación parte en 'nuevo' en cada
+-- inmobiliaria a la que pertenece, fechado en su primera evaluación. Volver a
+-- ejecutarlo no inserta nada. Los leads que se vuelvan elegibles después no
+-- tienen fila y el RPC los lee como 'nuevo'.
+create or replace function public.commercial_stage_backfill()
+returns integer
+language plpgsql
+set search_path = public
+as $$
+declare
+  inserted_count integer;
+begin
+  with eligible as (
+    select p.id as subject_user_id,
+           i.id as inmobiliaria_id,
+           (select min(e.created_at) from public.evaluations e where e.user_id = p.id) as first_evaluation_at
+    from public.profiles p
+    cross join public.inmobiliarias i
+    where p.role = 'usuario'
+      and exists (select 1 from public.evaluations e where e.user_id = p.id)
+      and not exists (
+        select 1 from public.lead_commercial_stage s
+        where s.subject_user_id = p.id and s.inmobiliaria_id = i.id
+      )
+      and public.lead_belongs_to_inmobiliaria(p.id, i.id)
+  ),
+  inserted as (
+    insert into public.commercial_stage_events (
+      occurred_at, subject_user_id, inmobiliaria_id, actor_id, actor_role,
+      stage_before, stage_after, reason, source
+    )
+    select first_evaluation_at, subject_user_id, inmobiliaria_id, null, 'sistema',
+           null, 'nuevo', null, 'backfill'
+    from eligible
+    returning id, occurred_at, subject_user_id, inmobiliaria_id
+  )
+  insert into public.lead_commercial_stage (subject_user_id, inmobiliaria_id, stage, last_event_id, updated_at)
+  select subject_user_id, inmobiliaria_id, 'nuevo', id, occurred_at
+  from inserted;
+
+  get diagnostics inserted_count = row_count;
+  return inserted_count;
+end;
+$$;
+
+revoke all on function public.commercial_stage_backfill() from public, anon, authenticated;

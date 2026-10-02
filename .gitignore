@@ -9,7 +9,7 @@ supabase/functions/.env.local
 supabase/.env
 supabase/.temp/
 Makefile
-handbook.md
+handbookmd
 
 .agents
 skills-lock.json
