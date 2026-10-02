@@ -1,3 +1,4 @@
+import '../styles/AuthPanel.css';
 import React, { useMemo, useRef, useState } from "react";
 import { isSupabaseDataConfigured } from "../services/profileService";
 import { calculateAge } from "../utils/helpers";
@@ -76,6 +77,20 @@ function getBirthDateError(form) {
   return "";
 }
 
+function validateRut(rutNumber, dv) {
+  if (!rutNumber || !dv) return false;
+  const cleanRut = rutNumber.replace(/\D/g, "");
+  if (cleanRut.length < 7) return false;
+  
+  let t = parseInt(cleanRut, 10);
+  let m = 0, s = 1;
+  for (; t; t = Math.floor(t / 10)) {
+    s = (s + t % 10 * (9 - m++ % 6)) % 11;
+  }
+  const expectedDv = s ? String(s - 1) : "K";
+  return expectedDv.toUpperCase() === dv.toUpperCase();
+}
+
 function getPasswordStrength(password) {
   const checks = [
     password.length >= 8,
@@ -143,633 +158,15 @@ function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, option
   );
 }
 
-const authStyles = `
-/* ═══ Auth Navy/Gold ═══ */
-/* Override .auth-shell so it doesn't constrain the split layout */
-.auth-shell {
-  display: block !important;
-  min-height: auto !important;
-  place-items: unset !important;
-}
-
-.auth-root {
-  display: grid;
-  grid-template-columns: 42% 58%;
-  height: 100vh;
-  width: 100%;
-  font-family: var(--rh-font);
-  overflow: hidden;
-}
-
-/* ── Left Panel ── */
-.auth-left {
-  background: linear-gradient(165deg, #0B1A2E 0%, #0F2240 50%, #132B4A 100%);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 3rem;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow: hidden;
-}
-.auth-left::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0.03;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
-  background-size: 50px 50px;
-}
-.auth-left-glow-1 {
-  position: absolute;
-  top: -120px;
-  right: -120px;
-  width: 350px;
-  height: 350px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,168,67,0.10) 0%, transparent 70%);
-  pointer-events: none;
-}
-.auth-left-glow-2 {
-  position: absolute;
-  bottom: -80px;
-  left: -80px;
-  width: 250px;
-  height: 250px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,168,67,0.06) 0%, transparent 70%);
-  pointer-events: none;
-}
-.auth-left-ambient {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-family: var(--rh-font-mono);
-  font-size: clamp(140px, 18vw, 220px);
-  font-weight: 700;
-  color: rgba(255,255,255,0.02);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-  user-select: none;
-  white-space: nowrap;
-}
-.auth-left-content {
-  position: relative;
-  z-index: 2;
-  text-align: center;
-  max-width: 340px;
-}
-.auth-left-logo {
-  width: 64px;
-  height: auto;
-  margin-bottom: 2rem;
-  filter: brightness(0) invert(1);
-  opacity: 0.9;
-}
-.auth-left-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(212,168,67,0.10);
-  border: 1px solid rgba(212,168,67,0.20);
-  border-radius: 999px;
-  padding: 6px 16px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #D4A843;
-  margin-bottom: 1.5rem;
-}
-.auth-left-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #D4A843;
-  animation: authPulse 2s ease-in-out infinite;
-}
-@keyframes authPulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-.auth-left h2 {
-  font-family: var(--rh-font-display);
-  font-size: clamp(26px, 3vw, 34px);
-  font-weight: 400;
-  color: #fff;
-  line-height: 1.15;
-  margin-bottom: 1rem;
-  text-wrap: balance;
-}
-.auth-left h2 .gold { color: #D4A843; }
-.auth-left p {
-  font-size: 14px;
-  color: rgba(255,255,255,0.45);
-  line-height: 1.7;
-}
-.auth-left-divider {
-  width: 40px;
-  height: 2px;
-  background: linear-gradient(90deg, #D4A843, rgba(212,168,67,0.2));
-  margin: 1.5rem auto;
-  border-radius: 1px;
-}
-.auth-left-features {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 0.5rem;
-}
-.auth-left-feature {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-}
-.auth-left-feature svg {
-  width: 16px;
-  height: 16px;
-  color: #D4A843;
-  flex-shrink: 0;
-}
-.auth-left-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 1.5rem;
-  padding: 12px 24px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(135deg, #D4A843 0%, #B8922E 100%);
-  color: #0B1A2E;
-  font-family: var(--rh-font);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
-  box-shadow: 0 2px 12px rgba(212,168,67,0.3);
-}
-.auth-left-cta:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(212,168,67,0.4);
-}
-.auth-left-cta:active {
-  transform: translateY(0);
-}
-.auth-left-cta svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* ── Right Panel ── */
-.auth-right {
-  background: #FAFBFD;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 2.5rem;
-  position: relative;
-  overflow-y: auto;
-  height: 100vh;
-}
-.auth-right-inner {
-  width: 100%;
-  max-width: 420px;
-  background: rgba(255,255,255,0.85);
-  border: 1px solid rgba(11,26,46,0.1);
-  border-radius: 16px;
-  padding: 2rem;
-}
-
-.auth-right-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 2rem;
-}
-.auth-right-brand-logo {
-  height: 32px;
-  width: auto;
-}
-
-.auth-right h1 {
-  font-family: var(--rh-font-display);
-  font-size: clamp(24px, 2.5vw, 30px);
-  font-weight: 400;
-  color: #0B1A2E;
-  line-height: 1.15;
-  margin-bottom: 0.5rem;
-  text-wrap: balance;
-}
-.auth-right-sub {
-  font-size: 14px;
-  color: rgba(11,26,46,0.85);
-  line-height: 1.6;
-  margin-bottom: 1.75rem;
-}
-.auth-right-supabase-note {
-  font-size: 12px;
-  color: rgba(11,26,46,0.35);
-  background: rgba(11,26,46,0.03);
-  border: 1px solid rgba(11,26,46,0.06);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
-}
-
-/* ── Segmented Control ── */
-.auth-seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  background: rgba(11,26,46,0.1);
-  border-radius: 10px;
-  margin-bottom: 1.5rem;
-}
-.auth-seg-btn {
-  padding: 10px 0;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: rgba(11,26,46,0.65);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--rh-font);
-  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
-}
-.auth-seg-btn:hover { color: rgba(11,26,46,0.80); }
-.auth-seg-btn:focus-visible {
-  outline: 2px solid #D4A843;
-  outline-offset: 2px;
-}
-.auth-seg-btn.is-active {
-  background: #fff;
-  color: #0B1A2E;
-  box-shadow: 0 1px 4px rgba(11,26,46,0.1);
-}
-
-/* ── Form Fields ── */
-.auth-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.auth-field-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(11,26,46,0.65);
-}
-.auth-field input,
-.auth-field select {
-  width: 100%;
-  height: 46px;
-  padding: 0 14px;
-  border: 1.5px solid rgba(11,26,46,0.42);
-  border-radius: 10px;
-  background: #fff;
-  color: #0B1A2E;
-  font-size: 14px;
-  font-family: var(--rh-font);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  outline: none;
-}
-.auth-field input::placeholder {
-  color: rgba(11,26,46,0.60);
-}
-.auth-field input:focus-visible,
-.auth-field select:focus-visible {
-  border-color: #D4A843;
-  box-shadow: 0 0 0 3px rgba(212,168,67,0.12);
-  outline: none;
-}
-.auth-field input:focus:not(:focus-visible),
-.auth-field select:focus:not(:focus-visible) {
-  outline: none;
-}
-.auth-field select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%230B1A2E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 36px;
-}
-
-/* ── Phone Input ── */
-.auth-phone {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0;
-  margin-top: 7px;
-}
-.auth-phone-prefix {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 14px;
-  height: 46px;
-  border: 1.5px solid rgba(11,26,46,0.22);
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: rgba(11,26,46,0.04);
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(11,26,46,0.6);
-  font-family: var(--rh-font);
-  white-space: nowrap;
-  user-select: none;
-}
-.auth-phone input {
-  border-radius: 0 10px 10px 0;
-  height: 46px;
-  /* La regla global "input, select, textarea" trae margin-top: 7px. El prefijo
-     es un span y no lo recibe, asi que el input caia 7px mas abajo. El margen
-     lo lleva el contenedor. */
-  margin-top: 0;
-}
-
-/* ── Birth Date Grid ── */
-.auth-birth-grid {
-  display: grid;
-  grid-template-columns: 60px 1fr 80px;
-  gap: 8px;
-}
-.auth-dd-field {
-  position: relative;
-}
-.auth-dd-field input {
-  width: 100%;
-  height: 46px;
-  padding: 0 12px;
-  border: 1.5px solid rgba(11,26,46,0.42);
-  border-radius: 10px;
-  background: #fff;
-  color: #0B1A2E;
-  font-size: 14px;
-  font-family: var(--rh-font);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  outline: none;
-}
-.auth-dd-field input::placeholder { color: rgba(11,26,46,0.60); }
-.auth-dd-field input:focus-visible {
-  border-color: #D4A843;
-  box-shadow: 0 0 0 3px rgba(212,168,67,0.12);
-  outline: none;
-}
-.auth-dd-field input:focus:not(:focus-visible) {
-  outline: none;
-}
-.auth-dd-menu {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 100%;
-  max-height: 180px;
-  overflow-y: auto;
-  padding: 5px;
-  border: 1px solid rgba(11,26,46,0.1);
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 12px 28px rgba(11,26,46,0.12);
-}
-.auth-dd-menu button {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 7px;
-  background: transparent;
-  border: none;
-  color: #0B1A2E;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--rh-font);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.auth-dd-menu button:hover,
-.auth-dd-menu button[aria-selected="true"] {
-  background: rgba(212,168,67,0.1);
-  color: #0B1A2E;
-}
-
-/* ── Password Strength ── */
-.auth-pwd-meter {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid rgba(11,26,46,0.06);
-  border-radius: 10px;
-  background: #fff;
-  margin-bottom: 14px;
-}
-.auth-pwd-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.auth-pwd-label {
-  font-size: 12px;
-  color: rgba(11,26,46,0.75);
-}
-.auth-pwd-level {
-  font-size: 12px;
-  font-weight: 700;
-}
-.auth-pwd-track {
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(11,26,46,0.06);
-  overflow: hidden;
-}
-.auth-pwd-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 200ms ease, background 200ms ease;
-}
-.auth-pwd-hint {
-  font-size: 11px;
-  color: rgba(11,26,46,0.75);
-  line-height: 1.5;
-  margin: 0;
-}
-
-/* ── Weak Password Confirm ── */
-.auth-weak-confirm {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgba(212,168,67,0.25);
-  border-radius: 10px;
-  background: rgba(212,168,67,0.04);
-  margin-bottom: 14px;
-}
-.auth-weak-confirm strong {
-  font-size: 13px;
-  color: #0B1A2E;
-  display: block;
-}
-.auth-weak-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* ── Error ── */
-.auth-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(180,35,24,0.05);
-  border: 1px solid rgba(180,35,24,0.12);
-  font-size: 13px;
-  color: #b42318;
-  margin-bottom: 14px;
-}
-.auth-error svg { width: 16px; height: 16px; flex-shrink: 0; }
-
-/* ── Submit Button ── */
-.auth-submit {
-  width: 100%;
-  height: 48px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(135deg, #D4A843, #B8912E);
-  color: #0B1A2E;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: var(--rh-font);
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-  box-shadow: 0 4px 16px rgba(212,168,67,0.25);
-  margin-top: 4px;
-}
-.auth-submit:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(212,168,67,0.35);
-}
-.auth-submit:active:not(:disabled) { transform: translateY(0); }
-.auth-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.auth-submit:focus-visible {
-  outline: 2px solid #0B1A2E;
-  outline-offset: 2px;
-}
-
-/* Touch: prevent double-tap zoom on buttons */
-.auth-seg-btn,
-.auth-submit,
-.auth-btn-outline,
-.auth-btn-gold,
-.auth-dd-menu button {
-  touch-action: manipulation;
-}
-
-/* ── Buttons shared ── */
-.auth-btn-outline {
-  padding: 9px 16px;
-  border-radius: 8px;
-  border: 1.5px solid rgba(11,26,46,0.12);
-  background: #fff;
-  color: rgba(11,26,46,0.6);
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--rh-font);
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s, background 0.2s;
-}
-.auth-btn-outline:hover {
-  border-color: rgba(11,26,46,0.2);
-  color: #0B1A2E;
-}
-.auth-btn-outline:focus-visible {
-  outline: 2px solid #D4A843;
-  outline-offset: 2px;
-}
-.auth-btn-gold {
-  padding: 9px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #D4A843;
-  color: #0B1A2E;
-  font-size: 13px;
-  font-weight: 700;
-  font-family: var(--rh-font);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.auth-btn-gold:focus-visible {
-  outline: 2px solid #0B1A2E;
-  outline-offset: 2px;
-}
-.auth-btn-gold:hover { background: #E0B85A; }
-
-/* ── Responsive ── */
-@media (max-width: 900px) {
-  .auth-root {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: auto;
-    overflow: auto;
-  }
-  .auth-left {
-    position: relative;
-    height: auto;
-    padding: 2rem 1.5rem;
-    min-height: auto;
-  }
-  .auth-left-ambient { display: none; }
-  .auth-left-content { max-width: 100%; }
-  .auth-left-logo { width: 48px; margin-bottom: 1rem; }
-  .auth-left h2 { font-size: 22px; }
-  .auth-left-features { display: none; }
-  .auth-left-divider { margin: 1rem auto; }
-  .auth-right {
-    padding: 1.5rem;
-    height: auto;
-    overflow-y: visible;
-  }
-  .auth-right-inner {
-    max-width: 100%;
-    background: transparent;
-    border: none;
-    padding: 0;
-  }
-}
-@media (max-width: 480px) {
-  .auth-left { padding: 1.5rem 1.25rem; }
-  .auth-right { padding: 1.25rem; }
-  .auth-birth-grid { grid-template-columns: 1fr 1fr 1fr; }
-  .auth-phone { grid-template-columns: 1fr; }
-  .auth-phone-prefix { display: none; }
-  .auth-phone input { border-radius: 10px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-`;
 
 export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon }) {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
-    full_name: "",
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    rut_number: "",
+    rut_dv: "",
     phone: "",
     birth_day: "",
     birth_month: "",
@@ -802,11 +199,15 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       const nextValue =
         name === "phone"
           ? onlyPhoneDigits(value, 8)
-          : name === "birth_day" || name === "birth_month"
-            ? onlyDigits(value, 2)
-            : name === "birth_year"
-              ? onlyDigits(value, 4)
-              : value;
+          : name === "rut_number"
+            ? onlyDigits(value, 8)
+            : name === "rut_dv"
+              ? value.slice(0, 1).toUpperCase().replace(/[^0-9K]/g, "")
+              : name === "birth_day" || name === "birth_month"
+                ? onlyDigits(value, 2)
+                : name === "birth_year"
+                  ? onlyDigits(value, 4)
+                  : value;
       return { ...prev, [name]: nextValue };
     });
 
@@ -838,9 +239,28 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       return;
     }
 
-    if (mode === "signup" && !form.full_name.trim()) {
+    if (mode === "signup" && !form.nombre.trim()) {
       setError("Ingresa tu nombre para crear la cuenta.");
       return;
+    }
+    if (mode === "signup" && !form.apellido_paterno.trim()) {
+      setError("Ingresa tu apellido paterno para crear la cuenta.");
+      return;
+    }
+    if (mode === "signup" && !form.apellido_materno.trim()) {
+      setError("Ingresa tu apellido materno para crear la cuenta.");
+      return;
+    }
+
+    if (mode === "signup") {
+      if (!form.rut_number || !form.rut_dv) {
+        setError("Ingresa tu RUT para crear la cuenta.");
+        return;
+      }
+      if (!validateRut(form.rut_number, form.rut_dv)) {
+        setError("El RUT ingresado no es válido.");
+        return;
+      }
     }
 
     const normalizedPhone = normalizePhone(form.phone);
@@ -878,7 +298,13 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       const auth =
         mode === "signin"
           ? await signIn(form)
-          : await signUp({ ...form, phone: normalizedPhone, birth_date: birthDate });
+          : await signUp({ 
+              ...form, 
+              full_name: `${form.nombre} ${form.apellido_paterno} ${form.apellido_materno}`.trim(),
+              phone: normalizedPhone, 
+              birth_date: birthDate, 
+              rut: `${form.rut_number}-${form.rut_dv}` 
+            });
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -903,7 +329,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
 
   return (
     <>
-      <style>{authStyles}</style>
+      
       <div className="auth-root">
         {/* Left Panel — Brand */}
         <div className="auth-left">
@@ -975,8 +401,40 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               {mode === "signup" && (
                 <>
                   <div className="auth-field">
-                    <label className="auth-field-label" htmlFor="auth-name">Nombre</label>
-                    <input id="auth-name" type="text" name="full_name" value={form.full_name} onChange={handleChange} placeholder="Ej: Isaias Carte" autoComplete="name" />
+                    <label className="auth-field-label">Nombre</label>
+                    <input id="auth-nombre" type="text" name="nombre" value={form.nombre} onChange={handleChange} placeholder="Ej: Isaias" autoComplete="given-name" />
+                  </div>
+                  <div className="auth-field">
+                    <label className="auth-field-label">Apellido Paterno</label>
+                    <input id="auth-apellido-paterno" type="text" name="apellido_paterno" value={form.apellido_paterno} onChange={handleChange} placeholder="Ej: Carte" autoComplete="family-name" />
+                  </div>
+                  <div className="auth-field">
+                    <label className="auth-field-label">Apellido Materno</label>
+                    <input id="auth-apellido-materno" type="text" name="apellido_materno" value={form.apellido_materno} onChange={handleChange} placeholder="Ej: Pérez" autoComplete="family-name" />
+                  </div>
+
+                  <div className="auth-field">
+                    <label className="auth-field-label">RUT</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '8px' }}>
+                      <input
+                        type="text"
+                        name="rut_number"
+                        value={form.rut_number}
+                        onChange={handleChange}
+                        placeholder="12345678"
+                        maxLength="8"
+                        inputMode="numeric"
+                      />
+                      <input
+                        type="text"
+                        name="rut_dv"
+                        value={form.rut_dv}
+                        onChange={handleChange}
+                        placeholder="K"
+                        maxLength="1"
+                        style={{ textAlign: 'center' }}
+                      />
+                    </div>
                   </div>
 
                   <div className="auth-field">
@@ -1118,7 +576,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
                     <option value={roles.user}>{roleLabels[roles.user]}</option>
                     <option value={roles.sales}>{roleLabels[roles.sales]}</option>
-                    <option value={roles.admin}>{roleLabels[roles.admin]}</option>
                   </select>
                 </div>
               )}
@@ -1140,3 +597,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
     </>
   );
 }
+
+
+

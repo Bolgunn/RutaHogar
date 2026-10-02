@@ -17,12 +17,14 @@ export const roles = {
   user: "usuario",
   sales: "ejecutivo",
   admin: "admin",
+  admin_inmo: "admin_inmobiliario",
 };
 
 export const roleLabels = {
   usuario: "Usuario",
   ejecutivo: "Ejecutivo comercial",
   admin: "Admin",
+  admin_inmobiliario: "Admin Inmobiliario",
 };
 
 function readStored(key) {
@@ -49,6 +51,7 @@ function buildProfile(user, preferredRole = roles.user, persistedProfile = null)
   const fullName = persistedProfile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "";
   const role = normalizeRole(persistedProfile?.role || user.user_metadata?.role || preferredRole);
   const phone = persistedProfile?.phone || user.user_metadata?.phone || "";
+  const rut = persistedProfile?.rut || user.user_metadata?.rut || "";
   const birthDate = persistedProfile?.birth_date || user.user_metadata?.birth_date || "";
 
   return {
@@ -57,6 +60,7 @@ function buildProfile(user, preferredRole = roles.user, persistedProfile = null)
     email: user.email,
     full_name: fullName,
     phone,
+    rut,
     birth_date: birthDate,
     role,
     onboarding_data: persistedProfile?.onboarding_data || null,
@@ -122,7 +126,7 @@ export async function signIn({ email, password, role = roles.user }) {
   return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, role));
 }
 
-export async function signUp({ email, password, role = roles.user, full_name = "", phone = "", birth_date = "" }) {
+export async function signUp({ email, password, role = roles.user, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "" }) {
   const normalizedRole = normalizeRole(role || roles.user);
   const normalizedPhone = normalizePhoneForStorage(phone);
   const normalizedBirthDate = normalizeBirthDateForStorage(birth_date);
@@ -135,7 +139,7 @@ export async function signUp({ email, password, role = roles.user, full_name = "
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { role: normalizedRole, full_name, phone: normalizedPhone, birth_date: normalizedBirthDate } },
+      options: { data: { role: normalizedRole, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
     });
     if (error) {
       logSupabaseError(error);
@@ -166,7 +170,7 @@ export async function signUp({ email, password, role = roles.user, full_name = "
     id: `local-${email}`,
     email,
     created_at: new Date().toISOString(),
-    user_metadata: { role: normalizedRole, full_name, phone: normalizedPhone, birth_date: normalizedBirthDate },
+    user_metadata: { role: normalizedRole, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate },
   };
   return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, normalizedRole));
 }
