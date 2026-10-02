@@ -249,7 +249,7 @@ create policy "Evaluations select own"
   using (
     (auth.uid() = user_id)
     or
-    (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text]))
+    (public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]))
   );
 
 drop policy if exists "Evaluations insert own" on public.evaluations;

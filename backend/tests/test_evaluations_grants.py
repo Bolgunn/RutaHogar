@@ -53,7 +53,8 @@ def test_evaluations_policies_keep_authenticated_access_row_scoped():
     assert (
         'create policy "evaluations select own" on public.evaluations for select '
         "using ( (auth.uid() = user_id) or "
-        "(public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text])) );"
+        "(public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, "
+        "'admin_inmobiliario'::text])) );"
     ) in sql
     assert (
         'create policy "evaluations insert own" on public.evaluations for insert '
@@ -72,3 +73,27 @@ def test_evaluations_policies_keep_authenticated_access_row_scoped():
         'create policy "evaluations update own" on public.evaluations for update '
         "using (auth.uid() = user_id) with check (auth.uid() = user_id);"
     ) in migrations
+
+
+SELECT_POLICY_MIGRATION = ROOT / "supabase/migrations/20261001120000_evaluations_select_policy.sql"
+SELECT_POLICY_ROLLBACK = ROOT / "supabase/rollback/20261001120000_evaluations_select_policy_rollback.sql"
+
+
+def test_select_policy_gives_admin_inmobiliario_executive_access():
+    sql = normalize(SELECT_POLICY_MIGRATION.read_text(encoding="utf-8"))
+    assert (
+        'create policy "evaluations select own" on public.evaluations for select '
+        "using ( (auth.uid() = user_id) or "
+        "(public.get_my_role() = any (array['ejecutivo'::text, 'admin'::text, "
+        "'admin_inmobiliario'::text])) );"
+    ) in sql
+
+
+def test_select_policy_does_not_reference_revoked_tables():
+    # Postgres checks privileges on every relation a policy mentions at plan
+    # time, so a revoked table inside an OR branch blocks every read.
+    for path in (SELECT_POLICY_MIGRATION, SELECT_POLICY_ROLLBACK, SCHEMA):
+        sql = normalize(path.read_text(encoding="utf-8"))
+        policy = sql.split('create policy "evaluations select own"', 1)[1].split(";", 1)[0]
+        assert "lead_status_history" not in policy
+        assert " from " not in policy
