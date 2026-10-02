@@ -43,3 +43,4 @@
 ## Notas
 
 - E4 se apoya en [[../RNF/RNF4-auditoria-tecnica|RNF 4]] y [[../RNF/RNF5-historial-inmutable|RNF 5]].
+- La confiabilidad es una dimensión **separada** de la [[../Database/lead_commercial_stage|etapa comercial]]. Pendiente al integrar HU 16: el RPC `change_commercial_stage` debe rechazar avances de etapa para leads `silenciado` o `descartado`, y permitir `perdido` y retrocesos. Para decidir qué leads pertenecen a una inmobiliaria conviene reutilizar `lead_belongs_to_inmobiliaria`.

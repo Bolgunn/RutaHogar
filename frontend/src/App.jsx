@@ -1681,6 +1681,7 @@ export default function App() {
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          role={profile.role}
         />
       ) : page === "projects" && profile.role === roles.sales ? (
         <ProjectsWorkspace
