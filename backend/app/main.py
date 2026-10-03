@@ -12,6 +12,7 @@ from .ai import (
     generate_executive_summary,
     generate_user_explanation,
 )
+from .academy_news import router as academy_news_router
 
 
 
@@ -37,6 +38,7 @@ VALID_RELATION_TYPES = {
 }
 
 app = FastAPI(title="RutaHogar")
+app.include_router(academy_news_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
 from .tracking.routes import router as tracking_router

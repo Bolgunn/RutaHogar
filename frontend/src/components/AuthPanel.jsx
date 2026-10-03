@@ -3,6 +3,7 @@ import { isSupabaseDataConfigured } from "../services/profileService";
 import { calculateAge } from "../utils/helpers";
 import { roleLabels, roles, signIn, signUp } from "../services/auth";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
+import { trackSignUp } from "../lib/analytics";
 
 const currentYear = new Date().getFullYear();
 const dayOptions = Array.from({ length: 31 }, (_, index) => {
@@ -879,6 +880,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         mode === "signin"
           ? await signIn(form)
           : await signUp({ ...form, phone: normalizedPhone, birth_date: birthDate });
+      if (mode === "signup") trackSignUp({ method: "auth_panel" });
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -1112,16 +1114,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                 </div>
               )}
 
-              {mode === "signup" && (
-                <div className="auth-field">
-                  <label className="auth-field-label" htmlFor="auth-role">Tipo de usuario</label>
-                  <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
-                    <option value={roles.user}>{roleLabels[roles.user]}</option>
-                    <option value={roles.sales}>{roleLabels[roles.sales]}</option>
-                    <option value={roles.admin}>{roleLabels[roles.admin]}</option>
-                  </select>
-                </div>
-              )}
+              
 
               {error && (
                 <div className="auth-error" role="alert">
