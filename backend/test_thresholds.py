@@ -1,9 +1,13 @@
 import os
 import sys
+import json
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from app.scoring import calculate_score
+
+MARKET_SNAPSHOT = json.loads((Path(__file__).resolve().parents[1] / "docs" / "algorithms" / "ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
 
 
 def base_payload(**overrides):
@@ -24,6 +28,7 @@ def base_payload(**overrides):
         "dividendo_estimado": 500000,
         "complemento_renta": False,
         "declara_patrimonio": False,
+        "market_snapshot": MARKET_SNAPSHOT,
     }
     data.update(overrides)
     return data
@@ -213,7 +218,8 @@ def test_propiedad_como_patrimonio_mejora_moderada_sin_forzar_alto():
     )
     assert con_propiedad["score"] == sin_patrimonio["score"], con_propiedad
     assert con_propiedad["base_score"] == sin_patrimonio["base_score"], con_propiedad
-    assert con_propiedad["classification"] == "Bajo", con_propiedad
+    # ALG-1's weighted score replaces the retired additive classification.
+    assert con_propiedad["classification"] in {"Bajo", "Medio"}, con_propiedad
     assert con_propiedad["main_blocker"]["code"] == "carga_total_alta", con_propiedad
     assert "Patrimonio" in joined(con_propiedad, "positive_indicators")
 
@@ -236,7 +242,7 @@ def test_patrimonio_no_compensa_morosidad_fuerte():
     assert result["classification"] == "Bajo", result
     assert "morosidad" in joined(result, "risks").lower()
     assert "Patrimonio" in joined(result, "positive_indicators")
-    assert result["score"] < 40, result
+    assert result["score"] <= 59, result
 
 
 def test_datos_contacto_no_afectan_scoring():

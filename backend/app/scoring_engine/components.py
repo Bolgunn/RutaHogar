@@ -47,7 +47,7 @@ def component_rule_margins(data: dict, indicators: dict) -> dict:
     income = _positive_float(safe_indicators.get("ingreso_total"))
     property_value = _positive_float(safe_indicators.get("property_value_clp"))
     dividend = _positive_float(safe_data.get("dividendo_estimado"))
-    debt = _positive_float(safe_data.get("deuda_mensual"))
+    debt = _positive_float(safe_indicators.get("deuda_total"))
     savings = _positive_float(safe_data.get("ahorro_disponible"))
     return {
         "payment": tuple(dividend - limit * income for limit in PAYMENT_RATIO_LIMITS),
@@ -61,12 +61,11 @@ def _score_payment_capacity(data: dict, indicators: dict) -> float:
     ratio = _ratio_or_none(indicators.get("ratio_dividendo_ingreso"))
     if ratio is None:
         return 0.0
-    margins = component_rule_margins(data, indicators)["payment"]
-    if margins[0] <= 0:
+    if ratio <= PAYMENT_RATIO_LIMITS[0]:
         return 100.0
-    if margins[1] <= 0:
+    if ratio <= PAYMENT_RATIO_LIMITS[1]:
         return 80.0
-    if margins[2] <= 0:
+    if ratio <= PAYMENT_RATIO_LIMITS[2]:
         return 55.0
     return 25.0
 
@@ -78,20 +77,19 @@ def _score_debt(data: dict, indicators: dict) -> float:
         return 0.0
 
     score = 100.0
-    margins = component_rule_margins(data, indicators)
     if debt_ratio is not None:
-        if margins["debt"][2] > 0:
+        if debt_ratio > DEBT_RATIO_LIMITS[2]:
             score -= 45
-        elif margins["debt"][1] > 0:
+        elif debt_ratio > DEBT_RATIO_LIMITS[1]:
             score -= 25
-        elif margins["debt"][0] > 0:
+        elif debt_ratio > DEBT_RATIO_LIMITS[0]:
             score -= 10
     if total_ratio is not None:
-        if margins["total_burden"][2] > 0:
+        if total_ratio > TOTAL_BURDEN_LIMITS[2]:
             score -= 50
-        elif margins["total_burden"][1] > 0:
+        elif total_ratio > TOTAL_BURDEN_LIMITS[1]:
             score -= 25
-        elif margins["total_burden"][0] > 0:
+        elif total_ratio > TOTAL_BURDEN_LIMITS[0]:
             score -= 10
     return score
 
@@ -101,17 +99,13 @@ def _score_savings(data: dict, indicators: dict) -> float:
     if pie_ratio is not None:
         if pie_ratio <= 0:
             return 0.0
-        margins = component_rule_margins(data, indicators)["savings"]
-        if margins[2] >= 0:
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[2]:
             return 100.0
-        if margins[1] >= 0:
-            return 82.0 + min((pie_ratio - 0.15) / 0.05, 1.0) * 13.0
-        if margins[0] >= 0:
-            return 58.0 + min((pie_ratio - 0.10) / 0.05, 1.0) * 18.0
-        if pie_ratio > 0:
-            return 20.0 + min(pie_ratio / 0.10, 1.0) * 35.0
-        return 0.0
-
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[1]:
+            return 82.0 + min((pie_ratio - SAVINGS_RATIO_LIMITS[1]) / 0.05, 1.0) * 13.0
+        if pie_ratio >= SAVINGS_RATIO_LIMITS[0]:
+            return 58.0 + min((pie_ratio - SAVINGS_RATIO_LIMITS[0]) / 0.05, 1.0) * 18.0
+        return 20.0 + min(pie_ratio / SAVINGS_RATIO_LIMITS[0], 1.0) * 35.0
     recommended_coverage = _positive_float(indicators.get("cobertura_pie_recomendado"))
     minimum_coverage = _positive_float(indicators.get("cobertura_pie_minimo"))
 
@@ -214,17 +208,8 @@ def _score_data_quality(data: dict, blockers: set) -> float:
         "continuidad_laboral",
         "morosidad_actual",
     ]
-    optional_fields = [
-        "property_value_clp",
-        "property_value_uf",
-        "property_value",
-        "comuna_objetivo",
-    ]
-
     completed_key_fields = sum(1 for field in key_fields if data.get(field) not in (None, ""))
-    completed_optional_fields = sum(1 for field in optional_fields if data.get(field) not in (None, ""))
-    score = (completed_key_fields / len(key_fields)) * 80.0
-    score += min(completed_optional_fields, 2) * 10.0
+    score = 100.0 * completed_key_fields / len(key_fields)
 
     if "complemento_incompleto" in blockers:
         score -= 35

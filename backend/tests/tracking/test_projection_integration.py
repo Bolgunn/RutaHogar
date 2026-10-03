@@ -1,4 +1,6 @@
+import json
 from copy import deepcopy
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -8,6 +10,10 @@ from app.tracking.contracts import TrackingError, parse_time
 from app.tracking.projection import project_progress, future_snapshot
 from app.tracking.scoring_adapter import score_snapshot
 from test_service import valid_snapshot
+
+
+def market_snapshot():
+    return json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
 
 
 def projection(latest=None, rows=None):
@@ -20,8 +26,8 @@ def projection(latest=None, rows=None):
         "subject_user_id": "u1", "as_of": "2026-01-31T00:00:00Z", "active_line": history,
         "variables": {"ahorro_disponible": {"direction": "increase", "min": 0}},
         "latest_effective_snapshot": history[-1]["snapshot"], "target_project": {"id": "p1"},
-        "scoring_runner": lambda state, _at: score_snapshot(state),
-        "rule_boundary_provider": RuleBoundaryProvider(),
+        "scoring_runner": lambda state, _at: score_snapshot(state, market_snapshot=market_snapshot()),
+        "rule_boundary_provider": RuleBoundaryProvider(market_snapshot()),
     }
     return inputs
 
@@ -34,9 +40,9 @@ def test_first_compatible_uses_real_engines_and_first_representable_instant():
     target = parse_time(result["target_compatible_at"])
     state = future_snapshot(inputs["latest_effective_snapshot"], result["variables"], target)
     prior = future_snapshot(inputs["latest_effective_snapshot"], result["variables"], target - timedelta(microseconds=1))
-    assert score_snapshot(state)["project_fit"]["status"] == "compatible"
-    assert score_snapshot(prior)["project_fit"]["status"] != "compatible"
-    assert result["milestones"][-1]["capacidad"]["capacidad_supuestos"]["version"] == "e4-matching-v1"
+    assert score_snapshot(state, market_snapshot=market_snapshot())["project_fit"]["status"] == "compatible"
+    assert score_snapshot(prior, market_snapshot=market_snapshot())["project_fit"]["status"] != "compatible"
+    assert result["milestones"][-1]["capacidad"]["capacidad_supuestos"]["version"] == "1.2.0"
     assert inputs["active_line"] == before
 
 
@@ -69,9 +75,9 @@ def test_boundary_provider_delegates_to_engine_predicates(monkeypatch):
         calls["financial"] += 1
         return real_financial(state, indicators)
 
-    def capacity(state, indicators):
+    def capacity(state, indicators, *args):
         calls["capacity"] += 1
-        return real_capacity(state, indicators)
+        return real_capacity(state, indicators, *args)
 
     monkeypatch.setitem(provider_globals, "financial_rule_margins", financial)
     monkeypatch.setitem(provider_globals, "capacity_rule_margins", capacity)
@@ -105,9 +111,9 @@ def test_capacity_boundaries_resegment_after_alg9_branch_change():
         },
     }
     state_at = lambda at: future_snapshot(latest, models, at)
-    scorer = lambda state, _at: score_snapshot(state)
+    scorer = lambda state, _at: score_snapshot(state, market_snapshot=market_snapshot())
 
-    candidates = RuleBoundaryProvider().milestones(latest, models, cutoff, state_at, scorer)
+    candidates = RuleBoundaryProvider(market_snapshot()).milestones(latest, models, cutoff, state_at, scorer)
     restriction_changes = [
         at for at in candidates
         if scorer(state_at(at - timedelta(microseconds=1)), at)["financial_indicators"]["restriccion_vinculante"]
