@@ -48,7 +48,7 @@ as $$
           join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
           where e.user_id = p.id
           and (
-            pr.comuna = e.input->>'comuna_objetivo'
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
             or pr.comuna = p.onboarding_data->>'comuna_interes'
             or pr.comuna = p.onboarding_data->>'comuna_alternativa'
           )

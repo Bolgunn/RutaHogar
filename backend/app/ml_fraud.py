@@ -26,12 +26,11 @@ def get_supabase_client() -> Client:
 def _extract_features(data: Dict) -> pd.DataFrame:
     """Extrae las variables de comportamiento para el modelo."""
     return pd.DataFrame([{
-        "time_to_submit": float(data.get("time_to_submit", 30)),
-        "intentos_previos": float(data.get("intentos_previos", 0)),
-        "ingreso_mensual": float(data.get("ingreso_mensual", 0)),
-        "deuda_mensual": float(data.get("deuda_mensual", 0)),
-        "edad": float(data.get("edad", 30)),
-        "ahorro_disponible": float(data.get("ahorro_disponible", 0))
+        "time_to_submit": float(data.get("time_to_submit") or 30),
+        "ingreso_mensual": float(data.get("ingreso_mensual") or 0),
+        "deuda_mensual": float(data.get("deuda_mensual") or 0),
+        "edad": float(data.get("edad") or 30),
+        "ahorro_disponible": float(data.get("ahorro_disponible") or 0)
     }])
 
 def predict_fraud_xgboost(data: Dict) -> Tuple[float, List[str]]:
@@ -49,22 +48,24 @@ def predict_fraud_xgboost(data: Dict) -> Tuple[float, List[str]]:
         _xgb_model = xgb.XGBClassifier()
         _xgb_model.load_model(MODEL_PATH)
         
-    # Si aún no hay modelo, usamos Fallback matemático para explicabilidad
+    # 1. Reglas Duras (Hard Rules / Fallback determinístico)
     intentos = data.get("intentos_previos", 0)
     ahorro_actual = features["ahorro_disponible"].iloc[0] if "ahorro_disponible" in features else 0
     ahorro_previo = data.get("ahorro_previo_24h")
     renta = features["ingreso_mensual"].iloc[0] if "ingreso_mensual" in features else 0
     
+    if ahorro_previo is not None and ahorro_actual > (ahorro_previo + (renta * 3)):
+        prev_fmt = f"${int(ahorro_previo):,}".replace(",", ".")
+        act_fmt = f"${int(ahorro_actual):,}".replace(",", ".")
+        return 99.0, [f"Avance de ahorro irreal detectado en 24h: subió de {prev_fmt} a {act_fmt} (Regla estricta)."]
+    elif intentos > 3:
+        return 99.0, [f"Tanteo detectado: El dispositivo ha intentado {intentos} evaluaciones (Regla estricta)."]
+    elif time_to_submit < 5:
+        return 95.0, ["Tiempo de llenado anormalmente bajo (<5s). Posible script automátizado (Regla estricta)."]
+
+    # 2. Si no hay modelo, retornamos un score bajo o base
     if _xgb_model is None:
-        if ahorro_previo is not None and ahorro_actual > (ahorro_previo + (renta * 3)):
-            prev_fmt = f"${int(ahorro_previo):,}".replace(",", ".")
-            act_fmt = f"${int(ahorro_actual):,}".replace(",", ".")
-            return 99.0, [f"Avance de ahorro irreal detectado en 24h: subió de {prev_fmt} a {act_fmt} (Fallback)."]
-        elif intentos > 3:
-            return 99.0, [f"Tanteo detectado: El dispositivo ha intentado {intentos} evaluaciones (Fallback)."]
-        elif time_to_submit < 5:
-            return 95.0, ["Tiempo de llenado anormalmente bajo (<5s). Posible script automátizado (Fallback)."]
-        elif time_to_submit < 10:
+        if time_to_submit < 10:
             return 60.0, ["Tiempo de llenado rápido (<10s). Posible autocompletado (Fallback)."]
         return 5.0, []
 
@@ -107,7 +108,7 @@ def retrain_adaptive_model():
     if not profiles:
         return {"status": "error", "message": "No hay perfiles para entrenar."}
         
-    status_map = {p["id"]: (1 if p["reliability_status"] in ["sospechoso", "reportado"] else 0) for p in profiles}
+    status_map = {p["id"]: (1 if p["reliability_status"] in ["sospechoso", "en_revision", "silenciado", "descartado"] else 0) for p in profiles}
     
     # 2. Obtener Evaluaciones (Features X)
     evaluations = supabase.table("evaluations").select("user_id, financial_data").execute().data
@@ -123,11 +124,11 @@ def retrain_adaptive_model():
         input_data = fin_data.get("input", {})
         # Usamos time_to_submit si existe, o un valor promedio si es antiguo
         dataset.append({
-            "time_to_submit": float(input_data.get("time_to_submit", 30)),
-            "ingreso_mensual": float(input_data.get("ingreso_mensual", 0)),
-            "deuda_mensual": float(input_data.get("deuda_mensual", 0)),
-            "edad": float(input_data.get("edad", 30)),
-            "ahorro_disponible": float(input_data.get("ahorro_disponible", 0))
+            "time_to_submit": float(input_data.get("time_to_submit") or 30),
+            "ingreso_mensual": float(input_data.get("ingreso_mensual") or 0),
+            "deuda_mensual": float(input_data.get("deuda_mensual") or 0),
+            "edad": float(input_data.get("edad") or 30),
+            "ahorro_disponible": float(input_data.get("ahorro_disponible") or 0)
         })
         labels.append(status_map[user_id])
         

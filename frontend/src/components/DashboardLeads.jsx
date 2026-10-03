@@ -236,6 +236,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
       if (ageRange.min && item.input?.edad == null) return false;
+      if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
       const status = item.reliability_status || "normal";
       // Leads silenciados no salen en el perfil de ejecutivos a no ser que sean reactivados
       if (status === "silenciado" || status === "descartado") return false;

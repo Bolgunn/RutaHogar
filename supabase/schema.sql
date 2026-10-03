@@ -258,23 +258,25 @@ create policy "Evaluations select own"
   for select
   using (
     (auth.uid() = user_id)
-    or (public.get_my_role() = 'admin')
+    or (public.get_my_role() in ('admin', 'ejecutivo'))
     or (
-      public.get_my_role() in ('admin_inmobiliario', 'ejecutivo')
-      and exists (
-        select 1 from public.proyectos pr
-        where pr.inmobiliaria_id = public.get_my_inmobiliaria()
-        and (
-          pr.comuna = evaluations.input->>'comuna_objetivo'
-          or pr.comuna = (select onboarding_data->>'comuna_interes' from public.profiles p where p.id = evaluations.user_id)
-          or pr.comuna = (select onboarding_data->>'comuna_alternativa' from public.profiles p where p.id = evaluations.user_id)
+      public.get_my_role() = 'admin_inmobiliario'
+      and (
+        exists (
+          select 1 from public.proyectos pr
+          where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+          and (
+            pr.comuna = coalesce(evaluations.target_commune, evaluations.financial_data->'input'->>'comuna_objetivo')
+            or pr.comuna = (select onboarding_data->>'comuna_interes' from public.profiles p where p.id = evaluations.user_id)
+            or pr.comuna = (select onboarding_data->>'comuna_alternativa' from public.profiles p where p.id = evaluations.user_id)
+          )
         )
-      )
-      or exists (
-        select 1 from public.lead_status_history lsh
-        join public.profiles exec_p on exec_p.id = lsh.changed_by
-        where lsh.profile_id = evaluations.user_id
-        and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        or exists (
+          select 1 from public.lead_status_history lsh
+          join public.profiles exec_p on exec_p.id = lsh.changed_by
+          where lsh.profile_id = evaluations.user_id
+          and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        )
       )
     )
   );
@@ -324,8 +326,14 @@ as $$
 declare
   v_old_status text;
   v_changed_by uuid;
+  v_role text;
 begin
-  v_changed_by := coalesce(auth.uid(), p_reporter_id);
+  v_changed_by := auth.uid();
+  v_role := public.get_my_role();
+
+  if v_role not in ('ejecutivo', 'admin', 'admin_inmobiliario') then
+    raise exception 'Unauthorized';
+  end if;
 
   select reliability_status into v_old_status from public.profiles where id = p_lead_id;
   
@@ -340,6 +348,12 @@ $$;
 
 revoke all on function public.update_lead_reliability(uuid, uuid, text, text) from public;
 grant execute on function public.update_lead_reliability(uuid, uuid, text, text) to authenticated;
+
+alter table public.lead_status_history enable row level security;
+drop policy if exists "Staff select lead_status_history" on public.lead_status_history;
+create policy "Staff select lead_status_history"
+on public.lead_status_history for select
+using (public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario'));
 
 -- Entrega a administradores globales y de inmobiliaria los leads en revisión y silenciados
 create or replace function public.get_reported_leads_for_admin()
@@ -382,7 +396,7 @@ as $$
             select 1 from public.proyectos pr
             where pr.inmobiliaria_id = public.get_my_inmobiliaria()
             and (
-              pr.comuna = e.input->>'comuna_objetivo'
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
               or pr.comuna = p.onboarding_data->>'comuna_interes'
               or pr.comuna = p.onboarding_data->>'comuna_alternativa'
             )
@@ -1061,7 +1075,7 @@ as $$
           join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
           where e.user_id = p.id
           and (
-            pr.comuna = e.input->>'comuna_objetivo'
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
             or pr.comuna = p.onboarding_data->>'comuna_interes'
             or pr.comuna = p.onboarding_data->>'comuna_alternativa'
           )

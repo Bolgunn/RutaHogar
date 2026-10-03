@@ -6,7 +6,7 @@ load_dotenv()
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
 from .scoring import calculate_score
@@ -408,13 +408,17 @@ async def explain_endpoint(payload: ExplainRequest):
 
 
 @app.post("/score/retrain")
-async def retrain_model_endpoint():
+async def retrain_model_endpoint(x_admin_token: Optional[str] = Header(None)):
     """
     Endpoint para reentrenar el modelo de Fraude (XGBoost) con datos históricos.
     Ideal para agendar en un cronjob o activarlo desde un panel Admin cuando
     se reactivan muchos leads.
     """
     from .ml_fraud import retrain_adaptive_model
+    
+    if x_admin_token != os.environ.get("ADMIN_RETRAIN_TOKEN", "super-secret-token"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         res = retrain_adaptive_model()
         return res
