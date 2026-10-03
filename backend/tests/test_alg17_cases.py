@@ -20,7 +20,6 @@ def _fixture_arguments(case_input):
         "invitation_status": case_input.get("invitation_status"),
         "treatment_consent": case_input.get("treatment_consent", case_input.get("consent")),
         "token_valid": case_input.get("token_valid", False),
-        "phone_verified": case_input.get("phone_verified", False),
         "has_submitted_values": "submitted_values" in case_input,
         "co_debtor_action": case_input.get("co_debtor_action"),
         "revoked": case_input.get("revoked", False),
@@ -81,7 +80,6 @@ class TestAlg17(unittest.TestCase):
         result = resolve_co_debtor_complement(
             invitation_status="pending",
             token_valid=True,
-            phone_verified=True,
             treatment_consent=True,
             has_submitted_values=True,
             lead_declared=lead_declared,
@@ -140,7 +138,6 @@ class TestAlg17(unittest.TestCase):
         resolve_co_debtor_complement(
             invitation_status="pending",
             token_valid=True,
-            phone_verified=True,
             treatment_consent=True,
             has_submitted_values=True,
             lead_declared=lead_declared,

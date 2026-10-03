@@ -1,88 +1,75 @@
 # ALG-17 — Co-debtor consent resolution
 
 | Field | Value |
-| :---- | :---- |
-| **Version** | `1.0.0` |
+| :-- | :-- |
+| **Version** | `1.1.0` |
 | **Owner story** | HU18 — Participación y consentimiento del co-deudor |
 | **Cases** | `docs/algorithms/ALG-17-cases.json` |
-| **Status** | Planned; written before implementation |
+| **Status** | Implemented as pure source-resolution logic |
 
 ## Purpose
 
-This algorithm resolves which complementary-income data may be used for a lead
-evaluation and which provenance label must accompany it. It does not change
-scoring weights, classification thresholds, blockers, or the `POST /score`
-contract. It protects the distinction between data declared by a lead and data
-provided and consented to by the co-debtor.
+ALG-17 selects the complementary-income source and provenance for a future lead evaluation. It changes no scoring weights, thresholds, caps, blockers, classifications, monetary rules, or public score contract. It distinguishes lead-declared data from the five fields personally supplied and treatment-consented to by the co-debtor.
 
-The lead can still obtain an orientative prequalification while an invitation is
-pending or expired. That result is explicitly labelled as having an unconfirmed
-complement. Once the co-debtor submits their own data and consents, their five
-financial fields prevail and an evaluation is recalculated immediately. A
-revocation affects only later evaluations; historic evaluation snapshots remain
-historical records but the co-debtor's data is no longer exposed to staff.
+The lead may receive a referential result while no valid co-debtor confirmation exists. A valid confirmation prevails for later evaluations, but confirmation itself does not recalculate. A later lead-requested update may persist a normal historical prequalification with reason `confirmacion_codeudor`. Revocation affects only future selection; historic snapshots remain intact.
 
 ## Inputs → outputs
 
 ### Inputs
 
 | Field | Source | Notes |
-| :---- | :----- | :---- |
-| Lead-declared complement | Lead evaluation / invitation | Income, debt, contract, continuity, delinquency and the lead-declared relation. |
-| Invitation state | `co_debtor_invitations` | `pending`, `expired`, `confirmed`, or `revoked`. |
-| Co-debtor submission | Token-gated confirmation | Own income, debt, contract, continuity and delinquency. The relation remains lead-declared. |
-| Consent state | Separate co-debtor consent record | Required before confirmed data can be used. |
-| Current time | Server only | Determines invitation expiry; never client time. |
+| :-- | :-- | :-- |
+| Lead-declared complement | Lead evaluation / invitation | Five financial fields plus `relacion_complementario`. |
+| Invitation state and timestamps | `co_debtor_invitations` | `pending`, `expired`, `confirmed`, `revoked`, or `replaced`; time is server supplied. |
+| Token validity and submission | Server-side token flow | The resolver receives facts, never a raw token. |
+| Co-debtor confirmation | Dedicated confirmation record | The co-debtor's five fields; relation remains lead-declared. |
+| Treatment consent and revocation | Separate consent lifecycle | Consent is required to select confirmed values; revocation excludes them. |
 
 ### Outputs
 
 | Key | Values | Meaning |
-| :-- | :----- | :------ |
-| `complement_source` | `lead_declared`, `co_debtor_confirmed`, `excluded_after_revocation` | The only source the scorer may use for a future evaluation. |
-| `complement_confirmation_status` | `not_confirmed`, `confirmed`, `revoked` | Lead/executive-facing provenance; executives never receive raw co-debtor financial fields. |
-| `rescore_required` | boolean | Whether confirmation must immediately create a new evaluation. |
+| :-- | :-- | :-- |
+| `complement_source` | `lead_declared`, `co_debtor_confirmed`, `excluded_after_revocation` | Only source eligible for a future evaluation. |
+| `complement_confirmation_status` | `not_confirmed`, `confirmed`, `revoked` | Minimal provenance for subsequent layers. |
+| `selected_complement` | mapping or `null` | Five selected financial fields and lead-declared relation when usable. |
+| `decision_rule` | `R1`–`R6` | Minimal reason for acceptance or rejection. |
+| `rescore_required` | `false` | Confirmation never triggers an automatic recalculation. |
 
 ## Rules
 
-Every tunable is defined once in backend constants during implementation.
-
 | ID | Condition | Output / effect | Source |
-| :-- | :-------- | :-------------- | :----- |
-| R1 | An invitation is created | Generate one random, single-use token; store only its digest; set `expires_at = created_at + CO_DEBTOR_INVITATION_TTL_DAYS`. A new invitation invalidates any active one for the same lead. | HU18 E1 + Grill |
-| R2 | `now >= expires_at` and invitation is still pending | Mark it `expired`; future evaluations may use lead-declared values and are labelled `not_confirmed`. Notify both parties through the invitation channels. | HU18 E1 + Grill |
-| R3 | Invitation pending, token valid, SMS phone verification succeeds, and the co-debtor accepts separate data-processing consent | The co-debtor submits their own five financial values. They prevail over lead-declared values; set status `confirmed`; consume token; immediately recalculate with reason `confirmacion_codeudor`. | HU18 E2–E3 + Grill |
-| R4 | Co-debtor declines, or validation fails | Do not use a co-debtor submission. The lead may correct the declared complement and create a replacement invitation. No rejection reason is required or stored. | Data minimization + Grill |
-| R5 | No valid co-debtor confirmation exists | The lead may be evaluated with lead-declared complement values. Mark result `not_confirmed`; it is always referential, never a bank approval. | HU18 E3 + S7 |
-| R6 | Co-debtor revokes consent | Record revocation. Do not recalculate existing historical results. All later evaluations set source `excluded_after_revocation` and omit the complement until a new invitation, verification and consent complete. Staff lose access to the co-debtor's financial fields and phone. | HU18 E4 + Grill |
-| R7 | Staff reads a lead with complement data | Expose only confirmation status/provenance; never raw co-debtor values or phone. | Grill + privacy minimization |
-| R8 | Co-debtor has explicitly opted in to WhatsApp contact | Assigned executive may use the phone only about the lead's evaluation. This opt-in is separate from treatment consent and is withdrawn with revocation. | Grill |
+| :-- | :-- | :-- |
+| R1 | Invitation is created | Generate a secure single-use token, store only its digest, and set expiry from `CO_DEBTOR_INVITATION_TTL_DAYS`. A replacement invalidates the prior invitation for that lead. | E1 |
+| R2 | Pending invitation reaches expiry | It is `expired`; future evaluations may use lead-declared values labelled `not_confirmed`. | E1, E3 |
+| R3 | Pending invitation has a valid token, the co-debtor submits five fields, and accepts treatment consent | Persist confirmation, consume invitation, and select the co-debtor's fields in later evaluations. Do not recalculate automatically. | E2, E3 |
+| R4 | Invitation is replaced, invalid, declined, or submission lacks valid consent | Do not select a co-debtor submission. The lead declaration remains eligible as `not_confirmed`; no financial rejection detail is stored. | E1–E3, data minimization |
+| R5 | No valid co-debtor confirmation exists | Select lead-declared complement and mark it `not_confirmed`; it remains referential. | E3 |
+| R6 | Co-debtor revokes treatment consent | Record revocation; do not alter historic snapshots. Exclude complement from all later evaluations and raw executive access. A new valid invitation and consent are required for later use. | E4 |
 
-### Constants and assumptions
+## Constants and assumptions
 
-| Constant / assumption | Value | Why | Owner |
-| :-------------------- | :---- | :-- | :---- |
-| `CO_DEBTOR_INVITATION_TTL_DAYS` | `7` days | Product decision made in the HU18 Grill on 2026-10-01. | HU18 |
-| Phone verification | SMS OTP before submission | Verifies control of the provided Chilean mobile number; selected in Grill. | HU18 |
-| WhatsApp contact | Off by default; explicit separate opt-in | Treatment consent must not be bundled with commercial contact. | HU18 |
-| One active invitation | Yes | Prevents ambiguity over which token/data set is current. | HU18 |
+| Constant / assumption | Value | Why |
+| :-- | :-- | :-- |
+| `CO_DEBTOR_INVITATION_TTL_DAYS` | `7` days | Central HU18 product decision. |
+| One active invitation | Yes | Prevents ambiguous active tokens for a lead. |
+| Access channel | Email invitation link | No co-debtor account or login is required. |
+| Revocation access | Separate management token after confirmation | Supports E4 without reusing the consumed invitation token. |
 
 ## Invariants
 
-1. A valid co-debtor confirmation always overrides the lead-declared five financial values in a later evaluation.
-2. No confirmation, expired invitation, or declined invitation blocks the lead's orientative evaluation.
-3. A revoked co-debtor is never included in a future evaluation until a new valid consent exists.
-4. The co-debtor cannot read lead financial data through any invitation endpoint or response.
-5. A token is never stored or returned in plaintext after its invitation response is created.
-6. Invitation, consent, confirmation and revocation audit events contain no raw financial values.
-7. The same state and input select the same complement source; no AI, client clock, or random branch decides it.
+1. Valid confirmed values override lead-declared five financial values; `relacion_complementario` stays lead-declared.
+2. No confirmation, expiry, replacement, or decline blocks a referential evaluation with a lead declaration.
+3. A revoked confirmation is never selected for future evaluation until a new valid invitation and consent exist.
+4. Co-debtor responses never expose lead financial data.
+5. Invitation and management tokens are never stored or returned after creation in plaintext.
+6. Invitation, consent, confirmation, and revocation audit events contain no financial values.
+7. Equal input and supplied time always yield equal resolution without mutating inputs.
 
 ## Edge cases
 
 | Condition | Expected behavior |
-| :-------- | :---------------- |
-| Token expired or already consumed | Reject access without revealing lead or co-debtor data. |
-| Lead changes declared complement while an invitation is pending | Invalidate the invitation; a replacement invitation represents the new declaration. |
-| Co-debtor submission differs from lead declaration | Use submitted values after consent and recalculate immediately. |
-| SMS provider unavailable | Do not accept/confirm the co-debtor; retain pending state and report a controlled error. |
-| Revoked co-debtor appears in historic evaluation | Preserve the historical result as a snapshot, but remove raw co-debtor data from staff-facing responses. |
-
+| :-- | :-- |
+| Expired, consumed, or replaced invitation token | Reject co-debtor access without revealing lead or co-debtor data. |
+| Lead changes declaration while an invitation is pending | Invalidate it and create a replacement invitation. |
+| Confirmation differs from lead declaration | Select the confirmed five fields for later evaluation; no automatic recalculation. |
+| Revoked co-debtor appears in historic evaluation | Preserve the historical snapshot; do not select its values later or expose raw values to executives. |

@@ -13,9 +13,9 @@
       "expect": { "invitation_status": "expired", "complement_source": "lead_declared", "confirmation_status": "not_confirmed", "rescore_required": false }
     },
     {
-      "name": "valid consented submission overrides lead declaration and rescoring is immediate",
-      "input": { "invitation_status": "pending", "token_valid": true, "phone_verified": true, "treatment_consent": true, "submitted_values": "different" },
-      "expect": { "invitation_status": "confirmed", "complement_source": "co_debtor_confirmed", "confirmation_status": "confirmed", "rescore_required": true, "rescore_reason": "confirmacion_codeudor" }
+      "name": "valid consented submission overrides lead declaration without automatic rescoring",
+      "input": { "invitation_status": "pending", "token_valid": true, "treatment_consent": true, "submitted_values": "different" },
+      "expect": { "invitation_status": "confirmed", "complement_source": "co_debtor_confirmed", "confirmation_status": "confirmed", "rescore_required": false }
     },
     {
       "name": "a declined submission stores no financial rejection detail",

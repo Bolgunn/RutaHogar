@@ -1720,15 +1720,16 @@ revoke all on function public.commercial_stage_backfill() from public, anon, aut
 
 -- =============================================================
 -- HU18 — Participación y consentimiento del co-deudor
--- Espejo de supabase/migrations/20261003120000_hu18_co_debtor_consent.sql
+-- Espejo acumulado de las migraciones HU18 de consentimiento.
 -- =============================================================
 
 create table if not exists public.co_debtor_invitations (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid not null references public.profiles(id) on delete restrict,
   recipient_email text not null check (length(trim(recipient_email)) > 0),
-  recipient_phone text not null check (length(trim(recipient_phone)) > 0),
   token_digest text not null unique check (length(trim(token_digest)) > 0),
+  management_token_digest text
+    check (management_token_digest is null or length(trim(management_token_digest)) > 0),
   status text not null default 'pending'
     check (status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
   expires_at timestamptz not null,
@@ -1736,9 +1737,6 @@ create table if not exists public.co_debtor_invitations (
   replaced_at timestamptz,
   replacement_of_invitation_id uuid
     references public.co_debtor_invitations(id) on delete restrict,
-  phone_verified_at timestamptz,
-  whatsapp_contact_opt_in boolean not null default false,
-  whatsapp_contact_opted_in_at timestamptz,
   created_at timestamptz not null default now(),
   constraint co_debtor_invitations_expiry_check check (expires_at > created_at),
   constraint co_debtor_invitations_replacement_check check (
@@ -1749,6 +1747,9 @@ create table if not exists public.co_debtor_invitations (
 create unique index if not exists co_debtor_invitations_one_pending_per_lead_idx
   on public.co_debtor_invitations (lead_id)
   where status = 'pending';
+create unique index if not exists co_debtor_invitations_management_token_digest_idx
+  on public.co_debtor_invitations (management_token_digest)
+  where management_token_digest is not null;
 create index if not exists co_debtor_invitations_lead_created_idx
   on public.co_debtor_invitations (lead_id, created_at desc);
 create index if not exists co_debtor_invitations_expiry_idx

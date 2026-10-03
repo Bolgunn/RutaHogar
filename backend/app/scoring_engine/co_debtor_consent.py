@@ -82,7 +82,6 @@ def resolve_co_debtor_complement(
     created_at: datetime | None = None,
     expires_at: datetime | None = None,
     token_valid: bool = False,
-    phone_verified: bool = False,
     treatment_consent: bool | None = None,
     has_submitted_values: bool = False,
     co_debtor_action: str | None = None,
@@ -108,7 +107,6 @@ def resolve_co_debtor_complement(
     valid_submission = (
         resolved_status == "pending"
         and token_valid
-        and phone_verified
         and treatment_consent is True
         and has_submitted_values
     )
@@ -121,7 +119,6 @@ def resolve_co_debtor_complement(
         "complement_confirmation_status": "not_confirmed",
         "selected_complement": _selected_lead_declaration(lead_declared),
         "rescore_required": False,
-        "rescore_reason": None,
         "decision_rule": "R5",
     }
 
@@ -148,8 +145,6 @@ def resolve_co_debtor_complement(
             selected_complement=_selected_confirmed_values(lead_declared, co_debtor_confirmed),
             decision_rule="R3",
         )
-        if valid_submission:
-            result.update(rescore_required=True, rescore_reason="confirmacion_codeudor")
         return result
 
     if resolved_status == "expired":
