@@ -2,6 +2,9 @@
 
 ALGORITHM_VERSION = "1.2.0"
 
+# ALG-17 — invitation lifetime for co-debtor consent.
+CO_DEBTOR_INVITATION_TTL_DAYS = 7
+
 CLASSIFICATION_THRESHOLDS = {
     "alto": 75,
     "medio": 50,
