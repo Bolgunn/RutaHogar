@@ -5,7 +5,7 @@ export const roles = {
   user: "usuario",
   sales: "ejecutivo",
   admin: "admin",
-  tenantAdmin: "admin_inmobiliario",
+  admin_inmo: "admin_inmobiliario",
 };
 
 const roleAliases = {
@@ -14,7 +14,7 @@ const roleAliases = {
   ejecutivo_comercial: roles.sales,
   ejecutivo: roles.sales,
   admin: roles.admin,
-  admin_inmobiliario: roles.tenantAdmin,
+  admin_inmobiliario: roles.admin_inmo,
 };
 
 export function normalizeRole(role) {
@@ -22,7 +22,7 @@ export function normalizeRole(role) {
 }
 
 export function isAdminRole(role) {
-  return role === roles.admin || role === roles.tenantAdmin;
+  return role === roles.admin || role === roles.admin_inmo;
 }
 
 export function isStaffRole(role) {

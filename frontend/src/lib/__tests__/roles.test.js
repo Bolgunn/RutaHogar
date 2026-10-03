@@ -7,44 +7,44 @@ const TENANT = "8f6b1d2e-0000-4000-8000-000000000001";
 
 describe("admin_inmobiliario role", () => {
   it("survives normalization instead of degrading to usuario", () => {
-    expect(normalizeRole("admin_inmobiliario")).toBe(roles.tenantAdmin);
+    expect(normalizeRole("admin_inmobiliario")).toBe(roles.admin_inmo);
     expect(normalizeRole("admin")).toBe(roles.admin);
     expect(normalizeRole("rol_desconocido")).toBe(roles.user);
   });
 
   it("is an admin and staff role", () => {
-    expect(isAdminRole(roles.tenantAdmin)).toBe(true);
-    expect(isStaffRole(roles.tenantAdmin)).toBe(true);
+    expect(isAdminRole(roles.admin_inmo)).toBe(true);
+    expect(isStaffRole(roles.admin_inmo)).toBe(true);
     expect(isAdminRole(roles.sales)).toBe(false);
     expect(isStaffRole(roles.user)).toBe(false);
   });
 
   it("lands on the admin panel and reaches every admin page", () => {
-    expect(staffInitialPage(roles.tenantAdmin)).toBe("admin");
-    expect(resolveStaffRoute("/", roles.tenantAdmin)).toEqual({ page: "admin", path: "/admin" });
-    expect(resolveStaffRoute("/admin", roles.tenantAdmin)).toEqual({ page: "admin" });
-    expect(resolveStaffRoute("/admin/proyectos", roles.tenantAdmin)).toEqual({ page: "admin-projects" });
-    expect(resolveStaffRoute("/admin/perfil", roles.tenantAdmin)).toEqual({ page: "admin-profile" });
-    expect(resolveStaffRoute("/dashboard", roles.tenantAdmin)).toEqual({ page: "leads", path: "/dashboard" });
+    expect(staffInitialPage(roles.admin_inmo)).toBe("admin");
+    expect(resolveStaffRoute("/", roles.admin_inmo)).toEqual({ page: "admin", path: "/admin" });
+    expect(resolveStaffRoute("/admin", roles.admin_inmo)).toEqual({ page: "admin" });
+    expect(resolveStaffRoute("/admin/proyectos", roles.admin_inmo)).toEqual({ page: "admin-projects" });
+    expect(resolveStaffRoute("/admin/perfil", roles.admin_inmo)).toEqual({ page: "admin-profile" });
+    expect(resolveStaffRoute("/dashboard", roles.admin_inmo)).toEqual({ page: "leads", path: "/dashboard" });
     for (const page of ["admin", "admin-projects", "admin-profile", "leads"]) {
-      expect(canViewStaffPage(page, roles.tenantAdmin)).toBe(true);
+      expect(canViewStaffPage(page, roles.admin_inmo)).toBe(true);
     }
   });
 
   it("routes exactly like a tenant admin", () => {
     for (const path of ["/", "/inicio", "/admin", "/admin/proyectos", "/admin/perfil", "/proyectos", "/dashboard", "/ejecutivo/leads", "/perfil", "/x"]) {
-      expect(resolveStaffRoute(path, roles.tenantAdmin)).toEqual(resolveStaffRoute(path, roles.admin));
+      expect(resolveStaffRoute(path, roles.admin_inmo)).toEqual(resolveStaffRoute(path, roles.admin));
     }
   });
 
   it("does not get executive-only pages", () => {
-    expect(canViewStaffPage("projects", roles.tenantAdmin)).toBe(false);
-    expect(canViewStaffPage("sales-profile", roles.tenantAdmin)).toBe(false);
+    expect(canViewStaffPage("projects", roles.admin_inmo)).toBe(false);
+    expect(canViewStaffPage("sales-profile", roles.admin_inmo)).toBe(false);
   });
 
   it("never counts as a global admin, even without an inmobiliaria", () => {
-    expect(isGlobalAdmin(roles.tenantAdmin, TENANT)).toBe(false);
-    expect(isGlobalAdmin(roles.tenantAdmin, null)).toBe(false);
+    expect(isGlobalAdmin(roles.admin_inmo, TENANT)).toBe(false);
+    expect(isGlobalAdmin(roles.admin_inmo, null)).toBe(false);
     expect(isGlobalAdmin(roles.admin, TENANT)).toBe(false);
     expect(isGlobalAdmin(roles.admin, null)).toBe(true);
   });

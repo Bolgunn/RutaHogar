@@ -56,9 +56,9 @@ const sidebarSupportByRole = {
 export default function Navbar({ profile, page, currentScore, onNavigate, onLogout }) {
   const role = profile?.role || roles.user;
   const isAdmin = isAdminRole(role);
-  const navRole = isAdmin ? roles.admin : role;
-  const groups = navByRole[navRole] || navByRole[roles.user];
-  const supportCard = sidebarSupportByRole[navRole] || sidebarSupportByRole[roles.user];
+  const fallbackRole = isAdmin ? roles.admin : roles.user;
+  const groups = navByRole[role] || navByRole[fallbackRole];
+  const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[fallbackRole];
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Usuario";
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email = profile?.email || "";
