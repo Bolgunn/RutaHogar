@@ -12,24 +12,23 @@ CREATE OR REPLACE FUNCTION public.sweep_fraudulent_leads()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   -- 1. Insertar el historial para los leads que van a ser cambiados
   INSERT INTO public.lead_status_history (
-    lead_id, 
-    previous_status, 
+    profile_id, 
+    old_status, 
     new_status, 
     reason, 
-    changed_by, 
-    changed_by_role
+    changed_by
   )
-  SELECT 
+  SELECT DISTINCT ON (p.id)
     p.id, 
     'normal', 
     'sospechoso', 
     'Alerta automática (Sweeper): Probabilidad de fraude (' || e.fraud_score_probability || '%) excede el umbral.', 
-    p.id, -- System trigger essentially, using lead id as fallback
-    'system'
+    p.id
   FROM public.profiles p
   JOIN public.evaluations e ON p.id = e.user_id
   WHERE e.fraud_score_probability >= 80
@@ -45,6 +44,8 @@ BEGIN
     AND p.reliability_status = 'normal';
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.sweep_fraudulent_leads() FROM public;
 
 -- Actualizar RPC para retornar campos de fraude
 DROP FUNCTION IF EXISTS public.get_reported_leads_for_admin();
@@ -85,7 +86,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
             SELECT 1 FROM public.proyectos pr
             WHERE pr.inmobiliaria_id = public.get_my_inmobiliaria()
             AND (
-              pr.comuna = e.input->>'comuna_objetivo'
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
               OR pr.comuna = p.onboarding_data->>'comuna_interes'
               OR pr.comuna = p.onboarding_data->>'comuna_alternativa'
             )
