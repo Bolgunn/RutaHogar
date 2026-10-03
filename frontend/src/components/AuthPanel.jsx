@@ -878,7 +878,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       const auth =
         mode === "signin"
           ? await signIn(form)
-          : await signUp({ ...form, phone: normalizedPhone, birth_date: birthDate });
+          : await signUp({ ...form, role: roles.user, phone: normalizedPhone, birth_date: birthDate });
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -1111,8 +1111,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   </div>
                 </div>
               )}
-
-              
 
               {error && (
                 <div className="auth-error" role="alert">
