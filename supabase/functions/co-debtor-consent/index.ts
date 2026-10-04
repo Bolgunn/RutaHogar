@@ -76,7 +76,14 @@ async function sendEmail(to: string, message: { subject: string; html: string; t
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${requiredEnv("RESEND_API_KEY")}` },
     body: JSON.stringify({ from: requiredEnv("CO_DEBTOR_FROM_EMAIL"), to: [to], ...message }),
   });
-  if (!response.ok) throw new Error("No se pudo enviar el correo de RutaHogar.");
+  if (!response.ok) {
+    const resendErrorBody = await response.text();
+    console.error("Resend rechazó el correo de co-deudor.", {
+      status: response.status,
+      body: resendErrorBody,
+    });
+    throw new Error("No se pudo enviar el correo de RutaHogar.");
+  }
 }
 
 async function leadEmail(admin: AdminClient, leadId: string): Promise<string | null> {
