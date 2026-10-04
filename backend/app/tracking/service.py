@@ -14,6 +14,8 @@ from .scoring_adapter import (
 )
 from ..scoring_engine.co_debtor_inputs import assemble_co_debtor_scoring_input
 
+CO_DEBTOR_CONFIRMATION_REASON = "confirmacion_codeudor"
+
 
 def canonical_command(command):
     canonical = deepcopy(command)
@@ -99,6 +101,27 @@ class TrackingService:
         """Keep legacy/in-memory repositories usable while HU18 is optional."""
         loader = getattr(self.repository, "load_co_debtor_consent", None)
         return loader(user_id) if callable(loader) else None
+
+    def update_score_with_confirmed_co_debtor(self, user_id):
+        """Append an explicit HU18 re-evaluation for the authenticated lead."""
+        bundle = self.repository.load(user_id)
+        history = source_events(bundle)
+        lineage = reconstruct(history, user_id, financial_field_contract())
+        if not lineage["active_line"]:
+            raise TrackingError("not_found")
+        now = self.clock().isoformat()
+        return self.execute(
+            user_id,
+            {
+                "event_id": self.new_id(),
+                "event_kind": "evaluation",
+                "effective_at": now,
+                "reason": CO_DEBTOR_CONFIRMATION_REASON,
+                "previous_event_id": lineage["active_line"][-1]["event_id"],
+                "patch": {},
+            },
+            require_co_debtor_confirmation=True,
+        )
 
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
@@ -192,7 +215,7 @@ class TrackingService:
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
 
-    def execute(self, user_id, command, target_event_id=None):
+    def execute(self, user_id, command, target_event_id=None, *, require_co_debtor_confirmation=False):
         command = canonical_command(command)
         if target_event_id:
             command["target_event_id"] = target_event_id
@@ -238,7 +261,7 @@ class TrackingService:
 
         def evaluate(source, snapshot):
             nonlocal consent_facts, consent_loaded
-            if snapshot.get("complemento_renta") and not consent_loaded:
+            if (snapshot.get("complemento_renta") or require_co_debtor_confirmation) and not consent_loaded:
                 consent_facts = self._co_debtor_consent(user_id)
                 consent_loaded = True
             resolved_input, consent_provenance = assemble_co_debtor_scoring_input(
@@ -246,6 +269,12 @@ class TrackingService:
                 co_debtor_consent=consent_facts,
                 now=recorded_at,
             )
+            if require_co_debtor_confirmation:
+                source = consent_provenance["complement_source"]
+                if source == "excluded_after_revocation":
+                    raise TrackingError("co_debtor_consent_revoked")
+                if source != "co_debtor_confirmed":
+                    raise TrackingError("co_debtor_confirmation_required")
             complete_input = complete_snapshot(resolved_input)
             result = self._score(complete_input, market_snapshot)
             details = {

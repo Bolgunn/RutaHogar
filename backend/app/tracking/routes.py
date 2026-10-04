@@ -28,7 +28,8 @@ def checked(call):
         status = {
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
-            "market_data_unavailable": 503,
+            "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
+            "co_debtor_consent_revoked": 409,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 
@@ -90,6 +91,21 @@ class EvaluationAnnotation(BaseModel):
     effective_at: AwareDatetime
     kind: Literal["plan_accepted", "narrative", "housing_plan", "milestone"]
     payload: dict = Field(default_factory=dict)
+
+
+class CoDebtorConfirmationEvaluationCommand(BaseModel):
+    """Deliberately empty: the authenticated session is the only lead input."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.post("/evaluations/co-debtor-confirmation")
+def update_score_with_confirmed_co_debtor(
+    _command: CoDebtorConfirmationEvaluationCommand | None = None,
+    ctx=Depends(context),
+):
+    user_id, _, service = ctx
+    return checked(lambda: service.update_score_with_confirmed_co_debtor(user_id))
 
 
 @router.post("/evaluations/{evaluation_id}/events")

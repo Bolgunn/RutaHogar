@@ -60,6 +60,60 @@ def test_bearer_required_before_domain_access(api):
     assert repo.commits == 0
 
 
+def test_confirmed_co_debtor_evaluation_uses_authenticated_owner_only(api):
+    client, repo = api
+    headers = {"Authorization": "Bearer test-owner"}
+    declared = {
+        **valid_snapshot(),
+        "complemento_renta": True,
+        "ingreso_mensual_complementario": 800000,
+        "deuda_mensual_complementario": 50000,
+        "tipo_contrato_complementario": "plazo_fijo",
+        "continuidad_laboral_complementario": "entre_6_y_12_meses",
+        "morosidad_complementario": "no",
+        "relacion_complementario": "pareja_conviviente",
+    }
+    repo.co_debtor_consent = {"invitation_status": "pending"}
+    baseline = client.post("/tracking/events", json=command(declared), headers=headers)
+    assert baseline.status_code == 200, baseline.text
+    previous = deepcopy(repo.bundle["evaluations"][0])
+    repo.co_debtor_consent = {
+        "invitation_status": "confirmed",
+        "co_debtor_confirmed": {
+            "ingreso_mensual_complementario": 1500000,
+            "deuda_mensual_complementario": 300000,
+            "tipo_contrato_complementario": "indefinido",
+            "continuidad_laboral_complementario": "mas_3_anios",
+            "morosidad_complementario": "no",
+        },
+    }
+
+    assert client.post("/tracking/evaluations/co-debtor-confirmation", json={}).status_code == 401
+    before_invalid_request = deepcopy(repo.bundle)
+    invalid = client.post(
+        "/tracking/evaluations/co-debtor-confirmation",
+        json={"lead_id": "another-lead"},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+    assert repo.bundle == before_invalid_request
+
+    updated = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert updated.status_code == 200, updated.text
+    assert repo.bundle["events"][-1]["user_id"] == "u1"
+    assert repo.bundle["events"][-1]["reason"] == "confirmacion_codeudor"
+    current = repo.bundle["evaluations"][-1]["financial_data"]["input"]
+    assert current["ingreso_mensual_complementario"] == 1500000
+    assert current["deuda_mensual_complementario"] == 300000
+    assert current["relacion_complementario"] == "pareja_conviviente"
+    assert repo.bundle["evaluations"][0] == previous
+
+    repo.co_debtor_consent = {"invitation_status": "revoked"}
+    revoked = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert revoked.status_code == 409
+    assert revoked.json()["detail"]["code"] == "co_debtor_consent_revoked"
+
+
 def test_baseline_partial_update_correction_and_read_only_projection(api):
     client, repo = api
     headers = {"Authorization": "Bearer test-owner"}
