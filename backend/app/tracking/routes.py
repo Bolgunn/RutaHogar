@@ -10,6 +10,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, TrackingError
 from .repository import TrackingRepository
 from .service import TrackingService
+from .staff import StaffLeadService
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 bearer = HTTPBearer(auto_error=False)
@@ -40,6 +41,13 @@ def context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(
         raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
     user_id = checked(lambda: repo.authenticate(credentials.credentials))
     return user_id, repo, TrackingService(repo)
+
+
+def staff_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                  repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, StaffLeadService(repo)
 
 
 @router.get("")
@@ -83,6 +91,18 @@ def confirm(goal_id: UUID, command: ConfirmationCommand, ctx=Depends(context)):
 def projection(ctx=Depends(context), as_of: AwareDatetime | None = None):
     user_id, _, service = ctx
     return checked(lambda: service.projection(user_id, as_of))
+
+
+@router.get("/staff/evaluations")
+def staff_evaluations(ctx=Depends(staff_context)):
+    token, service = ctx
+    return checked(lambda: service.evaluations(token))
+
+
+@router.get("/staff/leads/{lead_id}")
+def staff_lead_detail(lead_id: UUID, ctx=Depends(staff_context)):
+    token, service = ctx
+    return checked(lambda: service.lead_detail(token, str(lead_id)))
 
 
 class EvaluationAnnotation(BaseModel):

@@ -2019,3 +2019,15 @@ grant execute on function public.hu18_create_invitation(uuid, text, text, timest
   public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
   public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
   public.hu18_revoke_consent(uuid) to service_role;
+
+-- HU18 Step 8: staff never reads raw evaluation/history snapshots directly.
+-- The backend applies consent-state redaction and the existing commercial
+-- tenant scope before returning an executive projection.
+drop policy if exists "Evaluations select own" on public.evaluations;
+create policy "Evaluations select own"
+  on public.evaluations
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;

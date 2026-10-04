@@ -1,7 +1,7 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
 import { ensureUserProfile, getAuthenticatedUser } from "./profileService";
-import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
+import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
   if (value === undefined || value === null) return fallback;
@@ -37,7 +37,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     : recommendationData.items || [];
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
-  const contact = contactsMap[row.user_id] || {};
+  const contact = contactsMap[row.user_id] || row;
 
   const onboarding = {
     objetivo_principal: row.objective || "",
@@ -136,17 +136,15 @@ export async function getEvaluations(userId, role) {
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
   const isSales = role === "ejecutivo" || role === "admin";
+  if (isSales) {
+    const projection = await getStaffEvaluations();
+    return (projection.items || []).map((row) => normalizeEvaluation(row));
+  }
   let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
-  if (!isSales) query = query.eq("user_id", user.id);
+  query = query.eq("user_id", user.id);
   const { data, error } = await query;
   if (error) throw error;
   let contactsMap = {};
-  if (isSales && data?.length) {
-    const { data: contacts } = await supabase.rpc("list_lead_contacts", {
-      p_user_ids: [...new Set(data.map((row) => row.user_id))],
-    });
-    contactsMap = Object.fromEntries((contacts || []).map((contact) => [contact.id, contact]));
-  }
   if (!data?.length) return [];
   let annotationQuery = supabase.from("evaluation_events").select("*")
     .in("evaluation_id", data.map((row) => row.id));

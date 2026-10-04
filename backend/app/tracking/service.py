@@ -259,7 +259,7 @@ class TrackingService:
         consent_facts = None
         consent_loaded = False
 
-        def evaluate(source, snapshot):
+        def evaluate(source_event, snapshot):
             nonlocal consent_facts, consent_loaded
             if (snapshot.get("complemento_renta") or require_co_debtor_confirmation) and not consent_loaded:
                 consent_facts = self._co_debtor_consent(user_id)
@@ -270,16 +270,16 @@ class TrackingService:
                 now=recorded_at,
             )
             if require_co_debtor_confirmation:
-                source = consent_provenance["complement_source"]
-                if source == "excluded_after_revocation":
+                complement_source = consent_provenance["complement_source"]
+                if complement_source == "excluded_after_revocation":
                     raise TrackingError("co_debtor_consent_revoked")
-                if source != "co_debtor_confirmed":
+                if complement_source != "co_debtor_confirmed":
                     raise TrackingError("co_debtor_confirmation_required")
             complete_input = complete_snapshot(resolved_input)
             result = self._score(complete_input, market_snapshot)
             details = {
                 **provenance(result),
-                "source_event_ids": [source["event_id"]],
+                "source_event_ids": [source_event["event_id"]],
                 "cutoff_at": now,
                 "co_debtor_consent": consent_provenance,
             }
@@ -287,7 +287,9 @@ class TrackingService:
                 "id": self.new_id(), "snapshot": deepcopy(complete_input),
                 "result": result, "provenance": details,
             }
-            source.update(evaluation_id=evaluation["id"], evaluation=result, provenance=details)
+            source_event.update(
+                evaluation_id=evaluation["id"], evaluation=result, provenance=details
+            )
             evaluations.append(evaluation)
             return evaluation
 

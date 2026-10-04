@@ -17801,6 +17801,19 @@ th {
 .co-debtor-section__update { justify-self: start; margin: 0; }
 .co-debtor-section__feedback { margin: 0; }
 
+/* HU18 Step 8: server-projected executive consent state. */
+.executive-co-debtor { display: grid; gap: 12px; }
+.executive-co-debtor .admin-panel-card__header { margin-bottom: 0; }
+.executive-co-debtor__status.is-confirmed { background: rgba(45, 134, 89, .13); color: #17613c; }
+.executive-co-debtor__status.is-pending,
+.executive-co-debtor__status.is-expired,
+.executive-co-debtor__status.is-not_confirmed { background: rgba(212, 168, 67, .16); color: #75520a; }
+.executive-co-debtor__status.is-revoked { background: rgba(154, 52, 18, .12); color: #7c2d12; }
+.executive-co-debtor__source,
+.executive-co-debtor__copy { margin: 0; color: var(--rh-text-secondary); line-height: 1.5; }
+.executive-co-debtor__details { margin: 0; }
+.executive-co-debtor__details small { display: block; margin-top: 3px; color: var(--rh-text-muted); font-size: .78rem; }
+
 /* HU18: páginas públicas tokenizadas para la persona co-deudora. */
 .co-debtor-public-page {
   min-height: 100vh;

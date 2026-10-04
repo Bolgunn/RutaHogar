@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   ensureUserProfile: vi.fn(),
   from: vi.fn(),
   getAuthenticatedUser: vi.fn(),
+  getStaffEvaluations: vi.fn(),
 }));
 
 vi.mock("../../utils/supabase", () => ({
@@ -19,6 +20,7 @@ vi.mock("../profileService", () => ({
 vi.mock("../trackingService", () => ({
   annotateEvaluation: mocks.annotateEvaluation,
   appendTrackingEvent: vi.fn(),
+  getStaffEvaluations: mocks.getStaffEvaluations,
   getTracking: vi.fn(),
   newTrackingCommand: vi.fn(),
 }));
@@ -67,6 +69,7 @@ describe("HU13 — aceptación del plan", () => {
     mocks.ensureUserProfile.mockReset();
     mocks.from.mockReset();
     mocks.getAuthenticatedUser.mockReset();
+    mocks.getStaffEvaluations.mockReset();
     mocks.getAuthenticatedUser.mockResolvedValue({ id: "user-1" });
     mocks.ensureUserProfile.mockResolvedValue();
   });
@@ -125,5 +128,20 @@ describe("HU13 — aceptación del plan", () => {
       plan_accepted_at: "2026-09-27T12:00:00Z",
       plan_type: "acelerado",
     }));
+  });
+
+  it("uses the server-side staff projection instead of selecting raw evaluations", async () => {
+    mocks.getStaffEvaluations.mockResolvedValue({
+      items: [{ ...evaluation, full_name: "Lead en scope", phone: "+56912345678" }],
+    });
+
+    const evaluations = await getEvaluations("executive-1", "ejecutivo");
+
+    expect(evaluations[0]).toEqual(expect.objectContaining({
+      full_name: "Lead en scope",
+      phone: "+56912345678",
+    }));
+    expect(mocks.getStaffEvaluations).toHaveBeenCalledOnce();
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });

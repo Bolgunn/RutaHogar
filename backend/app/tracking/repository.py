@@ -79,6 +79,72 @@ class TrackingRepository:
             "co_debtor_confirmed": confirmation,
         }
 
+    def staff_actor(self, token):
+        """Authenticate the caller and read its server-side staff scope."""
+        user_id = self.authenticate(token)
+        query = urlencode({"id": f"eq.{user_id}", "select": "id,role,inmobiliaria_id"})
+        rows = self.request("GET", f"/rest/v1/profiles?{query}")
+        actor = rows[0] if isinstance(rows, list) and rows else None
+        if not actor:
+            raise TrackingError("owner_mismatch")
+        return actor
+
+    def staff_can_access(self, actor, lead_id):
+        """Reuse HU16's tenant definition; never take scope from the client."""
+        if actor.get("role") not in {"ejecutivo", "admin", "admin_inmobiliario"}:
+            return False
+        if actor.get("role") == "admin" and not actor.get("inmobiliaria_id"):
+            return True
+        tenant_id = actor.get("inmobiliaria_id")
+        if not tenant_id:
+            return False
+        return bool(self.request("POST", "/rest/v1/rpc/lead_belongs_to_inmobiliaria", payload={
+            "p_lead": lead_id,
+            "p_inmobiliaria": tenant_id,
+        }))
+
+    def staff_evaluations(self):
+        return self.request("GET", "/rest/v1/evaluations?select=*&order=created_at.desc")
+
+    def staff_contacts(self, lead_ids):
+        ids = sorted({str(lead_id) for lead_id in lead_ids if lead_id})
+        if not ids:
+            return {}
+        query = urlencode({"select": "id,full_name,phone", "id": f"in.({','.join(ids)})"})
+        rows = self.request("GET", f"/rest/v1/profiles?{query}")
+        return {
+            row["id"]: {"full_name": row.get("full_name"), "phone": row.get("phone")}
+            for row in rows if row.get("id")
+        }
+
+    def staff_lead_evaluations(self, lead_id):
+        query = urlencode({"user_id": f"eq.{lead_id}", "select": "financial_data,created_at"})
+        return self.request("GET", f"/rest/v1/evaluations?{query}")
+
+    def staff_co_debtor_invitation(self, lead_id):
+        query = urlencode({
+            "lead_id": f"eq.{lead_id}",
+            "select": (
+                "status,created_at,expires_at,"
+                "co_debtor_confirmations("
+                "ingreso_mensual_complementario,deuda_mensual_complementario,"
+                "tipo_contrato_complementario,continuidad_laboral_complementario,"
+                "morosidad_complementario)"
+            ),
+            "order": "created_at.desc",
+            "limit": 1,
+        })
+        rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
+        return rows[0] if isinstance(rows, list) and rows else None
+
+    def staff_history(self, lead_id):
+        query = urlencode({
+            "user_id": f"eq.{lead_id}",
+            "select": "id,evaluation_id,user_id,score,classification,snapshot,component_scores,algorithm_version,channel,events,created_at",
+            "order": "created_at.desc",
+        })
+        return self.request("GET", f"/rest/v1/scoring_history?{query}")
+
     def commit(self, user_id, command, revision, records):
         return self.request("POST", "/rest/v1/rpc/hu13_commit", payload={
             "p_user_id": user_id, "p_command": command, "p_expected_revision": revision,

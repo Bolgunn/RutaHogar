@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
+import { getStaffLeadDetail } from "../services/trackingService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { detectContactOpportunities } from "../lib/matching/contactOpportunities";
 import { buildLeadProjectComparison } from "../lib/matching/leadComparison";
@@ -9,6 +9,7 @@ import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
+import ExecutiveCoDebtorSection from "./ExecutiveCoDebtorSection";
 import { getCommercialStages } from "../services/commercialStageService";
 import { formatFormValue } from "../constants";
 import {
@@ -116,39 +117,6 @@ function latestEvaluationPerLead(items = []) {
     }
   }
   return [...latestByLead.values()];
-}
-
-function evaluationsForSameLead(items = [], lead) {
-  const key = leadIdentity(lead);
-  if (!key) return [];
-  return items
-    .filter((item) => leadIdentity(item) === key)
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-}
-
-function historyFallbackFromEvaluation(item) {
-  if (!item) return null;
-  const result = item.result || {};
-  return {
-    id: `evaluation-${item.id}`,
-    evaluation_id: item.id,
-    score: result.score,
-    base_score: result.base_score,
-    adjusted_score: result.adjusted_score,
-    score_adjustment_reason: result.score_adjustment_reason || "",
-    original_classification: result.original_classification || "",
-    classification: result.classification,
-    snapshot: {
-      ...(item.input || {}),
-      input: item.input || {},
-      onboarding: item.onboarding || {},
-      result,
-    },
-    component_scores: result.component_scores || {},
-    algorithm_version: result.algorithm_version || "",
-    created_at: item.created_at,
-    events: [],
-  };
 }
 
 function readDismissedOpportunities(scope) {
@@ -370,6 +338,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
+  const [coDebtor, setCoDebtor] = useState(null);
   const [commercialStages, setCommercialStages] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
@@ -399,10 +368,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   );
   const dismissedScope = executiveId || executiveEmail || "global";
   const latestEvaluations = useMemo(() => latestEvaluationPerLead(evaluations), [evaluations]);
-  const selectedLeadEvaluations = useMemo(
-    () => evaluationsForSameLead(evaluations, selectedLead),
-    [evaluations, selectedLead],
-  );
   const comparisonLeads = useMemo(
     () => comparisonLeadIds.map((id) => latestEvaluations.find((lead) => lead.id === id)).filter(Boolean),
     [comparisonLeadIds, latestEvaluations],
@@ -420,24 +385,17 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   }, [inmobiliariaId, executiveScope]);
 
   useEffect(() => {
-    if (!selectedLead) { setHistory([]); return; }
+    if (!selectedLead?.user_id) { setHistory([]); setCoDebtor(null); return; }
     let active = true;
-    const evaluationIds = selectedLeadEvaluations.length
-      ? selectedLeadEvaluations.map((item) => item.id)
-      : [selectedLead.id];
-    Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
-      .then((groups) => {
+    getStaffLeadDetail(selectedLead.user_id)
+      .then((detail) => {
         if (!active) return;
-        const rows = groups.flat().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        if (rows.length) {
-          setHistory(rows);
-          return;
-        }
-        setHistory(selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean));
+        setCoDebtor(detail.co_debtor || null);
+        setHistory(detail.history || []);
       })
-      .catch(() => { if (active) setHistory([]); });
+      .catch(() => { if (active) { setCoDebtor(null); setHistory([]); } });
     return () => { active = false; };
-  }, [selectedLead, selectedLeadEvaluations]);
+  }, [selectedLead?.user_id]);
 
   const leadUserIds = useMemo(
     () => latestEvaluations.map((item) => item.user_id).filter(Boolean).sort().join(","),
@@ -968,6 +926,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
                   {selectedOnboarding.comuna_alternativa && <DetailRow label="Comuna alternativa">{selectedOnboarding.comuna_alternativa}</DetailRow>}
                 </dl>
               </article>
+
+              <ExecutiveCoDebtorSection coDebtor={coDebtor} />
 
               {selectedMainBlocker && <article className="admin-panel-card admin-panel-card--warning executive-snapshot-card executive-lead-detail__blocker"><div className="admin-panel-card__header"><span className="executive-snapshot-card__icon"><i className="ti ti-alert-triangle" aria-hidden="true" /></span><h3>Bloqueador principal</h3></div><p className="admin-panel-card__body-strong">{selectedMainBlocker.title || selectedMainBlocker.code || "Antecedente a revisar"}</p>{selectedMainBlocker.description && <p>{selectedMainBlocker.description}</p>}<span className="admin-inline-note">Severidad: {translateSeverity(selectedMainBlocker.severity)}</span></article>}
 
