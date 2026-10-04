@@ -12,6 +12,7 @@ from .scoring_adapter import (
     complete_snapshot, financial_field_contract, market_snapshot_from_result,
     provenance, resolve_tracking_market_snapshot, score_snapshot,
 )
+from ..scoring_engine.co_debtor_inputs import assemble_co_debtor_scoring_input
 
 
 def canonical_command(command):
@@ -93,6 +94,11 @@ class TrackingService:
         if self.scorer is score_snapshot:
             return self.scorer(complete, market_snapshot=market_snapshot)
         return self.scorer(complete)
+
+    def _co_debtor_consent(self, user_id):
+        """Keep legacy/in-memory repositories usable while HU18 is optional."""
+        loader = getattr(self.repository, "load_co_debtor_consent", None)
+        return loader(user_id) if callable(loader) else None
 
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
@@ -198,7 +204,8 @@ class TrackingService:
             return deepcopy(prior["command_result"])
         history = source_events(bundle)
         before = reconstruct(history, user_id, financial_field_contract())
-        now = self.clock().isoformat()
+        recorded_at = self.clock()
+        now = recorded_at.isoformat()
         latest_id = before["active_line"][-1]["event_id"] if before["active_line"] else None
         event = {
             "event_id": command["event_id"], "subject_user_id": user_id,
@@ -226,11 +233,31 @@ class TrackingService:
         event = outcome["appended_record"]
         events, evaluations, goals, plan = [event], [], [], None
         market_snapshot = self._stored_market_snapshot(before.get("active_line")) or self.market_snapshot_resolver()
+        consent_facts = None
+        consent_loaded = False
 
         def evaluate(source, snapshot):
-            result = self._score(snapshot, market_snapshot)
-            details = {**provenance(result), "source_event_ids": [source["event_id"]], "cutoff_at": now}
-            evaluation = {"id": self.new_id(), "snapshot": deepcopy(snapshot), "result": result, "provenance": details}
+            nonlocal consent_facts, consent_loaded
+            if snapshot.get("complemento_renta") and not consent_loaded:
+                consent_facts = self._co_debtor_consent(user_id)
+                consent_loaded = True
+            resolved_input, consent_provenance = assemble_co_debtor_scoring_input(
+                snapshot,
+                co_debtor_consent=consent_facts,
+                now=recorded_at,
+            )
+            complete_input = complete_snapshot(resolved_input)
+            result = self._score(complete_input, market_snapshot)
+            details = {
+                **provenance(result),
+                "source_event_ids": [source["event_id"]],
+                "cutoff_at": now,
+                "co_debtor_consent": consent_provenance,
+            }
+            evaluation = {
+                "id": self.new_id(), "snapshot": deepcopy(complete_input),
+                "result": result, "provenance": details,
+            }
             source.update(evaluation_id=evaluation["id"], evaluation=result, provenance=details)
             evaluations.append(evaluation)
             return evaluation

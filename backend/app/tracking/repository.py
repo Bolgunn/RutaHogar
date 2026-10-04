@@ -1,6 +1,7 @@
 """Supabase I/O only. No scoring or projection persistence lives here."""
 
 import os
+from urllib.parse import urlencode
 
 import httpx
 
@@ -45,6 +46,38 @@ class TrackingRepository:
 
     def load(self, user_id):
         return self.request("POST", "/rest/v1/rpc/hu13_read", payload={"p_user_id": user_id})
+
+    def load_co_debtor_consent(self, user_id):
+        """Load only the latest HU18 facts needed to assemble a future score."""
+        query = urlencode({
+            "lead_id": f"eq.{user_id}",
+            "select": (
+                "status,created_at,expires_at,"
+                "co_debtor_confirmations("
+                "ingreso_mensual_complementario,deuda_mensual_complementario,"
+                "tipo_contrato_complementario,continuidad_laboral_complementario,"
+                "morosidad_complementario)"
+            ),
+            "order": "created_at.desc",
+            "limit": 1,
+        })
+        rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
+        if not isinstance(rows, list) or not rows:
+            return None
+        invitation = rows[0]
+        confirmations = invitation.get("co_debtor_confirmations")
+        if isinstance(confirmations, dict):
+            confirmation = confirmations
+        elif isinstance(confirmations, list) and confirmations:
+            confirmation = confirmations[0]
+        else:
+            confirmation = None
+        return {
+            "invitation_status": invitation.get("status"),
+            "created_at": invitation.get("created_at"),
+            "expires_at": invitation.get("expires_at"),
+            "co_debtor_confirmed": confirmation,
+        }
 
     def commit(self, user_id, command, revision, records):
         return self.request("POST", "/rest/v1/rpc/hu13_commit", payload={
