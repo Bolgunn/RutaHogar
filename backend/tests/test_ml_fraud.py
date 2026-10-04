@@ -1,4 +1,3 @@
-import pytest
 from app.ml_fraud import predict_fraud
 
 def test_fraud_rule_normal_user():

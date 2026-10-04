@@ -1,38 +1,9 @@
 -- Fix for HU16 PR review: Sweeper column names and security, 
 -- missing RLS in lead_status_history, unsecure update_lead_reliability, 
--- overly restrictive evaluations policy, and fixing invalid references to evaluations.input.
+-- and fixing invalid references to evaluations.input.
+-- Note: Section 1 (evaluations policy recreation) has been removed to prevent 42501 permission errors.
 
--- 1. Restore the fix for evaluations select policy (using target_commune and financial_data)
-DROP POLICY IF EXISTS "Evaluations select own" ON public.evaluations;
-CREATE POLICY "Evaluations select own"
-  ON public.evaluations
-  FOR SELECT
-  USING (
-    (auth.uid() = user_id)
-    OR (public.get_my_role() IN ('admin', 'ejecutivo'))
-    OR (
-      public.get_my_role() = 'admin_inmobiliario'
-      AND (
-        EXISTS (
-          SELECT 1 FROM public.proyectos pr
-          WHERE pr.inmobiliaria_id = public.get_my_inmobiliaria()
-          AND (
-            pr.comuna = COALESCE(evaluations.target_commune, evaluations.financial_data->'input'->>'comuna_objetivo')
-            OR pr.comuna = (SELECT onboarding_data->>'comuna_interes' FROM public.profiles p WHERE p.id = evaluations.user_id)
-            OR pr.comuna = (SELECT onboarding_data->>'comuna_alternativa' FROM public.profiles p WHERE p.id = evaluations.user_id)
-          )
-        )
-        OR EXISTS (
-          SELECT 1 FROM public.lead_status_history lsh
-          JOIN public.profiles exec_p ON exec_p.id = lsh.changed_by
-          WHERE lsh.profile_id = evaluations.user_id
-          AND exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
-        )
-      )
-    )
-  );
-
--- 2. Secure update_lead_reliability (add role check)
+-- 1. Secure update_lead_reliability (add role check and restrict ejecutivo to en_revision)
 CREATE OR REPLACE FUNCTION public.update_lead_reliability(
   p_lead_id uuid,
   p_reporter_id uuid DEFAULT NULL,
@@ -76,14 +47,14 @@ $$;
 REVOKE ALL ON FUNCTION public.update_lead_reliability(uuid, uuid, text, text) FROM public;
 GRANT EXECUTE ON FUNCTION public.update_lead_reliability(uuid, uuid, text, text) TO authenticated;
 
--- 3. Add RLS to lead_status_history
+-- 2. Add RLS to lead_status_history
 ALTER TABLE public.lead_status_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Staff select lead_status_history" ON public.lead_status_history;
 CREATE POLICY "Staff select lead_status_history"
 ON public.lead_status_history FOR SELECT
 USING (public.get_my_role() IN ('ejecutivo', 'admin', 'admin_inmobiliario'));
 
--- 4. Fix the sweep_fraudulent_leads function
+-- 3. Fix the sweep_fraudulent_leads function (changed_by = NULL for system, and revoke execute)
 CREATE OR REPLACE FUNCTION public.sweep_fraudulent_leads()
 RETURNS void
 LANGUAGE plpgsql
@@ -91,7 +62,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  -- Insert into history
+  -- Insert into history with changed_by = NULL (shown as 'Sistema' in AdminReportHistory)
   INSERT INTO public.lead_status_history (
     profile_id, 
     old_status, 
@@ -104,7 +75,7 @@ BEGIN
     'normal', 
     'sospechoso', 
     'Alerta automática (Sweeper): Probabilidad de fraude (' || e.fraud_score_probability || '%) excede el umbral.', 
-    p.id
+    NULL
   FROM public.profiles p
   JOIN public.evaluations e ON p.id = e.user_id
   WHERE e.fraud_score_probability >= 80
@@ -121,8 +92,9 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.sweep_fraudulent_leads() FROM public;
+REVOKE EXECUTE ON FUNCTION public.sweep_fraudulent_leads() FROM anon, authenticated, public;
 
--- 5. Fix get_reported_leads_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
+-- 4. Fix get_reported_leads_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
 CREATE OR REPLACE FUNCTION public.get_reported_leads_for_admin()
 RETURNS TABLE (
   id uuid,
@@ -182,7 +154,7 @@ $$;
 REVOKE ALL ON FUNCTION public.get_reported_leads_for_admin() FROM public;
 GRANT EXECUTE ON FUNCTION public.get_reported_leads_for_admin() TO authenticated;
 
--- 6. Fix get_lead_status_history_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
+-- 5. Fix get_lead_status_history_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
 CREATE OR REPLACE FUNCTION public.get_lead_status_history_for_admin()
 RETURNS TABLE (
   history_id uuid,

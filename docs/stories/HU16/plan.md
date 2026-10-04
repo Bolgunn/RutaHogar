@@ -90,26 +90,15 @@ stateDiagram-v2
 | `silenciado` | Silenciado formalmente por el administrador inmobiliario | **No** (oculto por defecto) |
 | `reactivado` | Reincorporado tras subsanar observaciones | **Sí** |
 
-### 3.2. Reglas Heurísticas del Detector Automático (E1)
+### 3.2. Reglas del Detector Automático (E1)
 
-Las reglas se implementan como funciones puras y auditables en un módulo específico:
+Las reglas determinísticas operan en el backend sin requerir librerías pesadas de Machine Learning:
 
-1. **`RULE_DEUDA_SUPERA_INGRESO` (Severidad: Alta):**  
-   `deuda_mensual >= ingreso_mensual` (con `ingreso_mensual > 0`). Imposibilidad aritmética de destinar más del 100% de los ingresos a deuda financiera sin caer en cesación inmediata.
-2. **`RULE_DIVIDENDO_INVIABLE` (Severidad: Alta):**  
-   `dividendo_estimado > ingreso_mensual * 0.85`. El dividendo proyectado compromete casi la totalidad del sueldo líquido.
-3. **`RULE_AHORRO_DESPROPORCIONADO` (Severidad: Media):**  
-   `ahorro_disponible > ingreso_mensual * 120` y sin co-deudor reportado para usuarios con sueldo menor al percentil medio. Representa más de 10 años de ahorro íntegro sin gastos.
-4. **`RULE_CONTRADICCION_MOROSIDAD` (Severidad: Alta):**  
-   `morosidad_actual == "no"` pero `monto_morosidad > 0`, o `morosidad_actual == "si"` pero `monto_morosidad <= 0`.
-5. **`RULE_EDAD_PLAZO_BANCARIO` (Severidad: Media):**  
-   `edad + plazo_credito > 85` años. Excede la edad máxima de cobertura de seguros de desgravamen hipotecario estándar en Chile (75–85 años).
-6. **`RULE_SALTO_ANORMAL_HISTORIAL` (Severidad: Alta):**  
-   Al comparar la evaluación actual con la anterior del mismo lead en un plazo inferior a 30 días:
-   - Incremento de ingresos > 200% o caída > 70% sin justificación laboral.
-   - Eliminación repentina de morosidad alta a $0 en menos de 7 días.
+1. **Tiempo de llenado anormalmente bajo (< 5s):** Posible uso de scripts o herramientas automatizadas.
+2. **Tanteo excesivo (> 3 intentos en ventana de tiempo):** Manipulación deliberada de parámetros para alterar el scoring.
+3. **Salto de ahorro irreal en 24h:** Incremento abrupto de ahorro en un período corto que excede la capacidad de generación de ingresos declarada.
 
-Si se activa al menos una regla de severidad **Alta**, o dos de severidad **Media**, el lead se cataloga automáticamente como `sospechoso` y se adjunta la lista de `inconsistency_flags` con código, factor descriptivo y valores involucrados.
+Si se activa alguna de estas condiciones, el lead se clasifica automáticamente como sospechoso y se registran los factores explicativos correspondientes.
 
 ### 3.3. Modelo de Datos y Persistencia (E4)
 
