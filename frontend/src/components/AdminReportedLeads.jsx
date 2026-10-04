@@ -13,6 +13,8 @@ export default function AdminReportedLeads({ profile }) {
   const [error, setError] = useState("");
   const [resolving, setResolving] = useState(false);
   const [currentTab, setCurrentTab] = useState("en_revision"); // "en_revision" | "silenciado"
+  const [activeAction, setActiveAction] = useState(null); // { leadId, status }
+  const [actionReason, setActionReason] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -31,8 +33,6 @@ export default function AdminReportedLeads({ profile }) {
   }, []);
 
   const handleResolve = async (leadId, status, reason) => {
-    const actionLabel = status === "silenciado" ? "silenciar" : "reactivar";
-    if (!window.confirm(`¿Estás seguro de que deseas ${actionLabel} este lead?`)) return;
     setResolving(true);
     try {
       await resolveLeadStatus(leadId, profile?.id, status, reason);
@@ -41,11 +41,9 @@ export default function AdminReportedLeads({ profile }) {
         current.map((l) => l.id === leadId ? { ...l, reliability_status: status } : l)
       );
 
-      if (status === "silenciado") {
-        alert("Lead silenciado exitosamente. Se ha retirado del perfil de los ejecutivos y no podrá ser contactado.");
-      } else {
-        alert("Lead reactivado exitosamente. Volverá a estar disponible para el contacto comercial de los ejecutivos.");
-      }
+      setActiveAction(null);
+      setActionReason("");
+      alert(`Lead actualizado a estado: ${status}`);
     } catch (err) {
       alert("Error al actualizar lead: " + err.message);
     } finally {
@@ -153,13 +151,45 @@ export default function AdminReportedLeads({ profile }) {
                 <span>Registrado: {formatDate(lead.reported_at || lead.created_at)}</span>
               </div>
               <div className="admin-action-grid" style={{ width: "auto" }}>
-                {currentTab === "en_revision" ? (
-                  <>
+                {activeAction?.leadId === lead.id ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '250px' }}>
+                    <textarea 
+                      placeholder={`Motivo para cambiar a ${activeAction.status} (obligatorio)...`} 
+                      className="admin-textarea"
+                      value={actionReason} 
+                      onChange={e => setActionReason(e.target.value)}
+                      rows={2}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="button" className="secondary-button compact-button" onClick={() => setActiveAction(null)}>Cancelar</button>
+                      <button type="button" className="primary-button compact-button" disabled={resolving || !actionReason.trim()} onClick={() => handleResolve(lead.id, activeAction.status, actionReason)}>Confirmar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'flex-end', maxWidth: '250px' }}>
+                    <button 
+                      type="button" 
+                      className="secondary-button compact-button" 
+                      style={{ color: "var(--color-text-main, #333)" }}
+                      onClick={() => { setActiveAction({ leadId: lead.id, status: 'normal' }); setActionReason(''); }}
+                      disabled={resolving}
+                    >
+                      <i className="ti ti-user-check" /> Normal
+                    </button>
+                    <button 
+                      type="button" 
+                      className="secondary-button compact-button" 
+                      style={{ color: "var(--color-warning, #ed6c02)" }}
+                      onClick={() => { setActiveAction({ leadId: lead.id, status: 'en_revision' }); setActionReason(''); }}
+                      disabled={resolving}
+                    >
+                      <i className="ti ti-alert-triangle" /> En revisión
+                    </button>
                     <button 
                       type="button" 
                       className="secondary-button compact-button" 
                       style={{ color: "var(--color-success, #2e7d32)" }}
-                      onClick={() => handleResolve(lead.id, "reactivado", "Lead verificado y reactivado por administrador")}
+                      onClick={() => { setActiveAction({ leadId: lead.id, status: 'reactivado' }); setActionReason(''); }}
                       disabled={resolving}
                     >
                       <i className="ti ti-check" /> Reactivar
@@ -168,22 +198,12 @@ export default function AdminReportedLeads({ profile }) {
                       type="button" 
                       className="secondary-button compact-button" 
                       style={{ color: "var(--color-danger, #d32f2f)" }}
-                      onClick={() => handleResolve(lead.id, "silenciado", "Lead silenciado por inconsistencias en revisión")}
+                      onClick={() => { setActiveAction({ leadId: lead.id, status: 'silenciado' }); setActionReason(''); }}
                       disabled={resolving}
                     >
-                      <i className="ti ti-volume-off" /> Silenciar lead
+                      <i className="ti ti-volume-off" /> Silenciar
                     </button>
-                  </>
-                ) : (
-                  <button 
-                    type="button" 
-                    className="secondary-button compact-button" 
-                    style={{ color: "var(--color-success, #2e7d32)" }}
-                    onClick={() => handleResolve(lead.id, "reactivado", "Lead reactivado desde silenciados")}
-                    disabled={resolving}
-                  >
-                    <i className="ti ti-check" /> Reactivar lead
-                  </button>
+                  </div>
                 )}
               </div>
             </article>

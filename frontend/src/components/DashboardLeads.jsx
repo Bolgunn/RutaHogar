@@ -396,6 +396,11 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
+  const [localEvaluations, setLocalEvaluations] = useState(evaluations || []);
+
+  useEffect(() => {
+    setLocalEvaluations(evaluations || []);
+  }, [evaluations]);
   const [commercialStages, setCommercialStages] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
@@ -516,8 +521,9 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       if (ageRange.min && item.input?.edad == null) return false;
       if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
       const status = item.reliability_status || "normal";
-      // Leads silenciados no salen en el perfil de ejecutivos a no ser que sean reactivados
-      if (status === "silenciado" || status === "descartado") return false;
+      // Leads silenciados no salen en el perfil de ejecutivos a no ser que sean reactivados o filtrados explícitamente
+      if (status === "descartado") return false;
+      if (status === "silenciado" && reliabilityStatus !== "silenciado") return false;
       if (reliabilityStatus === "default" && (status === "sospechoso" || status === "en_revision")) return false;
       if (reliabilityStatus !== "default" && reliabilityStatus !== "todos" && status !== reliabilityStatus) return false;
 
@@ -946,7 +952,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
               </div>
               <textarea
                 className="admin-textarea"
-                placeholder="Motivo del reporte (opcional)"
+                placeholder="Motivo del reporte (obligatorio)"
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 rows="3"
@@ -954,12 +960,17 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
               />
               <div className="admin-action-grid">
                 <button type="button" className="secondary-button" onClick={() => setIsReporting(false)}>Cancelar</button>
-                <button type="button" className="primary-button" onClick={async () => {
+                <button type="button" className="primary-button" disabled={!reportReason.trim()} onClick={async () => {
                   if (executiveScope) {
                     try {
                       await reportLead(selectedLead.user_id, executiveScope.id, reportReason);
                       // Optimistic UI update
-                      selectedLead.reliability_status = "en_revision";
+                      setLocalEvaluations(prev => prev.map(item =>
+                        item.id === selectedLead.id
+                          ? { ...item, reliability_status: "en_revision" }
+                          : item
+                      ));
+                      setSelectedLead(prev => ({ ...prev, reliability_status: "en_revision" }));
                       setIsReporting(false);
                       setReportReason("");
                       alert("Lead reportado correctamente. Pasará a estado de revisión.");

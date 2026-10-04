@@ -51,8 +51,16 @@ BEGIN
   v_changed_by := auth.uid();
   v_role := public.get_my_role();
 
+  IF v_changed_by IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized: anonymous calls not allowed';
+  END IF;
+
   IF v_role NOT IN ('ejecutivo', 'admin', 'admin_inmobiliario') THEN
     RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  IF v_role = 'ejecutivo' AND p_new_status != 'en_revision' THEN
+    RAISE EXCEPTION 'Unauthorized: ejecutivo can only set en_revision';
   END IF;
 
   SELECT reliability_status INTO v_old_status FROM public.profiles WHERE id = p_lead_id;
