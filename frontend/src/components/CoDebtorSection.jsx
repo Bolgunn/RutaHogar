@@ -4,6 +4,7 @@ import { formatFormValue } from "../constants";
 import {
   createCoDebtorInvitation,
   getLeadCoDebtorInvitation,
+  runExclusive,
 } from "../services/coDebtorService";
 import { updateScoreWithConfirmedCoDebtor } from "../services/trackingService";
 import { formatClp } from "../utils/helpers";
@@ -54,17 +55,6 @@ function InvitationForm({ email, onChange, onSubmit, busy, status }) {
       </button>
     </div>
   </form>;
-}
-
-export function runExclusive(lock, task) {
-  if (lock.current) return lock.current;
-  const request = Promise.resolve().then(task);
-  lock.current = request;
-  const clear = () => {
-    if (lock.current === request) lock.current = null;
-  };
-  request.then(clear, clear);
-  return request;
 }
 
 export function CoDebtorPanel({

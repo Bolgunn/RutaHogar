@@ -2,7 +2,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { CoDebtorPanel, runExclusive } from "./CoDebtorSection";
+import { CoDebtorPanel } from "./CoDebtorSection";
+import { runExclusive } from "../services/coDebtorService";
 
 const declaredProps = {
   declaredComplement: true,
@@ -35,7 +36,7 @@ describe("HU18 lead co-debtor section", () => {
 
     expect(html).toContain("Correo del co-deudor");
     expect(html).toContain("Enviar invitación");
-    expect(html).toContain("complete y autorice sus propios antecedentes");
+    expect(html).toContain("completar y autorizar sus propios antecedentes");
   });
 
   it("renders pending and expired invitations as not confirmed", () => {
