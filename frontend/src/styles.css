@@ -17768,9 +17768,46 @@ th {
 .recommendations-panel .recommendations-cta { margin: 0; padding: 4px 0 0; border: 0; background: transparent; text-align: left; }
 .recommendations-panel .recommendations-cta .primary-button { margin: 0; }
 
+/* HU18: estado y acción del co-deudor dentro del resultado vigente del lead. */
+.co-debtor-section {
+  display: grid;
+  gap: 14px;
+  padding: clamp(18px, 2.5vw, 24px);
+  border: 1px solid rgba(19,43,74,0.14);
+  border-radius: var(--rh-radius-lg);
+  background: linear-gradient(115deg, rgba(19,43,74,0.035), var(--rh-surface) 48%);
+  box-shadow: var(--rh-shadow-xs);
+}
+.co-debtor-section__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.co-debtor-section__header h2 { margin: 3px 0 0; color: var(--rh-navy); font-family: var(--rh-font-display); font-size: 1.3rem; }
+.co-debtor-section__header .eyebrow { color: var(--rh-gold-dark); }
+.co-debtor-section__status { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; white-space: nowrap; }
+.co-debtor-section__status--pending { background: #fff5d8; color: #805b00; }
+.co-debtor-section__status--expired { background: #f3f4f6; color: #4b5563; }
+.co-debtor-section__status--confirmed { background: #e6f6ec; color: #17633a; }
+.co-debtor-section__status--revoked { background: #fbe9e7; color: #9a3412; }
+.co-debtor-section__status--none { background: rgba(19,43,74,.08); color: var(--rh-navy); }
+.co-debtor-section > p { margin: 0; color: var(--rh-text-secondary); line-height: 1.5; }
+.co-debtor-section__note { padding-left: 11px; border-left: 3px solid var(--rh-gold); font-size: .9rem; }
+.co-debtor-section__form { display: grid; gap: 7px; max-width: 620px; }
+.co-debtor-section__form label { color: var(--rh-text); font-size: .87rem; font-weight: 800; }
+.co-debtor-section__form-row { display: flex; gap: 10px; align-items: center; }
+.co-debtor-section__form-row input { flex: 1; min-width: 0; margin: 0; }
+.co-debtor-section__form-row button { flex: 0 0 auto; margin: 0; }
+.co-debtor-section__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; }
+.co-debtor-section__details div { padding: 10px; border-radius: var(--rh-radius-sm); background: rgba(19,43,74,.045); }
+.co-debtor-section__details dt { color: var(--rh-text-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.co-debtor-section__details dd { margin: 4px 0 0; color: var(--rh-text); font-size: .9rem; font-weight: 700; }
+.co-debtor-section__update { justify-self: start; margin: 0; }
+.co-debtor-section__feedback { margin: 0; }
+
 @media (max-width: 720px) {
   .recommendations-panel .recommendation-score-ai-card { align-items: flex-start; flex-direction: column; gap: 18px; padding: 20px; }
   .recommendations-panel .recommendation-score-ai-card .score-visual-card { align-self: center; }
+  .co-debtor-section__details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .co-debtor-section__form-row { align-items: stretch; flex-direction: column; }
+  .co-debtor-section__form-row button { width: 100%; }
+  .co-debtor-section__update { width: 100%; }
 }
 
 .evaluation-review-gate {

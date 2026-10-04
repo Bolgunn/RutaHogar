@@ -13,6 +13,7 @@ import {
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
 import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 import AiExplanationBlock from "./AiExplanationBlock";
+import CoDebtorSection from "./CoDebtorSection";
 
 
 function PlanCarousel({ children }) {
@@ -90,7 +91,7 @@ function LinkedText({ text, onOpenArticle }) {
   );
 }
 
-export default function Recommendations({ evaluation, onStartEvaluation, onNavigate, onRetryExplanation }) {
+export default function Recommendations({ evaluation, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
@@ -214,6 +215,8 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
           </div>
         </div>
       )}
+
+      <CoDebtorSection evaluation={evaluation} onScoreUpdated={onCoDebtorScoreUpdated} />
 
       <div className="warning-note">
         <i className="ti ti-alert-triangle"></i>

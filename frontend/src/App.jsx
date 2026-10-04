@@ -494,6 +494,19 @@ export default function App() {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const refreshScoreAfterCoDebtorConfirmation = async () => {
+    try {
+      const [nextTracking, nextEvaluations] = await Promise.all([
+        getTracking(),
+        getEvaluations(userId, profile?.role),
+      ]);
+      setTrackingState(nextTracking);
+      setEvaluations(nextEvaluations);
+    } catch {
+      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
+    }
+  };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
     : profile
@@ -1666,6 +1679,7 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
+          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
         <Subsidios
