@@ -53,8 +53,8 @@ function coDebtorConfirmationEmail(link: string) {
 function leadConfirmationEmail() {
   return {
     subject: "Tu co-deudor confirm\u00f3 sus antecedentes en RutaHogar",
-    html: "<p>Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente; podr\u00e1s actualizarlo desde RutaHogar cuando esa opci\u00f3n est\u00e9 disponible.</p>",
-    text: "Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente.",
+    html: "<p>Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente; ingresa a RutaHogar para actualizarlo con los datos confirmados.</p>",
+    text: "Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente; ingresa a RutaHogar para actualizarlo con los datos confirmados.",
   };
 }
 
@@ -77,10 +77,8 @@ async function sendEmail(to: string, message: { subject: string; html: string; t
     body: JSON.stringify({ from: requiredEnv("CO_DEBTOR_FROM_EMAIL"), to: [to], ...message }),
   });
   if (!response.ok) {
-    const resendErrorBody = await response.text();
     console.error("Resend rechazó el correo de co-deudor.", {
       status: response.status,
-      body: resendErrorBody,
     });
     throw new Error("No se pudo enviar el correo de RutaHogar.");
   }
