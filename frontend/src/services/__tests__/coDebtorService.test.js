@@ -7,9 +7,15 @@ vi.mock("../../utils/supabase", () => ({
 }));
 
 import {
+  CO_DEBTOR_TREATMENT_CONSENT_VERSION,
   createCoDebtorInvitation,
   getLeadCoDebtorInvitation,
+  inspectCoDebtorInvitation,
+  inspectCoDebtorManagement,
   normalizeLeadCoDebtorInvitation,
+  readPublicCoDebtorToken,
+  revokeCoDebtorManagement,
+  submitCoDebtorConfirmation,
 } from "../coDebtorService";
 
 function invitationQuery(result) {
@@ -70,5 +76,62 @@ describe("HU18 lead co-debtor service", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
       body: { action: "create_invitation", recipient_email: "co.deudor@correo.cl" },
     });
+  });
+
+  it("uses public invitation inspection without requiring an authenticated session", async () => {
+    mocks.invoke.mockResolvedValue({ data: { status: "pending", expires_at: "2026-10-10T12:00:00Z", can_submit: true }, error: null });
+
+    await expect(inspectCoDebtorInvitation("invitation-token")).resolves.toEqual(expect.objectContaining({ can_submit: true }));
+    expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
+      body: { action: "inspect_invitation", token: "invitation-token" },
+    });
+  });
+
+  it("normalizes an invalid public link without exposing a function transport error", async () => {
+    mocks.invoke.mockResolvedValue({ data: null, error: {
+      context: { status: 404, clone: () => ({ json: async () => ({ status: "invalid", can_submit: false }) }) },
+    } });
+
+    await expect(inspectCoDebtorInvitation("bad-token")).resolves.toEqual({ status: "invalid", can_submit: false });
+  });
+
+  it("submits exactly the five permitted financial fields and separate consent", async () => {
+    mocks.invoke.mockResolvedValue({ data: { status: "confirmed" }, error: null });
+    const values = {
+      ingreso_mensual_complementario: "900000",
+      deuda_mensual_complementario: "100000",
+      tipo_contrato_complementario: "indefinido",
+      continuidad_laboral_complementario: "mas_3_anios",
+      morosidad_complementario: "no",
+      relacion_complementario: "pareja_conviviente",
+    };
+
+    await submitCoDebtorConfirmation("invitation-token", values);
+
+    expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
+      body: {
+        action: "submit_confirmation", token: "invitation-token",
+        ingreso_mensual_complementario: "900000", deuda_mensual_complementario: "100000",
+        tipo_contrato_complementario: "indefinido", continuidad_laboral_complementario: "mas_3_anios",
+        morosidad_complementario: "no", treatment_consent: true,
+        treatment_consent_version: CO_DEBTOR_TREATMENT_CONSENT_VERSION,
+      },
+    });
+  });
+
+  it("uses the public management contract and preserves idempotent revocation responses", async () => {
+    mocks.invoke.mockResolvedValueOnce({ data: { status: "confirmed", can_revoke: true }, error: null });
+    await expect(inspectCoDebtorManagement("management-token")).resolves.toEqual({ status: "confirmed", can_revoke: true });
+
+    mocks.invoke.mockResolvedValueOnce({ data: { status: "revoked", already_revoked: true }, error: null });
+    await expect(revokeCoDebtorManagement("management-token")).resolves.toEqual({ status: "revoked", already_revoked: true });
+    expect(mocks.invoke).toHaveBeenLastCalledWith("co-debtor-consent", {
+      body: { action: "revoke_management", token: "management-token" },
+    });
+  });
+
+  it("reads a public token only from the current URL query string", () => {
+    expect(readPublicCoDebtorToken("?token=only-in-memory")).toBe("only-in-memory");
+    expect(readPublicCoDebtorToken("")).toBe("");
   });
 });

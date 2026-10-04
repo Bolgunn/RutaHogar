@@ -10,6 +10,16 @@ const invitationFields = [
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const CO_DEBTOR_TREATMENT_CONSENT_VERSION = "2026-10";
+
+const publicFinancialFields = [
+  "ingreso_mensual_complementario",
+  "deuda_mensual_complementario",
+  "tipo_contrato_complementario",
+  "continuidad_laboral_complementario",
+  "morosidad_complementario",
+];
+
 function requireSupabase() {
   if (!supabase) throw new Error("La información del co-deudor no está disponible en este momento.");
 }
@@ -29,6 +39,72 @@ async function readFunctionError(error) {
   } catch {
     return null;
   }
+}
+
+function publicFunctionFailure(error, payload, fallback) {
+  const failure = new Error(payload?.error || fallback);
+  failure.status = error?.context?.status || null;
+  failure.payload = payload || null;
+  return failure;
+}
+
+async function invokePublicCoDebtor(action, token, values = {}) {
+  requireSupabase();
+  const { data, error } = await supabase.functions.invoke("co-debtor-consent", {
+    body: { action, token, ...values },
+  });
+  if (error) {
+    const payload = await readFunctionError(error);
+    throw publicFunctionFailure(error, payload, "No se pudo procesar el enlace. Intenta nuevamente.");
+  }
+  if (data?.error) throw publicFunctionFailure(null, data, "No se pudo procesar el enlace. Intenta nuevamente.");
+  return data;
+}
+
+export function readPublicCoDebtorToken(search = typeof window === "undefined" ? "" : window.location.search) {
+  return new URLSearchParams(search || "").get("token") || "";
+}
+
+export function runExclusive(lock, task) {
+  if (lock.current) return lock.current;
+  const request = Promise.resolve().then(task);
+  lock.current = request;
+  const clear = () => {
+    if (lock.current === request) lock.current = null;
+  };
+  request.then(clear, clear);
+  return request;
+}
+
+export async function inspectCoDebtorInvitation(token) {
+  try {
+    return await invokePublicCoDebtor("inspect_invitation", token);
+  } catch (failure) {
+    if (failure.status === 404 && failure.payload?.status === "invalid") return failure.payload;
+    throw failure;
+  }
+}
+
+export async function submitCoDebtorConfirmation(token, values = {}) {
+  const body = Object.fromEntries(publicFinancialFields.map((field) => [field, values[field]]));
+  return invokePublicCoDebtor("submit_confirmation", token, {
+    ...body,
+    treatment_consent: true,
+    treatment_consent_version: CO_DEBTOR_TREATMENT_CONSENT_VERSION,
+  });
+}
+
+export async function inspectCoDebtorManagement(token) {
+  try {
+    return await invokePublicCoDebtor("inspect_management", token);
+  } catch (failure) {
+    if (failure.status === 404 && failure.payload?.status === "invalid") return failure.payload;
+    throw failure;
+  }
+}
+
+export function revokeCoDebtorManagement(token) {
+  return invokePublicCoDebtor("revoke_management", token);
 }
 
 function isExpired(invitation, now = Date.now()) {

@@ -20,6 +20,7 @@ import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
 import ProjectsWorkspace from "./components/ProjectsWorkspace";
+import { CoDebtorInvitationPage, CoDebtorManagementPage } from "./components/PublicCoDebtorPages";
 import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
@@ -289,6 +290,12 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
+  // These token-gated pages belong to the co-debtor, never to a RutaHogar
+  // account. Resolve them before any profile or session redirect.
+  if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
+  if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
+    return { page: "co-debtor-management" };
+  }
   const trackingPage = resolveTrackingRoute(path);
   const unknownRoute = ![
     "/",
@@ -380,6 +387,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
 const getRouteForPage = (page, profile, options = {}) => {
   if (page === "landing") return "/landing.html";
   if (page === "set-password") return "/definir-password";
+  if (page === "co-debtor-invitation") return "/co-deudor/invitacion";
+  if (page === "co-debtor-management") return "/co-deudor/gestion";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
   if (!profile) return "/login";
@@ -396,6 +405,8 @@ const pagesWithoutBackButton = new Set([
   "dataconsent",
   "signup-offer",
   "set-password",
+  "co-debtor-invitation",
+  "co-debtor-management",
 ]);
 
 function AppBackButton({ onBack }) {
@@ -1261,6 +1272,9 @@ export default function App() {
       </div>
     );
   }
+
+  if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
+  if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
