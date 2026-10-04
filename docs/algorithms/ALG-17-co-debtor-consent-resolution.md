@@ -42,7 +42,7 @@ The lead may receive a referential result while no valid co-debtor confirmation 
 | R1 | Invitation is created | Generate a secure single-use token, store only its digest, and set expiry from `CO_DEBTOR_INVITATION_TTL_DAYS`. A replacement invalidates the prior invitation for that lead. | E1 |
 | R2 | Pending invitation reaches expiry | It is `expired`; future evaluations may use lead-declared values labelled `not_confirmed`. | E1, E3 |
 | R3 | Pending invitation has a valid token, the co-debtor submits five fields, and accepts treatment consent | Persist confirmation, consume invitation, and select the co-debtor's fields in later evaluations. Do not recalculate automatically. | E2, E3 |
-| R4 | Invitation is replaced, invalid, declined, or submission lacks valid consent | Do not select a co-debtor submission. The lead declaration remains eligible as `not_confirmed`; no financial rejection detail is stored. | E1–E3, data minimization |
+| R4 | Invitation is replaced, invalid, or submission lacks valid consent | Do not select a co-debtor submission. The lead declaration remains eligible as `not_confirmed`. | E1–E3, data minimization |
 | R5 | No valid co-debtor confirmation exists | Select lead-declared complement and mark it `not_confirmed`; it remains referential. | E3 |
 | R6 | Co-debtor revokes treatment consent | Record revocation; do not alter historic snapshots. Exclude complement from all later evaluations and raw executive access. A new valid invitation and consent are required for later use. | E4 |
 

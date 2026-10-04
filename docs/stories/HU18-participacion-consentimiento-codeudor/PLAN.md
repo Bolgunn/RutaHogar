@@ -3,7 +3,7 @@
 - **Story:** HU18 — Participación y consentimiento del co-deudor
 - **Actor:** Lead · co-debtor
 - **Source story:** `Wiki RutaHogar/UserStories/HU18-participacion-consentimiento-codeudor.md`
-- **Status / Sprint:** Planned · Sprint 2 · 3 SP
+- **Status / Sprint:** Implemented · Sprint 2 · 3 SP
 - **Branch:** `feat/hu18-participacion-consentimiento-codeudor` off `develop`
 
 ## Start here
@@ -20,7 +20,7 @@ Allow a lead to invite one co-debtor by email to provide their own five compleme
 
 ## Approach & decisions
 
-The co-debtor is an unauthenticated, token-gated participant, not an account type. Co-debtor data is stored separately from lead evaluations and is accessed only through server-side endpoints. The public browser receives no Supabase authority, and executive-facing services expose provenance only.
+The co-debtor is an unauthenticated, token-gated participant, not an account type. Co-debtor data is stored separately from lead evaluations. Public token operations and executive-facing projections run server-side; the lead's own invitation state remains constrained by RLS. The unauthenticated co-debtor browser receives no Supabase authority, and executives have no direct raw-table read policy.
 
 | Decision | Rationale |
 | :-- | :-- |
@@ -86,7 +86,7 @@ RLS and grants prevent anonymous direct Supabase access and executive direct rea
 5. Add the lead-requested "Actualizar score con datos confirmados" action. If it creates an evaluation, persist an ordinary immutable historical prequalification with reason `confirmacion_codeudor`; confirmation alone never creates one.
 6. Add lead UI for recipient email, invitation state/expiry/replacement, and distinct declared/confirmed labels.
 7. Add the unauthenticated co-debtor page: inspect invitation without lead financial data, enter five fields, accept treatment consent, and later inspect/revoke via the management link.
-8. Restrict executive responses/UI to provenance and enforce revocation hiding while preserving historic evaluation snapshots.
+8. Restrict direct executive table reads and expose only the authenticated, consent-aware server-side projection; enforce revocation hiding while preserving historic evaluation snapshots.
 9. Add backend, frontend, and hosted-RLS verification with reviewer evidence for E1–E4.
 
 ## Acceptance criteria map
@@ -103,7 +103,7 @@ RLS and grants prevent anonymous direct Supabase access and executive direct rea
 - **S1/S3:** ALG-17 is deterministic; no AI, client clock, or random branch selects a source.
 - **S2:** `POST /score` remains compatible until the dedicated integration steps.
 - **S5:** The co-debtor has a separate treatment-consent lifecycle and no external financial lookup.
-- **S6:** RLS plus server-side token gates restrict raw data; executives receive provenance only.
+- **S6:** RLS plus server-side token gates restrict raw data; executives receive only the current consent-aware projection, never direct evaluation/history or HU18-table reads.
 - **S7:** Results remain referential and never claim approval.
 - **S8:** No documents or credentials; invitation and management tokens are stored only as digests.
 

@@ -1,6 +1,6 @@
 {
   "algorithm": "ALG-17",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "cases": [
     {
       "name": "pending invitation keeps a referential declared complement",
@@ -18,9 +18,9 @@
       "expect": { "invitation_status": "confirmed", "complement_source": "co_debtor_confirmed", "confirmation_status": "confirmed", "rescore_required": false }
     },
     {
-      "name": "a declined submission stores no financial rejection detail",
-      "input": { "invitation_status": "pending", "token_valid": true, "co_debtor_action": "decline" },
-      "expect": { "complement_source": "lead_declared", "confirmation_status": "not_confirmed", "financial_rejection_detail_stored": false }
+      "name": "a submission without treatment consent keeps the declared complement",
+      "input": { "invitation_status": "pending", "token_valid": true, "treatment_consent": false, "submitted_values": "different" },
+      "expect": { "complement_source": "lead_declared", "confirmation_status": "not_confirmed", "rescore_required": false }
     },
     {
       "name": "revocation excludes complement only from future evaluations",
