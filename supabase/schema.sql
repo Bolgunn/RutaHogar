@@ -2029,5 +2029,7 @@ create policy "Evaluations select own"
   for select to authenticated
   using (auth.uid() = user_id);
 
+drop policy if exists "Evaluations select sales" on public.evaluations;
+
 drop policy if exists "Scoring history select staff" on public.scoring_history;
 drop policy if exists "Evaluation events select staff" on public.evaluation_events;
