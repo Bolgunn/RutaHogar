@@ -451,24 +451,6 @@ async def explain_endpoint(payload: ExplainRequest):
     return response
 
 
-@app.post("/score/retrain")
-async def retrain_model_endpoint(x_admin_token: Optional[str] = Header(None)):
-    """
-    Endpoint para reentrenar el modelo de Fraude (XGBoost) con datos históricos.
-    Ideal para agendar en un cronjob o activarlo desde un panel Admin cuando
-    se reactivan muchos leads.
-    """
-    from .ml_fraud import retrain_adaptive_model
-    
-    if x_admin_token != os.environ.get("ADMIN_RETRAIN_TOKEN", "super-secret-token"):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    try:
-        res = retrain_adaptive_model()
-        return res
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 
 # --- HU 9: interés en un proyecto ---
 # El catálogo de proyectos NO vive aquí. La fuente única es la tabla

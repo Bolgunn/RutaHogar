@@ -147,11 +147,11 @@ def calculate_score(data: Dict, include_ai: bool = True, market_snapshot: dict |
     }
     
     # -------------------------------------------------------------
-    # ML FRAUD ADAPTIVO (XGBoost + SHAP)
+    # SISTEMA ANTIFRAUDE DETERMINISTICO
     # -------------------------------------------------------------
-    from .ml_fraud import predict_fraud_xgboost
+    from .ml_fraud import predict_fraud
     
-    fraud_prob, shap_factors = predict_fraud_xgboost(data)
+    fraud_prob, shap_factors = predict_fraud(data)
             
     # Asignamos al payload de salida
     result["fraud_score_probability"] = fraud_prob

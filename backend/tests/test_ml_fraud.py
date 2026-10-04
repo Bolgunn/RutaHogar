@@ -1,5 +1,5 @@
 import pytest
-from app.ml_fraud import predict_fraud_xgboost
+from app.ml_fraud import predict_fraud
 
 def test_fraud_rule_normal_user():
     """Usuario legítimo: llenado lento, sin intentos previos anormales."""
@@ -10,7 +10,7 @@ def test_fraud_rule_normal_user():
         "ahorro_disponible": 5000000,
         "ahorro_previo_24h": None,
     }
-    prob, factors = predict_fraud_xgboost(data)
+    prob, factors = predict_fraud(data)
     assert prob < 20.0, "El score de fraude para usuario normal no debería ser alto."
     assert len(factors) == 0
 
@@ -22,7 +22,7 @@ def test_fraud_rule_tanteo():
         "ingreso_mensual": 1200000,
         "ahorro_disponible": 5000000,
     }
-    prob, factors = predict_fraud_xgboost(data)
+    prob, factors = predict_fraud(data)
     assert prob >= 99.0
     assert any("Tanteo detectado" in f for f in factors)
 
@@ -34,7 +34,7 @@ def test_fraud_rule_bot_fast_submit():
         "ingreso_mensual": 1200000,
         "ahorro_disponible": 5000000,
     }
-    prob, factors = predict_fraud_xgboost(data)
+    prob, factors = predict_fraud(data)
     assert prob >= 95.0
     assert any("Tiempo de llenado anormalmente bajo" in f for f in factors)
 
@@ -47,6 +47,6 @@ def test_fraud_rule_avance_ahorro_irreal():
         "ahorro_previo_24h": 3000000,
         "ahorro_disponible": 20000000, # Subió de 3M a 20M teniendo renta de 1M
     }
-    prob, factors = predict_fraud_xgboost(data)
+    prob, factors = predict_fraud(data)
     assert prob >= 99.0
     assert any("Avance de ahorro irreal detectado en 24h" in f for f in factors)
