@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+API_KEY = "rutahogar-crm-mock-secret-key-2026"
+HEADERS = {"X-Mock-CRM-API-Key": API_KEY}
 
 def test_sync_lead_new():
     payload = {
@@ -14,7 +16,7 @@ def test_sync_lead_new():
         "sincronizacion": {"version_hash": "hash_v1"}
     }
     
-    response = client.post("/api/v1/crm-mock/sync", json=payload)
+    response = client.post("/api/v1/crm-mock/sync", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "creado"
@@ -29,7 +31,7 @@ def test_sync_lead_no_changes():
         "sincronizacion": {"version_hash": "hash_v1"}
     }
     
-    response = client.post("/api/v1/crm-mock/sync", json=payload)
+    response = client.post("/api/v1/crm-mock/sync", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "sin_cambios"
@@ -44,13 +46,13 @@ def test_sync_lead_update():
         "sincronizacion": {"version_hash": "hash_v2"}
     }
     
-    response = client.post("/api/v1/crm-mock/sync", json=payload)
+    response = client.post("/api/v1/crm-mock/sync", json=payload, headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "actualizado"
 
 def test_get_leads():
-    response = client.get("/api/v1/crm-mock/leads")
+    response = client.get("/api/v1/crm-mock/leads", headers=HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "leads" in data

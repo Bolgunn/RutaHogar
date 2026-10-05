@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import DataConsent from "./DataConsent";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
+import { formatRut, validateRut } from "../utils/rut";
 
 function getPasswordStrength(password) {
   const checks = [
@@ -33,7 +34,13 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: name === "phone" ? onlyPhoneDigits(value, 8) : value }));
+    // Fix for comment 9: Format RUT on change
+    setForm((prev) => ({ 
+      ...prev, 
+      [name]: name === "phone" ? onlyPhoneDigits(value, 8) : 
+              name === "rut" ? formatRut(value) : 
+              value 
+    }));
   };
 
   const handleSubmit = (e) => {
@@ -42,7 +49,11 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
     if (!form.nombre.trim()) { setFormError("Ingresa tu nombre para continuar."); return; }
     if (!form.apellido_paterno.trim()) { setFormError("Ingresa tu apellido paterno para continuar."); return; }
     if (!form.apellido_materno.trim()) { setFormError("Ingresa tu apellido materno para continuar."); return; }
+    
+    // Fix for comment 9: Validate RUT
     if (!form.rut.trim()) { setFormError("Ingresa tu RUT para continuar."); return; }
+    if (!validateRut(form.rut)) { setFormError("El RUT ingresado no es válido."); return; }
+
     if (!form.email) { setFormError("Ingresa tu correo electrónico."); return; }
     const normalizedPhone = normalizePhone(form.phone);
     if (!form.phone.trim()) {

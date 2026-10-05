@@ -1,94 +1,87 @@
-# PLAN — HU 12: Sistema de Derivación e Integración Comercial
+# PLAN — HU 12: Sistema de Derivación e Integración Comercial (Resolución de Brechas y Hallazgos)
 
 - **Story:** HU 12 — Sistema de Derivación e Integración Comercial
 - **Actor:** Ejecutivo comercial · Administrador inmobiliario
-- **Source story:** `Wiki RutaHogar/UserStories/HU12-derivacion-comercial.md`
-- **Status / Sprint:** 🗓 Planificada · Sprint 2 · 5 SP
-- **Depends on / Required by:** Spike 2 E3 (crm-integrations-chile.md)
-- **Branch:** `feat/hu12-derivacion-comercial`
+- **Source story:** `agents/tasks/ANTIGRAVITY_HU12_DERIVACION_COMERCIAL.md` & `agents/tasks/Comentarios.md`
+- **Status / Sprint:** 🛠️ En Corrección y Planificación de Entrega Final · Sprint 2 · 8 SP / 5 SP
+- **Depends on / Required by:** Spike 2 (`docs/crm-integrations-chile.md`), Supabase DB Migrations, FastAPI Mock Server
+- **Target File:** `docs/stories/HU12/PLAN.md`
 
 ---
 
-## Standing questions
+## 1. Preguntas Definitorias (Standing Questions)
 
-| # | Question | Answer |
+| # | Pregunta | Respuesta |
 | :- | :------- | :----- |
-| 1 | Touches scoring? Which ALG, numbers changed? | No. |
-| 2 | Needs RLS / multi-tenant scoping? | No additional RLS, but the sync process accesses tenant data. |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes. Se agregará una tabla para registrar el estado de sincronización. Desarrollador aplica `supabase db push`. |
-| 4 | Changes the `POST /score` contract? | No. La sincronización ocurre de forma asíncrona post-scoring. |
-| 5 | Consent / privacy impact? | Alto. Solo se derivan leads que han dado su `consentimiento`. La integración simula el traspaso de datos personales (PII) a un tercero. |
+| 1 | ¿Toca el motor de Scoring (algoritmo / números)? | No. La integración es de consumo posterior a la evaluación. |
+| 2 | ¿Requiere RLS / Scoping Multi-tenant? | Sí. Corrección de permisos RLS en funciones RPC (`list_lead_contacts`, `update_lead_reliability`) y vista `admin_inmobiliario`. |
+| 3 | ¿Requiere Migración DB? ¿Quién la aplica? | Sí. Se consolidarán y corregirán las migraciones en `supabase/migrations/` en orden cronológico correcto sin romper prod ni omitir definiciones (`profiles.rut`, `update_lead_reliability`). |
+| 4 | ¿Modifica el contrato `POST /score`? | No. La derivación lee evaluaciones finalizadas. |
+| 5 | ¿Impacto en Consentimiento / Privacidad? | Crítico. Validación de consentimiento de acuerdo a Ley 19.628. Asegurar autenticación en endpoints de mock CRM (`crm_mock.py`) para evitar exposición pública de PII. |
 
-> CI checks these against the diff. An answer contradicted by the files touched fails the build.
+---
 
-## Goal
+## 2. Objetivo
 
-Enviar automáticamente los leads evaluados (junto con su nivel de prioridad y compatibilidad con el proyecto objetivo) hacia un CRM simulado externo, manteniendo dicho registro actualizado ante cambios, para que los ejecutivos comerciales puedan gestionarlos en su flujo natural sin duplicar plataformas.
+Resolver exhaustivamente los 9 hallazgos identificados en la revisión de código (`agents/tasks/Comentarios.md`) y alinear la implementación técnica con la guía de ejecución de Antigravity (`agents/tasks/ANTIGRAVITY_HU12_DERIVACION_COMERCIAL.md`) para asegurar una derivación comercial robusta, segura y lista para producción en RutaHogar.
 
-## Approach
+---
 
-Implementar el "Patrón Adapter" sugerido en el Spike 2 conectando Supabase con el backend de mock (que ya expone `/api/v1/crm-mock/sync`). Se utilizará un **Database Webhook** en la tabla `scoreleads_leads` que gatillará una nueva Edge Function (`sync-crm-lead`) cada vez que un lead se inserte o actualice. Esta función mapeará los datos relevantes del lead y hará el push hacia el endpoint del CRM simulado. Para llevar la trazabilidad y evitar re-envíos innecesarios o pérdidas, se agregará una tabla `crm_sync_status` que guardará el resultado de la última sincronización.
+## 3. Diagnóstico de los 9 Hallazgos de Revisión (Code Review Breakdown)
 
-## Entities
+1. **(1) Error de Migración e Incompatibilidad de Orden (DB):** `20260922000001_update_list_lead_contacts.sql` falla por fecha fuera de orden (`20260922` antecede a migraciones aplicadas `20260923+`) y referencia la columna `p.rut` que no está creada en migraciones previas.
+2. **(2) Eliminación Involuntaria de Columna y Rol en DB:** La función `list_lead_contacts` eliminó `reliability_status` y el rol `admin_inmobiliario` del filtro de permisos, dejando sin datos a los administradores inmobiliarios.
+3. **(3) Fallo de RLS en Lectura de Estado por Ejecutivos:** En `evaluationService.js:171`, las consultas directas a `profiles.reliability_status` por ejecutivos fallan por RLS, haciendo que todos los leads reportados se muestren como "Normales".
+4. **(4) RPC Inexistente en Repositorio:** `update_lead_reliability` (usado en `leadManagementService.js:20`) solo existía en prod y no en archivos del repositorio, rompiendo la funcionalidad de reportar/reactivar/descartar leads en deployments limpios.
+5. **(5) Brecha de Seguridad en Mock CRM:** Los endpoints `/api/v1/crm-mock/*` en `crm_mock.py` están desprotegidos (sin autenticación), exponiendo PII (Nombre, RUT, Email, Score) a accesos no autorizados.
+6. **(6) Identificadores Falsos / Placeholder RUT:** En `crmService.js:61`, los leads sin RUT envían `11111111-1` y `sin_correo@ejemplo.cl`, provocando colisiones y consolidación errónea de leads en CRMs que deduplican por RUT (ej. PlanOK).
+7. **(7) Regresión en Filtro de Fecha:** En `DashboardLeads.jsx:565`, la eliminación de la verificación del umbral de fecha provocó que el selector de fecha no filtre los registros.
+8. **(8) Mutación de Estado y Manejo Inconsistente en Reportes:** En `DashboardLeads.jsx:1027`, `selectedLead` se muta en sitio en lugar de actualizar el estado `evaluations`, dejando desincronizada la UI y badges de reporte.
+9. **(9) Formato e Invalidez de RUT en Registro Post-Evaluación:** En `SignupOffer.jsx:45`, no se valida ni normaliza el dígito verificador del RUT, permitiendo almacenar formatos heterogéneos y datos inválidos.
 
-- **Nueva Edge Function:** `sync-crm-lead`. Maneja el webhook de DB y hace la llamada HTTP al CRM.
-- **Nueva tabla:** `crm_sync_status` para llevar el registro de qué leads fueron sincronizados, cuándo, y el hash o versión de los datos enviados. 
-- **Endpoint simulado (existente):** `/api/v1/crm-mock/sync` en el backend FastAPI.
-- **Migración requerida:** Sí, para crear la tabla `crm_sync_status` y el trigger/webhook sobre `scoreleads_leads`.
+---
 
-## Algorithms
+## 4. Plan de Acción y Tareas de Solución (Paso a Paso)
 
-Ninguno afectado.
+### Fase 1: Corrección de Base de Datos y Migraciones Supabase
+- [x] **Tarea 1.1:** Reorganizar la migración `update_list_lead_contacts.sql` asignándole un timestamp cronológico válido (`20261005...`).
+- [x] **Tarea 1.2:** Asegurar en la migración que la tabla `profiles` contenga la columna `rut` y que `list_lead_contacts` retorne `reliability_status`, incorporando `SECURITY DEFINER` e incluyendo `admin_inmobiliario` y `ejecutivo` en los roles permitidos.
+- [x] **Tarea 1.3:** Crear la migración oficial para `update_lead_reliability` con la comprobación de roles requerida (`SECURITY DEFINER`, comprobación de `auth.uid()`).
 
-## In scope
+### Fase 2: Seguridad y Autenticación en Backend Mock CRM
+- [x] **Tarea 2.1:** Implementar autenticación/autorización mediante API Key o JWT Header en `backend/app/routers/crm_mock.py` para endpoints GET/POST `/api/v1/crm-mock/*`.
+- [x] **Tarea 2.2:** Asegurar que los datos PII no queden expuestos de forma abierta.
 
-- Push al endpoint CRM simulado existente cuando un lead termina su evaluación.
-- Actualización de los datos del lead en el CRM ante cualquier cambio (re-evaluación).
-- Envío de atributos requeridos: datos de contacto, proyecto objetivo, score y prioridad comercial, compatibilidad.
-- Trazabilidad del envío en Supabase (`crm_sync_status`).
+### Fase 3: Integración de Servicios Frontend (`crmService.js`, `evaluationService.js`, `leadManagementService.js`)
+- [x] **Tarea 3.1:** Modificar `crmService.js` para enviar `null` o valor no asignado cuando el RUT o email del lead no existan, en lugar de utilizar valores placeholder (`11111111-1`), permitiendo un manejo adecuado de deduplicación en el CRM.
+- [x] **Tarea 3.2:** Ajustar `evaluationService.js` para consultar `reliability_status` a través de la función segura RPC `list_lead_contacts` evitando bloqueos por RLS.
 
-## Out of scope
+### Fase 4: Corrección de Componentes UI (`DashboardLeads.jsx`, `SignupOffer.jsx`)
+- [x] **Tarea 4.1:** Restablecer el filtro de fecha en `DashboardLeads.jsx` restaurando la comprobación `dateThreshold`.
+- [x] **Tarea 4.2:** Corregir la actualización de estado al reportar un lead en `DashboardLeads.jsx`, actualizando la lista de estados `evaluations` en lugar de mutar `selectedLead` directamente.
+- [x] **Tarea 4.3:** Integrar la validación y formateo estándar del RUT en `SignupOffer.jsx` utilizando la utilidad centralizada `validateRut` / `formatRut`.
 
-- Implementación de un adaptador real para PlanOK, HubSpot o Salesforce (solo simulado en esta HU).
-- Sincronización bidireccional (RutaHogar -> CRM -> RutaHogar).
-- Endpoint del backend FastAPI (ya implementado en mock CRM).
+### Fase 5: Pruebas, Verificación y Documentación
+- [x] **Tarea 5.1:** Ejecutar suite de pruebas pytest para backend: `cd backend; .venv\Scripts\python -m pytest tests\ -q`.
+- [x] **Tarea 5.2:** Ejecutar suite de pruebas frontend y build: `cd frontend; npm run test` y `npm run build`.
+- [x] **Tarea 5.3:** Generar el artefacto de recorrido y verificación `walkthrough.md` en el directorio de artefactos con la evidencia del cumplimiento de los Criterios de Aceptación (E1 - E4).
 
-## Assumptions / unmet dependencies
+---
 
-- Se asume que el backend FastAPI estará disponible y será alcanzable por la Edge Function de Supabase.
-- El CRM simulado asume como identificador del lead el ID interno (`lead_id`).
+## 5. Mapeo de Criterios de Aceptación
 
-## Steps
+| Criterio Gherkin | Requisito Ttécnico | Estado de Planificación |
+| :--- | :--- | :--- |
+| **E1 — Derivación de leads evaluados** | Envío de leads con cualquier score (`Alto`, `Medio`, `Bajo`, `Requiere antecedentes`) a CRM. | Planificado / Implementado en `crmService.js`. |
+| **E2 — Info lead y proyecto objetivo** | Contrato de payload estructurado con contacto, proyecto y resultados. | Planificado / Implementado (con solución a placeholders). |
+| **E3 — Priorización del lead** | Registro de Prioridad Comercial, Compatibilidad por Capacidad y Afinadad por separado. | Planificado / Implementado en `buildCrmPayload`. |
+| **E4 — Actualización periódica en CRM** | Idempotencia y actualización sin duplicidad por `version_hash` SHA-256. | Planificado / Implementado en backend y local fallback. |
 
-1. **Migración DB:** Crear archivo en `supabase/migrations/` para la tabla `crm_sync_status` (columnas: `lead_id`, `sync_status`, `last_sync_at`, `payload_hash`, `error_message`).
-2. **Migración DB (Webhook):** Añadir en la migración el trigger (webhook) en `scoreleads_leads` para llamadas a la Edge Function tras un `INSERT` o `UPDATE`.
-3. **Edge Function:** Crear `supabase/functions/sync-crm-lead/index.ts`. Leer el payload del trigger, construir la estructura requerida (según test_crm_mock.py), enviar al backend (`/api/v1/crm-mock/sync`) y registrar el resultado en `crm_sync_status`.
-4. **Verificación local:** Añadir pruebas verificando la generación del payload y revisando logs.
+---
 
-## Acceptance criteria map
+## 6. Salvaguardas y Reglas Inviolables
 
-| Criterion | Step(s) | Verified by |
-| :-------- | :------ | :---------- |
-| `E1` — Derivación de leads evaluados | 2, 3 | test_crm_mock.py (existente) + pruebas manuales Edge Function |
-| `E2` — Info lead y proyecto objetivo | 3 | Verificación del payload generado en la Edge Function |
-| `E3` — Priorización del lead | 3 | Verificación de inclusión de score y nivel_accion en el payload |
-| `E4` — Actualización periódica en CRM | 2, 3 | Trigger `UPDATE` de DB llama a Edge Function y mock responde "actualizado" |
-
-## Safeguards
-
-- **No tocar backend/scoring_engine:** Esta historia es puramente asíncrona a nivel de DB/Edge Functions y no afecta el core de algoritmos.
-- **Privacidad y Consentimiento:** La Edge Function validará el booleano de `consentimiento` antes de ejecutar el push hacia el CRM, en línea con el Spike 2.
-
-## Definition of done
-
-- Tier 1 green: pytest (incl. golden + ALG cases) · eslint · vitest · Playwright journeys.
-- Tier 2 confirmed by a reviewer who is not the author, with evidence per criterion.
-- This plan and any `ALG-*` changes committed in the same PR as the code.
-- No criterion silently dropped.
-
-## Resolved decisions
-
-| Decision | Rationale |
-| :------- | :-------- |
-| Usar DB Webhook + Edge Function | Desacopla la sincronización del flujo síncrono del usuario final, evitando que una falla en el CRM rompa el precalculo y la UI. |
-| Endpoint CRM | Se utilizará el endpoint mock existente en el backend FastAPI (`/api/v1/crm-mock/sync`) en lugar de levantar otro servicio. |
+1. **Protección de Datos Personales (Ley 19.628):** Nunca derivar leads que no posean `consentimiento === true`.
+2. **Sin Placeholders Ficticios:** No inyectar RUTs ni correos falsos que vicien la base de datos comercial del CRM.
+3. **Seguridad y RLS:** No consultar campos protegidos por RLS sin la adecuada función `SECURITY DEFINER` ni dejar endpoints de API desprotegidos.
+4. **Build e Integridad:** Todo cambio debe mantener la compilación limpia de frontend (`npm run build`) y pasar los tests unitarios.

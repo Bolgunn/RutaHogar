@@ -562,6 +562,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
       if (ageRange.min && item.input?.edad == null) return false;
+      
+      // Fix for comment 6: Date filter check restored
+      if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
+
       const status = item.reliability_status || "normal";
       if (reliabilityStatus === "default" && (status === "sospechoso" || status === "descartado")) return false;
       if (reliabilityStatus !== "default" && reliabilityStatus !== "todos" && status !== reliabilityStatus) return false;
@@ -1023,8 +1027,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
                   if (executiveScope) {
                     try {
                       await reportLead(selectedLead.user_id, executiveScope.id, reportReason);
-                      // Optimistic UI update
-                      selectedLead.reliability_status = "en_revision";
+                      // Optimistic UI update - Fix for comment 8 (don't mutate prop directly)
+                      setSelectedLead({ ...selectedLead, reliability_status: "en_revision" });
                       setIsReporting(false);
                       setReportReason("");
                       alert("Lead reportado correctamente. Pasará a estado de revisión.");

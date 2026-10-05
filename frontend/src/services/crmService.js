@@ -58,8 +58,8 @@ export async function buildCrmPayload(lead, projectData, matchData) {
       apellido_paterno: lead?.profile?.apellido_paterno || "",
       apellido_materno: lead?.profile?.apellido_materno || "",
       full_name: lead?.full_name || lead?.email || "Usuario",
-      rut: lead?.profile?.rut || lead?.rut || "11111111-1",
-      email: lead?.email || "sin_correo@ejemplo.cl",
+      rut: lead?.profile?.rut || lead?.rut || null,
+      email: lead?.email || null,
       telefono: lead?.phone || lead?.profile?.phone || null,
       fecha_evaluacion: lead?.created_at || new Date().toISOString(),
       consentimiento: lead?.input?.consentimiento !== false
@@ -123,6 +123,7 @@ export async function syncLeadToSimulatedCrm(lead, projectData, matchData) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Mock-CRM-API-Key': 'rutahogar-crm-mock-secret-key-2026'
       },
       body: JSON.stringify(payload)
     });
@@ -147,7 +148,11 @@ export async function syncLeadToSimulatedCrm(lead, projectData, matchData) {
  */
 export async function getSimulatedCrmLeads() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/crm-mock/leads`);
+    const response = await fetch(`${API_BASE_URL}/api/v1/crm-mock/leads`, {
+      headers: {
+        'X-Mock-CRM-API-Key': 'rutahogar-crm-mock-secret-key-2026'
+      }
+    });
     if (response.ok) {
       const data = await response.json();
       return data.leads || [];
