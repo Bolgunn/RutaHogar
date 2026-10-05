@@ -40,6 +40,8 @@
 | Q5 | Existing leads | Backfill a `nuevo` row plus a system event for each eligible (lead, inmobiliaria) pair. `occurred_at` = the lead's first evaluation, `source = 'backfill'`. Leads who become eligible later have no row, and the RPC reads a missing row as `nuevo`. |
 | Q6 | PR scope | Foundation (migration, `schema.sql` sync, RLS/grants, SQL tests, service) plus a minimal UI in `DashboardLeads`. No HU 15 funnel. |
 
+Q3 and the single-record model are amended by `docs/stories/commercial-stage-project-tracks/PLAN.md`.
+
 ## Stages and transition rules
 
 Order (rank): `nuevo` 1, `contactado` 2, `en_plan_mejora` 3, `en_negociacion` 4, `reserva` 5,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedTargets, isTransitionAllowed, reasonRequired, stageLabel } from "../stageRules";
+import { allowedTargets, isTransitionAllowed, PROJECT_ONLY_STAGES, reasonRequired, stageLabel } from "../stageRules";
 
 describe("commercial stage rules", () => {
   it("rejects moving to the same stage or to an unknown one", () => {
@@ -41,6 +41,33 @@ describe("commercial stage rules", () => {
     expect(allowedTargets("venta_cerrada", "ejecutivo")).toEqual([]);
     expect(allowedTargets("venta_cerrada", "admin").map((item) => item.value)).toEqual(["perdido"]);
     expect(allowedTargets("nuevo", "ejecutivo").map((item) => item.value)).not.toContain("nuevo");
+  });
+
+  it("keeps today's targets for a project record by default", () => {
+    expect(allowedTargets("nuevo", "ejecutivo")).toEqual(allowedTargets("nuevo", "ejecutivo", { level: "proyecto" }));
+    expect(allowedTargets("nuevo", "ejecutivo").map((item) => item.value)).toContain("reserva");
+  });
+
+  it("never offers negotiation, reservation or sale on the lead-level record", () => {
+    const values = allowedTargets("contactado", "admin", { level: "lead" }).map((item) => item.value);
+    for (const stage of PROJECT_ONLY_STAGES) expect(values).not.toContain(stage);
+    expect(values).toEqual(["nuevo", "en_plan_mejora", "perdido"]);
+  });
+
+  it("drops lead-level lost once the lead has a project record", () => {
+    const values = allowedTargets("contactado", "ejecutivo", { level: "lead", hasProjectRecords: true }).map((item) => item.value);
+    expect(values).not.toContain("perdido");
+    expect(values).toEqual(["nuevo", "en_plan_mejora"]);
+  });
+
+  it("offers revival while every project record is lost, never from lost", () => {
+    const scope = { level: "lead", hasProjectRecords: true, allProjectRecordsPerdido: true };
+    expect(allowedTargets("contactado", "ejecutivo", scope).map((item) => item.value)).toEqual(["contactado", "nuevo", "en_plan_mejora"]);
+    expect(allowedTargets("perdido", "ejecutivo", scope).map((item) => item.value)).not.toContain("perdido");
+  });
+
+  it("requires a reason to revive (same stage)", () => {
+    expect(reasonRequired("contactado", "contactado")).toBe(true);
   });
 
   it("labels a missing stage as new", () => {
