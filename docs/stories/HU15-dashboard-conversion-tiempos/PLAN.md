@@ -111,8 +111,9 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
 2. In-scope projects: `proyectos` of `v_tenant`; for `ejecutivo`, only those where
    `is_ejecutivo_vinculado(p.id)` (a `proyecto_ejecutivos` row `estado = 'vinculado'` matching
    `auth.uid()` or `get_my_email()`).
-3. Leads: profiles with `role = 'usuario'`, at least one evaluation, and
-   `lead_belongs_to_proyecto(lead, p)` for at least one in-scope project. Deleted accounts have no
+3. Leads: profiles with `role = 'usuario'`, at least one evaluation, and, for at least one in-scope
+   project `p`, `lead_belongs_to_proyecto(lead, p)` **or** a `commercial_stage_events` row of
+   (lead, `v_tenant`) with `proyecto_id = p` (ALG-18 G28). Deleted accounts have no
    profile and are absent by construction (ALG-18 A5).
 4. Return
 
@@ -133,7 +134,7 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
    | `first_evaluation_at` | `min(evaluations.created_at)` |
    | `evaluaciones` | every evaluation ordered by `created_at`, as `{ at, project_goal_id }`; `project_goal_id` = `financial_data->'input'->'project_goal'->>'id'` **only if that id is an in-scope project**, else `null` |
    | `evaluacion_actual` | latest evaluation: `{ input: financial_data->'input', onboarding: profiles.onboarding_data, result: financial_data->'result' }` — the shape `DashboardLeads` already feeds to `matchLeadToProjects` |
-   | `proyectos` | in-scope project ids for which `lead_belongs_to_proyecto` holds |
+   | `proyectos` | in-scope project ids for which `lead_belongs_to_proyecto` holds **or** the lead has a stage event with that `proyecto_id` in `v_tenant` (G28) |
    | `postulaciones` | per in-scope project id in `financial_data->'input'->'project_goal'->>'id'`, the `min(created_at)` |
    | `stage_events` | `commercial_stage_events` of (lead, `v_tenant`) with `proyecto_id` null or in scope, ordered `(occurred_at, id)`, as `{ proyecto_id, stage_after, occurred_at, por_sistema: actor_role = 'sistema', por_mi: actor_id = auth.uid() }` — `por_mi` is computed in SQL; `actor_id` itself never leaves the database |
    | `plan` | `null` without a `tracking_plans` row; else `{ baseline_at, target_proyecto_id }` with `target_proyecto_id` = `target_project_snapshot->>'id'` **only if that id is an in-scope project**, else `null` |
@@ -258,6 +259,9 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
    10. `now` is present and not earlier than any `first_evaluation_at`, evaluation `at`, stage
        `occurred_at` or other timestamp in the result, including a lead inserted in the same
        transaction just before the call (ALG-18 G27).
+   11. A lead of A with a `venta_cerrada` record on P1 whose favorite on P1 was removed and whose
+       comunas no longer match P1 is still a fact row, with P1 in `proyectos` and its P1 events
+       (ALG-18 G28).
 8. **Service.** `frontend/src/services/commercialMetricsService.js`:
    `getCommercialFunnelFacts()` → `supabase.rpc("commercial_funnel_facts")`, returning
    `{ now, proyectos, facts }`; maps `forbidden` to "Tu cuenta no tiene una inmobiliaria asignada para ver
@@ -353,11 +357,13 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 
 ## Changes from the build review (2026-10-05)
 
-Part A's build raised two gaps in ALG-18; Bolgunn decided both. ALG-18 records them as G26–G27.
+Part A's build raised two gaps in ALG-18 and the plan carried one open question; Bolgunn decided all
+three. ALG-18 records them as G26–G28.
 
 | # | Change | Effect on HU 15 |
 | :- | :----- | :-------------- |
 | B1 | **G26.** In the series, a stage's `en_curso` counts in the period containing `now` only | Done in Part A: `funnelMetrics.js`, invariant 17, case `en_curso_en_el_periodo_actual`. The "Evolución histórica" times show "en curso" on the running period |
+| B3 | **G28.** A stage record on an in-scope project keeps the lead in the universe and in that project's R10 row | RPC universe and `proyectos` (Entities, step 6), SQL test case 11 (step 7). No change to `funnelMetrics.js`: it already reads `proyectos` |
 | B2 | **G27.** `now` is the database's time, returned by the RPC | RPC returns `now` (Entities, step 6), SQL test case 10 (step 7), service returns it (step 8), the page uses it instead of `new Date()` (step 9) |
 
 ## Changes from the project-tracks PR (2026-10-05)
@@ -374,7 +380,9 @@ already updated.
 | C4 | Migration `20261005120000` is **already applied in prod** (2026-10-05, ahead of merge), and `20261005130000` (PR #113, evaluations policy fix) too | HU 15's migration timestamp must be ≥ `20261005150000` (`20261005140000` is PR #114's role migration). Until PRs #112 and #113 merge, `supabase db push` from `develop` stops on "remote migration versions not found"; do not `migration repair` them away |
 | C5 | QA data in prod: inmobiliaria "QA Project Tracks" with projects QA PT Uno / Dos / Tres / Smoke, accounts `qa-pt-*@example.com`, and permanent stage history (including sell-out / restock job events) | HU 15's reviewer can use this tenant to see the funnel with real project records. It is real data in prod: it appears in that tenant's metrics only, since HU 15 is scoped per inmobiliaria |
 
-**Open question for Bolgunn (from PR #112, not decided here).** Project tracks makes a project record
+**Decided (ALG-18 G28, Bolgunn, 2026-10-05): include them.** The universe and `proyectos` also take
+leads with a stage record on an in-scope project; SQL test case 11 pins it. Original question, from
+PR #112: project tracks makes a project record
 "sticky": once created, it stays writable after the lead stops belonging to the project (removed
 favorite, changed comuna), so a standing sale on P can outlive `lead_belongs_to_proyecto(lead, P)`.
 Step 2–3 of the RPC take the fact universe from leads that belong to an in-scope project **today**,

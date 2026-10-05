@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
-| **Last changed** | 2026-10-05 · HU 15 · build review (G26–G27): `en_curso` of a period, `now` from the database |
+| **Last changed** | 2026-10-05 · HU 15 · build review (G26–G28): `en_curso` of a period, `now` from the database, leads kept by their project records |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -105,7 +105,7 @@ ISO-8601 instants (UTC offsets allowed). Arrays may be empty, never absent.
 | `first_evaluation_at` | instant | min `evaluations.created_at` | The preevaluación. Cohort key (R7) and start of every lead timeline |
 | `evaluaciones` | `[{ at, project_goal_id }]` | every evaluation, ascending by `created_at` | Includes the first. `project_goal_id` = `financial_data → input → project_goal → id` **when that project is in scope**, else `null` — the RPC never reveals a project of another inmobiliaria. Every evaluation after the first is a re-prequalification (R6) |
 | `evaluacion_actual` | `{ input, onboarding, result }` | latest evaluation | Exactly what `matchLeadToProjects` reads (`ALG-10` Inputs). Also carries `result.commercial_priority_detail` |
-| `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) | In-scope projects the lead belongs to. Non-empty by D2. Carried for the UI; no rule below narrows by it (G16) |
+| `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) **or** a stage record (G28) | In-scope projects the lead belongs to **or** has a project stage record on (any `commercial_stage_events` row of the lead in the tenant with that `proyecto_id`). Non-empty by D2 and G28. Only R10 narrows by it; no other rule does (G16) |
 | `postulaciones` | `[{ proyecto_id, first_at }]` | project-goal evaluations | **First** time the lead set each project as its meta (D3), even if later changed. One entry per project |
 | `stage_events` | `[{ proyecto_id, stage_after, occurred_at, por_sistema, por_mi }]` | `commercial_stage_events` | `proyecto_id: null` = lead-level move (D9). `por_sistema` = `actor_role = 'sistema'` (G8). `por_mi` = `actor_id = auth.uid()`, computed in the database (G23). Sorted by `(occurred_at, id)` by the RPC. Never `reason`, `actor_id`, `user_id` |
 | `plan` | `{ baseline_at, target_proyecto_id }` or `null` | `tracking_plans.baseline_at`, `target_project_snapshot → id` | One plan per lead (`tracking_plans.user_id` is unique). `target_proyecto_id` is `null` when the plan has no target project **or** its target is out of scope (same rule as `project_goal_id`) |
@@ -629,6 +629,7 @@ leads most likely to close. If the dashboard's own affinity or capacity filter a
 | `Compatible` + `alcanza` lead not yet contacted | counted in `tiempo_primer_contacto.en_curso` | R9 |
 | first contact recorded by a colleague | counts in `contactados_mes_actual`, not in `contactados_por_mi` | G23 |
 | lead belonging to two projects | appears in both `por_proyecto` rows | R10 |
+| lead with a sale on P that later stopped belonging to P (removed favorite, changed comuna) | still in the universe and in P's `por_proyecto` row; the sale still counts | G28: project records are sticky (project tracks), so the universe follows them. The RPC enforces this; ALG-18 just reads `proyectos` |
 | DST changes in America/Santiago (first Saturday→Sunday of April and of September, at local midnight) | durations unaffected (elapsed time); buckets use the offset of each instant, so `2026-07-01T03:30Z` is **30 June** 23:30 local | R5, R7 |
 | ISO week across a year boundary | `2027-01-01` is `2026-W53` for `semana` but `2027-01` / `2027` for `mes` / `año` | R7 |
 | Sunday 23:30 in Santiago | still that ISO week, although it is already Monday in UTC | R7 |
@@ -669,6 +670,7 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G24 | Per-project comparison table (R10) | Persona review (admin): most of the per-ejecutivo signal without actor data |
 | G25 | `mejores` (R11): the funnel and stage times recomputed on the best leads (`Compatible` + `alcanza`), shown through a "Todos / Mejores leads" switch | UI review (Bolgunn): show each role the leads that matter to them |
 | G26 | In the series, a stage's `en_curso` (leads currently in it) is counted in the period containing `now` only; other periods show 0 | Build review (Bolgunn, 2026-10-05): R7 assigned stage times to the end of a spell but said nothing about spells that have not ended. Rejected: 0 in every period (hides them from the series), the period the lead entered the stage |
+| G28 | A lead is in the universe, and `p` is in its `proyectos`, when it belongs to `p` today **or** has a stage record on `p` | Build review (Bolgunn, 2026-10-05), open question from PR #112: project records stay writable after the lead stops belonging to the project, so a standing sale on `p` would otherwise vanish from the dashboard. Rejected: belonging today only |
 | G27 | `now` is the database's time, returned by the RPC with the facts, not the browser's clock | Build review (Bolgunn, 2026-10-05): a browser clock behind the server would make a fresh lead's first evaluation later than `now` (negative waiting time, cohort outside the series). Rejected: a rule dropping such leads |
 | — | Counts as headline, rates secondary with `n`; no minimum-n cutoff | Persona review; a cutoff would be an invented number (D6) |
 
@@ -745,4 +747,5 @@ wrong if` column), to add when the author agrees:
 | 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
 | 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
 | 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |
+| 2026-10-05 | Build review (G28): leads with a stage record on an in-scope project stay in the universe and in that project's R10 row (`proyectos` input). Enforced by the RPC; asserted by its SQL test. |
 | 2026-10-05 | Build review (G26–G27): a stage's `en_curso` belongs to the period containing `now` (R7, invariant 17, case `en_curso_en_el_periodo_actual`); `now` comes from the database. |
