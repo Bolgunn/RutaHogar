@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { searchProperties } from "../services/propertyService";
 
+// Validadas contra el catálogo ingerido: cada una devuelve resultados pertinentes.
+// El embedding se arma con título, comuna, tipo y dormitorios (no la dirección),
+// así que solo se sugieren barrios que aparecen en los títulos. Revisar tras reingestar.
 const POPULAR_QUERIES = [
-  "Departamento 2 dormitorios en Santiago cerca del metro",
-  "Moderno 1D1B en Providencia para inversionista",
-  "Departamento 3D2B amplio en Ñuñoa con estacionamiento",
-  "Casa con jardín en Las Condes",
-  "Departamento económico en La Florida para primera vivienda",
+  "Departamento 2 dormitorios cerca del metro",
+  "Departamento 1 dormitorio para inversión hasta 2500 UF",
+  "Departamento con estacionamiento y bodega",
+  "Casa patrimonial para remodelar en Barrio Yungay",
+  "Casa hasta 4000 UF",
+  "Departamento en Ñuñoa",
 ];
 
-const COMMUNES = [
-  "Santiago", "Providencia", "Ñuñoa", "Las Condes",
-  "La Florida", "San Miguel", "Vitacura", "Macul",
-  "Peñalolén", "Lo Barnechea", "Recoleta", "Estación Central",
-];
+// Comunas con propiedades en el catálogo; ofrecer otras solo lleva a búsquedas vacías.
+const COMMUNES = ["Santiago", "Ñuñoa", "San Miguel"];
 
 // Datos ingeridos antes de la normalización traen el tipo en plural ("casas").
 const QUALIFY_NOUNS = {
