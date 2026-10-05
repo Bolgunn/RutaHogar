@@ -16,7 +16,7 @@
 
 ## Goal
 
-Allow a lead to invite one co-debtor by email to provide their own five complementary financial fields and separate treatment consent through a time-limited, single-use link. Until confirmation, the lead can receive a referential evaluation using declared data labelled `not_confirmed`. A valid confirmation becomes the source for later evaluations; it does not recalculate automatically. Revocation excludes the confirmed data from future evaluations and staff exposure while retaining historic snapshots.
+Allow a lead to declare one co-debtor's RUT and email alongside complementary-income data in Precalificación, then invite that person by email to provide their own five complementary financial fields and separate treatment consent through a time-limited, single-use link. The declared RUT is normalized and format/DV validated, but never externally verified or used in scoring. Until confirmation, the lead can receive a referential evaluation using declared data labelled `not_confirmed`. A valid confirmation becomes the source for later evaluations; it does not recalculate automatically. Revocation excludes the confirmed data from future evaluations and staff exposure while retaining historic snapshots.
 
 ## Approach & decisions
 
@@ -25,6 +25,7 @@ The co-debtor is an unauthenticated, token-gated participant, not an account typ
 | Decision | Rationale |
 | :-- | :-- |
 | Email invitation, secure single-use token, seven-day expiry, one active invitation | Satisfies E1 without creating a login. Tokens are stored only as digests. |
+| RUT and email collected in Precalificación | The initial score and invitation are linked to the same lead declaration. The RUT is stored as `recipient_rut` on the invitation, is lead-declared rather than externally verified, and is not a scoring input. |
 | Co-debtor supplies exactly five fields | E2 requires income, debt, contract type, employment continuity, and delinquency. `relacion_complementario` remains lead-declared. |
 | Separate treatment consent | The co-debtor's consent lifecycle is independent of the lead's consent. |
 | Pending, expired, and replaced invitations preserve a labelled lead declaration | E3 must not block the lead's referential flow. |
@@ -44,7 +45,7 @@ The co-debtor is an unauthenticated, token-gated participant, not an account typ
 
 ## Entities
 
-- `co_debtor_invitations`: lead ID, recipient email, invitation-token digest, state, expiry, consumption/replacement metadata, and nullable management/revocation-token digest. Exactly one invitation is pending per lead.
+- `co_debtor_invitations`: lead ID, lead-declared recipient RUT and email, the five declared complementary fields, invitation-token digest, state, expiry, consumption/replacement metadata, and nullable management/revocation-token digest. Exactly one invitation is pending per lead. A valid pending public token receives only the five declared fields for review; the RUT is never placed in public-token responses or consent events.
 - `co_debtor_confirmations`: invitation ID; only the five co-debtor-supplied financial fields; treatment-consent version/timestamp; confirmation timestamp.
 - `co_debtor_consent_events`: append-only invitation, consent, confirmation, and revocation evidence with actor/time/state, never financial values.
 
@@ -84,7 +85,7 @@ RLS and grants prevent anonymous direct Supabase access and executive direct rea
 3. Add server-side invitation, token inspection, co-debtor submission, expiry/replacement and revocation services/endpoints. Hash invitation/management tokens and never persist raw tokens.
 4. Amend scoring-input assembly to consume ALG-17: lead declaration for `not_confirmed`, confirmed values when valid, and no complement after revocation. Preserve `POST /score`.
 5. Add the lead-requested "Actualizar score con datos confirmados" action. If it creates an evaluation, persist an ordinary immutable historical prequalification with reason `confirmacion_codeudor`; confirmation alone never creates one.
-6. Add lead UI for recipient email, invitation state/expiry/replacement, and distinct declared/confirmed labels.
+6. Collect lead-declared co-debtor RUT and email within Precalificación, send the invitation only after the ordinary evaluation is persisted, and leave Recommendations as invitation state/retry/replacement management with distinct declared/confirmed labels.
 7. Add the unauthenticated co-debtor page: inspect invitation without lead financial data, enter five fields, accept treatment consent, and later inspect/revoke via the management link.
 8. Restrict direct executive table reads and expose only the authenticated, consent-aware server-side projection; enforce revocation hiding while preserving historic evaluation snapshots.
 9. Add backend, frontend, and hosted-RLS verification with reviewer evidence for E1–E4.

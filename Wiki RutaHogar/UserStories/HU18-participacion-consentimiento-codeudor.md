@@ -42,6 +42,8 @@
 
 ## Notas
 
+- **Captura de contacto.** El lead declara RUT y correo del co-deudor dentro de la precalificación, junto con el complemento de renta. El RUT se normaliza y valida por formato/dígito verificador, pero no se verifica externamente ni participa en scoring. Tras persistir el score se envía la invitación; Recommendations queda para estado, reintento, reemplazo y actualización explícita del score.
+
 - **El problema, verificado.** `ScoreRequest` captura `ingreso_mensual_complementario`,
   `deuda_mensual_complementario`, `tipo_contrato_complementario`,
   `continuidad_laboral_complementario`, `morosidad_complementario` y `relacion_complementario`
