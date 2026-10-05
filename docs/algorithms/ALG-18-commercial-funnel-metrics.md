@@ -728,8 +728,8 @@ the label. Additive, so the `POST /score` contract is not broken.
 
 ## Proposed note for ALG-10
 
-Not applied — ALG-10 is not edited by this story. Suggested text for ALG-10's A1 row (`Would be
-wrong if` column), to add when the author agrees:
+**Applied** to ALG-10's A1 row (`Would be wrong if` column) on 2026-10-05, approved by Bolgunn (HU 15
+plan step 12). The text, as applied:
 
 > HU 15 (`ALG-18` R1, R8) is the first surface that shows real conversion split by ALG-10 band: the
 > funnel filtered by `Compatible` / `Cercano` / `Marginal` and by capacity bucket. That is the first
