@@ -2110,7 +2110,7 @@ revoke all on function public.commercial_stage_backfill() from public, anon, aut
 -- =============================================================
 -- RutaHogar — HU 15: hechos del embudo comercial
 -- =============================================================
--- Migración 20261005150000. Diseño: docs/stories/HU15-dashboard-conversion-tiempos/PLAN.md.
+-- Migraciones 20261005150000 y 20261005160000 (plan aceptado, ALG-18 G32). Diseño: docs/stories/HU15-dashboard-conversion-tiempos/PLAN.md.
 -- Solo lectura: { now, proyectos, facts } del alcance de quien llama (ALG-18 Inputs).
 create or replace function public.commercial_funnel_facts()
 returns jsonb
@@ -2232,14 +2232,25 @@ begin
            ), '[]'::jsonb),
            'plan', (
              select jsonb_build_object(
-                      'baseline_at', tp.baseline_at,
-                      'target_proyecto_id', case
-                        when tp.target_project_snapshot ->> 'id' = any(v_scope_text)
-                          then tp.target_project_snapshot ->> 'id'
-                      end
+                      'baseline_at', acc.at,
+                      'target_proyecto_id', case when acc.goal = any(v_scope_text) then acc.goal end
                     )
-             from public.tracking_plans tp
-             where tp.user_id = l.lead
+             from (
+               select ee.effective_at as at,
+                      e.financial_data -> 'input' -> 'project_goal' ->> 'id' as goal
+               from public.evaluation_events ee
+               join public.evaluations e on e.id = ee.evaluation_id and e.user_id = ee.user_id
+               where ee.user_id = l.lead
+                 and ee.kind = 'plan_accepted'
+               union all
+               select e.plan_accepted_at,
+                      e.financial_data -> 'input' -> 'project_goal' ->> 'id'
+               from public.evaluations e
+               where e.user_id = l.lead
+                 and e.plan_accepted_at is not null
+               order by 1, 2
+               limit 1
+             ) acc
            ),
            'favoritos', coalesce((
              select jsonb_agg(jsonb_build_object('proyecto_id', f.proyecto_id, 'created_at', f.created_at)
