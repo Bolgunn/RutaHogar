@@ -54,10 +54,13 @@ insert into public.evaluations(id, user_id, score, classification, target_commun
   ('d5000000-0000-0000-0000-000000000003', 'c5000000-0000-0000-0000-000000000001', 74, 'Alto', 'Ñuñoa',
    '{"input": {"project_goal": {"nombre": "Meta antigua"}, "ingreso_mensual": 1}, "result": {"score": 74}}', '2026-03-10Z'),
   ('d5000000-0000-0000-0000-000000000004', 'c5000000-0000-0000-0000-000000000002', 55, 'Medio', 'HU15 Ninguna', null, '2026-01-11Z'),
-  ('d5000000-0000-0000-0000-000000000005', 'c5000000-0000-0000-0000-000000000003', 80, 'Alto', 'HU15 Ninguna', null, '2026-01-12Z'),
   ('d5000000-0000-0000-0000-000000000007', 'c5000000-0000-0000-0000-000000000006', 60, 'Medio', 'HU15 Ninguna', null, '2026-01-14Z');
 insert into public.evaluations(id, user_id, score, classification, target_commune) values
   ('d5000000-0000-0000-0000-000000000008', 'c5000000-0000-0000-0000-000000000007', 60, 'Medio', 'Ñuñoa');
+-- L3's evaluation aims at P1 and carries the legacy plan_accepted_at (ALG-18 G32).
+insert into public.evaluations(id, user_id, score, classification, target_commune, financial_data, plan_accepted_at, created_at) values
+  ('d5000000-0000-0000-0000-000000000005', 'c5000000-0000-0000-0000-000000000003', 80, 'Alto', 'HU15 Ninguna',
+   '{"input": {"project_goal": {"id": "b5000000-0000-0000-0000-000000000001", "nombre": "HU15 P1"}}}', '2026-01-14Z', '2026-01-12Z');
 insert into public.proyecto_favoritos(usuario_id, proyecto_id, created_at) values
   ('c5000000-0000-0000-0000-000000000001', 'b5000000-0000-0000-0000-000000000001', '2026-01-11Z'),
   ('c5000000-0000-0000-0000-000000000002', 'b5000000-0000-0000-0000-000000000002', '2026-01-12Z'),
@@ -68,7 +71,9 @@ insert into public.proyecto_ejecutivos(proyecto_id, ejecutivo_id, ejecutivo_emai
   ('b5000000-0000-0000-0000-000000000002', null, 'hu15-e1@example.invalid', 'pendiente'),
   ('b5000000-0000-0000-0000-000000000001', 'c5000000-0000-0000-0000-000000000012', 'hu15-e2@example.invalid', 'vinculado');
 
--- Plans: L1 targets PB (another inmobiliaria), L3 targets P1 and has one progress update.
+-- Tracking plans (HU 13 creates one on a lead's first evaluation; they are NOT accepted plans,
+-- ALG-18 G32). L1 accepts its plan below on the evaluation aimed at PB; L3 accepted it through the
+-- legacy column above; L2 has a tracking plan but never accepted one. L3 has one progress update.
 insert into public.tracking_plans(
   id, user_id, baseline_evaluation_id, root_event_id, baseline_at, original_plan_snapshot,
   target_project_snapshot, provenance
@@ -78,7 +83,10 @@ insert into public.tracking_plans(
    '2026-01-20Z', '{}', '{"id": "b5000000-0000-0000-0000-000000000003"}', '{}'),
   ('e5000000-0000-0000-0000-000000000003', 'c5000000-0000-0000-0000-000000000003',
    'd5000000-0000-0000-0000-000000000005', 'f5000000-0000-0000-0000-000000000003',
-   '2026-01-14Z', '{}', '{"id": "b5000000-0000-0000-0000-000000000001"}', '{}');
+   '2026-01-14Z', '{}', '{"id": "b5000000-0000-0000-0000-000000000001"}', '{}'),
+  ('e5000000-0000-0000-0000-000000000002', 'c5000000-0000-0000-0000-000000000002',
+   'd5000000-0000-0000-0000-000000000004', 'f5000000-0000-0000-0000-000000000002',
+   '2026-01-11Z', '{}', '{"id": "b5000000-0000-0000-0000-000000000002"}', '{}');
 insert into public.tracking_events(
   event_id, plan_id, user_id, event_kind, effective_at, recorded_at, reason, patch,
   recorded_complete_snapshot, evaluation_id, previous_event_id, algorithm_version, provenance
@@ -89,10 +97,17 @@ insert into public.tracking_events(
   ('f5000000-0000-0000-0000-000000000003', 'e5000000-0000-0000-0000-000000000003',
    'c5000000-0000-0000-0000-000000000003', 'baseline', '2026-01-14Z', '2026-01-14Z', 'test', '{}', '{}',
    'd5000000-0000-0000-0000-000000000005', null, 'hu13-lineage-v1', '{}'),
+  ('f5000000-0000-0000-0000-000000000002', 'e5000000-0000-0000-0000-000000000002',
+   'c5000000-0000-0000-0000-000000000002', 'baseline', '2026-01-11Z', '2026-01-11Z', 'test', '{}', '{}',
+   'd5000000-0000-0000-0000-000000000004', null, 'hu13-lineage-v1', '{}'),
   ('f5000000-0000-0000-0000-000000000004', 'e5000000-0000-0000-0000-000000000003',
    'c5000000-0000-0000-0000-000000000003', 'data_update', '2026-01-16Z', '2026-01-16Z', 'test',
    '{"ingreso_mensual": 1}', '{"ingreso_mensual": 1}', null, 'f5000000-0000-0000-0000-000000000003',
    'hu13-lineage-v1', '{}');
+
+insert into public.evaluation_events(event_id, evaluation_id, user_id, kind, payload, effective_at, provenance) values
+  ('a6000000-0000-0000-0000-000000000001', 'd5000000-0000-0000-0000-000000000002',
+   'c5000000-0000-0000-0000-000000000001', 'plan_accepted', '{}', '2026-01-20Z', '{}');
 
 -- Stage history, inserted as the owner (the RPC's own rules are project tracks' tests).
 insert into public.commercial_stage_events(
@@ -304,6 +319,8 @@ declare
   r jsonb := public.hu15_call('c5000000-0000-0000-0000-000000000014');
 begin
   assert jsonb_array_length(r -> 'facts') = 4, '8: L4 and L5 absent';
+  -- G32: a tracking plan alone is not an accepted plan.
+  assert public.hu15_fact(r, '2026-01-11Z') -> 'plan' = 'null'::jsonb, 'G32: L2 never accepted a plan';
   assert not exists (
     select 1 from jsonb_array_elements(r -> 'facts') f
     where f -> 'evaluaciones' = '[]'::jsonb or f -> 'first_evaluation_at' = 'null'::jsonb), '8: every fact has an evaluation';
@@ -338,6 +355,7 @@ begin
   assert (select string_agg(ev ->> 'stage_after', ',' order by ord)
           from jsonb_array_elements(l3 -> 'stage_events') with ordinality as t(ev, ord)) = 'reserva,venta_cerrada', '11: P1 events';
   assert l3 -> 'plan' ->> 'target_proyecto_id' = 'b5000000-0000-0000-0000-000000000001', '11: in-scope plan target kept';
+  assert (l3 -> 'plan' ->> 'baseline_at')::timestamptz = '2026-01-14Z', 'G32: legacy plan_accepted_at is the acceptance';
   assert jsonb_array_length(l3 -> 'progress_update_ats') = 1, '11: data_update counted, baseline not';
   assert l3 -> 'favoritos' = '[]'::jsonb, '11: removed favorite gone';
 end;
