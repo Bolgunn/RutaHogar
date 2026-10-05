@@ -97,12 +97,13 @@ function LabelHelp({ label, help, className = "cm-label" }) {
   return <span className="cm-label-row"><span className={className}>{label}</span><FieldTooltip text={help} /></span>;
 }
 
-function Kpi({ color, label, help, value, hint }) {
+function Kpi({ color, label, help, value, hint, action = null }) {
   return (
     <article className={`admin-kpi-card admin-kpi-card--${color}`}>
       <LabelHelp label={label} help={help} className="admin-kpi-card__label" />
       <strong className="admin-kpi-card__value">{value}</strong>
       <p className="admin-kpi-card__hint">{hint}</p>
+      {action}
     </article>
   );
 }
@@ -151,16 +152,30 @@ function HBars({ rows, total, fill = "", onPick }) {
   );
 }
 
-function Funnel({ embudo, scopeLabel }) {
+function Funnel({ embudo, scopeLabel, captura = null, planMejora = null }) {
   const top = embudo.etapas[0].alcanzaron;
   const ventas = embudo.etapas[embudo.etapas.length - 1].alcanzaron;
   return (
     <div className="cm-funnel">
+      {captura && (
+        <p className="cm-funnel__general cm-label-row">
+          Tasa de captura: <strong>{captura.postulan} de {captura.n}</strong> leads postularon a un proyecto
+          <Rate rate={captura.tasa} n={captura.n} />
+          <FieldTooltip text="Leads que fijaron uno de tus proyectos como su meta de compra al menos una vez, sobre el total de leads." />
+        </p>
+      )}
       <p className="cm-funnel__general cm-label-row">
         Conversión general: <strong>{ventas} de {embudo.n}</strong> leads llegaron a venta cerrada
         <Rate rate={embudo.conversion_general} n={embudo.n} />
         <FieldTooltip text="Leads con una venta vigente sobre todos los leads del embudo: la conversión de punta a punta, desde que el lead llega hasta la venta cerrada." />
       </p>
+      {planMejora && (
+        <p className="cm-funnel__general cm-label-row">
+          De En plan de mejora a Venta cerrada: <strong>{planMejora.con_venta} de {planMejora.en_plan_mejora}</strong> leads que estuvieron en plan de mejora
+          <Rate rate={planMejora.tasa} n={planMejora.en_plan_mejora} />
+          <FieldTooltip text="Leads que estuvieron en la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta." />
+        </p>
+      )}
       {embudo.etapas.map((etapa, index) => {
         const label = LADDER[index].label;
         return (
@@ -615,9 +630,16 @@ export default function CommercialMetrics({ role, onNavigate }) {
             <Kpi
               color="soft"
               label="Ciclo de venta"
-              help="Días desde la primera precalificación hasta la venta cerrada, considerando solo ventas vigentes. La mediana es el valor del medio: no la distorsionan las ventas muy lentas."
-              value={<>{days(ciclo.mediana)} <small>días (mediana)</small></>}
-              hint={`promedio ${days(ciclo.promedio)} · n = ${ciclo.n} ventas`}
+              help="Días promedio desde la primera precalificación hasta la venta cerrada, considerando solo ventas vigentes. La mediana es el valor del medio: si es muy distinta del promedio, unas pocas ventas muy lentas o muy rápidas lo están moviendo."
+              value={<>{days(ciclo.promedio)} <small>días (promedio)</small></>}
+              hint={`mediana ${days(ciclo.mediana)} · n = ${ciclo.n} ventas`}
+              action={(
+                <button
+                  type="button"
+                  className="cm-link"
+                  onClick={() => document.getElementById("cm-entre-etapas")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >Ver tiempos entre etapas →</button>
+              )}
             />
           </section>
 
@@ -678,7 +700,12 @@ export default function CommercialMetrics({ role, onNavigate }) {
             </div>
             {view.funnel === "mejores" && mejores && <p className="cm-scope">{mejoresScope}</p>}
             <div className="cm-funnel-wrap">
-              <Funnel embudo={funnelData} scopeLabel={view.funnel === "mejores" && mejores ? "mejores leads" : "todos los leads"} />
+              <Funnel
+                embudo={funnelData}
+                scopeLabel={view.funnel === "mejores" && mejores ? "mejores leads" : "todos los leads"}
+                captura={view.funnel === "mejores" && mejores ? null : m.captura}
+                planMejora={view.funnel === "mejores" && mejores ? null : m.plan_mejora_a_venta}
+              />
               <FunnelStatus embudo={funnelData} perdidoLabel={perdidoLabel} perdidoHelp={perdidoHelp} />
             </div>
           </article>
@@ -719,7 +746,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
             </div>
             {view.times === "mejores" && mejores && <p className="cm-scope">{mejoresScope}</p>}
             <div className="cm-scroll"><TimesTable enEtapa={timesData} /></div>
-            <h3 className="cm-subheading cm-label-row">
+            <h3 className="cm-subheading cm-label-row" id="cm-entre-etapas">
               Tiempo entre etapas
               <FieldTooltip text="Días desde que el lead llegó por primera vez a una etapa hasta que llegó a la siguiente. Los leads que se saltaron la primera se cuentan aparte, sin inventarles un tiempo." />
             </h3>
