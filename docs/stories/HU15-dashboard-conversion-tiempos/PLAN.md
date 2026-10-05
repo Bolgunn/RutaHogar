@@ -330,14 +330,17 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 
 | Criterion | Step(s) | Verified by |
 | :-------- | :------ | :---------- |
+| `E1` — conversión general y "pasaron de En plan de mejora a Venta cerrada" (G29) | 3, 4, 9 | `conversion_general_y_plan_mejora_a_venta`; invariants 18–19; reviewer: the KPI "De En plan de mejora a Venta cerrada" and the "Conversión general" line over the funnel |
 | `E1` — tasa de captura, conversión entre etapas, plan de mejora → venta | 3, 4, 9 | `funnelMetrics.test.js`: `captura_*`, `embudo_ever_reached_*`, `etapas_saltadas_*`, `venta_revertida_no_es_venta`, `plan_a_venta_baseline_antes_y_despues`, `perdido_por_agotamiento_vs_gestion`, `revivir_con_evento_de_lead`; reviewer: tab "Embudo y tiempos" against a seeded tenant |
 | `E1` — engagement | 3, 4, 9 | `engagement_solo_acciones_sobre_tus_proyectos`, `engagement_borde_de_mes_y_denominador_por_periodo`, `ejecutivo_etapa_tardia_*`; reviewer: KPI and per-action list |
 | `E1` — contact follow-up (persona review, G22–G23) | 3, 4, 6, 7, 9 | `seguimiento_de_contacto`; `commercial_funnel_facts.sql` case 6; reviewer: an ejecutivo sees "Contactados por ti", a colleague's contact does not count there |
 | `E1` / `E2` — best leads' funnel and stage times (G25) | 3, 4, 9 | `mejores_leads_embudo_y_tiempos`; reviewer: the switch changes both sections and shows "x de n" |
 | `E3` — comparison by project (G24) | 3, 4, 9 | `comparacion_por_proyecto`; reviewer: the table lists every in-scope project |
+| `E2` — tiempos intermedios entre estados (G30) | 3, 4, 9 | `tiempo_entre_etapas`; invariant 20; reviewer: the "Tiempo entre etapas" table (promedio, mediana, n, skipped, waiting) under both "Todos" and "Mejores leads" |
 | `E2` — días desde la preevaluación hasta venta cerrada, y tiempos intermedios | 3, 4, 9 | `venta_revertida_no_es_venta`, `retroceso_y_visita_repetida_suman`, `lead_aun_en_etapa_fuera_del_promedio`, `reapertura_tras_reposicion_suma_visitas`, `duracion_cruza_cambio_horario_*`; reviewer: times panel shows promedio, mediana, n and en curso |
+| `E3` — desglose de engagement y conversión, lado a lado (G31) | 3, 4, 9 | `desglose_por_dimension`; invariant 21; reviewer: the "Desglose de engagement y conversión" section with each of its four dimensions |
 | `E3` — desglose por proyecto, capacidad, prioridad y afinidad | 1, 3, 4, 9 | `rollup_*`, `bandas_en_todo_el_alcance_*`, `agotado_*`, `catalogo_vacio_sin_buckets`, `requiere_antecedentes_*`, `bloqueador_critico_*`, `filtros_and_*`, `prioridad_*`, `captura_con_filtro_*`, `n_cero_*`; `priorityActions.test.js`; reviewer: apply each filter and a combination |
-| `E4` — evolución semana / mes / año | 2, 3, 4, 9 | `semana_iso_*`, `anio_calendario_no_es_anio_iso`, `offset_estacional_no_fijo`; `santiagoCalendar.test.js`; reviewer: switch granularity on the "Evolución histórica" tab |
+| `E4` — evolución semana / mes / año | 2, 3, 4, 9 | `semana_iso_*`, `anio_calendario_no_es_anio_iso`, `offset_estacional_no_fijo`; `santiagoCalendar.test.js`; reviewer: switch granularity on the "Evaluaciones históricas" tab; its charts show engagement (counts and the active-lead rate), conversion rates per cohort, and times (sales cycle, days to apply, each stage pair) |
 | Scope: tenant admin vs ejecutivo, `vinculado` only, no cross-tenant | 6, 7, 10 | `commercial_funnel_facts.sql` cases 1–4; reviewer: log in as each role |
 | Privacy: no ids, reasons or actors leave the database, nor another inmobiliaria's project ids | 6, 7 | `commercial_funnel_facts.sql` cases 5 and 9 |
 | No AI, deterministic in `now`, nothing recomputed | 3, 4 | ALG-18 invariants 7–9 asserted on every case |
@@ -354,6 +357,21 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 - **Data volume fits in one RPC call** (prod on 2026-10-04: 163 leads, 434 evaluations). If a tenant
   grows past what one JSON payload handles comfortably, paging is a follow-up, not a reason to move
   ALG-18 into SQL.
+
+## Changes from the AC wording review (2026-10-05)
+
+"The HU is the rule" (Bolgunn): wherever the page differed from the story's wording, the missing
+figure is **added** next to what already existed. Nothing was removed or reinterpreted. ALG-18
+records the rules as G29–G31; no database change was needed.
+
+| # | AC wording | Added |
+| :- | :--------- | :---- |
+| W1 | E1 "la conversión general entre etapas" | `embudo.conversion_general`, shown as "Conversión general: x de n leads llegaron a venta cerrada" over the funnel |
+| W2 | E1 "específicamente cuántos leads pasaron de 'En plan de mejora' a 'Venta Cerrada'" | ALG-18 R12 and the KPI "De En plan de mejora a Venta cerrada". The plan-based KPI (R4) stays |
+| W3 | E2 "los tiempos intermedios entre estados comerciales" | ALG-18 R13 and the "Tiempo entre etapas" table; skipped stages are counted, never given a time. The time-in-stage table stays and gains an average column |
+| W4 | E3 "desglosar las métricas de engagement y conversión por …" | ALG-18 R14 and the "Desglose de engagement y conversión" section. Filters stay |
+| W5 | E4 "la pestaña de evaluaciones históricas" | Tab renamed "Evaluaciones históricas" |
+| W6 | E4 "cómo han cambiado el interés (engagement), las tasas de conversión y los tiempos" | Conversion-rate chart per cohort, the active-lead rate on the activity chart, and a times chart (sales cycle, days to apply, each stage pair) |
 
 ## Changes from the build review (2026-10-05)
 
