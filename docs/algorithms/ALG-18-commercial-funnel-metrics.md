@@ -3,7 +3,7 @@
 | Field | Value |
 | :---- | :---- |
 | **Version** | `hu15-commercial-funnel-v1` |
-| **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input) |
+| **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
 | **Last changed** | 2026-10-04 · HU 15 · draft, revised after the second grill (G1–G18) and the UI review (G19–G20) |
