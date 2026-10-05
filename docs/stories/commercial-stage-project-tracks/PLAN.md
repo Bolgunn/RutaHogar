@@ -34,10 +34,10 @@ session"); only what is specific to this story goes here.
 - Before `supabase db push`: run `supabase migration list --linked` and confirm the remote history
   matches the repository. Prod has a hand-applied, unregistered `20261003000000` (HU 16). Never paste
   this migration into the SQL editor (two outages so far: 2026-10-01 and 2026-10-03).
-  **Known blocker (checked 2026-10-04):** `20261003120000_lead_status_history_read` (PR #108) is
-  applied in prod but exists on neither `main` nor `develop`. `db push` refuses while the remote
-  has a version the local folder lacks. That file must reach `develop` before this story's
-  migration is pushed. Do not `migration repair` it away.
+  `20261003120000_lead_status_history_read` (PR #108) was applied in prod before it existed on
+  `develop`. That blocked `db push` until PR #108 merged into `develop` (2026-10-05) and this branch
+  merged `develop`. If `migration list` shows any other remote-only version, stop: do not
+  `migration repair` it away.
 
 ## Goal
 
