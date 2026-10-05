@@ -9,7 +9,8 @@ import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
-import { getCommercialStages } from "../services/commercialStageService";
+import { getCommercialRecords } from "../services/commercialStageService";
+import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
 import {
   formatScore,
@@ -370,7 +371,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
-  const [commercialStages, setCommercialStages] = useState({});
+  const [commercialRecords, setCommercialRecords] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
   const selectedOnboarding = selectedLead?.onboarding || {};
@@ -446,14 +447,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
   useEffect(() => {
     let active = true;
-    getCommercialStages(leadUserIds ? leadUserIds.split(",") : [], inmobiliariaId)
-      .then((stages) => { if (active) setCommercialStages(stages); });
+    getCommercialRecords(leadUserIds ? leadUserIds.split(",") : [], inmobiliariaId)
+      .then((records) => { if (active) setCommercialRecords(records); });
     return () => { active = false; };
   }, [leadUserIds, inmobiliariaId]);
 
-  const handleStageChanged = (leadId, stage) => {
-    setCommercialStages((current) => ({ ...current, [leadId]: stage }));
-  };
+  const handleStageChanged = useMemo(() => createLeadRecordsReloader(
+    (leadId) => getCommercialRecords([leadId], inmobiliariaId),
+    (leadId, records) => setCommercialRecords((current) => ({ ...current, [leadId]: records })),
+  ), [inmobiliariaId]);
 
   useEffect(() => {
     setSelectedLead((current) => {
@@ -615,7 +617,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         </div>
         <div className="executive-lead-card__status">
           <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
-          <CommercialStageBadge stage={commercialStages[lead.user_id]?.stage} />
+          <CommercialStageBadge records={commercialRecords[lead.user_id]} />
           <small>{formatDate(lead.created_at)}</small>
         </div>
       </div>
@@ -1023,7 +1025,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           {selectedLead.user_id && (
             <CommercialStagePanel
               leadId={selectedLead.user_id}
-              stage={commercialStages[selectedLead.user_id]?.stage}
+              records={commercialRecords[selectedLead.user_id]}
               role={role}
               onChanged={handleStageChanged}
             />
