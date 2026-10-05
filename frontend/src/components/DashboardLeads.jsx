@@ -8,6 +8,8 @@ import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProj
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
+import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
+import { getCommercialStages } from "../services/commercialStageService";
 import { formatFormValue } from "../constants";
 import {
   formatScore,
@@ -345,7 +347,7 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo }) {
+export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role }) {
   const [classification, setClassification] = useState("Alto");
   const [commune, setCommune] = useState("todas");
   const [age, setAge] = useState(0);
@@ -368,6 +370,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
+  const [commercialStages, setCommercialStages] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
   const selectedOnboarding = selectedLead?.onboarding || {};
@@ -435,6 +438,22 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
       .catch(() => { if (active) setHistory([]); });
     return () => { active = false; };
   }, [selectedLead, selectedLeadEvaluations]);
+
+  const leadUserIds = useMemo(
+    () => latestEvaluations.map((item) => item.user_id).filter(Boolean).sort().join(","),
+    [latestEvaluations],
+  );
+
+  useEffect(() => {
+    let active = true;
+    getCommercialStages(leadUserIds ? leadUserIds.split(",") : [], inmobiliariaId)
+      .then((stages) => { if (active) setCommercialStages(stages); });
+    return () => { active = false; };
+  }, [leadUserIds, inmobiliariaId]);
+
+  const handleStageChanged = (leadId, stage) => {
+    setCommercialStages((current) => ({ ...current, [leadId]: stage }));
+  };
 
   useEffect(() => {
     setSelectedLead((current) => {
@@ -596,6 +615,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
         </div>
         <div className="executive-lead-card__status">
           <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
+          <CommercialStageBadge stage={commercialStages[lead.user_id]?.stage} />
           <small>{formatDate(lead.created_at)}</small>
         </div>
       </div>
@@ -999,6 +1019,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo 
               </button>
             )}
           </section>
+
+          {selectedLead.user_id && (
+            <CommercialStagePanel
+              leadId={selectedLead.user_id}
+              stage={commercialStages[selectedLead.user_id]?.stage}
+              role={role}
+              onChanged={handleStageChanged}
+            />
+          )}
 
           <section className="admin-panel-card admin-panel-card--soft executive-lead-detail__history">
             <div className="admin-panel-card__header executive-history-header">

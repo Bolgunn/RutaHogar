@@ -8,7 +8,10 @@ from .contracts import TrackingError, parse_time
 from .goal_contract import freeze_goals
 from .goal_progress import calculate_goal_progress
 from .lineage import append_event, reconstruct
-from .scoring_adapter import complete_snapshot, financial_field_contract, provenance, score_snapshot
+from .scoring_adapter import (
+    complete_snapshot, financial_field_contract, market_snapshot_from_result,
+    provenance, resolve_tracking_market_snapshot, score_snapshot,
+)
 
 
 def canonical_command(command):
@@ -72,11 +75,24 @@ def goal_view(bundle, lineage, as_of):
 
 
 class TrackingService:
-    def __init__(self, repository, clock=None, new_id=None, scorer=score_snapshot):
+    def __init__(self, repository, clock=None, new_id=None, scorer=score_snapshot, market_snapshot_resolver=resolve_tracking_market_snapshot):
         self.repository = repository
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.new_id = new_id or (lambda: str(uuid4()))
         self.scorer = scorer
+        self.market_snapshot_resolver = market_snapshot_resolver
+
+    def _stored_market_snapshot(self, active_line):
+        for row in reversed(active_line or []):
+            if snapshot := market_snapshot_from_result(row.get("evaluation")):
+                return snapshot
+        return None
+
+    def _score(self, snapshot, market_snapshot):
+        complete = complete_snapshot(snapshot)
+        if self.scorer is score_snapshot:
+            return self.scorer(complete, market_snapshot=market_snapshot)
+        return self.scorer(complete)
 
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
@@ -134,6 +150,7 @@ class TrackingService:
                 rule_boundary_provider=RuleBoundaryProvider(),
             )
         latest = deepcopy(view.get("latest_effective_snapshot") or {})
+        market_snapshot = self._stored_market_snapshot(view.get("active_line")) or self.market_snapshot_resolver()
         baseline = view.get("baseline") or {}
         target = baseline.get("target_project_snapshot")
         # Project identity and value come from the evaluation that froze the target.
@@ -154,7 +171,7 @@ class TrackingService:
             key = at.isoformat()
             if key not in cache:
                 try:
-                    cache[key] = self.scorer(complete_snapshot(state))
+                    cache[key] = self._score(state, market_snapshot)
                 except TrackingError:
                     cache[key] = None
             return cache[key]
@@ -164,7 +181,7 @@ class TrackingService:
             subject_user_id=user_id, as_of=cutoff, active_line=view["active_line"],
             variables=variables,
             latest_effective_snapshot=latest, target_project=target,
-            scoring_runner=runner, rule_boundary_provider=RuleBoundaryProvider(),
+            scoring_runner=runner, rule_boundary_provider=RuleBoundaryProvider(market_snapshot),
             excluded_observation_ids=view.get("excluded_from_metrics", []),
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
@@ -208,9 +225,10 @@ class TrackingService:
         outcome = self._append(history, event, user_id)
         event = outcome["appended_record"]
         events, evaluations, goals, plan = [event], [], [], None
+        market_snapshot = self._stored_market_snapshot(before.get("active_line")) or self.market_snapshot_resolver()
 
         def evaluate(source, snapshot):
-            result = self.scorer(complete_snapshot(snapshot))
+            result = self._score(snapshot, market_snapshot)
             details = {**provenance(result), "source_event_ids": [source["event_id"]], "cutoff_at": now}
             evaluation = {"id": self.new_id(), "snapshot": deepcopy(snapshot), "result": result, "provenance": details}
             source.update(evaluation_id=evaluation["id"], evaluation=result, provenance=details)

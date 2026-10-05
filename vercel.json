@@ -3,9 +3,45 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [
-    { "source": "/score", "destination": "/api/score" },
-    { "source": "/tracking", "destination": "/api/score" },
-    { "source": "/tracking/(.*)", "destination": "/api/score" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/score",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/score/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/market-reference",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/interest",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/academy/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/properties/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/api/properties/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/tracking",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/tracking/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

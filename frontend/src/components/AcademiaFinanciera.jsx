@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ACADEMY_ARTICLES,
   ACADEMY_CAPSULES,
+  ACADEMY_INDICATORS,
+  ACADEMY_MARKET_UPDATES,
+  ACADEMY_OFFICIAL_LINKS,
   ACADEMY_TOPICS,
   CASE_STUDIES,
   STARTER_ARTICLE_IDS,
@@ -11,6 +14,7 @@ import {
 } from "../constants/academyContent";
 import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
 import AiExplanationBlock from "./AiExplanationBlock";
+import { getAcademyNews } from "../services/academyNewsService";
 
 const LEVEL_ORDER = {
   Básico: 0,
@@ -588,7 +592,6 @@ function RouteStop({ topic, index, onOpen }) {
         </span>
 
         <span className="route-stop-body">
-          <span className="route-stop-index">Parada {index}</span>
           <h3>{topic.label}</h3>
           <p>{topic.description}</p>
         </span>
@@ -647,6 +650,33 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule, query }) {
 
       {showDirectory ? (
         <>
+          {/* LA RUTA: temas en el orden en que conviene aprenderlos */}
+
+          <div className="academy-route-section">
+            <div className="academy-route-header">
+              <div>
+                <h3 className="academy-directory-heading academy-directory-heading--route">
+                  <i className="ti ti-route" aria-hidden="true" />
+                  Tu ruta financiera
+                </h3>
+                <p className="academy-directory-sub">
+                  Desde el crédito a la compra. Elige por dónde partir.
+                </p>
+              </div>
+            </div>
+
+            <ol className="route-path">
+              {ACADEMY_TOPICS.map((topic, i) => (
+                <RouteStop
+                  key={topic.id}
+                  topic={topic}
+                  index={i + 1}
+                  onOpen={setActiveTopic}
+                />
+              ))}
+            </ol>
+          </div>
+
           {/* CÁPSULAS DESTACADAS — CARRUSEL */}
 
           <div className="academy-capsules-section">
@@ -672,33 +702,6 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule, query }) {
                 />
               ))}
             </CapsuleCarousel>
-          </div>
-
-          {/* LA RUTA: temas en el orden en que conviene aprenderlos */}
-
-          <div className="academy-route-section">
-            <div className="academy-route-header">
-              <div>
-                <h3 className="academy-directory-heading academy-directory-heading--route">
-                  <i className="ti ti-route" aria-hidden="true" />
-                  Tu ruta financiera
-                </h3>
-                <p className="academy-directory-sub">
-                  10 paradas, del crédito a la compra. Elige por dónde partir.
-                </p>
-              </div>
-            </div>
-
-            <ol className="route-path">
-              {ACADEMY_TOPICS.map((topic, i) => (
-                <RouteStop
-                  key={topic.id}
-                  topic={topic}
-                  index={i + 1}
-                  onOpen={setActiveTopic}
-                />
-              ))}
-            </ol>
           </div>
         </>
       ) : (
@@ -782,6 +785,121 @@ function ConceptosTab({ onOpenArticle, onOpenCapsule, query }) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ActualidadTab() {
+  const [remoteNews, setRemoteNews] = useState(null);
+  const [newsMeta, setNewsMeta] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getAcademyNews()
+      .then((payload) => {
+        if (!active) return;
+        setRemoteNews(Array.isArray(payload?.items) ? payload.items : null);
+        setNewsMeta(payload?.meta || null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setRemoteNews(null);
+        setNewsMeta(null);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const marketUpdates = remoteNews?.length ? remoteNews.slice(0, 8) : ACADEMY_MARKET_UPDATES;
+  const isDynamic = Boolean(newsMeta?.dynamic_enabled && newsMeta?.fetched_count > 0);
+
+  return (
+    <div className="academy-current-tab">
+      <section className="academy-current-hero">
+        <div>
+          <span className="eyebrow">Actualidad y fuentes útiles</span>
+          <h2>Información para revisar antes de decidir</h2>
+          <p>
+            Esta sección reúne fuentes oficiales e indicadores que cambian con el tiempo. RutaHogar no interpreta estas señales como recomendación de compra ni como aprobación de crédito.
+          </p>
+        </div>
+        <div className="academy-current-note">
+          <i className="ti ti-shield-check" aria-hidden="true" />
+          <span>{newsMeta?.disclaimer || "Contenido curado con enlaces externos. Confirma siempre la información vigente en la fuente oficial."}</span>
+        </div>
+      </section>
+
+      <section className="academy-current-section">
+        <div className="academy-current-section__head">
+          <div>
+            <h3 className="academy-directory-heading">
+              <i className="ti ti-news" aria-hidden="true" />
+              Actualidad para seguir
+            </h3>
+            <p className="academy-directory-sub">Temas que conviene revisar en fuentes oficiales antes de cotizar, postular o comparar alternativas.</p>
+          </div>
+          
+        </div>
+
+        <div className="academy-current-grid">
+          {marketUpdates.map((item) => {
+            const reviewed = formatReviewedDate(item.reviewedAt);
+            const sourceDate = item.published_at || item.publishedAt;
+            return (
+              <article className="academy-current-card" key={item.id}>
+                <span className="academy-current-card__category">{item.category}</span>
+                <h4>{item.title}</h4>
+                <p>{item.summary}</p>
+                {item.whyItMatters && (
+                  <div className="academy-current-card__why">
+                    <strong>Por qué importa</strong>
+                    <span>{item.whyItMatters}</span>
+                  </div>
+                )}
+                <div className="academy-current-card__footer">
+                  
+                  <a href={item.url} target="_blank" rel="noopener noreferrer">Ver noticia <i className="ti ti-arrow-up-right" aria-hidden="true" /></a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="academy-current-section academy-current-section--split">
+        <div>
+          <h3 className="academy-directory-heading">
+            <i className="ti ti-chart-line" aria-hidden="true" />
+            Indicadores que cambian
+          </h3>
+          <p className="academy-directory-sub">No se usan para recalcular tu score desde Academia; son referencias para entender el contexto.</p>
+          <div className="academy-indicator-list">
+            {ACADEMY_INDICATORS.map((item) => (
+              <a className="academy-indicator-item" href={item.url} target="_blank" rel="noopener noreferrer" key={item.id}>
+                <span>{item.label}</span>
+                <p>{item.description}</p>
+                <small>{item.source}</small>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="academy-directory-heading">
+            <i className="ti ti-link" aria-hidden="true" />
+            Links oficiales
+          </h3>
+          <p className="academy-directory-sub">Accesos directos para confirmar requisitos, derechos y condiciones vigentes.</p>
+          <div className="academy-official-links">
+            {ACADEMY_OFFICIAL_LINKS.map((item) => (
+              <a className="academy-official-link" href={item.url} target="_blank" rel="noopener noreferrer" key={item.id}>
+                <strong>{item.institution}</strong>
+                <span>{item.title}</span>
+                <p>{item.description}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1217,6 +1335,7 @@ function CasosTab({ evaluation, onOpenArticle }) {
 const TABS = [
   { id: "conceptos", label: "Conceptos", icon: "ti-books" },
   { id: "interpretar", label: "Interpreta tu score", icon: "ti-chart-bar" },
+  { id: "actualidad", label: "Actualidad", icon: "ti-news" },
   { id: "casos", label: "Casos prácticos", icon: "ti-list-details" },
 ];
 
@@ -1399,6 +1518,8 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
           query={academyQuery}
         />
       )}
+
+      {activeTab === "actualidad" && <ActualidadTab />}
 
       {activeTab === "interpretar" && (
         <InterpretaTab

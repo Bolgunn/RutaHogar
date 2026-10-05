@@ -42,4 +42,7 @@
 
 ## Notas
 
-- Depende de que exista un estado de venta cerrada, que hoy no se modela: es una brecha a resolver antes de implementar.
+- La etapa comercial ya existe: [[../Database/lead_commercial_stage|lead_commercial_stage]] (etapa vigente por lead e inmobiliaria) y `commercial_stage_events` (historial de solo inserción). Etapas: `nuevo` → `contactado` → `en_plan_mejora` → `en_negociacion` → `reserva` → `venta_cerrada` (promesa firmada), más `perdido`.
+- E1: el embudo cuenta `lead_commercial_stage` por etapa. El impacto del plan de mejora se mide con los leads que tienen `tracking_plans.baseline_at` anterior a su evento `venta_cerrada`, no con la etapa `en_plan_mejora`, que es manual.
+- E2: el inicio es la primera `evaluations.created_at` del lead (preevaluación). Los tiempos entre estados son diferencias de `occurred_at` entre eventos consecutivos.
+- Las métricas deben agruparse por inmobiliaria: un mismo lead puede tener etapas distintas en inmobiliarias distintas.

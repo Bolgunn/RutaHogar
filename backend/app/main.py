@@ -1,8 +1,11 @@
+import asyncio
 import os
-from typing import Any, List, Optional
-from fastapi import FastAPI
+from typing import Any, Optional
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
+from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
+from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
 from .properties_search import search_properties
 from .ai import (
@@ -10,6 +13,7 @@ from .ai import (
     generate_executive_summary,
     generate_user_explanation,
 )
+from .academy_news import router as academy_news_router
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -34,6 +38,7 @@ VALID_RELATION_TYPES = {
 }
 
 app = FastAPI(title="RutaHogar")
+app.include_router(academy_news_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
 from .tracking.routes import router as tracking_router
@@ -84,7 +89,8 @@ class ScoreRequest(BaseModel):
     property_value_uf: Optional[float] = None
     property_value_clp: Optional[float] = None
     uf_value_clp: Optional[float] = None
-    plazo_credito_hipotecario: int
+    market_snapshot_fetched_at: Optional[str] = None
+    plazo_credito_hipotecario: Optional[int] = None
     tipo_contrato: str  # 'indefinido', 'plazo_fijo', 'independiente'
     continuidad_laboral: str
     morosidad_actual: str
@@ -182,7 +188,7 @@ class ScoreRequest(BaseModel):
     @field_validator("plazo_credito_hipotecario")
     @classmethod
     def validate_mortgage_term(cls, value):
-        if value not in VALID_MORTGAGE_TERMS:
+        if value is not None and value not in VALID_MORTGAGE_TERMS:
             raise ValueError("Plazo de crédito hipotecario inválido")
         return value
 
@@ -289,8 +295,46 @@ class ScoreRequest(BaseModel):
 
 @app.post("/score")
 async def score_endpoint(payload: ScoreRequest):
-    result = calculate_score(payload.model_dump())
-    return result
+    # The request never calls BCCh or starts a refresh: it only resolves storage.
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if (
+        payload.market_snapshot_fetched_at
+        and payload.market_snapshot_fetched_at != snapshot["fetched_at"]
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de calcular.",
+        )
+    return calculate_score(payload.model_dump(), market_snapshot=snapshot)
+
+
+def resolve_market_snapshot() -> dict:
+    """Small injectable boundary used by the endpoint and its contract tests."""
+    return resolve_market_snapshot_from_environment()
+
+
+@app.get("/market-reference")
+async def market_reference_endpoint():
+    """Public projection of the persisted snapshot; never calls BCCh."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    uf_source = snapshot["source"]["uf_value_clp"]
+    return {
+        "uf_value_clp": snapshot["uf_value_clp"],
+        "effective_date": uf_source["effective_date"],
+        "snapshot_effective_date": snapshot["effective_date"],
+        "snapshot_fetched_at": snapshot["fetched_at"],
+        "source": {
+            "provider": uf_source["provider"],
+            "series": uf_source["series"],
+        },
+    }
 
 
 class PropertySearchRequest(BaseModel):
@@ -315,8 +359,7 @@ async def properties_search_endpoint(payload: PropertySearchRequest):
     )
 
 class ExplainRequest(ScoreRequest):
-    # "user": solo la explicación del usuario. "all": incluye también los
-    # textos del ejecutivo (resumen y guía comercial).
+    # Narrative retry recalculates authoritative score inputs without spending AI.
     scope: str = "user"
 
     @field_validator("scope")
@@ -329,15 +372,14 @@ class ExplainRequest(ScoreRequest):
 
 @app.post("/score/explain")
 async def explain_endpoint(payload: ExplainRequest):
-    """
-    Regenera los textos de IA para una precalificación ya calculada.
-    Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
-    y devuelve únicamente los textos generados. Si un texto no pudo
-    generarse, su campo llega en null: el detalle del fallo nunca se expone
-    al cliente.
-    """
-    data = payload.model_dump(exclude={"scope"})
-    base = calculate_score(data, include_ai=False)
+    """Regenerate narratives from a server-calculated, non-AI score result."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if payload.market_snapshot_fetched_at and payload.market_snapshot_fetched_at != snapshot["fetched_at"]:
+        raise HTTPException(status_code=409, detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de generar la explicación.")
+    base = calculate_score(payload.model_dump(exclude={"scope"}), include_ai=False, market_snapshot=snapshot)
 
     response = {
         "score": base.get("score"),
@@ -348,25 +390,21 @@ async def explain_endpoint(payload: ExplainRequest):
     }
 
     response["ai_explanation"] = generate_user_explanation(
-        classification=base["classification"],
-        score=base["score"],
-        positive_indicators=base["positive_indicators"],
-        risks=base["risks"],
+        classification=base["classification"], score=base["score"],
+        positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
     )
 
     if payload.scope == "all":
         response["executive_summary"] = generate_executive_summary(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
         )
         response["commercial_guidance"] = generate_commercial_guidance(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
-            recommendations=base["recommendations"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
+            recommendations=base.get("recommendations", []),
         )
 
     return response

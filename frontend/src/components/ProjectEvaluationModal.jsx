@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildAccessibleAlternatives,
   evaluateScenario,
@@ -8,6 +8,10 @@ import { formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { propertyLabels } from "../constants";
 import { submitProjectGoal } from "../lib/projectGoalAction";
+import {
+  trackGeneratedLead,
+  trackProjectCompatibilityViewed,
+} from "../lib/analytics";
 
 const statusClass = {
   Compatible: "compatible",
@@ -41,6 +45,19 @@ export default function ProjectEvaluationModal({
   const [goalPending, setGoalPending] = useState(false);
   const [goalSuccess, setGoalSuccess] = useState(false);
   const [confirmGoalChange, setConfirmGoalChange] = useState(false);
+  const viewedProjectIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!project?.id || viewedProjectIdsRef.current.has(project.id)) return;
+
+    viewedProjectIdsRef.current.add(project.id);
+    trackProjectCompatibilityViewed({
+      projectId: project.id,
+      projectType: project.tipo_vivienda,
+      projectRegion: project.region,
+      sourcePage: "projects",
+    });
+  }, [project]);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
   const evaluation = useMemo(
@@ -78,6 +95,12 @@ export default function ProjectEvaluationModal({
         body: JSON.stringify({ proyecto_id: project.id, contactar_ejecutivo: true, email: contactEmail || undefined }),
       });
       if (!response.ok) throw new Error("No se pudo registrar tu solicitud.");
+      trackGeneratedLead({
+        leadSource: "project_interest",
+        projectId: project.id,
+        projectRegion: project.region,
+        sourcePage: "projects",
+      });
       setInterestStatus("Solicitud enviada. Un ejecutivo te contactará a la brevedad.");
     } catch (cause) {
       setActionError(cause.message || "No se pudo registrar tu solicitud.");

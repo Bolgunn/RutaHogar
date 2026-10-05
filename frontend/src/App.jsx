@@ -51,6 +51,7 @@ import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./se
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
+import { projectGoalUserMessage, setProjectGoal } from "./services/projectGoalService";
 import {
   getConsent,
   saveConsent,
@@ -61,6 +62,7 @@ import {
 } from "./services/profileService";
 import { formatScore } from "./utils/helpers";
 import { formatFormValue, plazoLabels } from "./constants";
+import { createPageViewDeduper, trackSignUp } from "./lib/analytics";
 
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
@@ -204,7 +206,6 @@ const buildFinancialInput = (input = {}) => ({
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
 });
-
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`
   : "No declarado";
@@ -270,6 +271,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "subsidios") return "/subsidios";
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
+  if (page === "portal") return "/portal";
   if (page === "projects") return "/proyectos";
   if (page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "register-milestone") return "/plan-mejora/progreso";
@@ -302,6 +304,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/subsidios",
     "/comparar-proyectos",
     "/academia",
+    "/portal",
     ...trackingRoutePaths,
     "/perfil",
     "/historial",
@@ -324,7 +327,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/portal", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -344,6 +347,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/subsidios") return { page: "subsidios" };
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
+    if (path === "/portal") return { page: "portal" };
     if (path === "/proyectos") return { page: "projects" };
     if (trackingPage) return { page: trackingPage };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
@@ -430,6 +434,10 @@ export default function App() {
   // Permite saber, al resolverse un guardado lento, si el resultado visible
   // sigue siendo el que originó ese guardado.
   const resultRef = useRef(null);
+  const pageViewTrackerRef = useRef(null);
+  if (!pageViewTrackerRef.current) {
+    pageViewTrackerRef.current = createPageViewDeduper();
+  }
   const navigationHistoryRef = useRef([]);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
@@ -580,6 +588,19 @@ export default function App() {
   }, [pathname, profile?.role, anonOnboarding]);
 
   useEffect(() => {
+    const route = resolveRouteForPath(pathname, profile, Boolean(anonOnboarding));
+    const normalizedCurrentPath = normalizePathname(pathname);
+    const finalPath = normalizePathname(route.path || pathname);
+
+    if (route.path && finalPath !== normalizedCurrentPath) return;
+    pageViewTrackerRef.current({
+      pagePath: finalPath,
+      pageLocation: window.location.href,
+      pageTitle: document.title,
+    });
+  }, [pathname, profile?.role, anonOnboarding]);
+
+  useEffect(() => {
     setDismissedError("");
   }, [currentError]);
 
@@ -616,7 +637,7 @@ export default function App() {
   // El resumen y la guía comercial quedan disponibles para la mesa de leads.
   async function handleRetryAiExplanation(evaluationToRetry = currentEvaluation) {
     const evaluation = evaluationToRetry;
-    if (!evaluation?.id || !evaluation?.input) return false;
+    if (!evaluation?.id || !evaluation?.result) return false;
 
     try {
       const response = await axios.post(
@@ -873,6 +894,7 @@ export default function App() {
         birth_date,
         role: roles.user,
       });
+      trackSignUp({ method: "signup_offer" });
 
       const newProfile = nextAuth.profile;
       const newUserId = isUUID(newProfile?.id) ? newProfile.id
@@ -1182,37 +1204,33 @@ export default function App() {
     if (!currentEvaluation) return;
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const goalInput = buildProjectGoalInput(
-        currentEvaluation.input,
+      const newEval = await setProjectGoal({
+        apiBase: resolveApiBase(),
+        consentGranted,
+        currentEvaluation,
+        normalizeResult: buildResultSnapshot,
+        onboarding: userOnboarding,
+        profile,
         project,
-        currentEvaluation.input?.uf_value_clp,
-      );
-      const payload = buildFinancialInput(goalInput);
-
-      const { response: res, payload: scoreResult } = await fetchJsonWithTimeout(`${apiBase.replace(/\/$/, "")}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }, { timeoutMessage: "La evaluación del proyecto tardó demasiado. Intenta nuevamente." });
-      if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
-
-      const newEval = await createEvaluation(profile.id, {
-        email: profile.email || "sin-email",
-        onboarding: userOnboarding || null,
-        // La metadata de la meta se persiste con la evaluación, pero no se
-        // envía a /score para mantener el contrato del motor financiero.
-        input: { ...payload, project_goal: goalInput.project_goal },
-        result: buildResultSnapshot(scoreResult),
-        channel: "project_selection",
       });
 
-       setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-       return true;
-     } catch (err) {
-       console.error(err);
-       throw new Error("No se pudo actualizar tu preferencia de proyecto. Intenta nuevamente.");
-     }
+      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+      return true;
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("[project-goal] No se pudo fijar la meta", {
+          stage: err?.stage || "unknown",
+          status: err?.status || null,
+          detail: err?.detail || null,
+          cause: err?.cause || err,
+        });
+      } else {
+        console.error("No se pudo fijar el proyecto como meta", err?.stage || "unknown");
+      }
+      alert(projectGoalUserMessage(err));
+      return false;
+    }
   };
 
   const handleLogout = async () => {
@@ -1698,6 +1716,7 @@ export default function App() {
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          role={profile.role}
         />
       ) : page === "projects" && profile.role === roles.sales ? (
         <ProjectsWorkspace
