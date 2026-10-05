@@ -20,7 +20,9 @@ session"); only what is specific to this story goes here.
   change goes into the new migration.
 - Read first: `supabase/tests/commercial_stage.sql`. The new test file copies its harness
   (`cs_expect_error`, `set local role authenticated` + `request.jwt.claims`, `begin; … rollback;`).
-  The old file must still pass **unchanged**. That is the proof that requirement 11 holds.
+  The old file must still pass with only the minimal edits listed in *Amendments during build* A1
+  (it cannot pass byte-for-byte: it moves a lead to `reserva` without a project, which R1 forbids).
+  Together with T13 that is the proof that requirement 11 holds.
 - Read first: ALG-17 **R3** (overall stage O1–O5, cause of loss) and **Requirements on other work**,
   in `docs/algorithms/ALG-17-commercial-funnel-metrics.md` on `feat/hu15-dashboard-conversion-tiempos`
   (`git show origin/feat/hu15-dashboard-conversion-tiempos:docs/algorithms/ALG-17-commercial-funnel-metrics.md`,
@@ -296,7 +298,7 @@ updates listed in step 12.
    warning header.
 3. **`supabase/schema.sql`** sync (Entities, last subsection).
 4. **SQL tests** `supabase/tests/commercial_stage_project_tracks.sql` (cases below). Run it and the
-   unchanged `supabase/tests/commercial_stage.sql` with `ON_ERROR_STOP` against a disposable database
+   minimally amended `supabase/tests/commercial_stage.sql` (A1) with `ON_ERROR_STOP` against a disposable database
    (`hu13_bootstrap.sql` + `schema.sql` + migrations). Then apply and revert the rollback once to
    prove it runs.
 5. **`frontend/src/lib/commercial/overallStage.js`** (pure, Q6):
@@ -419,7 +421,7 @@ helper needs in HU 15's plan), and the R-table above.
 | HU 15 plan `lead_belongs_to_proyecto` exists, not browser-granted / R10 | 1, 4 | T12 |
 | HU 15 plan ejecutivo scope = `vinculado` projects (reusable helper) | 1 | T5, T12 (`is_ejecutivo_vinculado`) |
 | ALG-17 R3 O1–O5 + G8 implemented once, in `lib/` | 5, 8 | `overallStage.test.js` cases named O1–O5, G8 |
-| R11 — PR #101 guarantees intact | 1–4 | `commercial_stage.sql` passes unchanged; T13 |
+| R11 — PR #101 guarantees intact | 1–4 | `commercial_stage.sql` passes with the A1 edits only; the original file passes on the rolled-back schema; T13 |
 | Q2 — no existing row violates R1; guard | 1 | prod counts above (2026-10-04); T16; push succeeds (merger) |
 | Q4 — project with commercial records cannot be deleted; clear message | 1, 10 | T14; reviewer: as admin, try deleting a project with a record → Spanish message, project still listed |
 | Q7 — panel selector, read-only projects, revival option, history per project; badge = overall stage | 6–9 | reviewer steps below; `CommercialStagePanel.test.jsx` |
@@ -471,3 +473,14 @@ helper needs in HU 15's plan), and the R-table above.
   (`can_admin_inmobiliaria`), and that is not changed here.
 - **A project's `inmobiliaria_id` never changes.** The jobs act on a project's records whatever
   their `inmobiliaria_id`. If projects ever move between tenants, revisit this.
+
+## Amendments during build
+
+Made by the build session (2026-10-04) and approved by Bolgunn where marked. No fixed requirement
+(R1–R11) changed.
+
+| # | What changed | Why |
+| :- | :----------- | :-- |
+| A1 | **`supabase/tests/commercial_stage.sql` is edited minimally** (approved by Bolgunn). Lead A's moves in the executive-A and admin-A sections target CS Proyecto A's record (`p_proyecto`), executive A gets a `vinculado` row on it, test 1 reads `lead_project_commercial_stage`, and test 11's `job` row names a project. Every expected error code and every other case is unchanged | The plan required the file to pass unchanged, but it cannot. Its test 1 moves a lead to `reserva` and later `venta_cerrada` without a project, exactly what R1 forbids (`project_required`). Its test 11 inserts a lead-level `job` row expecting `system_actor_check`, and Postgres checks CHECK constraints in name order, so the new `job_project_check` fires first. R1 and R11 both hold: only the plan's way of proving R11 was infeasible. The original file still passes on the schema after the rollback (step 4) |
+| A2 | T12 also compares `lead_belongs_to_inmobiliaria` with **PR #101's original body** (recreated inside the test transaction) on every fixture pair, in addition to the "exists over projects" equivalence | Q8 claims the redefinition preserves behaviour; comparing with the old body proves it directly |
+| A3 | The new test file grants `select, update on proyectos` to `authenticated` inside its rolled-back transaction, and fixture comunas vary spacing but not case | Hosted Supabase grants table privileges to `authenticated` and lets RLS decide, but the disposable database does not, and T8/T9 must fire the jobs from an admin's RLS-checked update. A disposable cluster created with `--locale=C` does not lower-case `Ñ`, which would make the case-folding comparison environment-dependent |
