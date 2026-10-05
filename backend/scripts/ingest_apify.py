@@ -269,6 +269,8 @@ def normalize_property_item(raw_item: dict) -> dict:
         or raw_item.get("tipo")
         or "departamento"
     ).lower()
+    # Apify entrega "casas"/"departamentos"; el filtro del portal usa singular.
+    tipo_vivienda = {"casas": "casa", "departamentos": "departamento"}.get(tipo_vivienda, tipo_vivienda)
 
     url = raw_item.get("url") or raw_item.get("link") or "https://www.portalinmobiliario.com"
     

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
 from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
-from .properties_search import search_properties
+from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, search_properties
 from .ai import (
     generate_commercial_guidance,
     generate_executive_summary,
@@ -343,7 +343,7 @@ class PropertySearchRequest(BaseModel):
     max_price_uf: Optional[float] = None
     property_type: Optional[str] = None
     limit: Optional[int] = 10
-    similarity_threshold: Optional[float] = 0.72
+    similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
 
 
 @app.post("/api/properties/search")
@@ -355,7 +355,7 @@ async def properties_search_endpoint(payload: PropertySearchRequest):
         max_price_uf=payload.max_price_uf,
         property_type=payload.property_type,
         limit=payload.limit or 10,
-        similarity_threshold=payload.similarity_threshold if payload.similarity_threshold is not None else 0.50,
+        similarity_threshold=payload.similarity_threshold,
     )
 
 class ExplainRequest(ScoreRequest):

@@ -3,6 +3,7 @@ import math
 import hashlib
 import re
 import html
+import logging
 from typing import List, Dict, Any, Optional
 
 # Disclaimer legal obligatorio (Criterio E4)
@@ -20,6 +21,13 @@ EMPTY_RESULTS_SUGGESTION = (
 
 # Dimensión del vector para pgvector (384 float vector)
 VECTOR_DIMENSION = 384
+
+# Única fuente del umbral: se aplica sobre la similitud ya ajustada por intención,
+# por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
+DEFAULT_SIMILARITY_THRESHOLD = 0.5
+SUPABASE_TIMEOUT_SECONDS = 5
+
+logger = logging.getLogger(__name__)
 
 def _tokenize(text: str) -> List[str]:
     """Limpia y tokeniza un texto en palabras en minúsculas, preservando dígitos y decodificando HTML."""
@@ -56,12 +64,12 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
             intent["req_dormitorios"] = int(m_d.group(1))
 
     # 4. Máximo precio UF en texto (ej: "hasta 3000 uf", "bajo 4000uf", "3000 uf")
-    m_uf = re.search(r"(?:hasta|bajo|máximo|max|menos de)?\s*(\d+(?:\.\d+)?)\s*uf", q)
+    # En Chile el punto separa miles ("3.000 UF") y la coma decimales ("2.650,5 UF").
+    m_uf = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?\s*uf", q)
     if m_uf:
-        try:
-            intent["req_max_uf"] = float(m_uf.group(1))
-        except ValueError:
-            pass
+        entero = m_uf.group(1).replace(".", "")
+        decimales = m_uf.group(2)
+        intent["req_max_uf"] = float(f"{entero}.{decimales}" if decimales else entero)
     # 5. Comunas comunes
     comunas = ["santiago", "providencia", "ñuñoa", "las condes", "la florida", "san miguel", "vitacura", "macul", "peñalolén", "lo barnechea", "recoleta", "estación central"]
     for c in comunas:
@@ -294,7 +302,6 @@ def _query_supabase_proyectos_rag(
     max_price_uf: Optional[float] = None,
     property_type: Optional[str] = None,
     limit: int = 12,
-    similarity_threshold: float = 0.0
 ) -> Optional[List[Dict[str, Any]]]:
     """Consulta la función RPC match_proyectos_rag o la tabla public.proyectos_rag en Supabase."""
     try:
@@ -319,7 +326,7 @@ def _query_supabase_proyectos_rag(
     rpc_endpoint = f"{supabase_url.rstrip('/')}/rest/v1/rpc/match_proyectos_rag"
     payload_data = {
         "query_embedding": query_vec,
-        "match_threshold": similarity_threshold,
+        "match_threshold": 0.0,
         "match_count": req_limit,
         "filter_commune": commune if commune else None,
         "filter_max_price_uf": max_price_uf if max_price_uf else None,
@@ -334,13 +341,14 @@ def _query_supabase_proyectos_rag(
             headers=headers,
             method="POST"
         )
-        with urllib.request.urlopen(req) as resp:
-            if resp.getcode() == 200:
-                rows = json.loads(resp.read().decode("utf-8"))
-                if isinstance(rows, list) and len(rows) > 0:
-                    return rows
-    except Exception:
-        pass
+        with urllib.request.urlopen(req, timeout=SUPABASE_TIMEOUT_SECONDS) as resp:
+            rows = json.loads(resp.read().decode("utf-8"))
+            # Una lista vacía es una respuesta legítima (catálogo vacío o sin
+            # coincidencias), no un fallo: no debe disparar el escaneo de la tabla.
+            if isinstance(rows, list):
+                return rows
+    except Exception as exc:
+        logger.warning("RPC match_proyectos_rag falló, se consulta la tabla directamente: %s", exc)
 
     # 2. Fallback: Consulta directa a la tabla public.proyectos_rag vía REST API de Supabase
     table_url = f"{supabase_url.rstrip('/')}/rest/v1/proyectos_rag?select=*"
@@ -355,20 +363,25 @@ def _query_supabase_proyectos_rag(
 
     try:
         req = urllib.request.Request(table_url, headers=headers, method="GET")
-        with urllib.request.urlopen(req) as resp:
-            if resp.getcode() == 200:
-                rows = json.loads(resp.read().decode("utf-8"))
-                if isinstance(rows, list) and len(rows) > 0:
-                    for r in rows:
-                        r_vec = r.get("embedding")
-                        if r_vec and isinstance(r_vec, list) and len(r_vec) == len(query_vec):
-                            r["similarity"] = calculate_cosine_similarity(query_vec, r_vec)
-                        else:
-                            r["similarity"] = 0.0
-                    rows.sort(key=lambda x: x.get("similarity", 0), reverse=True)
-                    return rows
-    except Exception:
-        pass
+        with urllib.request.urlopen(req, timeout=SUPABASE_TIMEOUT_SECONDS) as resp:
+            rows = json.loads(resp.read().decode("utf-8"))
+            if isinstance(rows, list):
+                for r in rows:
+                    r_vec = r.get("embedding")
+                    # PostgREST serializa vector(384) como texto "[0.1,...]".
+                    if isinstance(r_vec, str):
+                        try:
+                            r_vec = json.loads(r_vec)
+                        except ValueError:
+                            r_vec = None
+                    if r_vec and isinstance(r_vec, list) and len(r_vec) == len(query_vec):
+                        r["similarity"] = calculate_cosine_similarity(query_vec, r_vec)
+                    else:
+                        r["similarity"] = 0.0
+                rows.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+                return rows
+    except Exception as exc:
+        logger.warning("Consulta a proyectos_rag falló, se usa el catálogo local: %s", exc)
 
     return None
 
@@ -379,7 +392,7 @@ def search_properties(
     max_price_uf: Optional[float] = None,
     property_type: Optional[str] = None,
     limit: int = 10,
-    similarity_threshold: float = 0.0
+    similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
 ) -> Dict[str, Any]:
     query_text = (query or "").strip()
     if not query_text:
@@ -401,7 +414,6 @@ def search_properties(
         max_price_uf=max_price_uf,
         property_type=property_type,
         limit=limit,
-        similarity_threshold=similarity_threshold
     )
 
     if db_rows is not None and isinstance(db_rows, list):
@@ -438,7 +450,8 @@ def search_properties(
                 "cta_url": f"/evaluacion?property_uf={p_uf}&commune={p_com}"
             }
             
-            base_sim = float(row.get("similarity") or 0.75)
+            # Sin similitud calculada (fila sin embedding) no hay evidencia de relevancia.
+            base_sim = float(row.get("similarity") or 0.0)
             adj_sim = _adjust_similarity_score(raw_item, base_sim, query_intent, query_text)
             raw_item["similarity"] = round(adj_sim, 4)
 

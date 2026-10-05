@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { searchProperties } from "../services/propertyService";
 
 const POPULAR_QUERIES = [
@@ -25,6 +25,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
   const [resultsData, setResultsData] = useState(null);
   const [error, setError] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const searchControllerRef = useRef(null);
 
   const handleSearch = async (
     overrideQuery = null,
@@ -40,21 +41,37 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
     const price = overrideMaxPrice !== null ? overrideMaxPrice : (maxPriceUf ? Number(maxPriceUf) : null);
     const type = overridePropertyType !== null ? overridePropertyType : propertyType;
 
+    searchControllerRef.current?.abort();
+    const controller = new AbortController();
+    searchControllerRef.current = controller;
+
     setLoading(true);
     setError("");
     try {
-      const data = await searchProperties({ query: q, commune: com, maxPriceUf: price, propertyType: type, limit });
+      const data = await searchProperties({ query: q, commune: com, maxPriceUf: price, propertyType: type, limit, signal: controller.signal });
+      if (controller.signal.aborted) return;
       setResultsData(data);
     } catch (err) {
+      // Una búsqueda reemplazada por otra más nueva no es un error para el usuario.
+      if (controller.signal.aborted) return;
       console.error(err);
-      setError("No fue posible conectar con el buscador. Verifica tu conexión e intenta nuevamente.");
+      setResultsData(null);
+      setError(
+        err?.name === "TimeoutError"
+          ? "El buscador está tardando más de lo esperado. Intenta nuevamente en unos segundos."
+          : "No fue posible conectar con el buscador. Verifica tu conexión e intenta nuevamente.",
+      );
     } finally {
-      setLoading(false);
+      if (searchControllerRef.current === controller) {
+        searchControllerRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     handleSearch("departamento", 12);
+    return () => searchControllerRef.current?.abort();
   }, []);
 
   const handleQuickQuery = (q) => {
@@ -65,11 +82,9 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
   const handleApplyToProperty = (item) => {
     if (onStartEvaluation) {
       onStartEvaluation({
-        property_value_uf: item.price_uf,
-        property_value_unit: "uf",
-        comuna_objetivo: item.commune,
-        property_type: item.property_type,
-        tiene_propiedad_vista: true,
+        valor_uf: item.price_uf,
+        comuna: item.commune,
+        nombre: item.title,
       });
     } else if (onNavigate) {
       onNavigate("evaluate");

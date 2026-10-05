@@ -447,6 +447,7 @@ export default function App() {
   const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
+  const [portalProperty, setPortalProperty] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
     try {
@@ -933,11 +934,18 @@ export default function App() {
     navigateToPage("auth");
   };
 
-  const startEvaluation = () => {
+  const startEvaluation = (initialData) => {
+    // Los botones pasan el evento de click; solo el CTA del portal trae valor_uf.
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
     setResult(null);
     setResultSaved(null);
-    setScoreFormDraft(null);
-    setStartingNewEvaluation(false);
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    // Quien llega desde una propiedad ya pidió evaluarla: se salta la confirmación.
+    setStartingNewEvaluation(Boolean(property));
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
   };
 
@@ -1068,6 +1076,7 @@ export default function App() {
 
   const handleResult = async (scoreResult, input) => {
     setScoreFormDraft(null);
+    setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const financialInput = buildFinancialInput(input);
 
@@ -1610,8 +1619,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
             <ScoreForm
-              targetCommune={userOnboarding?.comuna_interes}
+              targetCommune={portalProperty?.comuna || userOnboarding?.comuna_interes}
               objective={userOnboarding?.objetivo_principal}
               onboardingData={userOnboarding}
               birthDate={profile?.birth_date || profile?.fecha_nacimiento}

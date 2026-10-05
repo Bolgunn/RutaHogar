@@ -1,5 +1,6 @@
 import unittest
 import math
+from unittest.mock import patch
 from app.properties_search import (
     generate_text_embedding,
     calculate_cosine_similarity,
@@ -8,11 +9,18 @@ from app.properties_search import (
     EMPTY_RESULTS_SUGGESTION
 )
 from fastapi.testclient import TestClient
+from app import properties_search as properties_search_module
 from app.main import app
 
 class TestPropertiesSearchRAG(unittest.TestCase):
 
     def setUp(self):
+        # Los criterios se verifican contra el catálogo local, no contra los datos
+        # vivos de Supabase que cambian con cada ingesta. patch.object y no un
+        # string: otros tests recargan app.* y el nombre apuntaría a otro módulo.
+        supabase_patch = patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=None)
+        supabase_patch.start()
+        self.addCleanup(supabase_patch.stop)
         self.client = TestClient(app)
 
     def test_generate_text_embedding(self):
@@ -92,6 +100,24 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         self.assertIn("disclaimer", data)
         self.assertGreater(len(data["results"]), 0)
         self.assertEqual(data["results"][0]["commune"], "Las Condes")
+
+    def test_max_price_uses_chilean_thousands_separator(self):
+        from app.properties_search import _extract_query_intent
+        self.assertEqual(_extract_query_intent("hasta 3.000 UF")["req_max_uf"], 3000.0)
+        self.assertEqual(_extract_query_intent("2.650,5 uf")["req_max_uf"], 2650.5)
+
+    def test_database_rows_without_similarity_are_not_boosted(self):
+        rows = [{"id": "x", "nombre": "Depto", "comuna": "Santiago", "valor_uf": 2000, "similarity": 0.0}]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="departamento")
+        self.assertEqual(res["total"], 0)
+
+    def test_empty_database_result_is_not_replaced_by_local_catalog(self):
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=[]):
+            res = search_properties(query="departamento en Santiago")
+        self.assertEqual(res["total"], 0)
+        self.assertEqual(res["suggestion"], EMPTY_RESULTS_SUGGESTION)
+
 
 if __name__ == "__main__":
     unittest.main()
