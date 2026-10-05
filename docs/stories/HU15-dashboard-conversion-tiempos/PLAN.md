@@ -92,7 +92,7 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 
 **Read, unchanged:** `profiles` (`role`, `inmobiliaria_id`, `onboarding_data`), `evaluations`
 (`created_at`, `financial_data → input / result`), `proyectos`, `proyecto_ejecutivos`,
-`proyecto_favoritos`, `tracking_plans.baseline_at`, `tracking_events` (`recorded_at`, `event_kind`),
+`proyecto_favoritos`, `evaluation_events` (kind `plan_accepted`), `tracking_events` (`recorded_at`, `event_kind`),
 `improvement_goal_events` (`recorded_at`, `confirmed`), `commercial_stage_events` (with the
 project-tracks branch's `proyecto_id`; its index `(subject_user_id, inmobiliaria_id, proyecto_id,
 occurred_at, id)` serves the `(occurred_at, id)` ordering).
@@ -137,7 +137,7 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
    | `proyectos` | in-scope project ids for which `lead_belongs_to_proyecto` holds **or** the lead has a stage event with that `proyecto_id` in `v_tenant` (G28) |
    | `postulaciones` | per in-scope project id in `financial_data->'input'->'project_goal'->>'id'`, the `min(created_at)` |
    | `stage_events` | `commercial_stage_events` of (lead, `v_tenant`) with `proyecto_id` null or in scope, ordered `(occurred_at, id)`, as `{ proyecto_id, stage_after, occurred_at, por_sistema: actor_role = 'sistema', por_mi: actor_id = auth.uid() }` — `por_mi` is computed in SQL; `actor_id` itself never leaves the database |
-   | `plan` | `null` without a `tracking_plans` row; else `{ baseline_at, target_proyecto_id }` with `target_proyecto_id` = `target_project_snapshot->>'id'` **only if that id is an in-scope project**, else `null` |
+   | `plan` | `null` if the lead never accepted a plan; else `{ baseline_at, target_proyecto_id }` from the **earliest** acceptance: an `evaluation_events` row with `kind = 'plan_accepted'` (`effective_at`) or the legacy `evaluations.plan_accepted_at`, with `target_proyecto_id` = that evaluation's `financial_data->'input'->'project_goal'->>'id'` **only if it is an in-scope project**, else `null` (ALG-18 G32; migration `20261005160000`). Not `tracking_plans`: HU 13 creates one on every lead's first evaluation |
    | `favoritos` | `proyecto_favoritos` on in-scope projects |
    | `progress_update_ats` | `tracking_events.recorded_at` with `event_kind in ('data_update', 'evaluation')` |
    | `confirmed_goal_ats` | `improvement_goal_events.recorded_at` with `confirmed` |

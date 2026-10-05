@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
-| **Last changed** | 2026-10-05 · HU 15 · AC wording review (G29–G31): overall conversion, en plan de mejora → venta, time between stages, breakdown by dimension |
+| **Last changed** | 2026-10-05 · HU 15 · G32: the plan is the accepted plan (`plan_accepted`), not the HU 13 tracking baseline |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -61,8 +61,10 @@ by week, month or year (E4).
    `venta_cerrada`, which counts only while the sale stands, so that "venta" means the same thing in
    the funnel, plan → venta and the sales cycle. Rejected: counting undone sales in the funnel but
    not in the cycle (two populations under one word).
-4. **Plan impact from `tracking_plans.baseline_at`, not from the `en_plan_mejora` stage (D5).** The
-   stage is a manual click an executive may never make; the plan baseline is a recorded fact.
+4. **Plan impact from the recorded plan acceptance, not from the `en_plan_mejora` stage (D5, G32).**
+   The stage is a manual click an executive may never make; the lead accepting the plan is a recorded
+   fact (`evaluation_events` of kind `plan_accepted`). Not `tracking_plans.baseline_at`: HU 13 creates
+   that row on **every** lead's first evaluation, so it does not mean a plan was accepted.
 5. **Time *in* a stage, plus time *between* stages (D6, G30).** Stages may be skipped and moves may
    go backwards, so "N → N+1" alone would be undefined for a lead who skipped a stage. Time in a stage
    is always defined and stays. HU 15 E2 asks for the times between states too, so R13 adds them with
@@ -109,7 +111,7 @@ ISO-8601 instants (UTC offsets allowed). Arrays may be empty, never absent.
 | `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) **or** a stage record (G28) | In-scope projects the lead belongs to **or** has a project stage record on (any `commercial_stage_events` row of the lead in the tenant with that `proyecto_id`). Non-empty by D2 and G28. Only R10 narrows by it; no other rule does (G16) |
 | `postulaciones` | `[{ proyecto_id, first_at }]` | project-goal evaluations | **First** time the lead set each project as its meta (D3), even if later changed. One entry per project |
 | `stage_events` | `[{ proyecto_id, stage_after, occurred_at, por_sistema, por_mi }]` | `commercial_stage_events` | `proyecto_id: null` = lead-level move (D9). `por_sistema` = `actor_role = 'sistema'` (G8). `por_mi` = `actor_id = auth.uid()`, computed in the database (G23). Sorted by `(occurred_at, id)` by the RPC. Never `reason`, `actor_id`, `user_id` |
-| `plan` | `{ baseline_at, target_proyecto_id }` or `null` | `tracking_plans.baseline_at`, `target_project_snapshot → id` | One plan per lead (`tracking_plans.user_id` is unique). `target_proyecto_id` is `null` when the plan has no target project **or** its target is out of scope (same rule as `project_goal_id`) |
+| `plan` | `{ baseline_at, target_proyecto_id }` or `null` | the lead's **earliest plan acceptance**: an `evaluation_events` row of kind `plan_accepted` (its `effective_at`), or the legacy `evaluations.plan_accepted_at` | `null` when the lead never accepted a plan (G32). `baseline_at` is the acceptance instant; `target_proyecto_id` is the `financial_data → input → project_goal → id` of the evaluation the plan was accepted on, `null` when it has none **or** it is out of scope (same rule as `project_goal_id`) |
 | `favoritos` | `[{ proyecto_id, created_at }]` | `proyecto_favoritos` | |
 | `progress_update_ats` | instant[] | `tracking_events.recorded_at`, `event_kind` ∈ {`data_update`, `evaluation`} | Events of the lead's plan |
 | `confirmed_goal_ats` | instant[] | `improvement_goal_events.recorded_at`, `confirmed = true` | Events of the lead's plan |
@@ -762,6 +764,7 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G24 | Per-project comparison table (R10) | Persona review (admin): most of the per-ejecutivo signal without actor data |
 | G25 | `mejores` (R11): the funnel and stage times recomputed on the best leads (`Compatible` + `alcanza`), shown through a "Todos / Mejores leads" switch | UI review (Bolgunn): show each role the leads that matter to them |
 | G26 | In the series, a stage's `en_curso` (leads currently in it) is counted in the period containing `now` only; other periods show 0 | Build review (Bolgunn, 2026-10-05): R7 assigned stage times to the end of a spell but said nothing about spells that have not ended. Rejected: 0 in every period (hides them from the series), the period the lead entered the stage |
+| G32 | The fact row's `plan` is the lead's earliest **accepted** plan (`plan_accepted` evaluation event, or the legacy `evaluations.plan_accepted_at`), targeted at the accepted evaluation's project goal. Shape unchanged, so R4, R6 and the cases are unchanged | Found while building the HU 15 demo seed (2026-10-05): HU 13 creates `tracking_plans` on every lead's first evaluation, so the old source counted every new lead as having accepted a plan. Decided by Bolgunn |
 | G29 | Add `embudo.conversion_general` and R12 (leads that went from the `en_plan_mejora` stage to a standing sale). R4 stays | AC wording review (Bolgunn, 2026-10-05): "the HU is the rule". E1 names both the overall conversion and the stage transition explicitly |
 | G30 | Add R13, time between consecutive stages, with skips counted in `saltaron`. `en_etapa` stays | AC wording review: E2 asks for "los tiempos intermedios entre estados comerciales" |
 | G31 | Add R14, the breakdown of engagement and conversion by project, affinity, capacity and priority. Filters stay | AC wording review: E3 asks to "desglosar", not only to filter |
@@ -842,6 +845,7 @@ plan step 12). The text, as applied:
 | 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
 | 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
 | 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |
+| 2026-10-05 | G32: `plan` comes from the recorded plan acceptance, not from `tracking_plans` (HU 13 creates one per lead). RPC redefined by migration `20261005160000`; SQL test cases updated. |
 | 2026-10-05 | AC wording review (G29–G31): `embudo.conversion_general`, R12 en plan de mejora → venta, R13 time between stages, R14 breakdown; invariants 18–21; cases `conversion_general_y_plan_mejora_a_venta`, `tiempo_entre_etapas`, `desglose_por_dimension`. |
 | 2026-10-05 | Build review (G28): leads with a stage record on an in-scope project stay in the universe and in that project's R10 row (`proyectos` input). Enforced by the RPC; asserted by its SQL test. |
 | 2026-10-05 | Build review (G26–G27): a stage's `en_curso` belongs to the period containing `now` (R7, invariant 17, case `en_curso_en_el_periodo_actual`); `now` comes from the database. |
