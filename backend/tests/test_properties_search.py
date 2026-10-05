@@ -1,9 +1,10 @@
-import json
+import importlib.util
 import math
-import os
+import re
 import unittest
 from unittest.mock import patch
 from app.properties_search import (
+    EmbeddingError,
     generate_text_embedding,
     calculate_cosine_similarity,
     search_properties,
@@ -14,6 +15,34 @@ from fastapi.testclient import TestClient
 from app import properties_search as properties_search_module
 from app.main import app
 
+
+class _Vector(list):
+    def tolist(self):
+        return list(self)
+
+
+class FakeEncoder:
+    """Doble de MiniLM: bolsa de palabras hasheada, determinista y sin descargar el modelo."""
+
+    def __init__(self):
+        self.calls = []
+
+    def encode(self, texts, **kwargs):
+        self.calls.append(list(texts))
+        return [self._encode_one(text) for text in texts]
+
+    @staticmethod
+    def _encode_one(text):
+        vec = [0.0] * 384
+        for token in re.findall(r"\w+", text.lower()):
+            h = 0
+            for char in token:
+                h = (h * 31 + ord(char)) & 0xFFFFFFFF
+            vec[h % 384] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        return _Vector(v / norm for v in vec)
+
+
 class TestPropertiesSearchRAG(unittest.TestCase):
 
     def setUp(self):
@@ -23,6 +52,13 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         supabase_patch = patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=None)
         supabase_patch.start()
         self.addCleanup(supabase_patch.stop)
+        self.encoder = FakeEncoder()
+        model_patch = patch.object(properties_search_module, "_get_embedding_model", return_value=self.encoder)
+        model_patch.start()
+        self.addCleanup(model_patch.stop)
+        catalog_patch = patch.object(properties_search_module, "_local_catalog_vectors", None)
+        catalog_patch.start()
+        self.addCleanup(catalog_patch.stop)
         self.client = TestClient(app)
 
     def test_generate_text_embedding(self):
@@ -143,40 +179,51 @@ class TestPropertiesSearchRAG(unittest.TestCase):
             generate_text_embedding("departamento 2 dormitorios"),
         )
 
-    def test_openai_provider_requests_384_dimensions(self):
-        captured = {}
+    def test_model_receives_normalized_abbreviations(self):
+        generate_text_embedding("Depto en Ñuñoa")
+        self.assertEqual(self.encoder.calls[-1], ["departamento en ñuñoa"])
 
-        class FakeResponse:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return False
-
-            def read(self):
-                return json.dumps({"data": [{"embedding": [0.1] * 384}]}).encode("utf-8")
-
-        def fake_urlopen(req, timeout):
-            captured["body"] = json.loads(req.data.decode("utf-8"))
-            return FakeResponse()
-
-        env = {"EMBEDDING_PROVIDER": "openai", "OPENAI_API_KEY": "test-key"}
-        with patch.dict(os.environ, env), patch.object(properties_search_module.urllib.request, "urlopen", fake_urlopen):
-            vec = generate_text_embedding("depto en Ñuñoa")
-        self.assertEqual(len(vec), 384)
-        self.assertEqual(captured["body"]["dimensions"], 384)
-        self.assertEqual(captured["body"]["input"], "departamento en ñuñoa")
-
-    def test_openai_provider_without_key_returns_503(self):
-        env = {"EMBEDDING_PROVIDER": "openai", "OPENAI_API_KEY": ""}
-        with patch.dict(os.environ, env):
+    def test_missing_embedding_model_returns_503(self):
+        with patch.object(properties_search_module, "_get_embedding_model", side_effect=EmbeddingError("sin modelo")):
             response = self.client.post("/api/properties/search", json={"query": "depto"})
         self.assertEqual(response.status_code, 503)
+
+    def test_ingest_embeds_all_rows_in_one_batch(self):
+        from scripts import ingest_apify
+        # test_cors recarga app.*; se fija la función del módulo ya parchado.
+        self.enterContext(patch.object(ingest_apify, "generate_text_embeddings", properties_search_module.generate_text_embeddings))
+        proyectos = [
+            {"nombre": "Casa", "descripcion": "", "comuna": "Maipú", "tipo_vivienda": "casa", "dormitorios": 3},
+            {"nombre": "Depto", "descripcion": "", "comuna": "Santiago", "tipo_vivienda": "departamento", "dormitorios": 2},
+        ]
+        ingest_apify.attach_embeddings(proyectos)
+        self.assertEqual(len(self.encoder.calls), 1)
+        self.assertTrue(all(len(p["embedding"]) == 384 for p in proyectos))
 
     def test_top_similarities_are_logged_at_debug_level(self):
         with self.assertLogs(properties_search_module.logger, level="DEBUG") as logs:
             search_properties(query="departamento en Santiago")
         self.assertTrue(any("top5" in line and line.startswith("DEBUG") for line in logs.output))
+
+
+
+@unittest.skipUnless(importlib.util.find_spec("sentence_transformers"), "sentence-transformers no instalado")
+class TestMiniLMModel(unittest.TestCase):
+    """Usa el modelo real (descarga ~90 MB la primera vez)."""
+
+    def test_real_model_outputs_384_normalized_dimensions(self):
+        vec = generate_text_embedding("departamento 2 dormitorios en Santiago")
+        self.assertEqual(len(vec), 384)
+        self.assertAlmostEqual(math.sqrt(sum(v * v for v in vec)), 1.0, places=4)
+
+    def test_real_model_ranks_related_listing_higher(self):
+        query = generate_text_embedding("depto cerca del metro")
+        related = generate_text_embedding("departamento a pasos de estación de metro")
+        unrelated = generate_text_embedding("casa con jardín y quincho en la precordillera")
+        self.assertGreater(
+            calculate_cosine_similarity(query, related),
+            calculate_cosine_similarity(query, unrelated),
+        )
 
 
 if __name__ == "__main__":

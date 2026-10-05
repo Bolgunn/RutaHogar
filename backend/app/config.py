@@ -66,18 +66,3 @@ def get_apify_actor_id() -> str:
 def get_groq_api_key() -> str:
     """Retorna la API Key oficial de Groq para explicaciones IA."""
     return os.environ.get("GROQ_API_KEY", "")
-
-
-def get_embedding_provider() -> str:
-    """Proveedor de embeddings del RAG: "hashing" (local, por defecto) u "openai"."""
-    return os.environ.get("EMBEDDING_PROVIDER", "hashing").strip().lower()
-
-
-def get_openai_api_key() -> str:
-    """Retorna la API Key de OpenAI usada solo para embeddings del portal (HU19)."""
-    return os.environ.get("OPENAI_API_KEY", "")
-
-
-def get_embedding_model() -> str:
-    """Modelo de embeddings de OpenAI; debe aceptar `dimensions` para calzar con vector(384)."""
-    return os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")

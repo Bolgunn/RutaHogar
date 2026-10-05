@@ -3,8 +3,11 @@
 Script de transformación e ingesta de propiedades hacia Supabase con pgvector.
 Desacoplado de la extracción de red de Apify.
 
+Sin argumentos ingesta raw_apify_dump.json (departamentos) y raw_apify_dump_casas.json (casas),
+vectorizando con el modelo local MiniLM de app.properties_search.
+
 Soporta parámetros CLI:
-- raw_apify_dump_casas.json o --file=raw_apify_dump_casas.json : Especifica el archivo estático a ingestar
+- raw_apify_dump_casas.json o --file=raw_apify_dump_casas.json : Ingesta solo ese archivo
 - --no-truncate o --append : Conserva las propiedades existentes en Supabase (evita el TRUNCATE)
 - --dry-run : Muestra la normalización del primer elemento sin insertar en Supabase
 """
@@ -23,13 +26,16 @@ from typing import Any, Tuple, List, Dict
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import (
-    get_embedding_provider,
     get_supabase_url,
     get_supabase_key,
 )
-from app.properties_search import generate_text_embedding
+from app.properties_search import EMBEDDING_MODEL_NAME, generate_text_embeddings
 
-DEFAULT_DUMP_FILE = Path(__file__).resolve().parent.parent / "raw_apify_dump.json"
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_DUMP_FILES = [
+    BACKEND_DIR / "raw_apify_dump.json",
+    BACKEND_DIR / "raw_apify_dump_casas.json",
+]
 
 KNOWN_RM_COMMUNES: Dict[str, str] = {
     "santiago": "Santiago",
@@ -283,9 +289,6 @@ def normalize_property_item(raw_item: dict) -> dict:
     else:
         imagen_url = "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2"
 
-    text_content = f"{nombre} {descripcion} {comuna} {tipo_vivienda} {dormitorios} dormitorios"
-    embedding = generate_text_embedding(text_content)
-
     return {
         "nombre": nombre,
         "descripcion": descripcion,
@@ -301,8 +304,18 @@ def normalize_property_item(raw_item: dict) -> dict:
         "imagen_url": imagen_url,
         "fuente": "Portal Inmobiliario (Apify)",
         "estado": "disponible",
-        "embedding": embedding,
     }
+
+
+def embedding_text(proyecto: dict) -> str:
+    return f"{proyecto['nombre']} {proyecto['descripcion']} {proyecto['comuna']} {proyecto['tipo_vivienda']} {proyecto['dormitorios']} dormitorios"
+
+
+def attach_embeddings(proyectos: list) -> None:
+    # Un solo encode en lote: llamar al modelo fila por fila es ~10x más lento.
+    vectors = generate_text_embeddings([embedding_text(p) for p in proyectos])
+    for proyecto, vector in zip(proyectos, vectors):
+        proyecto["embedding"] = vector
 
 
 def truncate_proyectos_rag_table() -> bool:
@@ -416,17 +429,22 @@ def main():
     if custom_file_arg:
         target_path = Path(custom_file_arg)
         if not target_path.is_absolute():
-            target_path = Path(__file__).resolve().parent.parent / custom_file_arg
+            target_path = BACKEND_DIR / custom_file_arg
+        target_paths = [target_path]
     else:
-        target_path = DEFAULT_DUMP_FILE
+        target_paths = DEFAULT_DUMP_FILES
 
-    items = load_raw_apify_dump(target_path)
-    if not items:
+    normalized_list = []
+    for target_path in target_paths:
+        normalized_list.extend(normalize_property_item(it) for it in load_raw_apify_dump(target_path))
+
+    if not normalized_list:
         print("⚠️ No se obtuvieron elementos para ingestar.")
         sys.exit(1)
 
-    normalized_list = [normalize_property_item(it) for it in items]
-    print(f"📦 Procesados {len(normalized_list)} proyectos desde '{target_path.name}' con embeddings de 384 dimensiones (proveedor: {get_embedding_provider()}).")
+    attach_embeddings(normalized_list)
+    nombres = ", ".join(path.name for path in target_paths)
+    print(f"📦 Procesados {len(normalized_list)} proyectos desde {nombres} con {EMBEDDING_MODEL_NAME} (384 dimensiones).")
 
     if dry_run:
         print("🔍 Modo --dry-run activado. No se insertaron datos en public.proyectos_rag.")

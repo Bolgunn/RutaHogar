@@ -1,6 +1,5 @@
 import os
 import math
-import hashlib
 import re
 import html
 import json
@@ -29,16 +28,11 @@ VECTOR_DIMENSION = 384
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
 DEFAULT_SIMILARITY_THRESHOLD = 0.5
 SUPABASE_TIMEOUT_SECONDS = 5
-EMBEDDING_TIMEOUT_SECONDS = 8
+# Modelo local y open-source; su salida de 384 dims calza con proyectos_rag.embedding vector(384).
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+_embedding_model = None
 
 logger = logging.getLogger(__name__)
-
-def _tokenize(text: str) -> List[str]:
-    """Limpia y tokeniza un texto en palabras en minúsculas, preservando dígitos y decodificando HTML."""
-    unescaped = html.unescape(text or "")
-    cleaned = re.sub(r"[^\w\s]", " ", unescaped.lower())
-    tokens = [t for t in cleaned.split() if len(t) > 1 or t.isdigit()]
-    return tokens
 
 def _extract_query_intent(query_text: str) -> Dict[str, Any]:
     """Extracts numerical intent from query (bathrooms, bedrooms, max price UF)."""
@@ -147,8 +141,8 @@ class EmbeddingError(RuntimeError):
     """El proveedor de embeddings configurado no pudo vectorizar el texto."""
 
 
-# Abreviaturas que el usuario escribe y el catálogo no: sin esto "depto" no
-# comparte ningún token con "departamento" en el modelo de hashing.
+# Abreviaturas chilenas que el usuario escribe y el catálogo no; MiniLM se entrenó
+# mayormente en inglés y no sabe que "depto" es "departamento".
 _TERM_SYNONYMS = {
     "depto": "departamento",
     "deptos": "departamento",
@@ -183,91 +177,39 @@ def _cta_text(property_type: Any) -> str:
     return "Ver si califico para esta propiedad"
 
 
-def generate_text_embedding(text: str) -> List[float]:
+def _get_embedding_model():
+    """Carga perezosa: el primer uso descarga el modelo (~90 MB) a la caché de Hugging Face."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise EmbeddingError("Falta sentence-transformers: pip install -r backend/requirements.txt") from exc
+        try:
+            _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
+        except Exception as exc:
+            raise EmbeddingError(f"No se pudo cargar {EMBEDDING_MODEL_NAME}: {exc}") from exc
+    return _embedding_model
+
+
+def generate_text_embeddings(texts: List[str]) -> List[List[float]]:
     """
-    Vectoriza con el proveedor configurado (EMBEDDING_PROVIDER). La ingesta y la
-    consulta llaman a esta misma función para que ambos vectores vivan en el mismo espacio.
+    Vectoriza en lote con MiniLM (384 dims, norma L2). La ingesta y la consulta pasan
+    por aquí para que los vectores de Supabase y los de la consulta vivan en el mismo espacio.
     """
-    from .config import get_embedding_provider
-
-    normalized = _normalize_terms(text)
-    if get_embedding_provider() == "openai":
-        return _openai_embedding(normalized)
-    return _hashing_embedding(normalized)
-
-
-def _openai_embedding(text: str) -> List[float]:
-    from .config import get_embedding_model, get_openai_api_key
-
-    api_key = get_openai_api_key()
-    if not api_key:
-        raise EmbeddingError("EMBEDDING_PROVIDER=openai requiere OPENAI_API_KEY")
-
-    payload = json.dumps({
-        "model": get_embedding_model(),
-        "input": text or " ",
-        "dimensions": VECTOR_DIMENSION,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/embeddings",
-        data=payload,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-        method="POST",
+    model = _get_embedding_model()
+    vectors = model.encode(
+        [_normalize_terms(text) for text in texts],
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=EMBEDDING_TIMEOUT_SECONDS) as resp:
-            vec = json.loads(resp.read().decode("utf-8"))["data"][0]["embedding"]
-    except Exception as exc:
-        raise EmbeddingError(f"OpenAI embeddings falló: {exc}") from exc
-
-    if len(vec) != VECTOR_DIMENSION:
-        raise EmbeddingError(f"Embedding de {len(vec)} dimensiones; se esperaban {VECTOR_DIMENSION}")
-    return vec
+    return [vector.tolist() for vector in vectors]
 
 
-def _hashing_embedding(text: str) -> List[float]:
-    """
-    Proyección léxica por hashing de unigramas y bigramas (384 dims, norma L2).
-    No entiende sinónimos: solo sirve como modo local sin API externa.
-    """
-    vec = [0.0] * VECTOR_DIMENSION
-    tokens = _tokenize(text)
-    if not tokens:
-        # Retorna vector unitario por defecto
-        vec[0] = 1.0
-        return vec
+def generate_text_embedding(text: str) -> List[float]:
+    return generate_text_embeddings([text])[0]
 
-    # 1. Proyección de palabras unigramas y n-gramas
-    for token in tokens:
-        # Generar hash numérico positivo
-        h = 0
-        for char in token:
-            h = (h * 31 + ord(char)) & 0xFFFFFFFF
-        
-        idx1 = h % VECTOR_DIMENSION
-        idx2 = (h * 17 + 5) % VECTOR_DIMENSION
-        weight = 1.0 + (len(token) * 0.1)
-        
-        vec[idx1] += weight
-        vec[idx2] += (weight * 0.5)
-
-    # 2. Proyección de bigramas para capturar contexto ("2 dormitorios", "las condes", etc.)
-    for i in range(len(tokens) - 1):
-        bigram = f"{tokens[i]}_{tokens[i+1]}"
-        h = 0
-        for char in bigram:
-            h = (h * 37 + ord(char)) & 0xFFFFFFFF
-        idx = h % VECTOR_DIMENSION
-        vec[idx] += 2.0
-
-    # 3. Normalizar vector a norma L2 (longitud unitaria)
-    norm = math.sqrt(sum(val * val for val in vec))
-    if norm > 0:
-        vec = [val / norm for val in vec]
-    else:
-        vec[0] = 1.0
-
-    return vec
 
 def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     """Calcula la similitud de coseno entre dos vectores numéricos."""
@@ -382,10 +324,17 @@ SAMPLE_PROPERTIES_CATALOG: List[Dict[str, Any]] = [
     }
 ]
 
-# Precomputar embeddings para la lista en memoria
-for prop in SAMPLE_PROPERTIES_CATALOG:
-    text_content = f"{prop['title']} {prop['description']} {prop['commune']} {prop['property_type']} {prop['bedrooms']} dormitorios"
-    prop["embedding"] = _hashing_embedding(_normalize_terms(text_content))
+def _local_catalog_embeddings() -> List[List[float]]:
+    global _local_catalog_vectors
+    if _local_catalog_vectors is None:
+        _local_catalog_vectors = generate_text_embeddings([
+            f"{prop['title']} {prop['description']} {prop['commune']} {prop['property_type']} {prop['bedrooms']} dormitorios"
+            for prop in SAMPLE_PROPERTIES_CATALOG
+        ])
+    return _local_catalog_vectors
+
+
+_local_catalog_vectors: Optional[List[List[float]]] = None
 
 
 def _query_supabase_proyectos_rag(
@@ -514,7 +463,7 @@ def search_properties(
             "suggestion": "Por favor ingresa un término o descripción de búsqueda."
         }
 
-    # EmbeddingError se propaga: comparar con un vector de otro modelo daría resultados basura.
+    # EmbeddingError se propaga (503): sin modelo no hay búsqueda semántica posible.
     query_vec = generate_text_embedding(query_text)
     query_intent = _extract_query_intent(query_text)
 
@@ -591,10 +540,9 @@ def search_properties(
     # Fallback local determinístico cuando no hay conexión a Supabase
     scored_items = []
     scored_local = []
-    # El catálogo local se vectorizó con hashing al importar; la consulta debe usar el mismo modelo.
-    local_query_vec = _hashing_embedding(_normalize_terms(query_text))
+    catalog_vectors = _local_catalog_embeddings()
 
-    for item in SAMPLE_PROPERTIES_CATALOG:
+    for item, item_vec in zip(SAMPLE_PROPERTIES_CATALOG, catalog_vectors):
         norm_item = {
             "id": item.get("id"),
             "title": html.unescape(item.get("title") or item.get("nombre") or ""),
@@ -627,7 +575,7 @@ def search_properties(
                 continue
 
         # Calcular similitud coseno entre el embedding de la consulta y la propiedad
-        base_sim = calculate_cosine_similarity(local_query_vec, item["embedding"])
+        base_sim = calculate_cosine_similarity(query_vec, item_vec)
         adj_sim = _adjust_similarity_score(norm_item, base_sim, query_intent, query_text)
         scored_local.append((adj_sim, base_sim, norm_item))
 
