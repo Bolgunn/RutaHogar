@@ -396,6 +396,12 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
+  const [localEvaluations, setLocalEvaluations] = useState(evaluations || []);
+
+  useEffect(() => {
+    setLocalEvaluations(evaluations || []);
+  }, [evaluations]);
+
   const [commercialStages, setCommercialStages] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
@@ -424,10 +430,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     [executiveId, executiveEmail],
   );
   const dismissedScope = executiveId || executiveEmail || "global";
-  const latestEvaluations = useMemo(() => latestEvaluationPerLead(evaluations), [evaluations]);
+  const latestEvaluations = useMemo(() => latestEvaluationPerLead(localEvaluations), [localEvaluations]);
   const selectedLeadEvaluations = useMemo(
-    () => evaluationsForSameLead(evaluations, selectedLead),
-    [evaluations, selectedLead],
+    () => evaluationsForSameLead(localEvaluations, selectedLead),
+    [localEvaluations, selectedLead],
   );
   const comparisonLeads = useMemo(
     () => comparisonLeadIds.map((id) => latestEvaluations.find((lead) => lead.id === id)).filter(Boolean),

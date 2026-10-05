@@ -3,7 +3,7 @@
 -- and fixing invalid references to evaluations.input.
 -- Note: Section 1 (evaluations policy recreation) has been removed to prevent 42501 permission errors.
 
--- 1. Secure update_lead_reliability (add role check and restrict ejecutivo to en_revision)
+-- 1. Secure update_lead_reliability (add role check, fix NULL role check, and restrict ejecutivo to en_revision)
 CREATE OR REPLACE FUNCTION public.update_lead_reliability(
   p_lead_id uuid,
   p_reporter_id uuid DEFAULT NULL,
@@ -26,7 +26,7 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized: anonymous calls not allowed';
   END IF;
 
-  IF v_role NOT IN ('ejecutivo', 'admin', 'admin_inmobiliario') THEN
+  IF v_role IS NULL OR v_role NOT IN ('ejecutivo', 'admin', 'admin_inmobiliario') THEN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
 
@@ -47,12 +47,8 @@ $$;
 REVOKE ALL ON FUNCTION public.update_lead_reliability(uuid, uuid, text, text) FROM public;
 GRANT EXECUTE ON FUNCTION public.update_lead_reliability(uuid, uuid, text, text) TO authenticated;
 
--- 2. Add RLS to lead_status_history
+-- 2. Add RLS to lead_status_history (policy "Staff select lead_status_history" is managed by 20261003120000_lead_status_history_read.sql)
 ALTER TABLE public.lead_status_history ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Staff select lead_status_history" ON public.lead_status_history;
-CREATE POLICY "Staff select lead_status_history"
-ON public.lead_status_history FOR SELECT
-USING (public.get_my_role() IN ('ejecutivo', 'admin', 'admin_inmobiliario'));
 
 -- 3. Fix the sweep_fraudulent_leads function (changed_by = NULL for system, and revoke execute)
 CREATE OR REPLACE FUNCTION public.sweep_fraudulent_leads()
@@ -95,6 +91,7 @@ REVOKE ALL ON FUNCTION public.sweep_fraudulent_leads() FROM public;
 REVOKE EXECUTE ON FUNCTION public.sweep_fraudulent_leads() FROM anon, authenticated, public;
 
 -- 4. Fix get_reported_leads_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
+DROP FUNCTION IF EXISTS public.get_reported_leads_for_admin();
 CREATE OR REPLACE FUNCTION public.get_reported_leads_for_admin()
 RETURNS TABLE (
   id uuid,
@@ -155,6 +152,7 @@ REVOKE ALL ON FUNCTION public.get_reported_leads_for_admin() FROM public;
 GRANT EXECUTE ON FUNCTION public.get_reported_leads_for_admin() TO authenticated;
 
 -- 5. Fix get_lead_status_history_for_admin (replace nonexistent e.input with coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo'))
+DROP FUNCTION IF EXISTS public.get_lead_status_history_for_admin();
 CREATE OR REPLACE FUNCTION public.get_lead_status_history_for_admin()
 RETURNS TABLE (
   history_id uuid,
@@ -217,3 +215,30 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION public.get_lead_status_history_for_admin() FROM public;
 GRANT EXECUTE ON FUNCTION public.get_lead_status_history_for_admin() TO authenticated;
+
+-- 6. Clean up obsolete housing plan trigger from evaluations (HU13 makes evaluations immutable)
+DROP TRIGGER IF EXISTS trg_check_housing_plan_progress ON public.evaluations;
+DROP FUNCTION IF EXISTS public.check_housing_plan_progress();
+
+-- 7. Update list_lead_contacts to include reliability_status
+DROP FUNCTION IF EXISTS public.list_lead_contacts(uuid[]);
+CREATE OR REPLACE FUNCTION public.list_lead_contacts(p_user_ids uuid[])
+RETURNS TABLE (
+  id uuid,
+  full_name text,
+  phone text,
+  reliability_status text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.id, p.full_name, p.phone, COALESCE(p.reliability_status, 'normal') AS reliability_status
+  FROM public.profiles p
+  WHERE p.id = ANY(COALESCE(p_user_ids, '{}'::uuid[]))
+    AND p.role = 'usuario'
+    AND COALESCE(public.get_my_role(), '') = ANY (ARRAY['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
+$$;
+REVOKE ALL ON FUNCTION public.list_lead_contacts(uuid[]) FROM public;
+GRANT EXECUTE ON FUNCTION public.list_lead_contacts(uuid[]) TO authenticated;

@@ -92,13 +92,22 @@ stateDiagram-v2
 
 ### 3.2. Reglas del Detector Automático (E1)
 
-Las reglas determinísticas operan en el backend sin requerir librerías pesadas de Machine Learning:
+El sistema opera con reglas determinísticas tanto a nivel de Backend (`ml_fraud.py`) como a nivel de Base de Datos (`check_ml_fraud_on_insert` en Supabase), garantizando explicabilidad y auditoría sin requerir librerías pesadas de Machine Learning:
 
-1. **Tiempo de llenado anormalmente bajo (< 5s):** Posible uso de scripts o herramientas automatizadas.
-2. **Tanteo excesivo (> 3 intentos en ventana de tiempo):** Manipulación deliberada de parámetros para alterar el scoring.
-3. **Salto de ahorro irreal en 24h:** Incremento abrupto de ahorro en un período corto que excede la capacidad de generación de ingresos declarada.
+#### A. Reglas de Inconsistencia de Datos Financieros y Personales:
+1. **Deuda mensual igual o superior al ingreso:** Si `deuda_mensual >= ingreso_mensual` (con `ingreso_mensual > 0`). Detona advertencia explicativa: *"Deuda mensual declarada ($X) es igual o supera el ingreso mensual total ($Y)"*.
+2. **Dividendo estimado no viable:** Si `dividendo_estimado > ingreso_mensual * 0.85`. Detona: *"Dividendo mensual estimado ($X) supera el 85% del ingreso mensual ($Y)"*.
+3. **Ahorro disponible desproporcionado:** Si `ahorro_disponible > ingreso_mensual * 120`. Detona: *"Ahorro disponible ($X) es desproporcionado (supera 120 veces el ingreso mensual $Y)"*.
+4. **Contradicción en morosidad declarada vs. monto:** Si `morosidad_actual = 'no'` y `monto_morosidad > 0`, o bien si `morosidad_actual = 'si'` y `monto_morosidad <= 0`. Detona: *"Inconsistencia en morosidad: declara morosidad pero monto es $0 (o viceversa)"*.
+5. **Edad + Plazo de crédito inviable:** Si `edad + plazo_credito_hipotecario > 85`. Detona: *"Edad (X años) + plazo solicitado (Y años) supera el límite máximo bancario de 85 años"*.
 
-Si se activa alguna de estas condiciones, el lead se clasifica automáticamente como sospechoso y se registran los factores explicativos correspondientes.
+#### B. Reglas Comportamentales y Anti-Bot:
+1. **Tiempo de llenado anormalmente bajo (< 5s):** Posible uso de scripts o herramientas automatizadas. Detona: *"Tiempo de llenado anormalmente bajo (<5s). Posible script automatizado"*.
+2. **Tanteo excesivo (> 3 intentos en ventana de 15 minutos):** Manipulación deliberada de parámetros desde un mismo dispositivo para alterar el scoring. Detona: *"Tanteo detectado: El dispositivo ha intentado X evaluaciones en menos de 15 min"*.
+3. **Salto de ahorro irreal en 24h:** Incremento abrupto de ahorro en un período corto que excede la capacidad de generación de ingresos declarada. Detona: *"Avance de ahorro irreal detectado en 24h"*.
+
+Si se activa cualquiera de estas condiciones (score de inconsistencia o fraude >= 90%), el lead se clasifica automáticamente con `reliability_status = 'sospechoso'` y se genera un registro en `public.lead_status_history` con `changed_by = NULL` (Sistema) y los factores explicativos concatenados en el motivo.
+
 
 ### 3.3. Modelo de Datos y Persistencia (E4)
 
@@ -224,50 +233,43 @@ Políticas RLS:
 
 ## 6. Estado de Implementación Final (Ejecutado)
 
-Durante el desarrollo e implementación final de la HU16, se construyó un ecosistema de detección de fraude de doble capa (Backend + Base de Datos) diseñado para ser seguro, adaptativo y, sobre todo, **explicable (XAI)**.
+Durante el desarrollo e implementación final de la HU16, se construyó un ecosistema de detección de inconsistencias y sospechas de doble capa (Backend + Base de Datos) diseñado para ser completamente determinístico, explicable, ligero y auditable, **sin dependencias de librerías de Machine Learning (sin XGBoost, SHAP, Scikit-learn ni Pandas)**.
 
-A continuación, se detalla la arquitectura de las barreras anti-fraude operativas:
+A continuación, se detalla la arquitectura operativa de detección:
 
-### 6.1. Variables Comportamentales Clave
-Se descartó la geolocalización por temas de privacidad (Ley 19.628) y precisión. En su lugar, el sistema vigila variables de comportamiento:
-1. **`time_to_submit_ms`**: El tiempo exacto (en milisegundos) que demora el usuario entre que abre el formulario y lo envía. Permite detectar scripts que inyectan datos de golpe.
-2. **`device_id_hash`**: Identificador ofuscado del navegador/dispositivo. Permite correlacionar múltiples envíos de un mismo atacante aunque cambie su RUT o IP.
-3. **`intentos_previos`**: Variable generada en tiempo real por el Backend, contando cuántas veces ha participado el `device_id_hash` en una ventana de tiempo de 15 minutos.
+### 6.1. Variables Comportamentales y Financieras Clave
+Se descartó la geolocalización por temas de privacidad (Ley 19.628). En su lugar, el sistema evalúa:
+1. **`time_to_submit_ms`**: Tiempo exacto (en ms/segundos) que demora el usuario entre que abre el formulario y lo envía (detecta scripts que inyectan datos masivos en < 5s).
+2. **`device_id_hash`**: Identificador ofuscado del navegador/dispositivo para correlacionar envíos en ventanas cortas.
+3. **`intentos_previos`**: Conteo en tiempo real de evaluaciones originadas por el mismo `device_id_hash` en los últimos 15 minutos (detecta tanteo deliberado).
+4. **Datos financieros declarados (`financial_data->'input'`):** Ingreso mensual, deuda mensual, dividendo estimado, ahorro disponible, morosidad declarada y plazo solicitado.
 
-### 6.2. Capa 1: El Cerebro en el Backend (XGBoost + Fallback)
-Toda evaluación que entra al sistema es escaneada por el módulo `ml_fraud.py` en Python, el cual opera con un relevo inteligente:
+### 6.2. Capa 1: Detector Determinístico en Backend (`ml_fraud.py`)
+Toda evaluación que entra al endpoint `POST /score` es procesada por el módulo `ml_fraud.py` en Python puro:
+- **Anti-Bot (Velocidad):** Si `time_to_submit` < 5 segundos = 95% sospecha.
+- **Anti-Tanteo:** Si el dispositivo registra más de 3 intentos en los últimos 15 minutos = 99% sospecha.
+- **Salto de Ahorro Irreal:** Si en menos de 24 horas el ahorro salta más de 3 veces el ingreso mensual = 99% sospecha.
+- **Factores Explicativos:** Los motivos se inyectan en lenguaje natural claro (ej: *"Tiempo de llenado anormalmente bajo (<5s)"*, *"Tanteo detectado"*), cumpliendo el principio de explicabilidad.
 
-*   **Sistema de Fallback (Reglas Duras Temporales):** Mientras el sistema acumula los primeros reportes históricos, opera con reglas estrictas:
-    *   **Anti-Bot (Velocidad):** Si `time_to_submit` < 5 segundos = 95% Fraude.
-    *   **Anti-Fuerza Bruta (Tanteo temporal):** Antes de evaluar, el Backend hace un `COUNT` en Supabase de los intentos del `device_id_hash` en los **últimos 15 minutos**. Si son más de 3, se bloquea con 99% Fraude.
-*   **Machine Learning Adaptativo (XGBoost):** El sistema expone el endpoint `/score/retrain`. Al ser llamado, el modelo entrena un árbol de decisiones con el historial real. Una vez entrenado, el Fallback se apaga, y XGBoost comienza a encontrar correlaciones invisibles.
-*   **Explicabilidad (SHAP):** En todos los casos, el modelo usa la librería SHAP para inyectar en la base de datos la *razón exacta* del bloqueo (ej: "Velocidad anormal", "Tanteo detectado"), cumpliendo con la necesidad del administrador de saber *por qué* un lead es sospechoso.
+### 6.3. Capa 2: Reglas Nativas de Inconsistencia en Base de Datos (Supabase)
+Para evitar que registros eludan la revisión ante eventualidades del frontend o invocaciones directas, se implementó en `supabase/migrations/20261004110000_fix_hu16_review_issues.sql` el trigger `check_ml_fraud_on_insert` que evalúa de forma atómica:
+- **Deuda $\ge$ Ingreso:** Si la deuda mensual declarada es igual o mayor al ingreso mensual total.
+- **Dividendo Inviable:** Si el dividendo estimado supera el 85% del ingreso.
+- **Ahorro Desproporcionado:** Si el ahorro disponible supera 120 veces el ingreso mensual declarado.
+- **Contradicción en Morosidad:** Si declara `morosidad_actual = 'no'` pero registra `monto_morosidad > 0` (o viceversa).
+- **Edad + Plazo Excedido:** Si la suma de edad y plazo supera 85 años.
 
-### 6.3. Capa 2: Defensas Absolutas en Base de Datos (Supabase)
-Para proteger el ecosistema de ataques prolongados ("Smurfing" o engaños lentos) y caídas de red, se implementaron mecanismos nativos en SQL:
+Cuando cualquiera de estas reglas se activa, la evaluación se marca con `reliability_status = 'sospechoso'`, y se inserta automáticamente un registro inmutable en `lead_status_history` con `changed_by = NULL` (Sistema) y los factores detallados.
 
-*   **Trigger de Velocidad de Ahorro Máxima (Anti-Smurfing):** 
-    Para evitar que un usuario burle las reglas haciendo decenas de pequeños incrementos en su "Plan de Mejora", el Trigger `check_housing_plan_progress` mide la realidad física.
-    Calcula el tiempo activo y establece un techo máximo de ahorro: `3 sueldos iniciales + (1 sueldo * meses_activos)`. Si el acumulado total del ahorro supera este límite absoluto del tiempo, el lead es marcado como fraude por *"Velocidad de ahorro matemáticamente imposible"*.
-*   **Barrendero de Consistencia Eventual (Sweeper):**
-    Una función programada (`sweep_fraudulent_leads()`) que busca leads que el Backend Python marcó como `fraud_score >= 80%` pero que no lograron ser actualizados en Supabase por el Frontend (por cortes de internet). Este barrendero los encuentra y actualiza su estado a `sospechoso` para garantizar que nadie escape de la revisión.
+*(Nota técnica: El trigger previo `check_housing_plan_progress` sobre `evaluations` fue descartado formalmente debido a que la HU13 convirtió a `evaluations` en inmutable mediante el trigger `hu13_immutable`, centralizando el análisis financiero al momento del `INSERT`).*
 
 ### 6.4. Separación de Roles y Testing
-- **Ejecutivos vs Administradores:** Los leads clasificados como `sospechoso` desaparecen de las bandejas comerciales y caen exclusivamente en el panel Admin.
-- **Testing Automatizado:** Se han implementado y ampliado suites de prueba estructuradas para garantizar la fiabilidad del sistema de fraude:
-  - `backend/tests/test_ml_fraud.py` (Pytest): Verifica el modelo de Machine Learning (`predict_fraud_xgboost`) y sus reglas de Fallback sin requerir conexión a la base de datos viva (tests unitarios in-memory).
-    - **Funcionalidades probadas:**
-      1. *Usuario normal:* Verifica que no se marquen falsos positivos.
-      2. *Tanteo:* Valida la regla de `intentos_previos > 3` (retorna 99.0%).
-      3. *Bot / Script:* Valida el llenado en menos de 5 segundos (`time_to_submit < 5`, retorna 95.0%).
-      4. *Avance irreal de ahorro:* Comprueba la relación del salto de ahorro contra los ingresos (retorna 99.0%).
-    - **Cómo ejecutar:** `python -m pytest backend/tests/test_ml_fraud.py -v` (requiere tener instalado `pytest`).
-  - `backend/test_fraude.py` (ejecutable vía `make test-fraude` o `python backend/test_fraude.py`): Suite de integración automatizada completa contra el backend FastAPI (usando `TestClient`).
-    - **Casos probados:**
-      1. *[TEST 1] Usuario Normal:* Valida llenado pausado (45s) sin alertas previas (`fraud_score` < 20%).
-      2. *[TEST 2] Ataque Bot/Script:* Valida llenado express (< 5s) activando bloqueo por velocidad (`fraud_score` >= 95%).
-      3. *[TEST 3] Tanteo de Parámetros:* Simula 4 intentos rápidos desde un mismo dispositivo en 15 min (`fraud_score` >= 99%).
-      4. *[TEST 4] Salto de Ahorro Irreal:* Simula salto de $3M a $20M en 24h con sueldo de $1.2M (`fraud_score` >= 99% con formato en pesos chilenos).
-      5. *[TEST 5] Reentrenamiento ML:* Valida el endpoint `POST /score/retrain` que descarga los leads de Supabase y ajusta el modelo XGBoost.
-  - `backend/tests/test_ml_fraud.py`: Pruebas unitarias in-memory para el motor `predict_fraud_xgboost` con Pytest.
-  - `supabase/test_hu16_rules.sql`: Transacción con `ROLLBACK` para validar que el Trigger de Ahorro y el Barrendero funcionen a nivel SQL en la base de datos.
+- **Ejecutivos vs Administradores:** Los leads clasificados como `sospechoso` o `silenciado` quedan ocultos por defecto en la vista del ejecutivo comercial (E3), mientras que el administrador cuenta con la facultad exclusiva de resolver su estado a `normal`, `en_revision`, `silenciado` o `reactivado` con motivo obligatorio (E2).
+- **Testing Automatizado:**
+  - `backend/tests/test_ml_fraud.py` (Pytest): Verifica unitariamente el motor determinístico `predict_fraud` in-memory:
+    1. *Usuario normal:* Score bajo (< 20%) y sin factores.
+    2. *Tanteo:* Score >= 99% por > 3 intentos.
+    3. *Bot / Script:* Score >= 95% por tiempo < 5s.
+    4. *Salto de ahorro:* Score >= 99% por salto en 24h.
+  - `backend/test_fraude.py`: Suite de integración FastAPI completa (4 pruebas automatizadas con `TestClient` cubriendo usuario normal, bot, tanteo y salto de ahorro).
+  - `supabase/test_hu16_rules.sql`: Script de validación SQL con `ROLLBACK` para verificar la activación del trigger `check_ml_fraud_on_insert` ante datos contradictorios y el funcionamiento del barrendero (`sweep_fraudulent_leads`).

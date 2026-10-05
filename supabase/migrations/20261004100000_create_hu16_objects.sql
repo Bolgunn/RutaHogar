@@ -31,69 +31,7 @@ CREATE TABLE IF NOT EXISTS public.lead_status_history (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 5. Trigger for housing plan progress check
-CREATE OR REPLACE FUNCTION public.check_housing_plan_progress()
-RETURNS trigger AS $$
-DECLARE
-  v_old_total numeric := 0;
-  v_new_total numeric := 0;
-  v_income numeric := 0;
-  v_days_active numeric;
-  v_months_active numeric;
-  v_max_logical_savings numeric;
-  v_fraud_reason jsonb := NULL;
-  v_fraud_text text := NULL;
-  v_current_status text;
-BEGIN
-  IF NEW.housing_plan IS NOT NULL THEN
-    v_old_total := COALESCE((OLD.housing_plan->'meta_ahorro'->>'monto_actual')::numeric, 0);
-    v_new_total := COALESCE((NEW.housing_plan->'meta_ahorro'->>'monto_actual')::numeric, 0);
-    v_income := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
-    
-    IF v_income > 0 THEN
-      v_days_active := EXTRACT(EPOCH FROM (now() - NEW.created_at)) / 86400;
-      v_months_active := GREATEST(0, v_days_active / 30.0);
-      v_max_logical_savings := (v_income * 3) + (v_income * v_months_active);
-
-      IF (v_new_total - v_old_total) > (v_income * 3) THEN
-        v_fraud_text := 'Avance irreal vs renta mensual en Plan de Mejora';
-        v_fraud_reason := to_jsonb(v_fraud_text);
-      ELSIF v_new_total > v_max_logical_savings THEN
-        v_fraud_text := 'Velocidad de ahorro matemáticamente imposible (Smurfing detectado)';
-        v_fraud_reason := to_jsonb(v_fraud_text);
-      END IF;
-
-      IF v_fraud_reason IS NOT NULL THEN
-        SELECT reliability_status INTO v_current_status FROM public.profiles WHERE id = NEW.user_id;
-        
-        -- Si está normal o reactivado, marcamos sospechoso y dejamos trazabilidad en el historial
-        IF v_current_status IN ('normal', 'reactivado') THEN
-          UPDATE public.profiles 
-          SET reliability_status = 'sospechoso', updated_at = now() 
-          WHERE id = NEW.user_id;
-
-          INSERT INTO public.lead_status_history (profile_id, old_status, new_status, reason, changed_by)
-          VALUES (NEW.user_id, v_current_status, 'sospechoso', 'Alerta automática (Plan de Ahorro): ' || v_fraud_text, NULL);
-        END IF;
-        
-        NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || v_fraud_reason;
-        NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
-      END IF;
-    END IF;
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS trg_check_housing_plan_progress ON public.evaluations;
-CREATE TRIGGER trg_check_housing_plan_progress
-BEFORE UPDATE ON public.evaluations
-FOR EACH ROW
-WHEN (OLD.housing_plan IS DISTINCT FROM NEW.housing_plan)
-EXECUTE FUNCTION public.check_housing_plan_progress();
-
--- 6. Trigger for automatic detection on evaluation insert
+-- 5. Trigger for automatic detection on evaluation insert
 CREATE OR REPLACE FUNCTION public.check_ml_fraud_on_insert()
 RETURNS trigger AS $$
 DECLARE
@@ -104,11 +42,66 @@ DECLARE
   v_ahorro_actual numeric;
   v_renta numeric;
   v_time_to_submit numeric;
+  v_deuda_mensual numeric;
+  v_dividendo_estimado numeric;
+  v_morosidad_actual text;
+  v_monto_morosidad numeric;
+  v_edad numeric;
+  v_plazo_credito numeric;
   v_reasons text[] := ARRAY[]::text[];
 BEGIN
   v_device_hash := NEW.financial_data->'input'->>'device_id_hash';
   v_time_to_submit := COALESCE((NEW.financial_data->'input'->>'time_to_submit')::numeric, 999);
+  v_renta := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+  v_ahorro_actual := COALESCE((NEW.financial_data->'input'->>'ahorro_disponible')::numeric, 0);
+  v_deuda_mensual := COALESCE((NEW.financial_data->'input'->>'deuda_mensual')::numeric, 0);
+  v_dividendo_estimado := COALESCE((NEW.financial_data->'input'->>'dividendo_estimado')::numeric, 0);
+  v_morosidad_actual := NEW.financial_data->'input'->>'morosidad_actual';
+  v_monto_morosidad := COALESCE((NEW.financial_data->'input'->>'monto_morosidad')::numeric, 0);
+  v_edad := COALESCE((NEW.financial_data->'input'->>'edad')::numeric, 0);
+  v_plazo_credito := COALESCE((NEW.financial_data->'input'->>'plazo_credito_hipotecario')::numeric, 0);
 
+  -- =============================================================
+  -- REGLAS DE VALORES INCONSISTENTES / CONTRADICTORIOS (E1 Proposal A)
+  -- =============================================================
+  -- Regla 1: Deuda mensual supera o iguala al ingreso
+  IF v_renta > 0 AND v_deuda_mensual >= v_renta THEN
+    v_reasons := array_append(v_reasons, 'Deuda mensual supera o iguala al ingreso mensual');
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Deuda mensual declarada supera o iguala al ingreso mensual"'::jsonb;
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+  END IF;
+
+  -- Regla 2: Dividendo estimado no viable (> 85% de ingreso)
+  IF v_renta > 0 AND v_dividendo_estimado > (v_renta * 0.85) THEN
+    v_reasons := array_append(v_reasons, 'Dividendo estimado compromete más del 85% del ingreso');
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Dividendo estimado compromete más del 85% del ingreso"'::jsonb;
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+  END IF;
+
+  -- Regla 3: Ahorro desproporcionado (> 120x ingreso)
+  IF v_renta > 0 AND v_ahorro_actual > (v_renta * 120) THEN
+    v_reasons := array_append(v_reasons, 'Ahorro disponible supera 120 veces el ingreso mensual');
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Ahorro disponible supera 120 veces el ingreso mensual"'::jsonb;
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+  END IF;
+
+  -- Regla 4: Morosidad contradictoria
+  IF (v_morosidad_actual = 'no' AND v_monto_morosidad > 0) OR (v_morosidad_actual = 'si' AND v_monto_morosidad <= 0) THEN
+    v_reasons := array_append(v_reasons, 'Contradicción en declaración de morosidad y monto');
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Contradicción entre declaración de morosidad y monto registrado"'::jsonb;
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+  END IF;
+
+  -- Regla 5: Edad + plazo crédito hipotecario supera 85 años
+  IF v_edad > 0 AND v_plazo_credito > 0 AND (v_edad + v_plazo_credito) > 85 THEN
+    v_reasons := array_append(v_reasons, 'Edad más plazo de crédito hipotecario supera los 85 años');
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Edad declarada más plazo de crédito supera los 85 años"'::jsonb;
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+  END IF;
+
+  -- =============================================================
+  -- REGLAS DE COMPORTAMIENTO / ANTI-BOT
+  -- =============================================================
   IF v_device_hash IS NOT NULL THEN
     -- Tanteo: más de 3 intentos en 15 minutos
     SELECT count(*) INTO v_intentos 
@@ -131,9 +124,7 @@ BEGIN
     LIMIT 1;
     
     IF v_ahorro_previo IS NOT NULL THEN
-       v_ahorro_actual := COALESCE((NEW.financial_data->'input'->>'ahorro_disponible')::numeric, 0);
-       v_renta := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
-       IF v_ahorro_actual > (v_ahorro_previo + (v_renta * 3)) THEN
+       IF v_renta > 0 AND v_ahorro_actual > (v_ahorro_previo + (v_renta * 3)) THEN
           NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
           NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Avance de ahorro irreal detectado en 24h"'::jsonb;
           v_reasons := array_append(v_reasons, 'Avance de ahorro irreal detectado en 24h');
@@ -141,7 +132,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- Script automatizado
+  -- Script automatizado / Bot
   IF v_time_to_submit < 5 THEN
     NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 95.0);
     NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tiempo de llenado anormalmente bajo (<5s)"'::jsonb;
@@ -162,7 +153,7 @@ BEGIN
         NEW.user_id, 
         v_current_status, 
         'sospechoso', 
-        'Alerta automática (Evaluación): ' || COALESCE(array_to_string(v_reasons, ', '), 'Inconsistencias detectadas'), 
+        'Alerta automática (Evaluación): ' || COALESCE(array_to_string(v_reasons, '; '), 'Inconsistencias detectadas'), 
         NULL
       );
     END IF;
