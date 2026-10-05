@@ -20,6 +20,11 @@ export type InvitationRow = {
   management_token_digest?: string | null;
   recipient_email?: string;
   lead_id?: string;
+  ingreso_mensual_complementario?: number | null;
+  deuda_mensual_complementario?: number | null;
+  tipo_contrato_complementario?: string | null;
+  continuidad_laboral_complementario?: string | null;
+  morosidad_complementario?: string | null;
 };
 
 export function cleanText(value: unknown, maxLength = 254): string {
@@ -28,6 +33,24 @@ export function cleanText(value: unknown, maxLength = 254): string {
 
 export function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+export function normalizeChileanRut(value: unknown): string {
+  const compact = cleanText(value, 32).replace(/[^0-9kK]/g, "").toUpperCase();
+  if (!/^\d{7,8}[0-9K]$/.test(compact)) throw new Error("RUT del co-deudor inválido.");
+
+  const number = compact.slice(0, -1);
+  const verificationDigit = compact.slice(-1);
+  let sum = 0;
+  let multiplier = 2;
+  for (let index = number.length - 1; index >= 0; index -= 1) {
+    sum += Number(number[index]) * multiplier;
+    multiplier = multiplier === 7 ? 2 : multiplier + 1;
+  }
+  const remainder = 11 - (sum % 11);
+  const expected = remainder === 11 ? "0" : remainder === 10 ? "K" : String(remainder);
+  if (verificationDigit !== expected) throw new Error("RUT del co-deudor inválido.");
+  return `${number}-${verificationDigit}`;
 }
 
 export function escapeHtml(value: string): string {
@@ -79,12 +102,9 @@ export type Submission = {
   treatment_consent_version: string;
 };
 
-export function parseSubmission(payload: Record<string, unknown>): Submission {
-  const allowed = new Set(["action", "token", "treatment_consent", "treatment_consent_version", ...FINANCIAL_FIELDS]);
-  if (Object.keys(payload).some((key) => !allowed.has(key))) {
-    throw new Error("La confirmaci\u00f3n contiene campos no permitidos.");
-  }
-  if (payload.treatment_consent !== true) throw new Error("El consentimiento de tratamiento es obligatorio.");
+export type DeclaredComplement = Omit<Submission, "treatment_consent_version">;
+
+function parseFinancialFields(payload: Record<string, unknown>): DeclaredComplement {
   const income = Number(payload.ingreso_mensual_complementario);
   const debt = Number(payload.deuda_mensual_complementario);
   if (!Number.isFinite(income) || income < 0 || !Number.isFinite(debt) || debt < 0) {
@@ -93,26 +113,58 @@ export function parseSubmission(payload: Record<string, unknown>): Submission {
   const contract = cleanText(payload.tipo_contrato_complementario, 64);
   const continuity = cleanText(payload.continuidad_laboral_complementario, 64);
   const delinquency = cleanText(payload.morosidad_complementario, 8);
-  const version = cleanText(payload.treatment_consent_version, 120);
   if (!CONTRACT_TYPES.has(contract) || !CONTINUITY_VALUES.has(continuity) || !DELINQUENCY_VALUES.has(delinquency)) {
     throw new Error("Los antecedentes laborales o de morosidad no son v\u00e1lidos.");
   }
-  if (!version) throw new Error("La versi\u00f3n del consentimiento es obligatoria.");
   return {
     ingreso_mensual_complementario: income,
     deuda_mensual_complementario: debt,
     tipo_contrato_complementario: contract,
     continuidad_laboral_complementario: continuity,
     morosidad_complementario: delinquency,
+  };
+}
+
+export function parseLeadDeclaredComplement(payload: Record<string, unknown>): DeclaredComplement {
+  const allowed = new Set(["action", "recipient_email", "recipient_rut", ...FINANCIAL_FIELDS]);
+  if (Object.keys(payload).some((key) => !allowed.has(key))) {
+    throw new Error("La invitaci\u00f3n contiene campos no permitidos.");
+  }
+  return parseFinancialFields(payload);
+}
+
+export function parseSubmission(payload: Record<string, unknown>): Submission {
+  const allowed = new Set(["action", "token", "treatment_consent", "treatment_consent_version", ...FINANCIAL_FIELDS]);
+  if (Object.keys(payload).some((key) => !allowed.has(key))) {
+    throw new Error("La confirmaci\u00f3n contiene campos no permitidos.");
+  }
+  if (payload.treatment_consent !== true) throw new Error("El consentimiento de tratamiento es obligatorio.");
+  const version = cleanText(payload.treatment_consent_version, 120);
+  if (!version) throw new Error("La versi\u00f3n del consentimiento es obligatoria.");
+  return {
+    ...parseFinancialFields(payload),
     treatment_consent_version: version,
   };
 }
 
+function hasDeclaredComplement(row: InvitationRow): row is InvitationRow & Required<DeclaredComplement> {
+  return FINANCIAL_FIELDS.every((field) => row[field] !== undefined && row[field] !== null && row[field] !== "");
+}
+
 export function invitationPublicContext(row: InvitationRow, status = invitationStatus(row)) {
-  return {
+  const context = {
     status,
     expires_at: status === "pending" ? row.expires_at : null,
     can_submit: status === "pending",
+  };
+  if (status !== "pending" || !hasDeclaredComplement(row)) return context;
+  return {
+    ...context,
+    ingreso_mensual_complementario: row.ingreso_mensual_complementario,
+    deuda_mensual_complementario: row.deuda_mensual_complementario,
+    tipo_contrato_complementario: row.tipo_contrato_complementario,
+    continuidad_laboral_complementario: row.continuidad_laboral_complementario,
+    morosidad_complementario: row.morosidad_complementario,
   };
 }
 

@@ -1,11 +1,18 @@
 import { supabase } from "../utils/supabase";
+import { normalizeChileanRut } from "../utils/chileanRut";
 
 const invitationFields = [
   "recipient_email",
+  "recipient_rut",
   "status",
   "expires_at",
   "created_at",
-  "co_debtor_confirmations(ingreso_mensual_complementario,deuda_mensual_complementario,tipo_contrato_complementario,continuidad_laboral_complementario,morosidad_complementario)",
+  "ingreso_mensual_complementario",
+  "deuda_mensual_complementario",
+  "tipo_contrato_complementario",
+  "continuidad_laboral_complementario",
+  "morosidad_complementario",
+  "co_debtor_confirmations(ingreso_mensual_complementario,deuda_mensual_complementario,tipo_contrato_complementario,continuidad_laboral_complementario,morosidad_complementario,confirmed_at)",
 ].join(",");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -118,13 +125,25 @@ function confirmationFor(invitation) {
   return Array.isArray(relation) ? relation[0] || null : relation || null;
 }
 
+function declaredComplementFor(invitation) {
+  const values = Object.fromEntries(publicFinancialFields.map((field) => [field, invitation?.[field]]));
+  return publicFinancialFields.every((field) => values[field] !== undefined && values[field] !== null && values[field] !== "")
+    ? values
+    : null;
+}
+
 export function normalizeLeadCoDebtorInvitation(invitation, now = Date.now()) {
   if (!invitation) return null;
-  const status = isExpired(invitation, now) ? "expired" : invitation.status;
+  const rawStatus = isExpired(invitation, now) ? "expired" : invitation.status;
+  // The delivery-failure operation marks the freshly-created record as
+  // replaced. It has no usable token, so surface it as a retryable state.
+  const status = rawStatus === "replaced" ? "delivery_failed" : rawStatus;
   return {
     recipientEmail: invitation.recipient_email || "",
+    recipientRut: invitation.recipient_rut || "",
     status,
     expiresAt: invitation.expires_at || null,
+    declaredComplement: declaredComplementFor(invitation),
     // Confirmed values are deliberately omitted as soon as consent is no
     // longer current. The UI never reads invitation or management tokens.
     confirmation: status === "confirmed" ? confirmationFor(invitation) : null,
@@ -149,15 +168,27 @@ export function validateCoDebtorEmail(value) {
   return email;
 }
 
-export async function createCoDebtorInvitation(recipientEmail) {
+export function validateCoDebtorRut(value) {
+  const rut = normalizeChileanRut(value);
+  if (!rut) throw new Error("Ingresa un RUT válido para el co-deudor.");
+  return rut;
+}
+
+export async function createCoDebtorInvitation(recipientEmail, recipientRut, declaredComplement = {}) {
   requireSupabase();
   const email = validateCoDebtorEmail(recipientEmail);
+  const rut = validateCoDebtorRut(recipientRut);
   const { data, error } = await supabase.functions.invoke("co-debtor-consent", {
-    body: { action: "create_invitation", recipient_email: email },
+    body: {
+      action: "create_invitation",
+      recipient_email: email,
+      recipient_rut: rut,
+      ...Object.fromEntries(publicFinancialFields.map((field) => [field, declaredComplement[field]])),
+    },
   });
   if (error || data?.error) {
     const detail = data?.error ? data : await readFunctionError(error);
-    throw new Error(functionMessage(error, detail));
+    throw publicFunctionFailure(error, detail, functionMessage(error, detail));
   }
   return data;
 }

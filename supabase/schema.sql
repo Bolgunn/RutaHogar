@@ -1727,6 +1727,13 @@ create table if not exists public.co_debtor_invitations (
   id uuid primary key default gen_random_uuid(),
   lead_id uuid not null references public.profiles(id) on delete restrict,
   recipient_email text not null check (length(trim(recipient_email)) > 0),
+  recipient_rut text
+    check (recipient_rut is null or recipient_rut ~ '^[0-9]{7,8}-[0-9K]$'),
+  ingreso_mensual_complementario numeric,
+  deuda_mensual_complementario numeric,
+  tipo_contrato_complementario text,
+  continuidad_laboral_complementario text,
+  morosidad_complementario text,
   token_digest text not null unique check (length(trim(token_digest)) > 0),
   management_token_digest text
     check (management_token_digest is null or length(trim(management_token_digest)) > 0),
@@ -1741,6 +1748,29 @@ create table if not exists public.co_debtor_invitations (
   constraint co_debtor_invitations_expiry_check check (expires_at > created_at),
   constraint co_debtor_invitations_replacement_check check (
     replacement_of_invitation_id is distinct from id
+  ),
+  constraint co_debtor_invitations_declared_complement_check check (
+    num_nonnulls(
+      ingreso_mensual_complementario,
+      deuda_mensual_complementario,
+      tipo_contrato_complementario,
+      continuidad_laboral_complementario,
+      morosidad_complementario
+    ) = 0
+    or (
+      num_nonnulls(
+        ingreso_mensual_complementario,
+        deuda_mensual_complementario,
+        tipo_contrato_complementario,
+        continuidad_laboral_complementario,
+        morosidad_complementario
+      ) = 5
+      and ingreso_mensual_complementario >= 0
+      and deuda_mensual_complementario >= 0
+      and tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')
+      and continuidad_laboral_complementario in ('menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios')
+      and morosidad_complementario in ('si', 'no')
+    )
   )
 );
 
@@ -1898,6 +1928,66 @@ begin
 end;
 $$;
 
+-- Declared-complement overload used by the authenticated Edge Function. Its
+-- values stay on the invitation until the co-debtor confirms their own data.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz,
+  p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric,
+  p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text,
+  p_morosidad_complementario text
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_recipient_rut, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set ingreso_mensual_complementario = p_ingreso_mensual_complementario,
+        deuda_mensual_complementario = p_deuda_mensual_complementario,
+        tipo_contrato_complementario = p_tipo_contrato_complementario,
+        continuidad_laboral_complementario = p_continuidad_laboral_complementario,
+        morosidad_complementario = p_morosidad_complementario
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+-- RUT-aware overload used only by the authenticated Edge Function. The
+-- original four-argument operation remains for existing hosted callers.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  if p_recipient_rut !~ '^[0-9]{7,8}-[0-9K]$' then
+    raise exception 'hu18_invalid_recipient_rut' using errcode = 'P0001';
+  end if;
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set recipient_rut = p_recipient_rut
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
 create or replace function public.hu18_revert_invitation_after_delivery_failure(
   p_invitation_id uuid, p_previous_invitation_id uuid default null
 )
@@ -2010,12 +2100,16 @@ end;
 $$;
 
 revoke all on function public.hu18_create_invitation(uuid, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text) from public, anon, authenticated;
 revoke all on function public.hu18_revert_invitation_after_delivery_failure(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.hu18_expire_invitation(uuid) from public, anon, authenticated;
 revoke all on function public.hu18_expire_invitations() from public, anon, authenticated;
 revoke all on function public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function public.hu18_revoke_consent(uuid) from public, anon, authenticated;
 grant execute on function public.hu18_create_invitation(uuid, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text),
   public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
   public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
   public.hu18_revoke_consent(uuid) to service_role;

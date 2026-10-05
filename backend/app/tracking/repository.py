@@ -54,7 +54,7 @@ class TrackingRepository:
             "select": (
                 "status,created_at,expires_at,"
                 "co_debtor_confirmations("
-                "ingreso_mensual_complementario,deuda_mensual_complementario,"
+                "id,ingreso_mensual_complementario,deuda_mensual_complementario,"
                 "tipo_contrato_complementario,continuidad_laboral_complementario,"
                 "morosidad_complementario)"
             ),

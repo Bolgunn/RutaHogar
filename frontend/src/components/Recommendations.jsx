@@ -91,11 +91,27 @@ function LinkedText({ text, onOpenArticle }) {
   );
 }
 
-export default function Recommendations({ evaluation, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated }) {
+export function scrollToScoreSummary(element) {
+  element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+}
+
+export default function Recommendations({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
+  const scoreSummaryRef = useRef(null);
+  const [coDebtorSuccess, setCoDebtorSuccess] = useState(false);
   const openInAcademy = () => onNavigate?.("academia");
+  const handleCoDebtorScoreUpdated = async () => {
+    await onCoDebtorScoreUpdated?.();
+    setCoDebtorSuccess(true);
+    const scrollToScore = () => scrollToScoreSummary(scoreSummaryRef.current);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(scrollToScore);
+    } else {
+      scrollToScore();
+    }
+  };
 
   if (!data) {
     return (
@@ -123,7 +139,9 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         </div>
       </div>
 
-      <div className="recommendation-hero-row">
+      {coDebtorSuccess && <p className="success-message" role="status">Actualizamos tu score con los antecedentes confirmados.</p>}
+
+      <div className="recommendation-hero-row" ref={scoreSummaryRef}>
         <section className="recommendation-score-ai-card">
           <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
             <span>Score financiero</span>
@@ -216,7 +234,7 @@ export default function Recommendations({ evaluation, onStartEvaluation, onNavig
         </div>
       )}
 
-      <CoDebtorSection evaluation={evaluation} onScoreUpdated={onCoDebtorScoreUpdated} />
+      <CoDebtorSection evaluation={evaluation} trackingState={trackingState} onScoreUpdated={handleCoDebtorScoreUpdated} />
 
       <div className="warning-note">
         <i className="ti ti-alert-triangle"></i>

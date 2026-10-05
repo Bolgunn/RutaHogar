@@ -38,13 +38,19 @@ export function normalizeEvaluation(row, contactsMap = {}) {
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
   const contact = contactsMap[row.user_id] || row;
+  const input = financialData.input || financialData.input_snapshot || financialData;
+  const onboardingSnapshot = input?.onboarding_snapshot;
+  const hasSnapshotField = (field) => Object.prototype.hasOwnProperty.call(onboardingSnapshot || {}, field);
 
   const onboarding = {
-    objetivo_principal: row.objective || "",
-    tipo_propiedad: row.property_type || "",
-    comuna_interes: row.target_commune || "",
-    comuna_alternativa: row.alternative_commune || "",
-    plazo_compra: row.purchase_timeline || "",
+    objetivo_principal: hasSnapshotField("objetivo_principal") ? onboardingSnapshot.objetivo_principal : row.objective || "",
+    tipo_propiedad: hasSnapshotField("tipo_propiedad") ? onboardingSnapshot.tipo_propiedad : row.property_type || "",
+    comuna_interes: hasSnapshotField("comuna_interes") ? onboardingSnapshot.comuna_interes : input?.comuna_objetivo || row.target_commune || "",
+    comuna_alternativa: hasSnapshotField("comuna_alternativa") ? onboardingSnapshot.comuna_alternativa : input?.comuna_alternativa || row.alternative_commune || "",
+    plazo_compra: hasSnapshotField("plazo_compra") ? onboardingSnapshot.plazo_compra : input?.plazo_compra || row.purchase_timeline || "",
+    tiene_propiedad_vista: hasSnapshotField("tiene_propiedad_vista")
+      ? onboardingSnapshot.tiene_propiedad_vista === true
+      : input?.tiene_propiedad_vista,
   };
 
   return {
@@ -57,7 +63,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     phone: contact.phone || null,
     user_id: row.user_id,
     onboarding,
-    input: financialData.input || financialData.input_snapshot || financialData,
+    input,
     result: {
       ...storedResult,
       score: storedResult.score ?? row.score,

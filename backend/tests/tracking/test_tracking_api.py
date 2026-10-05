@@ -80,6 +80,7 @@ def test_confirmed_co_debtor_evaluation_uses_authenticated_owner_only(api):
     repo.co_debtor_consent = {
         "invitation_status": "confirmed",
         "co_debtor_confirmed": {
+            "id": "confirmation-1",
             "ingreso_mensual_complementario": 1500000,
             "deuda_mensual_complementario": 300000,
             "tipo_contrato_complementario": "indefinido",
@@ -102,11 +103,18 @@ def test_confirmed_co_debtor_evaluation_uses_authenticated_owner_only(api):
     assert updated.status_code == 200, updated.text
     assert repo.bundle["events"][-1]["user_id"] == "u1"
     assert repo.bundle["events"][-1]["reason"] == "confirmacion_codeudor"
+    assert repo.bundle["events"][-1]["provenance"]["co_debtor_confirmation_id"] == "confirmation-1"
     current = repo.bundle["evaluations"][-1]["financial_data"]["input"]
     assert current["ingreso_mensual_complementario"] == 1500000
     assert current["deuda_mensual_complementario"] == 300000
     assert current["relacion_complementario"] == "pareja_conviviente"
     assert repo.bundle["evaluations"][0] == previous
+
+    assert client.get("/tracking", headers=headers).json()["co_debtor"]["score_update_required"] is False
+    duplicate = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["code"] == "co_debtor_confirmation_already_applied"
+    assert len(repo.bundle["evaluations"]) == 2
 
     repo.co_debtor_consent = {"invitation_status": "revoked"}
     revoked = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)

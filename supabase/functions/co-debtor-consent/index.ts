@@ -1,10 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  cleanText, digestToken, escapeHtml, invitationExpiry, invitationPublicContext, invitationStatus,
-  isEmail, managementPublicContext, parseSubmission, parseTtlDays, secureToken, timingSafeEqual,
+  cleanText, digestToken, invitationExpiry, invitationPublicContext, invitationStatus,
+  isEmail, managementPublicContext, normalizeChileanRut, parseLeadDeclaredComplement, parseSubmission, parseTtlDays, secureToken, timingSafeEqual,
   type InvitationRow,
 } from "./helpers.ts";
+import {
+  coDebtorConfirmationEmail, expirationEmail, invitationEmail, leadConfirmationEmail,
+} from "./email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,47 +30,13 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-function publicUrl(path: string, token: string): string {
+function appUrl(path = ""): string {
   const base = requiredEnv("APP_PUBLIC_URL").replace(/\/$/, "");
-  return `${base}${path}?token=${encodeURIComponent(token)}`;
+  return `${base}${path}`;
 }
 
-function invitationEmail(link: string, ttlDays: number) {
-  const safeLink = escapeHtml(link);
-  return {
-    subject: "Invitaci\u00f3n para aportar antecedentes en RutaHogar",
-    html: `<p>Te invitaron a aportar tus propios antecedentes para complementar una evaluaci\u00f3n referencial en RutaHogar.</p><p>No ver\u00e1s antecedentes financieros de otra persona.</p><p><a href="${safeLink}">Completar mis antecedentes</a></p><p>Este enlace expira en ${ttlDays} d\u00edas.</p>`,
-    text: `Te invitaron a aportar tus antecedentes para complementar una evaluaci\u00f3n referencial en RutaHogar. Abre el enlace dentro de ${ttlDays} d\u00edas: ${link}`,
-  };
-}
-
-function coDebtorConfirmationEmail(link: string) {
-  const safeLink = escapeHtml(link);
-  return {
-    subject: "Confirmamos la recepci\u00f3n de tus antecedentes en RutaHogar",
-    html: `<p>Recibimos tus antecedentes y tu consentimiento de tratamiento de datos para RutaHogar.</p><p><a href="${safeLink}">Gestionar o revocar mi consentimiento</a></p><p>RutaHogar entrega orientaci\u00f3n referencial; no aprueba cr\u00e9ditos.</p>`,
-    text: `Recibimos tus antecedentes y consentimiento. Puedes gestionar o revocar tu consentimiento: ${link}`,
-  };
-}
-
-function leadConfirmationEmail() {
-  return {
-    subject: "Tu co-deudor confirm\u00f3 sus antecedentes en RutaHogar",
-    html: "<p>Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente; ingresa a RutaHogar para actualizarlo con los datos confirmados.</p>",
-    text: "Tu co-deudor confirm\u00f3 sus antecedentes. Tu resultado no se actualiz\u00f3 autom\u00e1ticamente; ingresa a RutaHogar para actualizarlo con los datos confirmados.",
-  };
-}
-
-function expirationEmail(forLead: boolean) {
-  return {
-    subject: "La invitaci\u00f3n de co-deudor expir\u00f3 en RutaHogar",
-    html: forLead
-      ? "<p>La invitaci\u00f3n para completar antecedentes de co-deudor expir\u00f3. Puedes crear una nueva invitaci\u00f3n desde RutaHogar.</p>"
-      : "<p>El enlace para aportar antecedentes en RutaHogar expir\u00f3. Si deseas continuar, solicita una nueva invitaci\u00f3n al lead.</p>",
-    text: forLead
-      ? "La invitaci\u00f3n para completar antecedentes de co-deudor expir\u00f3. Puedes crear una nueva desde RutaHogar."
-      : "El enlace para aportar antecedentes en RutaHogar expir\u00f3. Solicita una nueva invitaci\u00f3n al lead si deseas continuar.",
-  };
+function publicUrl(path: string, token: string): string {
+  return `${appUrl(path)}?token=${encodeURIComponent(token)}`;
 }
 
 async function sendEmail(to: string, message: { subject: string; html: string; text: string }) {
@@ -104,7 +73,7 @@ async function authenticatedLead(req: Request, admin: AdminClient, anonKey: stri
 async function findByToken(admin: AdminClient, column: "token_digest" | "management_token_digest", token: string): Promise<InvitationRow | null> {
   const digest = await digestToken(token);
   const { data, error } = await admin.from("co_debtor_invitations")
-    .select("id, status, expires_at, token_digest, management_token_digest, recipient_email, lead_id")
+    .select("id, status, expires_at, token_digest, management_token_digest, recipient_email, lead_id, ingreso_mensual_complementario, deuda_mensual_complementario, tipo_contrato_complementario, continuidad_laboral_complementario, morosidad_complementario")
     .eq(column, digest).maybeSingle();
   if (error || !data || !timingSafeEqual(digest, String(data[column] || ""))) return null;
   return data as InvitationRow;
@@ -120,16 +89,29 @@ async function createInvitation(req: Request, body: Record<string, unknown>, adm
   const leadId = await authenticatedLead(req, admin, anonKey, supabaseUrl);
   const recipientEmail = cleanText(body.recipient_email).toLowerCase();
   if (!isEmail(recipientEmail)) return json({ error: "Correo del co-deudor inv\u00e1lido." }, 400);
+  let recipientRut: string;
+  try { recipientRut = normalizeChileanRut(body.recipient_rut); } catch (error) {
+    return json({ error: (error as Error).message }, 400);
+  }
+  let declaredComplement;
+  try { declaredComplement = parseLeadDeclaredComplement(body); } catch (error) {
+    return json({ error: (error as Error).message }, 422);
+  }
   const token = secureToken();
   const tokenDigest = await digestToken(token);
   const ttlDays = parseTtlDays(Deno.env.get("CO_DEBTOR_INVITATION_TTL_DAYS"));
   const expiresAt = invitationExpiry(new Date(), ttlDays).toISOString();
   const { data, error } = await admin.rpc("hu18_create_invitation", {
-    p_lead_id: leadId, p_recipient_email: recipientEmail, p_token_digest: tokenDigest, p_expires_at: expiresAt,
+    p_lead_id: leadId, p_recipient_email: recipientEmail, p_recipient_rut: recipientRut, p_token_digest: tokenDigest, p_expires_at: expiresAt,
+    p_ingreso_mensual_complementario: declaredComplement.ingreso_mensual_complementario,
+    p_deuda_mensual_complementario: declaredComplement.deuda_mensual_complementario,
+    p_tipo_contrato_complementario: declaredComplement.tipo_contrato_complementario,
+    p_continuidad_laboral_complementario: declaredComplement.continuidad_laboral_complementario,
+    p_morosidad_complementario: declaredComplement.morosidad_complementario,
   }).single();
   if (error || !data) return json({ error: "No se pudo crear la invitaci\u00f3n." }, 500);
   try {
-    await sendEmail(recipientEmail, invitationEmail(publicUrl("/co-deudor/invitacion", token), ttlDays));
+    await sendEmail(recipientEmail, invitationEmail(publicUrl("/co-deudor/invitacion", token), expiresAt));
   } catch {
     await admin.rpc("hu18_revert_invitation_after_delivery_failure", {
       p_invitation_id: data.invitation_id, p_previous_invitation_id: data.previous_invitation_id,
@@ -172,7 +154,7 @@ async function submitConfirmation(body: Record<string, unknown>, admin: AdminCli
   let leadEmailSent = true;
   try { await sendEmail(data.recipient_email, coDebtorConfirmationEmail(managementLink)); } catch { coDebtorEmailSent = false; }
   const email = await leadEmail(admin, data.lead_id);
-  try { if (!email) throw new Error("lead email unavailable"); await sendEmail(email, leadConfirmationEmail()); } catch { leadEmailSent = false; }
+  try { if (!email) throw new Error("lead email unavailable"); await sendEmail(email, leadConfirmationEmail(appUrl("/recomendaciones"))); } catch { leadEmailSent = false; }
   return json({ status: "confirmed", confirmation_email_sent: coDebtorEmailSent, lead_email_sent: leadEmailSent });
 }
 

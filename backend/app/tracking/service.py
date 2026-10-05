@@ -102,6 +102,31 @@ class TrackingService:
         loader = getattr(self.repository, "load_co_debtor_consent", None)
         return loader(user_id) if callable(loader) else None
 
+    @staticmethod
+    def _confirmation_id(consent_facts):
+        confirmation = (consent_facts or {}).get("co_debtor_confirmed")
+        confirmation_id = confirmation.get("id") if isinstance(confirmation, dict) else None
+        return str(confirmation_id) if confirmation_id else None
+
+    @staticmethod
+    def _confirmation_was_applied(bundle, confirmation_id):
+        return any(
+            event.get("reason") == CO_DEBTOR_CONFIRMATION_REASON
+            and (event.get("provenance") or {}).get("co_debtor_confirmation_id") == confirmation_id
+            for event in bundle.get("events", [])
+        )
+
+    def _co_debtor_update_state(self, bundle, user_id):
+        """Expose the current confirmation's one-time score-update state only."""
+        consent_facts = self._co_debtor_consent(user_id)
+        confirmation_id = self._confirmation_id(consent_facts)
+        required = bool(
+            (consent_facts or {}).get("invitation_status") == "confirmed"
+            and confirmation_id
+            and not self._confirmation_was_applied(bundle, confirmation_id)
+        )
+        return {"score_update_required": required}
+
     def update_score_with_confirmed_co_debtor(self, user_id):
         """Append an explicit HU18 re-evaluation for the authenticated lead."""
         bundle = self.repository.load(user_id)
@@ -109,25 +134,48 @@ class TrackingService:
         lineage = reconstruct(history, user_id, financial_field_contract())
         if not lineage["active_line"]:
             raise TrackingError("not_found")
+        consent_facts = self._co_debtor_consent(user_id)
+        if (consent_facts or {}).get("invitation_status") == "revoked":
+            raise TrackingError("co_debtor_consent_revoked")
+        confirmation_id = self._confirmation_id(consent_facts)
+        if (consent_facts or {}).get("invitation_status") != "confirmed" or not confirmation_id:
+            raise TrackingError("co_debtor_confirmation_required")
+        if self._confirmation_was_applied(bundle, confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
         now = self.clock().isoformat()
-        return self.execute(
-            user_id,
-            {
-                "event_id": self.new_id(),
-                "event_kind": "evaluation",
-                "effective_at": now,
-                "reason": CO_DEBTOR_CONFIRMATION_REASON,
-                "previous_event_id": lineage["active_line"][-1]["event_id"],
-                "patch": {},
-            },
-            require_co_debtor_confirmation=True,
-        )
+        try:
+            return self.execute(
+                user_id,
+                {
+                    "event_id": self.new_id(),
+                    "event_kind": "evaluation",
+                    "effective_at": now,
+                    "reason": CO_DEBTOR_CONFIRMATION_REASON,
+                    "previous_event_id": lineage["active_line"][-1]["event_id"],
+                    "patch": {},
+                },
+                require_co_debtor_confirmation=True,
+                co_debtor_confirmation_id=confirmation_id,
+            )
+        except TrackingError as error:
+            # A simultaneous request can lose the normal HU13 revision race.
+            # Re-read only to report the domain outcome when the winner consumed
+            # this exact confirmation; no retry can create a second evaluation.
+            if error.code == "lineage_conflict" and self._confirmation_was_applied(
+                self.repository.load(user_id), confirmation_id
+            ):
+                raise TrackingError("co_debtor_confirmation_already_applied") from None
+            raise
 
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
         bundle = self.repository.load(user_id)
+        co_debtor = self._co_debtor_update_state(bundle, user_id)
         if not bundle["plan"]:
-            return {"status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": []}
+            return {
+                "status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": [],
+                "co_debtor": co_debtor,
+            }
         # Cutoff is effective time; recorded audit remains complete and immutable.
         lineage = reconstruct(source_events(bundle), user_id, financial_field_contract())
         active = [row for row in lineage["active_line"] if parse_time(row["effective_at"]) <= cutoff]
@@ -144,6 +192,7 @@ class TrackingService:
             "goals": goal_view(bundle, line_at_cutoff, cutoff),
             "last_active_update_at": last_update,
             "update_due": bool(last_update and cutoff - parse_time(last_update) >= timedelta(days=30)),
+            "co_debtor": co_debtor,
         }
 
     def _append(self, history, event, user_id):
@@ -215,11 +264,14 @@ class TrackingService:
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
 
-    def execute(self, user_id, command, target_event_id=None, *, require_co_debtor_confirmation=False):
+    def execute(self, user_id, command, target_event_id=None, *, require_co_debtor_confirmation=False,
+                co_debtor_confirmation_id=None):
         command = canonical_command(command)
         if target_event_id:
             command["target_event_id"] = target_event_id
         bundle = self.repository.load(user_id)
+        if co_debtor_confirmation_id and self._confirmation_was_applied(bundle, co_debtor_confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
         prior = next((row for row in bundle["events"] if row["event_id"] == command["event_id"]), None)
         if prior:
             if prior["canonical_request"] != command:
@@ -270,6 +322,8 @@ class TrackingService:
                 now=recorded_at,
             )
             if require_co_debtor_confirmation:
+                if self._confirmation_id(consent_facts) != co_debtor_confirmation_id:
+                    raise TrackingError("co_debtor_confirmation_required")
                 complement_source = consent_provenance["complement_source"]
                 if complement_source == "excluded_after_revocation":
                     raise TrackingError("co_debtor_consent_revoked")
@@ -283,6 +337,8 @@ class TrackingService:
                 "cutoff_at": now,
                 "co_debtor_consent": consent_provenance,
             }
+            if co_debtor_confirmation_id:
+                details["co_debtor_confirmation_id"] = co_debtor_confirmation_id
             evaluation = {
                 "id": self.new_id(), "snapshot": deepcopy(complete_input),
                 "result": result, "provenance": details,

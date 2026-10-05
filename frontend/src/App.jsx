@@ -12,6 +12,7 @@ import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
+import { createCoDebtorInvitation } from "./services/coDebtorService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
@@ -67,6 +68,7 @@ const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
 const ANON_RESULT_KEY = "RutaHogar_anon_result";
 const ANON_INPUT_KEY = "RutaHogar_anon_input";
+const ANON_CO_DEBTOR_INVITATION_KEY = "RutaHogar_anon_co_debtor_invitation";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -157,7 +159,16 @@ const buildResultSnapshot = (scoreResult = {}) => ({
   commercial_guidance: normalizeDisplayText(scoreResult.commercial_guidance),
 });
 
-const buildFinancialInput = (input = {}) => ({
+export const buildOnboardingSnapshot = (onboarding = {}) => ({
+  objetivo_principal: onboarding?.objetivo_principal || "",
+  tipo_propiedad: onboarding?.tipo_propiedad || "",
+  comuna_interes: onboarding?.comuna_interes || "",
+  comuna_alternativa: onboarding?.comuna_alternativa || "",
+  plazo_compra: onboarding?.plazo_compra || "",
+  tiene_propiedad_vista: onboarding?.tiene_propiedad_vista === true,
+});
+
+export const buildFinancialInput = (input = {}, onboarding = null) => ({
   birth_date: input.birth_date,
   ingreso_mensual: input.ingreso_mensual,
   deuda_mensual: input.deuda_mensual,
@@ -204,6 +215,9 @@ const buildFinancialInput = (input = {}) => ({
   pie_en_cuotas_interes: input.pie_en_cuotas_interes,
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
+  ...(onboarding || input.onboarding_snapshot
+    ? { onboarding_snapshot: buildOnboardingSnapshot(onboarding || input.onboarding_snapshot) }
+    : {}),
 });
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`
@@ -425,6 +439,7 @@ export default function App() {
   const initialAnonOnboarding = useMemo(() => readSessionJson(ANON_ONBOARDING_KEY), []);
   const initialAnonResult = useMemo(() => readSessionJson(ANON_RESULT_KEY), []);
   const initialAnonInput = useMemo(() => readSessionJson(ANON_INPUT_KEY), []);
+  const initialAnonCoDebtorInvitation = useMemo(() => readSessionJson(ANON_CO_DEBTOR_INVITATION_KEY), []);
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [auth, setAuth] = useState(storedAuth);
   const [page, setPage] = useState(
@@ -465,6 +480,7 @@ export default function App() {
   const [anonOnboarding, setAnonOnboarding] = useState(initialAnonOnboarding);
   const [anonResult, setAnonResult] = useState(initialAnonResult);
   const [anonInput, setAnonInput] = useState(initialAnonInput);
+  const [anonCoDebtorInvitation, setAnonCoDebtorInvitation] = useState(initialAnonCoDebtorInvitation);
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
@@ -505,14 +521,18 @@ export default function App() {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const refreshEvaluationView = async () => {
+    const [nextTracking, nextEvaluations] = await Promise.all([
+      getTracking(),
+      getEvaluations(userId, profile?.role),
+    ]);
+    setTrackingState(nextTracking);
+    setEvaluations(nextEvaluations);
+    return { tracking: nextTracking, evaluations: nextEvaluations };
+  };
   const refreshScoreAfterCoDebtorConfirmation = async () => {
     try {
-      const [nextTracking, nextEvaluations] = await Promise.all([
-        getTracking(),
-        getEvaluations(userId, profile?.role),
-      ]);
-      setTrackingState(nextTracking);
-      setEvaluations(nextEvaluations);
+      return await refreshEvaluationView();
     } catch {
       setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
       throw new Error("No pudimos actualizar tu evaluación ni el historial.");
@@ -769,9 +789,11 @@ export default function App() {
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
     sessionStorage.removeItem(ANON_RESULT_KEY);
     sessionStorage.removeItem(ANON_INPUT_KEY);
+    sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
     setAnonOnboarding(null);
     setAnonResult(null);
     setAnonInput(null);
+    setAnonCoDebtorInvitation(null);
     setScoreFormDraft(null);
   };
 
@@ -793,6 +815,7 @@ export default function App() {
     const pendingOnboarding = anonOnboarding;
     const pendingResult = anonResult;
     const pendingInput = anonInput;
+    const pendingCoDebtorInvitation = anonCoDebtorInvitation;
     const nextProfile = nextAuth?.profile;
 
     if (
@@ -842,7 +865,7 @@ export default function App() {
 
     let savedEvaluation = null;
     if (pendingResult && pendingInput) {
-      const financialInput = buildFinancialInput(pendingInput);
+      const financialInput = buildFinancialInput(pendingInput, onboardingToSave);
       const existingEvaluations = nextUserId
         ? await getEvaluations(nextUserId, migratedProfile?.role)
         : [];
@@ -858,6 +881,22 @@ export default function App() {
           channel: getChannel(),
         });
       }
+    }
+
+    if (pendingCoDebtorInvitation) {
+      try {
+        await createCoDebtorInvitation(
+          pendingCoDebtorInvitation.recipientEmail,
+          pendingCoDebtorInvitation.recipientRut,
+          pendingCoDebtorInvitation.declaredComplement || {
+            ingreso_mensual_complementario: pendingInput?.ingreso_mensual_complementario,
+            deuda_mensual_complementario: pendingInput?.deuda_mensual_complementario,
+            tipo_contrato_complementario: pendingInput?.tipo_contrato_complementario,
+            continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
+            morosidad_complementario: pendingInput?.morosidad_complementario,
+          },
+        );
+      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
     }
 
     clearAnonSession();
@@ -878,7 +917,7 @@ export default function App() {
     navigateToPage("anon-evaluate");
   };
 
-  const handleAnonResult = (scoreResult, input) => {
+  const handleAnonResult = (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const anonymousFlowId =
@@ -887,11 +926,17 @@ export default function App() {
     const financialInput = buildFinancialInput({
       ...input,
       anonymous_flow_id: anonymousFlowId,
-    });
+    }, anonOnboarding);
     sessionStorage.setItem(ANON_RESULT_KEY, JSON.stringify(resultSnapshot));
     sessionStorage.setItem(ANON_INPUT_KEY, JSON.stringify(financialInput));
+    if (metadata.coDebtorInvitation) {
+      sessionStorage.setItem(ANON_CO_DEBTOR_INVITATION_KEY, JSON.stringify(metadata.coDebtorInvitation));
+    } else {
+      sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
+    }
     setAnonResult(resultSnapshot);
     setAnonInput(financialInput);
+    setAnonCoDebtorInvitation(metadata.coDebtorInvitation || null);
     setPage("signup-offer");
   };
 
@@ -1080,10 +1125,10 @@ export default function App() {
     resultRef.current = result;
   }, [result]);
 
-  const handleResult = async (scoreResult, input) => {
+  const handleResult = async (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
-    const financialInput = buildFinancialInput(input);
+    const financialInput = buildFinancialInput(input, userOnboarding);
 
     try {
       // Se siembra la ref en el mismo tick: el efecto corre después del
@@ -1110,22 +1155,38 @@ export default function App() {
         channel: getChannel(),
       });
 
-      // Si el usuario ya evaluó de nuevo, este guardado quedó obsoleto y no
-      // debe tocar el resultado visible, que pertenece a otra evaluación.
-      if (resultRef.current === resultSnapshot) {
-        setResultSaved(true);
-        // El snapshot visible queda ligado a la evaluación guardada: sin esto
-        // no hay forma de saber si `result` y `currentEvaluation` son lo mismo.
-        setResult((prev) =>
-          prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
-        );
-      }
-
       setEvaluations((prev) => {
         const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
         return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
       });
       prependEvaluation(savedEvaluation);
+
+      if (metadata.coDebtorInvitation) {
+        try {
+          await createCoDebtorInvitation(
+            metadata.coDebtorInvitation.recipientEmail,
+            metadata.coDebtorInvitation.recipientRut,
+            metadata.coDebtorInvitation.declaredComplement,
+          );
+        } catch {
+          // A delivery failure must never roll back or hide the saved score.
+        }
+      }
+
+      try {
+        await refreshEvaluationView();
+        // Keep the just-calculated preview visible until both the historical
+        // evaluation and the invitation state are current. This prevents the
+        // previous confirmed co-debtor from flashing after a new evaluation.
+        if (resultRef.current === resultSnapshot) {
+          setResultSaved(true);
+          setResult((prev) =>
+            prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
+          );
+        }
+      } catch {
+        setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      }
     } catch (err) {
       console.error(err);
       if (resultRef.current !== resultSnapshot) return;
@@ -1694,6 +1755,7 @@ export default function App() {
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
           onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
+          trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
         <Subsidios

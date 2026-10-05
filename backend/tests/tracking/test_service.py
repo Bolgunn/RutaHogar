@@ -104,6 +104,27 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
 
 
+def test_evaluations_keep_their_own_preliminary_question_snapshot():
+    repo, app = service()
+    original_onboarding = {
+        "objetivo_principal": "comprar_ahora",
+        "tipo_propiedad": "casa",
+        "comuna_interes": "La Pintana",
+        "comuna_alternativa": "La Reina",
+        "plazo_compra": "6_12_meses",
+        "tiene_propiedad_vista": True,
+    }
+    first = app.execute("u1", command({**valid_snapshot(), "onboarding_snapshot": original_onboarding}))
+    later_onboarding = {**original_onboarding, "tipo_propiedad": "departamento", "comuna_interes": "Providencia"}
+    app.execute("u1", command({"onboarding_snapshot": later_onboarding}, first["event_id"], "2026-02-01T00:00:00Z"))
+
+    first_snapshot = repo.bundle["evaluations"][0]["financial_data"]["input"]["onboarding_snapshot"]
+    later_snapshot = repo.bundle["evaluations"][1]["financial_data"]["input"]["onboarding_snapshot"]
+    assert first_snapshot == original_onboarding
+    assert later_snapshot == later_onboarding
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["onboarding_snapshot"] == original_onboarding
+
+
 def test_first_later_project_goal_freezes_target_and_enables_projection():
     repo, app = service()
     baseline_snapshot = valid_snapshot()

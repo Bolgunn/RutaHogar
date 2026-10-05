@@ -1,6 +1,6 @@
 import {
   digestToken, invitationPublicContext, invitationStatus, managementPublicContext,
-  parseSubmission, secureToken, timingSafeEqual,
+  parseLeadDeclaredComplement, parseSubmission, secureToken, timingSafeEqual,
 } from "./helpers.ts";
 
 const now = new Date("2026-10-03T12:00:00.000Z");
@@ -18,11 +18,56 @@ Deno.test("HU18 invitation tokens are random and only their digest is persistabl
   }
 });
 
-Deno.test("HU18 public invitation context contains no invitation id or financial values", () => {
+Deno.test("HU18 public invitation context contains no invitation id or values without a declared complement", () => {
   const context = invitationPublicContext(pending, now);
   if ("id" in context || "ingreso_mensual" in context || context.status !== "pending" || !context.can_submit) {
     throw new Error("public invitation context leaks data");
   }
+});
+
+Deno.test("HU18 pending invitation context exposes exactly the five declared fields", () => {
+  const context = invitationPublicContext({
+    ...pending,
+    lead_id: "lead-id",
+    recipient_email: "co.deudor@correo.cl",
+    ingreso_mensual_complementario: 900000,
+    deuda_mensual_complementario: 100000,
+    tipo_contrato_complementario: "indefinido",
+    continuidad_laboral_complementario: "mas_3_anios",
+    morosidad_complementario: "no",
+  }, now);
+  const expected = {
+    status: "pending",
+    expires_at: pending.expires_at,
+    can_submit: true,
+    ingreso_mensual_complementario: 900000,
+    deuda_mensual_complementario: 100000,
+    tipo_contrato_complementario: "indefinido",
+    continuidad_laboral_complementario: "mas_3_anios",
+    morosidad_complementario: "no",
+  };
+  if (JSON.stringify(context) !== JSON.stringify(expected)) throw new Error("public prefill contract leaked data");
+  for (const status of ["expired", "replaced", "confirmed", "revoked"] as const) {
+    const terminal = invitationPublicContext({ ...pending, ...expected, status }, now);
+    if ("ingreso_mensual_complementario" in terminal) throw new Error(`${status} leaked declared data`);
+  }
+});
+
+Deno.test("HU18 declared prefill accepts exactly the five lead fields", () => {
+  const declared = parseLeadDeclaredComplement({
+    action: "create_invitation",
+    recipient_email: "co.deudor@correo.cl",
+    recipient_rut: "12345678-5",
+    ingreso_mensual_complementario: 900000,
+    deuda_mensual_complementario: 100000,
+    tipo_contrato_complementario: "indefinido",
+    continuidad_laboral_complementario: "mas_3_anios",
+    morosidad_complementario: "no",
+  });
+  if (declared.deuda_mensual_complementario !== 100000) throw new Error("declared complement rejected");
+  let rejected = false;
+  try { parseLeadDeclaredComplement({ ...declared, action: "create_invitation", recipient_email: "x@y.cl", recipient_rut: "12345678-5", relacion_complementario: "pareja" }); } catch { rejected = true; }
+  if (!rejected) throw new Error("lead relation entered public prefill data");
 });
 
 Deno.test("HU18 recognises expired, replaced, consumed, and revoked invitation states", () => {

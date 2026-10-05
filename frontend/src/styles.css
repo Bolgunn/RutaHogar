@@ -17784,6 +17784,7 @@ th {
 .co-debtor-section__status { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; white-space: nowrap; }
 .co-debtor-section__status--pending { background: #fff5d8; color: #805b00; }
 .co-debtor-section__status--expired { background: #f3f4f6; color: #4b5563; }
+.co-debtor-section__status--delivery_failed { background: #fff1f1; color: #9a3412; }
 .co-debtor-section__status--confirmed { background: #e6f6ec; color: #17633a; }
 .co-debtor-section__status--revoked { background: #fbe9e7; color: #9a3412; }
 .co-debtor-section__status--none { background: rgba(19,43,74,.08); color: var(--rh-navy); }
@@ -17841,6 +17842,8 @@ th {
 .co-debtor-public-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
 .co-debtor-public-form__grid label { display: grid; gap: 7px; color: var(--rh-text); font-size: .9rem; font-weight: 800; }
 .co-debtor-public-form__grid label:last-child { grid-column: 1 / -1; max-width: calc(50% - 8px); }
+.co-debtor-public-form__field { display: grid; gap: 7px; }
+.co-debtor-public-form__field:last-child { grid-column: 1 / -1; max-width: calc(50% - 8px); }
 .co-debtor-public-form input,
 .co-debtor-public-form select { width: 100%; margin: 0; }
 .co-debtor-public-form__consent { display: flex; gap: 10px; align-items: flex-start; color: var(--rh-text-secondary); font-size: .9rem; line-height: 1.5; }
@@ -17863,7 +17866,7 @@ th {
   .co-debtor-public-page { padding: 16px; }
   .co-debtor-public-page__brand { margin-bottom: 20px; }
   .co-debtor-public-form__grid { grid-template-columns: 1fr; }
-  .co-debtor-public-form__grid label:last-child { grid-column: auto; max-width: none; }
+  .co-debtor-public-form__grid label:last-child, .co-debtor-public-form__field:last-child { grid-column: auto; max-width: none; }
   .co-debtor-public-form .primary-button { width: 100%; }
   .co-debtor-public-revoke-confirm > div { display: grid; grid-template-columns: 1fr; }
 }

@@ -8,6 +8,8 @@ import {
   runExclusive,
   submitCoDebtorConfirmation,
 } from "../services/coDebtorService";
+import { formatMoneyInput, stripMoneyInput } from "../services/moneyFormat";
+import FieldTooltip from "./FieldTooltip";
 
 const emptyConfirmation = {
   ingreso_mensual_complementario: "",
@@ -18,11 +20,29 @@ const emptyConfirmation = {
   treatment_consent: false,
 };
 
+const declaredFinancialFields = [
+  "ingreso_mensual_complementario",
+  "deuda_mensual_complementario",
+  "tipo_contrato_complementario",
+  "continuidad_laboral_complementario",
+  "morosidad_complementario",
+];
+
+export function confirmationFromInvitation(context) {
+  const canPrefill = context?.status === "pending" && context?.can_submit === true
+    && declaredFinancialFields.every((field) => context[field] !== undefined && context[field] !== null && context[field] !== "");
+  if (!canPrefill) return { ...emptyConfirmation };
+  return {
+    ...emptyConfirmation,
+    ...Object.fromEntries(declaredFinancialFields.map((field) => [field, String(context[field])])),
+  };
+}
+
 const contractOptions = [
-  ["indefinido", "Contrato indefinido"],
-  ["plazo_fijo", "Contrato a plazo fijo"],
-  ["independiente", "Trabajador independiente"],
-  ["honorarios_variable", "Honorarios o renta variable"],
+  ["indefinido", "Indefinido"],
+  ["independiente", "Independiente"],
+  ["plazo_fijo", "Plazo fijo"],
+  ["honorarios_variable", "Honorarios / variable"],
 ];
 
 const continuityOptions = [
@@ -47,10 +67,6 @@ function StatusCard({ eyebrow, title, children, tone = "neutral" }) {
     <h1>{title}</h1>
     {children}
   </section>;
-}
-
-function safeMoneyInput(value) {
-  return String(value || "").replace(/\D/g, "");
 }
 
 function validationMessage(values) {
@@ -86,33 +102,39 @@ export function CoDebtorInvitationView({ context, loading, confirmation, onChang
 
   return <PublicShell><StatusCard eyebrow="Aporte de antecedentes" title="Completa tus propios antecedentes">
     <p>RutaHogar entrega orientación referencial para compra de vivienda. Estás aportando tus propios datos, no los de otra persona.</p>
+    <p className="co-debtor-public-card__note">Estos antecedentes fueron declarados por la persona que te invitó. Revísalos y corrígelos si es necesario.</p>
     <form className="co-debtor-public-form" onSubmit={onSubmit} noValidate>
       <div className="co-debtor-public-form__grid">
-        <label htmlFor="co-debtor-income">Ingreso mensual
-          <input id="co-debtor-income" name="ingreso_mensual_complementario" inputMode="numeric" value={confirmation.ingreso_mensual_complementario} onChange={(event) => onChange("ingreso_mensual_complementario", safeMoneyInput(event.target.value))} placeholder="Ej: 900000" disabled={busy} />
-        </label>
-        <label htmlFor="co-debtor-debt">Deuda mensual
-          <input id="co-debtor-debt" name="deuda_mensual_complementario" inputMode="numeric" value={confirmation.deuda_mensual_complementario} onChange={(event) => onChange("deuda_mensual_complementario", safeMoneyInput(event.target.value))} placeholder="Escribe 0 si no tienes" disabled={busy} />
-        </label>
-        <label htmlFor="co-debtor-contract">Tipo de contrato
+        <div className="co-debtor-public-form__field">
+          <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-income">Ingreso mensual</label><FieldTooltip text="Indica tu ingreso líquido mensual o el promedio que recibes regularmente." /></div>
+          <input id="co-debtor-income" name="ingreso_mensual_complementario" inputMode="numeric" value={formatMoneyInput(confirmation.ingreso_mensual_complementario)} onChange={(event) => onChange("ingreso_mensual_complementario", stripMoneyInput(event.target.value))} placeholder="Ej: 900.000" disabled={busy} />
+        </div>
+        <div className="co-debtor-public-form__field">
+          <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-debt">Deuda mensual</label><FieldTooltip text="Incluye tus cuotas y compromisos financieros mensuales vigentes. Si no tienes deuda, ingresa 0." /></div>
+          <input id="co-debtor-debt" name="deuda_mensual_complementario" inputMode="numeric" value={formatMoneyInput(confirmation.deuda_mensual_complementario)} onChange={(event) => onChange("deuda_mensual_complementario", stripMoneyInput(event.target.value))} disabled={busy} />
+        </div>
+        <div className="co-debtor-public-form__field">
+          <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-contract">Tipo de contrato</label><FieldTooltip text="Selecciona la modalidad bajo la cual recibes tus ingresos actualmente." /></div>
           <select id="co-debtor-contract" name="tipo_contrato_complementario" value={confirmation.tipo_contrato_complementario} onChange={(event) => onChange("tipo_contrato_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
             {contractOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>
-        <label htmlFor="co-debtor-continuity">Continuidad laboral
+        </div>
+        <div className="co-debtor-public-form__field">
+          <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-continuity">Continuidad laboral</label><FieldTooltip text="Indica cuánto tiempo llevas trabajando de forma continua en tu empleo o actividad actual." /></div>
           <select id="co-debtor-continuity" name="continuidad_laboral_complementario" value={confirmation.continuidad_laboral_complementario} onChange={(event) => onChange("continuidad_laboral_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
             {continuityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>
-        <label htmlFor="co-debtor-delinquency">Morosidad actual
+        </div>
+        <div className="co-debtor-public-form__field">
+          <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-delinquency">Morosidad actual</label><FieldTooltip text="Indica si tienes cuotas o pagos vencidos en este momento." /></div>
           <select id="co-debtor-delinquency" name="morosidad_complementario" value={confirmation.morosidad_complementario} onChange={(event) => onChange("morosidad_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
             <option value="no">No</option>
             <option value="si">Sí</option>
           </select>
-        </label>
+        </div>
       </div>
       <label className="co-debtor-public-form__consent" htmlFor="co-debtor-treatment-consent">
         <input id="co-debtor-treatment-consent" name="treatment_consent" type="checkbox" checked={confirmation.treatment_consent} onChange={(event) => onChange("treatment_consent", event.target.checked)} disabled={busy} />
@@ -170,7 +192,11 @@ export function CoDebtorInvitationPage({ token = readPublicCoDebtorToken() }) {
     }
     setLoading(true);
     inspectCoDebtorInvitation(token)
-      .then((next) => { if (active) setContext(next); })
+      .then((next) => {
+        if (!active) return;
+        setContext(next);
+        setConfirmation(confirmationFromInvitation(next));
+      })
       .catch(() => { if (active) setContext({ status: "invalid", can_submit: false }); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

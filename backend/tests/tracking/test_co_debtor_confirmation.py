@@ -44,7 +44,9 @@ def pending_facts():
 
 
 def confirmed_facts(**overrides):
-    facts = {"invitation_status": "confirmed", "co_debtor_confirmed": confirmed_values()}
+    confirmation = {"id": "confirmation-1", **confirmed_values()}
+    confirmation.update(overrides.pop("co_debtor_confirmed", {}))
+    facts = {"invitation_status": "confirmed", "co_debtor_confirmed": confirmation}
     facts.update(overrides)
     return facts
 
@@ -69,6 +71,7 @@ def test_explicit_confirmation_update_creates_a_new_immutable_evaluation():
     assert result["evaluation_ids"] == [current["id"]]
     assert repository.bundle["events"][-1]["reason"] == CO_DEBTOR_CONFIRMATION_REASON
     assert repository.bundle["events"][-1]["event_kind"] == "evaluation"
+    assert repository.bundle["events"][-1]["provenance"]["co_debtor_confirmation_id"] == "confirmation-1"
     assert current_input["ingreso_mensual_complementario"] == 1_500_000
     assert current_input["deuda_mensual_complementario"] == 300_000
     assert current_input["tipo_contrato_complementario"] == "indefinido"
@@ -110,7 +113,7 @@ def test_confirmation_by_itself_has_no_automatic_evaluation_effect():
     assert repository.bundle == previous
 
 
-def test_repeating_the_explicit_action_creates_normal_history_even_when_score_is_equal():
+def test_each_confirmation_is_consumed_once_even_when_its_values_match_the_lead_declaration():
     repository, tracking, _ = baseline_with_pending_complement()
     declared = repository.bundle["evaluations"][0]["financial_data"]["input"]
     repository.co_debtor_consent = confirmed_facts(co_debtor_confirmed={
@@ -124,19 +127,39 @@ def test_repeating_the_explicit_action_creates_normal_history_even_when_score_is
         )
     })
 
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is True
     first = tracking.update_score_with_confirmed_co_debtor("u1")
-    second = tracking.update_score_with_confirmed_co_debtor("u1")
 
     evaluations = repository.bundle["evaluations"]
-    assert len(evaluations) == 3
-    assert len({evaluation["id"] for evaluation in evaluations}) == 3
-    assert first["evaluation_ids"] != second["evaluation_ids"]
+    assert len(evaluations) == 2
+    assert len({evaluation["id"] for evaluation in evaluations}) == 2
     assert evaluations[0]["financial_data"]["result"]["score"] == evaluations[1]["financial_data"]["result"]["score"]
-    assert evaluations[1]["financial_data"]["result"]["score"] == evaluations[2]["financial_data"]["result"]["score"]
-    assert [event["reason"] for event in repository.bundle["events"][-2:]] == [
-        CO_DEBTOR_CONFIRMATION_REASON,
-        CO_DEBTOR_CONFIRMATION_REASON,
-    ]
+    assert first["evaluation_ids"] == [evaluations[1]["id"]]
+    assert repository.bundle["events"][-1]["provenance"]["co_debtor_confirmation_id"] == "confirmation-1"
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is False
+
+    with pytest.raises(TrackingError, match="co_debtor_confirmation_already_applied"):
+        tracking.update_score_with_confirmed_co_debtor("u1")
+    assert len(repository.bundle["evaluations"]) == 2
+
+    repository.co_debtor_consent = pending_facts()
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is False
+
+    repository.co_debtor_consent = confirmed_facts(co_debtor_confirmed={
+        "id": "confirmation-2",
+        **confirmed_values(ingreso_mensual_complementario=600_000),
+    })
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is True
+    tracking.update_score_with_confirmed_co_debtor("u1")
+    assert len(repository.bundle["evaluations"]) == 3
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is False
+
+
+def test_revoked_confirmation_never_requires_a_score_update():
+    repository, tracking, _ = baseline_with_pending_complement()
+    repository.co_debtor_consent = {"invitation_status": "revoked", "co_debtor_confirmed": {"id": "confirmation-1"}}
+
+    assert tracking.read("u1")["co_debtor"]["score_update_required"] is False
 
 
 def test_explicit_confirmation_update_can_produce_a_different_score():
@@ -150,3 +173,30 @@ def test_explicit_confirmation_update_can_produce_a_different_score():
     tracking.update_score_with_confirmed_co_debtor("u1")
 
     assert repository.bundle["evaluations"][-1]["financial_data"]["result"]["score"] != original_score
+
+
+def test_insufficient_down_payment_is_identical_before_and_after_confirmation():
+    repository, tracking = service()
+    repository.co_debtor_consent = pending_facts()
+    tracking.execute("u1", command(declared_snapshot(
+        ahorro_disponible=6_000_000,
+        property_value=2_200,
+        property_value_unit="uf",
+        property_value_uf=2_200,
+        property_value_clp=None,
+    )))
+    repository.co_debtor_consent = confirmed_facts()
+    tracking.update_score_with_confirmed_co_debtor("u1")
+
+    baseline, confirmed = [row["financial_data"]["result"] for row in repository.bundle["evaluations"]]
+    expected_minimum = 2_200 * 40_695 * 0.10
+    for result in (baseline, confirmed):
+        indicators = result["financial_indicators"]
+        assert indicators["property_value_uf"] == 2_200
+        assert indicators["pie_minimo_clp"] == expected_minimum
+        assert indicators["brecha_pie_minimo"] == expected_minimum - 6_000_000
+        assert "pie_insuficiente" in {blocker["code"] for blocker in result["blockers"]}
+    assert (
+        baseline["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]
+        == confirmed["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]
+    )

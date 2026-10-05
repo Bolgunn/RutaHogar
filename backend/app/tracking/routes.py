@@ -30,7 +30,7 @@ def checked(call):
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
             "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
-            "co_debtor_consent_revoked": 409,
+            "co_debtor_consent_revoked": 409, "co_debtor_confirmation_already_applied": 409,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 

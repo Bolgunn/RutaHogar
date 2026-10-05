@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { CoDebtorInvitationView, CoDebtorManagementView } from "./PublicCoDebtorPages";
+import { CoDebtorInvitationView, CoDebtorManagementView, confirmationFromInvitation } from "./PublicCoDebtorPages";
 
 const confirmation = {
   ingreso_mensual_complementario: "900000",
@@ -66,6 +66,49 @@ describe("HU18 public co-debtor invitation", () => {
     expect(html).not.toContain("No mostrar");
     expect(html).not.toContain("teléfono");
     expect(html).toContain("Confirmar mis antecedentes");
+    expect(html).toContain('value="900.000"');
+    expect(html).toContain('value="100.000"');
+    expect(html).not.toContain('placeholder="Escribe 0 si no tienes"');
+    expect((html.match(/aria-label="Ayuda"/g) || []).length).toBe(5);
+    expect(html).toContain(">Indefinido<");
+    expect(html).toContain(">Plazo fijo<");
+  });
+
+  it("prefills the five lead-declared values for a pending invitation and keeps them editable", () => {
+    const context = {
+      status: "pending", can_submit: true,
+      ingreso_mensual_complementario: 900000,
+      deuda_mensual_complementario: 100000,
+      tipo_contrato_complementario: "indefinido",
+      continuidad_laboral_complementario: "mas_3_anios",
+      morosidad_complementario: "no",
+      relacion_complementario: "pareja", recipient_rut: "12345678-5", recipient_email: "no@mostrar.cl",
+    };
+    const prefilled = confirmationFromInvitation(context);
+    const html = invitation(context, { confirmation: prefilled });
+
+    expect(prefilled).toMatchObject({
+      ingreso_mensual_complementario: "900000", deuda_mensual_complementario: "100000",
+      tipo_contrato_complementario: "indefinido", continuidad_laboral_complementario: "mas_3_anios",
+      morosidad_complementario: "no", treatment_consent: false,
+    });
+    expect(html).toContain("Estos antecedentes fueron declarados por la persona que te invitó.");
+    expect(html).toContain('value="900.000"');
+    expect(html).toContain('value="100.000"');
+    expect(html).toContain('value="indefinido"');
+    expect(html).not.toContain("pareja");
+    expect(html).not.toContain("12345678-5");
+    expect(html).not.toContain("no@mostrar.cl");
+  });
+
+  it("does not prefill values for a non-pending invitation", () => {
+    const context = { status: "confirmed", can_submit: false, ...confirmation };
+
+    expect(confirmationFromInvitation(context)).toEqual({
+      ingreso_mensual_complementario: "", deuda_mensual_complementario: "",
+      tipo_contrato_complementario: "", continuidad_laboral_complementario: "",
+      morosidad_complementario: "", treatment_consent: false,
+    });
   });
 
   it("shows no form for expired, confirmed, or replaced invitations", () => {
