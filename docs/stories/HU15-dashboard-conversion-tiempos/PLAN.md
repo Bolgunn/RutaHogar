@@ -82,7 +82,7 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 | :- | :------- | :----- |
 | 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-18`** (frontend, no tunable numbers of its own). `ALG-10` consumed unchanged; its proposed A1 note is applied only if the author approves at review (step 12) |
 | 2 | Needs RLS / multi-tenant scoping? | Yes — scoping is the RPC's whole job: role + `get_my_inmobiliaria()` + `vinculado` assignments, `SECURITY DEFINER`, granted to `authenticated` only. No table policy changes |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `<timestamp>_hu15_commercial_funnel_facts.sql` + rollback + `schema.sql` sync, `<timestamp>` later than every migration in prod (≥ `20261005140000`; prod has `20261005120000` and `20261005130000`). Applied by the CTO with `supabase db push` after merge — **never pasted into the SQL editor** (see the 10-01 / 10-03 / 10-05 outages caused by hand-edited SQL) |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `<timestamp>_hu15_commercial_funnel_facts.sql` + rollback + `schema.sql` sync, `<timestamp>` later than every migration in prod (≥ `20261005150000`; prod has `20261005120000` and `20261005130000`, and PR #114 takes `20261005140000`). Applied by the CTO with `supabase db push` after merge — **never pasted into the SQL editor** (see the 10-01 / 10-03 / 10-05 outages caused by hand-edited SQL) |
 | 4 | Changes the `POST /score` contract? | No. (ALG-18's `action_key` engine follow-up is additive and outside HU 15) |
 | 5 | Consent / privacy impact? | Staff already read evaluations (policy `Evaluations select own`, migration `20261001120000`, re-declared by `20261005130000` after a hand edit on 2026-10-05 hid every lead from staff, PR #113); the RPC exposes no more than that, scoped tighter. It returns no lead id, name or email, and no stage `reason` or actor. No new consent needed |
 
@@ -232,7 +232,7 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
    missing, stop and report. (All of project tracks' parts are in PR #112 and its migration is
    already live in prod; only the merge into `develop` is pending.)
 6. **Migration.** `supabase/migrations/<timestamp>_hu15_commercial_funnel_facts.sql` (timestamp
-   later than every migration in prod, ≥ `20261005140000`), wrapped in `begin; … commit;`,
+   later than every migration in prod and than PR #114's `20261005140000`, so ≥ `20261005150000`), wrapped in `begin; … commit;`,
    idempotent: create `commercial_funnel_facts()` per **Entities**, reusing
    `lead_belongs_to_proyecto` and `is_ejecutivo_vinculado` (never redefine them); `revoke all … from public, anon, authenticated`; `grant execute on
    commercial_funnel_facts() to authenticated`. Rollback in `supabase/rollback/` dropping only what
@@ -371,7 +371,7 @@ already updated.
 | C1 | **ALG-17 renumbered to ALG-18.** HU 18 (PR #111) published ALG-17 first; IsaiasACF flagged the collision in PR #112's review | Files, references and `ALG18_VERSION` renamed on this branch. Project tracks' plan amendment A4 and its code use ALG-18 |
 | C2 | `lead_belongs_to_proyecto` and `is_ejecutivo_vinculado` are created by migration `20261005120000`; `lead_belongs_to_inmobiliaria` is redefined on top of the first (behaviour-preserving) | HU 15 reuses both and creates neither (decisions, Entities, step 6) |
 | C3 | `overallStage()` implements ALG-18 R3 O1–O5 and G8 once, in `lib/commercial/overallStage.js` | `funnelMetrics.js` calls it at each replay step; ALG-18's "implemented in" row is amended by this PR (step 3) |
-| C4 | Migration `20261005120000` is **already applied in prod** (2026-10-05, ahead of merge), and `20261005130000` (PR #113, evaluations policy fix) too | HU 15's migration timestamp must be ≥ `20261005140000`. Until PRs #112 and #113 merge, `supabase db push` from `develop` stops on "remote migration versions not found"; do not `migration repair` them away |
+| C4 | Migration `20261005120000` is **already applied in prod** (2026-10-05, ahead of merge), and `20261005130000` (PR #113, evaluations policy fix) too | HU 15's migration timestamp must be ≥ `20261005150000` (`20261005140000` is PR #114's role migration). Until PRs #112 and #113 merge, `supabase db push` from `develop` stops on "remote migration versions not found"; do not `migration repair` them away |
 | C5 | QA data in prod: inmobiliaria "QA Project Tracks" with projects QA PT Uno / Dos / Tres / Smoke, accounts `qa-pt-*@example.com`, and permanent stage history (including sell-out / restock job events) | HU 15's reviewer can use this tenant to see the funnel with real project records. It is real data in prod: it appears in that tenant's metrics only, since HU 15 is scoped per inmobiliaria |
 
 **Open question for Bolgunn (from PR #112, not decided here).** Project tracks makes a project record
