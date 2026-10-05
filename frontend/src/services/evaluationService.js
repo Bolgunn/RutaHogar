@@ -1,6 +1,7 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
 import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
+import { isStaffRole } from "../lib/roles";
 import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
@@ -135,7 +136,7 @@ export function applyEvaluationAnnotations(row, annotations) {
 }
 
 export function evaluationAnnotationOwner(role, userId) {
-  return role === "ejecutivo" || role === "admin" ? null : userId;
+  return isStaffRole(role) ? null : userId;
 }
 
 export async function getEvaluations(userId, role) {
@@ -143,17 +144,9 @@ export async function getEvaluations(userId, role) {
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
-  
-  const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
-
-  let query = supabase
-    .from("evaluations")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (!isSales) {
-    query = query.eq("user_id", user.id);
-  }
+  const isSales = isStaffRole(role);
+  let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
+  if (!isSales) query = query.eq("user_id", user.id);
   const { data, error } = await query;
   if (error) throw error;
   let contactsMap = {};

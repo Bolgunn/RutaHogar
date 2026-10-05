@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { roles } from "../lib/roles";
 import {
   ensureUserProfile,
   getCurrentProfile,
@@ -13,18 +14,13 @@ const PROFILE_KEY = "RutaHogar_profile";
 const SESSION_KEY = "RutaHogar_session";
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 
-export const roles = {
-  user: "usuario",
-  sales: "ejecutivo",
-  admin: "admin",
-  admin_inmo: "admin_inmobiliario",
-};
+export { roles };
 
 export const roleLabels = {
   usuario: "Usuario",
   ejecutivo: "Ejecutivo comercial",
   admin: "Admin",
-  admin_inmobiliario: "Admin Inmobiliario",
+  admin_inmobiliario: "Admin inmobiliaria",
 };
 
 function readStored(key) {

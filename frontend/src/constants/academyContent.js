@@ -92,6 +92,126 @@ export const ACADEMY_TOPICS = [
   },
 ];
 
+export const ACADEMY_MARKET_UPDATES = [
+  {
+    id: "bcch-tasas-hipotecarias",
+    category: "Tasas e inflación",
+    title: "Revisa la TPM, inflación y tasas publicadas por el Banco Central",
+    summary:
+      "La Tasa de Política Monetaria, la inflación y las series de tasas ayudan a entender el contexto general del financiamiento, aunque no determinan por sí solas la tasa que ofrecerá un banco.",
+    whyItMatters:
+      "Sirve para conversar con más contexto sobre el momento del mercado y comparar condiciones de crédito con información oficial.",
+    source: "Banco Central de Chile",
+    url: "https://www.bcentral.cl/",
+    reviewedAt: "2026-09",
+  },
+  {
+    id: "cmf-credito-hipotecario",
+    category: "Crédito hipotecario",
+    title: "Consulta educación financiera y derechos del consumidor financiero",
+    summary:
+      "La CMF publica material educativo sobre créditos, endeudamiento, seguros y funcionamiento del sistema financiero chileno.",
+    whyItMatters:
+      "Ayuda a distinguir una simulación referencial de una evaluación formal y a preparar preguntas antes de cotizar.",
+    source: "CMF Educa",
+    url: "https://www.cmfchile.cl/educa/621/w3-channel.html",
+    reviewedAt: "2026-09",
+  },
+  {
+    id: "minvu-subsidios",
+    category: "Subsidios",
+    title: "Revisa llamados, requisitos y programas habitacionales vigentes",
+    summary:
+      "Los requisitos, fechas y montos de subsidios pueden cambiar por llamado. La fuente oficial debe ser MINVU o ChileAtiende.",
+    whyItMatters:
+      "Evita basar una decisión en información desactualizada sobre beneficios o postulaciones.",
+    source: "MINVU",
+    url: "https://www.minvu.gob.cl/beneficio/vivienda/",
+    reviewedAt: "2026-09",
+  },
+  {
+    id: "chileatiende-tramites-vivienda",
+    category: "Trámites",
+    title: "Verifica trámites y requisitos habitacionales en ChileAtiende",
+    summary:
+      "ChileAtiende centraliza orientación para trámites estatales, postulaciones y requisitos de beneficios habitacionales.",
+    whyItMatters:
+      "Permite confirmar documentos y pasos antes de iniciar una postulación o reunir antecedentes.",
+    source: "ChileAtiende",
+    url: "https://www.chileatiende.gob.cl/",
+    reviewedAt: "2026-09",
+  },
+];
+
+export const ACADEMY_INDICATORS = [
+  {
+    id: "uf",
+    label: "UF vigente",
+    description: "Valor reajustable usado en créditos hipotecarios, dividendos, precios de vivienda y algunos seguros.",
+    source: "Banco Central / SII",
+    url: "https://www.sii.cl/valores_y_fechas/uf/uf2026.htm",
+  },
+  {
+    id: "tpm",
+    label: "TPM",
+    description: "Tasa de Política Monetaria. Influye en el contexto financiero, pero no equivale directamente a una tasa hipotecaria.",
+    source: "Banco Central de Chile",
+    url: "https://www.bcentral.cl/",
+  },
+  {
+    id: "ipc",
+    label: "IPC e inflación",
+    description: "Ayuda a entender reajustes, poder adquisitivo y contexto macroeconómico asociado a la UF.",
+    source: "INE / Banco Central",
+    url: "https://www.ine.gob.cl/estadisticas/economia/indices-de-precio-e-inflacion",
+  },
+  {
+    id: "subsidios",
+    label: "Llamados de subsidios",
+    description: "Fechas, requisitos y montos pueden cambiar por llamado. Siempre confirma en el sitio oficial.",
+    source: "MINVU",
+    url: "https://www.minvu.gob.cl/beneficio/vivienda/",
+  },
+];
+
+export const ACADEMY_OFFICIAL_LINKS = [
+  {
+    id: "sernac",
+    institution: "SERNAC",
+    title: "Consumidor financiero",
+    description: "Derechos, deberes y recomendaciones para contratar productos financieros.",
+    url: "https://www.sernac.cl/portal/618/w3-propertyvalue-21043.html",
+  },
+  {
+    id: "cmf",
+    institution: "CMF Educa",
+    title: "Educación financiera",
+    description: "Material educativo sobre crédito, deuda, seguros y sistema financiero.",
+    url: "https://www.cmfchile.cl/educa/621/w3-channel.html",
+  },
+  {
+    id: "minvu",
+    institution: "MINVU",
+    title: "Beneficios habitacionales",
+    description: "Información oficial sobre subsidios, postulaciones y programas de vivienda.",
+    url: "https://www.minvu.gob.cl/beneficio/vivienda/",
+  },
+  {
+    id: "chileatiende",
+    institution: "ChileAtiende",
+    title: "Trámites y requisitos",
+    description: "Orientación para trámites estatales, postulaciones y beneficios.",
+    url: "https://www.chileatiende.gob.cl/",
+  },
+  {
+    id: "bcentral",
+    institution: "Banco Central",
+    title: "Indicadores económicos",
+    description: "Series, tasas, inflación y documentos oficiales de política monetaria.",
+    url: "https://www.bcentral.cl/",
+  },
+];
+
 
 // -----------------------------------------------------------------------------
 // ARTÍCULOS

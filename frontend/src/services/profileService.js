@@ -1,20 +1,10 @@
 import { supabase } from "../utils/supabase";
 import { normalizePhone } from "../utils/phone";
+import { normalizeRole } from "../lib/roles";
 
 export const isSupabaseDataConfigured = Boolean(supabase);
 
-const roleAliases = {
-  usuario_comun: "usuario",
-  usuario: "usuario",
-  ejecutivo_comercial: "ejecutivo",
-  ejecutivo: "ejecutivo",
-  admin: "admin",
-  admin_inmobiliario: "admin_inmobiliario",
-};
-
-export function normalizeRole(role) {
-  return roleAliases[role] || "usuario";
-}
+export { normalizeRole };
 
 export function isUUID(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);

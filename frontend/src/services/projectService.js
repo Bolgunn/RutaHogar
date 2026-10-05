@@ -506,6 +506,10 @@ export async function deleteProject(id) {
   const { error } = await supabase.from("proyectos").delete().eq("id", id);
   if (error) {
     logSupabaseError(error);
+    // lead_project_commercial_stage protege el proyecto con ON DELETE RESTRICT.
+    if (error.code === "23503") {
+      throw new Error("Este proyecto tiene historial comercial y no se puede eliminar; márcalo como agotado.");
+    }
     throw new Error(error.message || "No se pudo eliminar el proyecto.");
   }
   return true;

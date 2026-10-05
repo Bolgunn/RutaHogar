@@ -4,6 +4,7 @@ import { isSupabaseDataConfigured } from "../services/profileService";
 import { calculateAge } from "../utils/helpers";
 import { roleLabels, roles, signIn, signUp } from "../services/auth";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
+import { trackSignUp } from "../lib/analytics";
 
 const currentYear = new Date().getFullYear();
 const dayOptions = Array.from({ length: 31 }, (_, index) => {
@@ -305,6 +306,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               birth_date: birthDate, 
               rut: `${form.rut_number}-${form.rut_dv}` 
             });
+      if (mode === "signup") trackSignUp({ method: "auth_panel" });
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -569,17 +571,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   </div>
                 </div>
               )}
-
-              {mode === "signup" && (
-                <div className="auth-field">
-                  <label className="auth-field-label" htmlFor="auth-role">Tipo de usuario</label>
-                  <select id="auth-role" name="role" value={form.role} onChange={handleChange}>
-                    <option value={roles.user}>{roleLabels[roles.user]}</option>
-                    <option value={roles.sales}>{roleLabels[roles.sales]}</option>
-                  </select>
-                </div>
-              )}
-
               {error && (
                 <div className="auth-error" role="alert">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>

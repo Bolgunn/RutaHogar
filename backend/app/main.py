@@ -14,6 +14,8 @@ from .ai import (
 )
 from .routers import crm_mock
 from .tracking.routes import router as tracking_router
+from .academy_news import router as academy_news_router
+
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -39,6 +41,9 @@ VALID_RELATION_TYPES = {
 
 app = FastAPI(title="RutaHogar")
 app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
+app.include_router(academy_news_router)
+
+# HU13 has its own authenticated contract; POST /score is unchanged.
 app.include_router(tracking_router)
 
 LOCAL_FRONTEND_ORIGINS = [

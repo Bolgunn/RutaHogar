@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { roleLabels } from "../services/auth";
+import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
 import AdminReportedLeads from "./AdminReportedLeads";
@@ -43,7 +44,7 @@ export default function AdminPanel({ evaluations, profile }) {
       .then((context) => {
         if (!active) return;
         setTenant(context);
-        setCanSeeArco(PROVIDER === "local" || context.isGlobalAdmin === true);
+        setCanSeeArco(PROVIDER === "local" || isGlobalAdmin(profile?.role, context.inmobiliaria_id));
       })
       .catch(() => {
         if (!active) return;
@@ -54,7 +55,7 @@ export default function AdminPanel({ evaluations, profile }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [profile?.role]);
 
   const counts = useMemo(
     () =>
@@ -97,7 +98,7 @@ export default function AdminPanel({ evaluations, profile }) {
       key: "admin",
       title: roleLabels.admin,
       description: "Supervisa catálogo, permisos y solicitudes sensibles.",
-      state: (profile?.role === "admin" || profile?.role === "admin_inmobiliario") ? "Sesión actual" : "Disponible",
+      state: isAdminRole(profile?.role) ? "Sesión actual" : "Disponible",
     },
     {
       key: "sales",
