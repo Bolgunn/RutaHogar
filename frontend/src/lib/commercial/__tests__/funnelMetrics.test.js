@@ -107,7 +107,7 @@ function expectCase(output, expected) {
   }
 }
 
-// --- Invariants 1–16 (ALG-18, "Invariants and edge cases") ---
+// --- Invariants 1–17 (ALG-18, "Invariants and edge cases") ---
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 const alcanzaron = (embudo, etapa) => embudo.etapas.find((e) => e.etapa === etapa).alcanzaron;
@@ -219,6 +219,14 @@ function expectInvariants(out) {
   expect(sum(periodos.map((p) => p.captura.postulan)), "Σ cohort postulan").toBe(out.captura.postulan);
   if (periodos.length) expect(periodos[periodos.length - 1].engagement.n, "last denominator = n").toBe(n);
 
+  // 17
+  if (periodos.length) {
+    for (const [etapa, { en_curso }] of Object.entries(out.tiempos.en_etapa)) {
+      expect(sum(periodos.map((p) => p.tiempos.en_etapa[etapa].en_curso)), `Σ period en_curso(${etapa})`).toBe(en_curso);
+      for (const p of periodos) if (!p.en_curso) expect(p.tiempos.en_etapa[etapa].en_curso, `${p.clave} ${etapa} en_curso`).toBe(0);
+    }
+  }
+
   // 13
   const contactado = alcanzaron(out.embudo, "contactado");
   const { contacto } = out;
@@ -292,7 +300,7 @@ function deepFreeze(value) {
 describe("ALG-18 cases", () => {
   it("covers every case of the file", () => {
     expect(spec.version).toBe(ALG18_VERSION);
-    expect(spec.cases).toHaveLength(33);
+    expect(spec.cases).toHaveLength(34);
   });
 
   for (const testCase of spec.cases) {
@@ -304,7 +312,7 @@ describe("ALG-18 cases", () => {
         expectCase(run(args), testCase.expect);
       });
 
-      it("holds invariants 1–6, 10, 13–16", () => {
+      it("holds invariants 1–6, 10, 13–17", () => {
         expectInvariants(run(args));
       });
 

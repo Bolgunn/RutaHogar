@@ -174,15 +174,15 @@ function planAVenta(items) {
   return { con_plan: conPlan.length, con_plan_y_venta: conVenta, tasa: rate(conVenta, conPlan.length) };
 }
 
-// R5 — sin `range`, toda la historia; con `range`, cada tiempo cae en el periodo de su fin y
-// los leads aún en una etapa no tienen fin, así que en_curso es 0.
-function enEtapa(items, range = null) {
+// R5 — sin `range`, toda la historia; con `range`, cada tiempo cae en el periodo de su fin y los
+// leads aún en una etapa solo cuentan en en_curso del periodo que contiene now (R7, G26).
+function enEtapa(items, range = null, countsEnCurso = true) {
   return Object.fromEntries(ALL_STAGES.map((etapa) => {
     const values = [];
     let enCurso = 0;
     for (const { a } of items) {
       if (a.stage === etapa) {
-        if (!range) enCurso += 1;
+        if (countsEnCurso) enCurso += 1;
         continue;
       }
       const closed = a.spells.filter((spell) => spell.stage === etapa);
@@ -193,13 +193,13 @@ function enEtapa(items, range = null) {
   }));
 }
 
-function tiempos(items, range = null) {
+function tiempos(items, range = null, countsEnCurso = true) {
   const ends = (at) => at !== null && (!range || within(range, at));
   return {
     ciclo_venta: stat(items.filter(({ a }) => ends(a.saleAt)).map(({ a }) => days(a.firstEval, a.saleAt))),
     dias_hasta_postular: stat(items.filter(({ a }) => ends(a.firstApplication))
       .map(({ a }) => days(a.firstEval, a.firstApplication))),
-    en_etapa: enEtapa(items, range),
+    en_etapa: enEtapa(items, range, countsEnCurso),
   };
 }
 
@@ -310,15 +310,16 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
       .map((period) => {
         const range = bounds(period);
         const cohort = items.filter(({ a }) => within(range, a.firstEval));
+        const enCurso = within(range, nowMs);
         return {
           clave: period.clave,
           desde: period.desde,
           hasta: period.hasta,
-          en_curso: within(range, nowMs),
+          en_curso: enCurso,
           captura: captura(cohort),
           embudo: embudo(cohort),
           plan_a_venta: planAVenta(cohort),
-          tiempos: tiempos(items, range),
+          tiempos: tiempos(items, range, enCurso),
           engagement: engagement(items, range),
           contacto: {
             contactados: firstContactDays(items, range).length,
