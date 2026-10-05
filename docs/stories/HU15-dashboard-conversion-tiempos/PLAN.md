@@ -6,8 +6,13 @@
 - **Status:** Planned · Sprint 2 · 8 SP · **Depends on:**
   `fix/admin-inmobiliario-role` (built, not merged) ·
   `feat/commercial-stage-base` (merged; migration `20260930120000` live since 2026-10-04) ·
-  `feat/commercial-stage-project-tracks` (**not started**; must satisfy ALG-18 "Requirements on
-  other work") · `ALG-10` (built). **Required by:** none.
+  `feat/commercial-stage-project-tracks` (PR #112: built, reviewed, verified by hand; migration
+  `20261005120000` **live in prod since 2026-10-05**, ahead of merge; meets ALG-18 "Requirements on
+  other work" 1–7) · `ALG-10` (built). **Required by:** none.
+- **Algorithm number:** renumbered **ALG-17 → ALG-18** on 2026-10-05. HU 18 (PR #111) published
+  `ALG-17-co-debtor-consent-resolution.md` and `ALG-17-cases.json` first. The files on this branch are
+  `ALG-18-commercial-funnel-metrics.md` and `ALG-18-cases.json`; the version constant is
+  `ALG18_VERSION`. See *Changes from the project-tracks PR* below.
 - **Branch:** `feat/hu15-dashboard-conversion-tiempos` (from `origin/develop`)
 
 ## Start here
@@ -68,7 +73,8 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 | Counts are the headline, rates secondary with `n`; no minimum-n cutoff | Persona review (admin and ejecutivo): at real scale rates are low and read as failure; a cutoff would be an invented number |
 | No per-ejecutivo breakdown for admins; ejecutivos see only their own contacts via `por_mi` | Per-ejecutivo needs actor ids (reverses D9) plus an HR/privacy review, and both personas warned a ranking invites stage-gaming. The per-project table (ALG-18 R10) carries most of the signal |
 | The "llamar hoy" queue, reservas at risk and pending promesas stay out | They are lists of leads — the leads dashboard's job (HU 2 / HU 14) — not metrics |
-| The `lead_belongs_to_proyecto(p_lead, p_proyecto)` helper is created here unless the project-tracks branch already did | D2 names it; it is `lead_belongs_to_inmobiliaria`'s rule restricted to one project. One definition only — if both branches define it, keep one and stop if they differ |
+| **Reuse** `lead_belongs_to_proyecto(p_lead, p_proyecto)` and `is_ejecutivo_vinculado(p_proyecto)`, both created by the project-tracks migration `20261005120000`. Do not redefine either | D2 names the first. One definition each: project-tracks also redefined `lead_belongs_to_inmobiliaria` on top of `lead_belongs_to_proyecto`, so the rule exists once. Both are `stable security definer`, not granted to browser roles |
+| The overall stage and the cause of a loss (ALG-18 R3 O1–O5, G8) come from **`overallStage()`** in `frontend/src/lib/commercial/overallStage.js`, landed by project-tracks. `funnelMetrics.js` calls it at each replay step and does not re-implement R3 | Project-tracks Q6: the lead-card badge is its first consumer, so it is a shared `lib/` function. Its input `[{ proyecto_id, stage, at, por_sistema }]` is each record's current stage plus the instant and `por_sistema` of its latest event, which the replay has at every step. Its tests are named by ALG-18 id (O1…O5, G8) |
 
 ## Standing questions
 
@@ -76,9 +82,9 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 | :- | :------- | :----- |
 | 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-18`** (frontend, no tunable numbers of its own). `ALG-10` consumed unchanged; its proposed A1 note is applied only if the author approves at review (step 12) |
 | 2 | Needs RLS / multi-tenant scoping? | Yes — scoping is the RPC's whole job: role + `get_my_inmobiliaria()` + `vinculado` assignments, `SECURITY DEFINER`, granted to `authenticated` only. No table policy changes |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `<timestamp>_hu15_commercial_funnel_facts.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — **never pasted into the SQL editor** (see the 10-01 / 10-03 outages caused by hand-applied SQL) |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `<timestamp>_hu15_commercial_funnel_facts.sql` + rollback + `schema.sql` sync, `<timestamp>` later than every migration in prod (≥ `20261005140000`; prod has `20261005120000` and `20261005130000`). Applied by the CTO with `supabase db push` after merge — **never pasted into the SQL editor** (see the 10-01 / 10-03 / 10-05 outages caused by hand-edited SQL) |
 | 4 | Changes the `POST /score` contract? | No. (ALG-18's `action_key` engine follow-up is additive and outside HU 15) |
-| 5 | Consent / privacy impact? | Staff already read evaluations (policy `Evaluations select own`, migration `20261001120000`); the RPC exposes no more than that, scoped tighter. It returns no lead id, name or email, and no stage `reason` or actor. No new consent needed |
+| 5 | Consent / privacy impact? | Staff already read evaluations (policy `Evaluations select own`, migration `20261001120000`, re-declared by `20261005130000` after a hand edit on 2026-10-05 hid every lead from staff, PR #113); the RPC exposes no more than that, scoped tighter. It returns no lead id, name or email, and no stage `reason` or actor. No new consent needed |
 
 > 1 and 3 are checked against the diff by CI.
 
@@ -88,7 +94,13 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 (`created_at`, `financial_data → input / result`), `proyectos`, `proyecto_ejecutivos`,
 `proyecto_favoritos`, `tracking_plans.baseline_at`, `tracking_events` (`recorded_at`, `event_kind`),
 `improvement_goal_events` (`recorded_at`, `confirmed`), `commercial_stage_events` (with the
-project-tracks branch's `proyecto_id`).
+project-tracks branch's `proyecto_id`; its index `(subject_user_id, inmobiliaria_id, proyecto_id,
+occurred_at, id)` serves the `(occurred_at, id)` ordering).
+
+**Read, from project-tracks (do not redefine):** `lead_belongs_to_proyecto(p_lead, p_proyecto)`,
+`is_ejecutivo_vinculado(p_proyecto)`. Project tracks also added `lead_project_commercial_stage`,
+`commercial_stage_scope()` and the sell-out / restock trigger; HU 15 reads none of them, only
+events.
 
 **New — `public.commercial_funnel_facts() returns jsonb`**, `stable security definer set
 search_path = public`, revoked from `public, anon`, granted to `authenticated`.
@@ -96,8 +108,9 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
 1. `v_role := get_my_role()`, `v_tenant := get_my_inmobiliaria()`. Raise `forbidden` (errcode
    `42501`) unless `v_tenant` is not null **and** `v_role` ∈ {`admin_inmobiliario`, `admin`,
    `ejecutivo`}.
-2. In-scope projects: `proyectos` of `v_tenant`; for `ejecutivo`, only those with a
-   `proyecto_ejecutivos` row `estado = 'vinculado'` matching `auth.uid()` or `get_my_email()`.
+2. In-scope projects: `proyectos` of `v_tenant`; for `ejecutivo`, only those where
+   `is_ejecutivo_vinculado(p.id)` (a `proyecto_ejecutivos` row `estado = 'vinculado'` matching
+   `auth.uid()` or `get_my_email()`).
 3. Leads: profiles with `role = 'usuario'`, at least one evaluation, and
    `lead_belongs_to_proyecto(lead, p)` for at least one in-scope project. Deleted accounts have no
    profile and are absent by construction (ALG-18 A5).
@@ -124,20 +137,25 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
    | `progress_update_ats` | `tracking_events.recorded_at` with `event_kind in ('data_update', 'evaluation')` |
    | `confirmed_goal_ats` | `improvement_goal_events.recorded_at` with `confirmed` |
 
-**New (unless already present) — `public.lead_belongs_to_proyecto(p_lead uuid, p_proyecto uuid)
-returns boolean`**, `stable security definer`, not granted to browser roles: true when the lead's
-profile has `role = 'usuario'` and either has a `proyecto_favoritos` row for `p_proyecto`, or one of
-its declared comunas (the same four sources as `lead_belongs_to_inmobiliaria`, compared with
-`lower(trim(...))`) equals that project's comuna.
+**Existing — `public.lead_belongs_to_proyecto(p_lead uuid, p_proyecto uuid) returns boolean`**,
+created by `20261005120000` (project tracks), `stable security definer`, not granted to browser
+roles: true when the lead's profile has `role = 'usuario'` and either has a `proyecto_favoritos` row
+for `p_proyecto`, or one of its declared comunas (evaluations' `target_commune`,
+`alternative_commune`, `financial_data.input.comuna_objetivo`, and onboarding's `comuna_interes` /
+`comuna_alternativa`, compared with `lower(trim(...))`) equals that project's comuna. HU 15 calls
+it; it does not create it.
 
 No existing rows change. No table, column or policy is added or altered.
 
 ## Algorithms
 
-- **`ALG-18`** — commercial funnel metrics. **New**, written before this plan:
-  `docs/algorithms/ALG-18-commercial-funnel-metrics.md`, cases `ALG-18-cases.json`. Implemented in
-  `frontend/src/lib/commercial/funnelMetrics.js`; asserted by
-  `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js`. 9 open assumptions logged.
+- **`ALG-18`** (was ALG-17 until 2026-10-05) — commercial funnel metrics. **New**, written before
+  this plan: `docs/algorithms/ALG-18-commercial-funnel-metrics.md`, cases `ALG-18-cases.json`.
+  Implemented in `frontend/src/lib/commercial/funnelMetrics.js`, except R3's overall stage and
+  cause, which are `frontend/src/lib/commercial/overallStage.js` (project tracks); asserted by
+  `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` and `overallStage.test.js`. 9 open
+  assumptions logged. **Amendment owed by this PR:** ALG-18's "Runs on / implemented in" row names
+  `overallStage.js` for R3 (step 3).
 - **`ALG-10`** — implemented as-is, no changes. Called by ALG-18 for every band.
 
 **Local logic** (no ALG number, story-local): the Santiago calendar helpers (period key and bounds
@@ -147,7 +165,7 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 
 **In:**
 
-- The `commercial_funnel_facts()` RPC (+ `lead_belongs_to_proyecto` if absent), rollback,
+- The `commercial_funnel_facts()` RPC (reusing project tracks' helpers), rollback,
   `schema.sql` sync, SQL tests.
 - `ALG-18` implementation and tests; the priority map and its parity test.
 - `services/commercialMetricsService.js`.
@@ -157,7 +175,8 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 
 **Out:**
 
-- Stage keying by project, revival, the sell-out / restock jobs → `feat/commercial-stage-project-tracks`.
+- Stage keying by project, revival, the sell-out / restock jobs, `overallStage()` →
+  `feat/commercial-stage-project-tracks` (PR #112, done).
 - `admin_inmobiliario` role support → `fix/admin-inmobiliario-role`.
 - `action_key` in `commercial_priority_detail` → separate engine follow-up (ALG-18 G18).
 - Global-admin cross-tenant dashboard → not in D2; a future story if wanted.
@@ -186,7 +205,12 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 3. **ALG-18.** `frontend/src/lib/commercial/funnelMetrics.js`: export
    `computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }, { match = matchLeadToProjects } = {})`
    implementing R0–R8 exactly. The second argument is the test seam only. Export
-   `ALG17_VERSION = "hu15-commercial-funnel-v1"`. No `Date.now()`, no input mutation.
+   `ALG18_VERSION = "hu15-commercial-funnel-v1"`. No `Date.now()`, no input mutation.
+   **R3's overall stage and cause come from `overallStage(records)`** (`./overallStage`): at each
+   replay step, build one entry per existing record (`proyecto_id`, current `stage_after`, `at` =
+   that record's latest `occurred_at`, `por_sistema` of that event) and call it. Do not
+   re-implement O1–O5 or G8 here. In the same commit, amend ALG-18's "Runs on / implemented in" row
+   to name `overallStage.js` for R3.
 4. **ALG-18 tests.** `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js`: load
    `docs/algorithms/ALG-18-cases.json`; expand the shorthand described in its `nota` (defaults,
    `proyectos_comunes`, `prioridad_label` / `prioridad_key`, `alg10` → a fake `match` that returns
@@ -198,13 +222,15 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 ### Part B — data and page (needs both prerequisite branches in `develop`)
 
 5. **Gate.** Sync with the base branch. Confirm: `commercial_stage_events.proyecto_id` exists;
-   `frontend/src/lib/roles.js` exports `roles.admin_inmo` and `isAdminRole`; the project-tracks
-   branch shipped the sell-out / restock jobs and the revival exception. If any is missing, stop and
-   report.
+   `lead_belongs_to_proyecto`, `is_ejecutivo_vinculado` and `frontend/src/lib/commercial/overallStage.js`
+   exist; `frontend/src/lib/roles.js` exports `roles.admin_inmo` and `isAdminRole`; the
+   project-tracks branch shipped the sell-out / restock jobs and the revival exception. If any is
+   missing, stop and report. (All of project tracks' parts are in PR #112 and its migration is
+   already live in prod; only the merge into `develop` is pending.)
 6. **Migration.** `supabase/migrations/<timestamp>_hu15_commercial_funnel_facts.sql` (timestamp
-   later than the project-tracks migration), wrapped in `begin; … commit;`, idempotent: create
-   `lead_belongs_to_proyecto` if the project-tracks branch did not, and `commercial_funnel_facts()`
-   per **Entities**; `revoke all … from public, anon, authenticated`; `grant execute on
+   later than every migration in prod, ≥ `20261005140000`), wrapped in `begin; … commit;`,
+   idempotent: create `commercial_funnel_facts()` per **Entities**, reusing
+   `lead_belongs_to_proyecto` and `is_ejecutivo_vinculado` (never redefine them); `revoke all … from public, anon, authenticated`; `grant execute on
    commercial_funnel_facts() to authenticated`. Rollback in `supabase/rollback/` dropping only what
    this migration created. Append the same DDL to `supabase/schema.sql`.
 7. **SQL tests.** `supabase/tests/commercial_funnel_facts.sql`, style of `commercial_stage.sql`
@@ -282,8 +308,10 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
     `page` pattern — no React Router.
 11. **Wiki.** `Wiki RutaHogar/UserStories/HU15-dashboard-conversion-tiempos.md` notes: E2's
     "diferencias entre eventos consecutivos" is replaced by time in each stage (ALG-18 R5); metrics
-    are computed per inmobiliaria and, inside it, per project record; link ALG-18. Spanish, per the
-    handbook.
+    are computed per inmobiliaria and, inside it, per project record; link ALG-18. Also replace the
+    E1 note "el embudo cuenta `lead_commercial_stage` por etapa", stale since project tracks: the
+    funnel replays `commercial_stage_events` per record. Project tracks already added the notes on
+    the per-project data layer and the two levels of `perdido`; keep them. Spanish, per the handbook.
 12. **ALG-10 note (only with the author's approval at review).** Apply ALG-18's "Proposed note for
     ALG-10" to ALG-10's A1 row. Text only, no number. Otherwise leave ALG-10 untouched.
 
@@ -305,12 +333,35 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 
 ## Assumptions
 
-- **`feat/commercial-stage-project-tracks` meets ALG-18's "Requirements on other work".** Part B is
-  written against it and must not stub it: if it is not merged, build Part A, open the PR as draft,
-  and stop at step 5.
+- **`feat/commercial-stage-project-tracks` meets ALG-18's "Requirements on other work".** Verified:
+  its SQL tests T1–T16 map to requirements 1–7, and 16 smoke checks passed against prod on
+  2026-10-05, plus a manual walkthrough. Part B is written against it and must not stub it: if
+  PR #112 is not merged, build Part A, open the PR as draft, and stop at step 5.
 - **`fix/admin-inmobiliario-role` is merged** and provides `frontend/src/lib/roles.js`
   (`roles.admin_inmo`, `isAdminRole`). Until then, `roles` from `services/auth.js` has no
   `admin_inmobiliario` key; do not add one here.
 - **Data volume fits in one RPC call** (prod on 2026-10-04: 163 leads, 434 evaluations). If a tenant
   grows past what one JSON payload handles comfortably, paging is a follow-up, not a reason to move
   ALG-18 into SQL.
+
+## Changes from the project-tracks PR (2026-10-05)
+
+`feat/commercial-stage-project-tracks` (PR #112) landed the prerequisites this plan assumed, and
+changed some details. This section records what HU 15 must take into account; the steps above are
+already updated.
+
+| # | Change | Effect on HU 15 |
+| :- | :----- | :-------------- |
+| C1 | **ALG-17 renumbered to ALG-18.** HU 18 (PR #111) published ALG-17 first; IsaiasACF flagged the collision in PR #112's review | Files, references and `ALG18_VERSION` renamed on this branch. Project tracks' plan amendment A4 and its code use ALG-18 |
+| C2 | `lead_belongs_to_proyecto` and `is_ejecutivo_vinculado` are created by migration `20261005120000`; `lead_belongs_to_inmobiliaria` is redefined on top of the first (behaviour-preserving) | HU 15 reuses both and creates neither (decisions, Entities, step 6) |
+| C3 | `overallStage()` implements ALG-18 R3 O1–O5 and G8 once, in `lib/commercial/overallStage.js` | `funnelMetrics.js` calls it at each replay step; ALG-18's "implemented in" row is amended by this PR (step 3) |
+| C4 | Migration `20261005120000` is **already applied in prod** (2026-10-05, ahead of merge), and `20261005130000` (PR #113, evaluations policy fix) too | HU 15's migration timestamp must be ≥ `20261005140000`. Until PRs #112 and #113 merge, `supabase db push` from `develop` stops on "remote migration versions not found"; do not `migration repair` them away |
+| C5 | QA data in prod: inmobiliaria "QA Project Tracks" with projects QA PT Uno / Dos / Tres / Smoke, accounts `qa-pt-*@example.com`, and permanent stage history (including sell-out / restock job events) | HU 15's reviewer can use this tenant to see the funnel with real project records. It is real data in prod: it appears in that tenant's metrics only, since HU 15 is scoped per inmobiliaria |
+
+**Open question for Bolgunn (from PR #112, not decided here).** Project tracks makes a project record
+"sticky": once created, it stays writable after the lead stops belonging to the project (removed
+favorite, changed comuna), so a standing sale on P can outlive `lead_belongs_to_proyecto(lead, P)`.
+Step 2–3 of the RPC take the fact universe from leads that belong to an in-scope project **today**,
+and ALG-18 R10 uses `p ∈ lead.proyectos`. Both would drop that sale from the dashboard. Adding "or has
+a record on an in-scope project" to the universe and to `proyectos` would fix it, but that is an
+ALG-18 change: decide it before Part B.
