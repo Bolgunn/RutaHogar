@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
-| **Last changed** | 2026-10-05 · HU 15 · build review (G26–G28): `en_curso` of a period, `now` from the database, leads kept by their project records |
+| **Last changed** | 2026-10-05 · HU 15 · AC wording review (G29–G31): overall conversion, en plan de mejora → venta, time between stages, breakdown by dimension |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -63,10 +63,11 @@ by week, month or year (E4).
    not in the cycle (two populations under one word).
 4. **Plan impact from `tracking_plans.baseline_at`, not from the `en_plan_mejora` stage (D5).** The
    stage is a manual click an executive may never make; the plan baseline is a recorded fact.
-5. **Time *in* a stage, not time "from stage N to N+1" (D6).** Stages may be skipped and moves may
-   go backwards; "N → N+1" is undefined for a lead who skipped N+1 and double-counts a lead who went
-   back. Time in a stage is always defined. The HU 15 wiki note ("diferencias de `occurred_at` entre
-   eventos consecutivos") is superseded by this.
+5. **Time *in* a stage, plus time *between* stages (D6, G30).** Stages may be skipped and moves may
+   go backwards, so "N → N+1" alone would be undefined for a lead who skipped a stage. Time in a stage
+   is always defined and stays. HU 15 E2 asks for the times between states too, so R13 adds them with
+   an explicit rule for skips: a lead that reached N+1 without passing through N is counted as
+   `saltaron`, never silently dropped or given an invented time.
 6. **Unweighted engagement (D7), about your projects only (G19).** Any weight per action would be an
    invented number with nothing to calibrate it against. An unweighted "did anything" plus a
    per-action breakdown is honest. Every action must concern one of the caller's projects: a lead
@@ -149,6 +150,8 @@ FunnelMetrics = {
   contacto,                 // R9
   por_proyecto,             // R10
   mejores,                  // R11 — the funnel and stage times of the best leads only
+  plan_mejora_a_venta,      // R12 — leads that went from en_plan_mejora to venta_cerrada
+  desglose,                 // R14 — metrics broken down by project, affinity, capacity, priority
   serie: { granularidad, periodos: [Periodo] }   // R7
 }
 ```
@@ -156,17 +159,21 @@ FunnelMetrics = {
 | Object | Shape |
 | :----- | :---- |
 | `captura` | `{ n, postulan, tasa }` |
-| `embudo` | `{ n, etapas: [{ etapa, alcanzaron, conversion }], abiertos, perdido_actual: { total, por_agotamiento, por_gestion } }` — `etapas` in ladder order, all six always present |
+| `embudo` | `{ n, etapas: [{ etapa, alcanzaron, conversion }], conversion_general, abiertos, perdido_actual: { total, por_agotamiento, por_gestion } }` — `etapas` in ladder order, all six always present |
 | `plan_a_venta` | `{ con_plan, con_plan_y_venta, tasa }` |
-| `tiempos` | `{ ciclo_venta: Stat, dias_hasta_postular: Stat, en_etapa: { [etapa]: StageStat } }` — `en_etapa` has all seven stages |
+| `tiempos` | `{ ciclo_venta: Stat, dias_hasta_postular: Stat, en_etapa: { [etapa]: StageStat }, entre_etapas: [EntreEtapas] }` — `en_etapa` has all seven stages; `entre_etapas` the five ladder pairs in order (R13) |
 | `engagement` | `{ n, activos, tasa, por_accion: { [accion]: { leads, eventos } }, mes_actual: { n, activos, tasa } }` — all six actions always present; `mes_actual` only at top level (G21) |
 | `contacto` | `{ sin_contactar: { n, antiguedad_mediana, antiguedad_maxima }, contactados_mes_actual, contactados_por_mi: { total, mes_actual }, tiempo_primer_contacto }` — `tiempo_primer_contacto` is `StageStat`-shaped (`en_curso` = still uncontacted) or `null` with `bandas.sin_catalogo` (G22) |
 | `por_proyecto` | `[{ proyecto_id, leads, postulan, ventas, sin_contactar }]` — one row per in-scope project, in `proyectos` order (G24) |
-| `mejores` | `{ n, embudo, en_etapa }` with the same shapes as `embudo` and `tiempos.en_etapa`, or `null` with `bandas.sin_catalogo` (G25) |
+| `mejores` | `{ n, embudo, en_etapa, entre_etapas }` with the same shapes as `embudo`, `tiempos.en_etapa` and `tiempos.entre_etapas`, or `null` with `bandas.sin_catalogo` (G25) |
+| `plan_mejora_a_venta` | `{ en_plan_mejora, con_venta, tasa }` (R12) |
+| `desglose` | `{ proyecto: [DesgloseRow], afinidad: [DesgloseRow] or null, capacidad: [DesgloseRow] or null, prioridad: [DesgloseRow] }` (R14) |
+| `DesgloseRow` | `{ clave, leads, postulan, tasa_postulacion, activos, tasa_activos, activos_mes, tasa_activos_mes, ventas, tasa_venta }` |
+| `EntreEtapas` | `{ desde, hasta, n, promedio, mediana, saltaron, en_curso }` — `Stat` plus the skip and in-progress counts (R13) |
 | `bandas` | `{ n, sin_catalogo: false, afinidad: { Compatible, Cercano, Marginal, fuera_de_alcance, requiere_antecedentes }, capacidad: { alcanza, cercano_por_capacidad, insuficiente, requiere_antecedentes } }` — every key always present; **or** `{ n, sin_catalogo: true, afinidad: null, capacidad: null }` (G11) |
 | `Stat` | `{ n, promedio, mediana }` — days, unrounded; `promedio` and `mediana` are `null` when `n = 0` |
 | `StageStat` | `Stat` plus `en_curso`: leads currently in that stage, excluded from `n` |
-| `Periodo` | `{ clave, desde, hasta, en_curso, captura, embudo, plan_a_venta, tiempos, engagement, contacto: { contactados, tiempo_primer_contacto } }` |
+| `Periodo` | `{ clave, desde, hasta, en_curso, captura, embudo, plan_a_venta, plan_mejora_a_venta, tiempos, engagement, contacto: { contactados, tiempo_primer_contacto } }` |
 
 Enumerations:
 
@@ -352,6 +359,7 @@ stage below it: a promesa was signed.
 | `etapas[k].conversion` | `alcanzaron(k) ÷ alcanzaron(k−1)`; `null` for `nuevo` and whenever the denominator is 0 |
 | `embudo.abiertos` | leads whose current overall stage is neither `venta_cerrada` nor `perdido` (G14) |
 | `embudo.perdido_actual` | `{ total, por_agotamiento, por_gestion }`: leads whose current overall stage is `perdido`, split by cause |
+| `embudo.conversion_general` | `alcanzaron(venta_cerrada) ÷ n`, `null` when `n = 0` — the overall conversion from the universe to a standing sale (G29, HU 15 E1 "la conversión general") |
 
 ### R4 — Plan → venta (D5, G9, G20)
 
@@ -386,7 +394,7 @@ two middle values. **No minimum-n cutoff.**
 - **An undone sale** is not in `ciclo_venta`: it no longer stands.
 - **`en_etapa.perdido`** measures how long leads stayed lost before being revived or reopened; leads
   still lost are its `en_curso`.
-- **"Time from stage N to N+1" is not computed** (Purpose, point 5).
+- **Time from stage N to N+1** is R13, a separate metric; `en_etapa` does not change (G30).
 - In tenant view the spells are those of the **overall** stage (assumption A6), not of any one
   project record.
 
@@ -453,6 +461,10 @@ history.
 | :----- | :------------------------------- | :---- |
 | `captura`, `embudo`, `plan_a_venta` | the lead's `first_evaluation_at` (**cohort**) | The cohort's stages, applications and sales are evaluated at `now`, not at the period's end. `n` of the period = its cohort size |
 | `ciclo_venta`, `dias_hasta_postular` | the interval's **end** | |
+| `plan_mejora_a_venta` | the lead's `first_evaluation_at` (**cohort**) | Like `plan_a_venta` (R12) |
+| `entre_etapas` row `n`, `promedio`, `mediana` | the instant the lead entered `hasta` (the interval's **end**) | R13 |
+| `entre_etapas` row `saltaron` | the instant the lead first entered `hasta` | R13 |
+| `entre_etapas` row `en_curso` | the period containing `now` (G26) | Same rule as `en_etapa[s].en_curso` |
 | `en_etapa[s]` | the end of the lead's **last** closed spell in `s` | The lead's whole summed time lands in that one period |
 | `en_etapa[s].en_curso` | the period containing `now` (G26) | Leads currently in `s` are counted only in the running period, the one with `en_curso: true`; every other period has `en_curso` 0. Summed over the periods it equals the top-level `en_curso` |
 | `engagement` | each action's timestamp | A lead is activo in every period where it has an action. Denominator per R6 (G12) |
@@ -553,6 +565,73 @@ in scope is dominated by leads nobody expects to buy; managers asked to see the 
 leads most likely to close. If the dashboard's own affinity or capacity filter already excludes
 `Compatible` or `alcanza`, `mejores.n` is 0 and the result is the explicit empty one.
 
+### R12 — En plan de mejora → venta cerrada (G29)
+
+HU 15 E1 asks *specifically* how many leads went from the `en_plan_mejora` stage to `venta_cerrada`.
+R4 answers the plan's impact from the accepted plan; R12 answers the stage question as worded.
+
+| Field | Value |
+| :---- | :---- |
+| `en_plan_mejora` | leads with at least one considered event (R0) whose `stage_after` is `en_plan_mejora` |
+| `con_venta` | of those, leads whose **standing sale date** (R3, G9) is strictly after their **first** such event |
+| `tasa` | `con_venta ÷ en_plan_mejora`, `null` when `en_plan_mejora = 0` |
+
+A lead counts in `en_plan_mejora` only if the stage was **recorded**: reaching it by skipping (R3's
+`reached`) is not passing through it. A stage recorded *after* the sale does not count in
+`con_venta`, an undone sale does not count (G9), and the sale may be on any project in `S`. R4 is
+unchanged and the dashboard shows both.
+
+### R13 — Time between consecutive stages (G30)
+
+For each consecutive ladder pair `(N, M)` — `nuevo → contactado`, `contactado → en_plan_mejora`,
+`en_plan_mejora → en_negociacion`, `en_negociacion → reserva`, `reserva → venta_cerrada` — on the
+lead's **overall** timeline (R3; A6 applies):
+
+- **entries into a stage** are the starts of the spells in that stage; for `venta_cerrada` the only
+  entry is the **standing sale date** (G9), so an undone sale is never an arrival;
+- `entrada(N)` is the lead's **first** entry into `N`.
+
+| Field | Value |
+| :---- | :---- |
+| `n`, `promedio`, `mediana` | `Stat` of days from `entrada(N)` to the first entry into `M` **strictly after** it, over the leads that have one (elapsed time, R5) |
+| `saltaron` | leads with an entry into `M` but none strictly after `entrada(N)`: they reached `M` without passing through `N` first (skipped `N`, or reached `M` before ever entering `N`) |
+| `en_curso` | leads with an `entrada(N)` and no entry into `M` after it, whose current overall stage is `N` |
+
+The three groups are disjoint. A lead that skipped `N` is counted in `saltaron` of the pair that
+ends in the stage it reached, so skips are visible and never get an invented time. In a `Periodo`,
+`n` and the `Stat` go to the period of the arrival in `M`, `saltaron` to the period of the first
+entry into `M`, and `en_curso` follows G26.
+
+### R14 — Breakdown by dimension (G31)
+
+HU 15 E3 asks to *break down* engagement and conversion by project, purchase capacity, priority and
+affinity. Filters (R8) narrow the page to one value at a time; R14 lists every value side by side. It
+runs on the leads after filters (R8), like everything else.
+
+`DesgloseRow` for a set of leads `L` evaluated with a project set `S'`:
+
+| Field | Value |
+| :---- | :---- |
+| `clave` | the project id, band or priority key |
+| `leads` | the number of leads in `L` |
+| `postulan`, `tasa_postulacion` | R2 with `S'`; rate over `leads` |
+| `activos`, `tasa_activos` | R6 with `S'`, full history; rate over `leads` |
+| `activos_mes`, `tasa_activos_mes` | R6 with `S'` over the month containing `now` (G21); rate over `leads` |
+| `ventas`, `tasa_venta` | leads with a standing sale (R3) on a project in `S'`; rate over `leads` |
+
+Every rate is `null` when `leads = 0`.
+
+| Dimension | One row per | `L` | `S'` |
+| :-------- | :---------- | :-- | :--- |
+| `proyecto` | in-scope project `p`, in `proyectos` order | leads after filters with `p ∈ proyectos` (as R10) | `{p}` |
+| `afinidad` | every affinity key of R1, in output order | leads after filters in that bucket | `S` |
+| `capacidad` | every capacity key of R1, in output order | leads after filters in that bucket | `S` |
+| `prioridad` | the six action keys, then `sin_prioridad` | leads after filters with that priority (R1b) | `S` |
+
+`afinidad` and `capacidad` are `null` when `bandas.sin_catalogo` (G11). The band and priority rows
+partition the leads after filters; the project rows do not (a lead in two projects is in both, as
+R10).
+
 ## Invariants and edge cases
 
 **Invariants** — asserted by tests on every case, not by fixture values:
@@ -597,6 +676,19 @@ leads most likely to close. If the dashboard's own affinity or capacity filter a
     within `mejores` with `mejores.n`.
 17. Unless `periodos` is empty, for every stage `s`: `Σ periodos[i].tiempos.en_etapa[s].en_curso =
     tiempos.en_etapa[s].en_curso`, and it is 0 in every period whose `en_curso` is `false`.
+18. `embudo.conversion_general = alcanzaron(venta_cerrada) ÷ n` (`null` iff `n = 0`), in the totals,
+    in every cohort period and in `mejores`.
+19. `plan_mejora_a_venta.con_venta <= en_plan_mejora <= n` and `con_venta <= alcanzaron(venta_cerrada)`;
+    `tasa` is `null` iff `en_plan_mejora = 0`. Also per cohort period.
+20. `tiempos.entre_etapas` has the five pairs in ladder order; for each, `n + saltaron <=
+    alcanzaron(hasta)` and `n + saltaron + en_curso <=` the universe's `n`. Unless `periodos` is
+    empty, each row's `n`, `saltaron` and `en_curso` summed over the periods equal the totals, and
+    `en_curso` is 0 outside the running period.
+21. In `desglose`, the `afinidad`, `capacidad` (unless `null`) and `prioridad` rows each sum to the
+    totals: `Σ leads = n`, `Σ postulan = captura.postulan`, `Σ activos = engagement.activos`,
+    `Σ ventas = alcanzaron(venta_cerrada)`. In every row `postulan`, `activos`, `activos_mes` and
+    `ventas` are `<= leads`. The `proyecto` rows match `por_proyecto` on `leads`, `postulan` and
+    `ventas`.
 
 **Edge cases:**
 
@@ -670,6 +762,9 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G24 | Per-project comparison table (R10) | Persona review (admin): most of the per-ejecutivo signal without actor data |
 | G25 | `mejores` (R11): the funnel and stage times recomputed on the best leads (`Compatible` + `alcanza`), shown through a "Todos / Mejores leads" switch | UI review (Bolgunn): show each role the leads that matter to them |
 | G26 | In the series, a stage's `en_curso` (leads currently in it) is counted in the period containing `now` only; other periods show 0 | Build review (Bolgunn, 2026-10-05): R7 assigned stage times to the end of a spell but said nothing about spells that have not ended. Rejected: 0 in every period (hides them from the series), the period the lead entered the stage |
+| G29 | Add `embudo.conversion_general` and R12 (leads that went from the `en_plan_mejora` stage to a standing sale). R4 stays | AC wording review (Bolgunn, 2026-10-05): "the HU is the rule". E1 names both the overall conversion and the stage transition explicitly |
+| G30 | Add R13, time between consecutive stages, with skips counted in `saltaron`. `en_etapa` stays | AC wording review: E2 asks for "los tiempos intermedios entre estados comerciales" |
+| G31 | Add R14, the breakdown of engagement and conversion by project, affinity, capacity and priority. Filters stay | AC wording review: E3 asks to "desglosar", not only to filter |
 | G28 | A lead is in the universe, and `p` is in its `proyectos`, when it belongs to `p` today **or** has a stage record on `p` | Build review (Bolgunn, 2026-10-05), open question from PR #112: project records stay writable after the lead stops belonging to the project, so a standing sale on `p` would otherwise vanish from the dashboard. Rejected: belonging today only |
 | G27 | `now` is the database's time, returned by the RPC with the facts, not the browser's clock | Build review (Bolgunn, 2026-10-05): a browser clock behind the server would make a fresh lead's first evaluation later than `now` (negative waiting time, cohort outside the series). Rejected: a rule dropping such leads |
 | — | Counts as headline, rates secondary with `n`; no minimum-n cutoff | Persona review; a cutoff would be an invented number (D6) |
@@ -747,5 +842,6 @@ plan step 12). The text, as applied:
 | 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
 | 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
 | 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |
+| 2026-10-05 | AC wording review (G29–G31): `embudo.conversion_general`, R12 en plan de mejora → venta, R13 time between stages, R14 breakdown; invariants 18–21; cases `conversion_general_y_plan_mejora_a_venta`, `tiempo_entre_etapas`, `desglose_por_dimension`. |
 | 2026-10-05 | Build review (G28): leads with a stage record on an in-scope project stay in the universe and in that project's R10 row (`proyectos` input). Enforced by the RPC; asserted by its SQL test. |
 | 2026-10-05 | Build review (G26–G27): a stage's `en_curso` belongs to the period containing `now` (R7, invariant 17, case `en_curso_en_el_periodo_actual`); `now` comes from the database. |

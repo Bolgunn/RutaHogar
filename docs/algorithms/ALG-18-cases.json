@@ -1,7 +1,7 @@
 {
   "algorithm": "ALG-18",
   "version": "hu15-commercial-funnel-v1",
-  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-18's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-17 of the document are asserted on every case's output in addition to `expect`.",
+  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-18's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-21 of the document are asserted on every case's output in addition to `expect`.",
   "proyectos_comunes": {
     "A": { "id": "A", "nombre": "Proyecto A", "estado": "disponible" },
     "B": { "id": "B", "nombre": "Proyecto B", "estado": "disponible" },
@@ -1045,6 +1045,697 @@
             }
           }
         }
+      }
+    },
+    {
+      "name": "conversion_general_y_plan_mejora_a_venta",
+      "por_que": "R3 conversion_general, R12, G29. Three of five leads hold a sale (L1, L2, L5): overall conversion 0.6. Four recorded en_plan_mejora (L1-L4); only L1 sold after it. L2's en_plan_mejora was recorded after its sale, L3's sale was undone (G9), L4 never sold; L5 sold without the stage and is outside the denominator.",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-05T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-15T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "perdido",
+                "occurred_at": "2026-09-12T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L4",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-04T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L5",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-08T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "n": 5,
+          "conversion_general": 0.6
+        },
+        "plan_mejora_a_venta": {
+          "en_plan_mejora": 4,
+          "con_venta": 1,
+          "tasa": 0.25
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "embudo": {
+              "conversion_general": 0.6
+            },
+            "plan_mejora_a_venta": {
+              "en_plan_mejora": 4,
+              "con_venta": 1,
+              "tasa": 0.25
+            }
+          },
+          "2026-10": {
+            "embudo": {
+              "n": 0,
+              "conversion_general": null
+            },
+            "plan_mejora_a_venta": {
+              "en_plan_mejora": 0,
+              "con_venta": 0,
+              "tasa": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "tiempo_entre_etapas",
+      "por_que": "R13, G30. L1 walks the whole ladder (2, 5, 2, 5, 5 days). L2 goes from nuevo straight to reserva: it skipped en_negociacion, so it counts in that pair's saltaron, and it waits in reserva (en_curso of reserva -> venta). L3 goes nuevo -> contactado (3 days), back to nuevo and to contactado again: only its first nuevo and the first contactado after it count, and it waits in contactado. Arrivals are in September; what is still in progress goes to October, the running period (G26).",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "granularidad": "mes",
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-08T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "en_negociacion",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "reserva",
+                "occurred_at": "2026-09-15T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "reserva",
+                "occurred_at": "2026-09-05T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-04T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-06T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-07T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "entre_etapas": [
+            {
+              "desde": "nuevo",
+              "hasta": "contactado",
+              "n": 2,
+              "promedio": 2.5,
+              "mediana": 2.5,
+              "saltaron": 0,
+              "en_curso": 0
+            },
+            {
+              "desde": "contactado",
+              "hasta": "en_plan_mejora",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 0,
+              "en_curso": 1
+            },
+            {
+              "desde": "en_plan_mejora",
+              "hasta": "en_negociacion",
+              "n": 1,
+              "promedio": 2,
+              "mediana": 2,
+              "saltaron": 0,
+              "en_curso": 0
+            },
+            {
+              "desde": "en_negociacion",
+              "hasta": "reserva",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 1,
+              "en_curso": 0
+            },
+            {
+              "desde": "reserva",
+              "hasta": "venta_cerrada",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 0,
+              "en_curso": 1
+            }
+          ]
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "tiempos": {
+              "entre_etapas": [
+                {
+                  "n": 2,
+                  "en_curso": 0
+                },
+                {
+                  "n": 1,
+                  "en_curso": 0
+                },
+                {
+                  "n": 1
+                },
+                {
+                  "n": 1,
+                  "saltaron": 1
+                },
+                {
+                  "n": 1,
+                  "en_curso": 0
+                }
+              ]
+            }
+          },
+          "2026-10": {
+            "tiempos": {
+              "entre_etapas": [
+                {
+                  "n": 0,
+                  "promedio": null
+                },
+                {
+                  "n": 0,
+                  "en_curso": 1
+                },
+                {
+                  "n": 0
+                },
+                {
+                  "n": 0,
+                  "saltaron": 0
+                },
+                {
+                  "n": 0,
+                  "en_curso": 1
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "desglose_por_dimension",
+      "por_que": "R14, G31. L1 (Compatible, alcanza, Contactar ahora) applied to A, favorited A this month and bought on A. L2 (Cercano, alcanza, Nutrir) did nothing. L3 (Compatible, alcanza, no priority) applied to B in September. Band and priority rows partition the three leads; project rows count the leads of each project (L2 is in both) evaluated against that project only.",
+      "input": {
+        "proyectos": [
+          "A",
+          "B"
+        ],
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "prioridad_label": "Contactar ahora",
+            "alg10": {
+              "A": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            },
+            "postulaciones": [
+              {
+                "proyecto_id": "A",
+                "first_at": "2026-09-05T12:00:00Z"
+              }
+            ],
+            "favoritos": [
+              {
+                "proyecto_id": "A",
+                "created_at": "2026-10-02T12:00:00Z"
+              }
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A",
+              "B"
+            ],
+            "prioridad_label": "Nutrir con plan de mejora",
+            "alg10": {
+              "A": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            }
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "B"
+            ],
+            "alg10": {
+              "A": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            },
+            "postulaciones": [
+              {
+                "proyecto_id": "B",
+                "first_at": "2026-09-06T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "n": 3,
+        "desglose": {
+          "proyecto": [
+            {
+              "clave": "A",
+              "leads": 2,
+              "postulan": 1,
+              "tasa_postulacion": 0.5,
+              "activos": 1,
+              "tasa_activos": 0.5,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.5,
+              "ventas": 1,
+              "tasa_venta": 0.5
+            },
+            {
+              "clave": "B",
+              "leads": 2,
+              "postulan": 1,
+              "tasa_postulacion": 0.5,
+              "activos": 1,
+              "tasa_activos": 0.5,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            }
+          ],
+          "afinidad": [
+            {
+              "clave": "Compatible",
+              "leads": 2,
+              "postulan": 2,
+              "tasa_postulacion": 1.0,
+              "activos": 2,
+              "tasa_activos": 1.0,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.5,
+              "ventas": 1,
+              "tasa_venta": 0.5
+            },
+            {
+              "clave": "Cercano",
+              "leads": 1,
+              "postulan": 0,
+              "tasa_postulacion": 0.0,
+              "activos": 0,
+              "tasa_activos": 0.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            },
+            {
+              "clave": "Marginal",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "fuera_de_alcance",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "requiere_antecedentes",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            }
+          ],
+          "capacidad": [
+            {
+              "clave": "alcanza",
+              "leads": 3,
+              "postulan": 2,
+              "tasa_postulacion": 0.6666666666666666,
+              "activos": 2,
+              "tasa_activos": 0.6666666666666666,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.3333333333333333,
+              "ventas": 1,
+              "tasa_venta": 0.3333333333333333
+            },
+            {
+              "clave": "cercano_por_capacidad",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "insuficiente",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "requiere_antecedentes",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            }
+          ],
+          "prioridad": [
+            {
+              "clave": "contact_now",
+              "leads": 1,
+              "postulan": 1,
+              "tasa_postulacion": 1.0,
+              "activos": 1,
+              "tasa_activos": 1.0,
+              "activos_mes": 1,
+              "tasa_activos_mes": 1.0,
+              "ventas": 1,
+              "tasa_venta": 1.0
+            },
+            {
+              "clave": "contact_with_review",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "nurture",
+              "leads": 1,
+              "postulan": 0,
+              "tasa_postulacion": 0.0,
+              "activos": 0,
+              "tasa_activos": 0.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            },
+            {
+              "clave": "reorient",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "request_info",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "do_not_route",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "sin_prioridad",
+              "leads": 1,
+              "postulan": 1,
+              "tasa_postulacion": 1.0,
+              "activos": 1,
+              "tasa_activos": 1.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            }
+          ]
+        },
+        "por_proyecto": [
+          {
+            "proyecto_id": "A",
+            "leads": 2,
+            "postulan": 1,
+            "ventas": 1
+          },
+          {
+            "proyecto_id": "B",
+            "leads": 2,
+            "postulan": 1,
+            "ventas": 0
+          }
+        ]
       }
     }
   ]
