@@ -1,10 +1,10 @@
-# ALG-17 — Métricas del embudo comercial (commercial funnel metrics)
+# ALG-18 — Métricas del embudo comercial (commercial funnel metrics)
 
 | Field | Value |
 | :---- | :---- |
 | **Version** | `hu15-commercial-funnel-v1` |
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input) |
-| **Cases** | `docs/algorithms/ALG-17-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
+| **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
 | **Last changed** | 2026-10-04 · HU 15 · draft, revised after the second grill (G1–G18) and the UI review (G19–G20) |
 
@@ -18,8 +18,8 @@
 > 1. `fix/admin-inmobiliario-role` — frontend support for the `admin_inmobiliario` role (the tenant
 >    admin of D2).
 > 2. `feat/commercial-stage-project-tracks` — commercial stages keyed by lead **and** project (D9).
->    The grill turned several of ALG-17's needs into requirements on that branch; they are listed in
->    **Requirements on other work** below. ALG-17 relies on them and does not re-check them.
+>    The grill turned several of ALG-18's needs into requirements on that branch; they are listed in
+>    **Requirements on other work** below. ALG-18 relies on them and does not re-check them.
 
 ## Purpose
 
@@ -32,11 +32,11 @@ by week, month or year (E4).
 **When it runs.** In the browser, after the dashboard calls the `security definer` RPC
 `commercial_funnel_facts()` (D1, specified in PLAN.md) and whenever a filter, the granularity or
 `now` changes. The RPC is the boundary: it decides scope (D2), drops deleted accounts, and strips
-`reason`, `actor_id` and `user_id` from stage events (D9). ALG-17 trusts what it receives.
+`reason`, `actor_id` and `user_id` from stage events (D9). ALG-18 trusts what it receives.
 
 **What it depends on.**
 
-- `ALG-10` (`matchLeadToProjects`) for **every** affinity and capacity band. ALG-17 reads ALG-10's
+- `ALG-10` (`matchLeadToProjects`) for **every** affinity and capacity band. ALG-18 reads ALG-10's
   outputs; it never restates a threshold, never re-scores a pair, never recomputes capacity.
 - The commercial-stage model (`docs/stories/commercial-stage/PLAN.md`, migration
   `20260930120000_commercial_stage.sql`) for the stage list and ranks, as extended by the
@@ -114,7 +114,7 @@ ISO-8601 instants (UTC offsets allowed). Arrays may be empty, never absent.
 | `confirmed_goal_ats` | instant[] | `improvement_goal_events.recorded_at`, `confirmed = true` | Events of the lead's plan |
 
 **`proyectos`** — the caller's in-scope projects (D2): every project of the tenant for a tenant
-admin, the assigned (`vinculado`) projects for an ejecutivo. HU 7 contract; ALG-17 reads `id` and
+admin, the assigned (`vinculado`) projects for an ejecutivo. HU 7 contract; ALG-18 reads `id` and
 `estado` ∈ {`disponible`, `en_construccion`, `agotado`} and passes the rows to ALG-10 untouched.
 
 **`filtros`** (D11) — an empty array means "no filter on this dimension".
@@ -666,7 +666,7 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 
 ## Requirements on other work
 
-ALG-17 depends on these and does not re-check them. They come from G1–G8 and G18.
+ALG-18 depends on these and does not re-check them. They come from G1–G8 and G18.
 
 **`feat/commercial-stage-project-tracks`** (amends the commercial-stage plan's Q3 "no automatic
 transitions" and D9's "no lead-level `perdido`"):
@@ -721,12 +721,12 @@ the label. Additive, so the `POST /score` contract is not broken.
 Not applied — ALG-10 is not edited by this story. Suggested text for ALG-10's A1 row (`Would be
 wrong if` column), to add when the author agrees:
 
-> HU 15 (`ALG-17` R1, R8) is the first surface that shows real conversion split by ALG-10 band: the
+> HU 15 (`ALG-18` R1, R8) is the first surface that shows real conversion split by ALG-10 band: the
 > funnel filtered by `Compatible` / `Cercano` / `Marginal` and by capacity bucket. That is the first
 > evidence for or against this assumption. Read it with three caveats before retuning anything:
-> bands are the lead's **current** band, not the band it had when it was contacted (`ALG-17` A3);
+> bands are the lead's **current** band, not the band it had when it was contacted (`ALG-18` A3);
 > each lead is counted once, in its **best** band across the tenant's non-`agotado` projects
-> (`ALG-17` A4); and no sample-size floor is applied. It is a signal to revisit A1, not a fit.
+> (`ALG-18` A4); and no sample-size floor is applied. It is a signal to revisit A1, not a fit.
 
 ## Change log
 

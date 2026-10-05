@@ -6,7 +6,7 @@
 - **Status:** Planned · Sprint 2 · 8 SP · **Depends on:**
   `fix/admin-inmobiliario-role` (built, not merged) ·
   `feat/commercial-stage-base` (merged; migration `20260930120000` live since 2026-10-04) ·
-  `feat/commercial-stage-project-tracks` (**not started**; must satisfy ALG-17 "Requirements on
+  `feat/commercial-stage-project-tracks` (**not started**; must satisfy ALG-18 "Requirements on
   other work") · `ALG-10` (built). **Required by:** none.
 - **Branch:** `feat/hu15-dashboard-conversion-tiempos` (from `origin/develop`)
 
@@ -15,10 +15,10 @@
 For the build session. Standing instructions are in `docs/HANDBOOK.md` ("Starting a build
 session"); only what is specific to this story goes here.
 
-- Read first: `docs/algorithms/ALG-17-commercial-funnel-metrics.md` and `ALG-17-cases.json` —
+- Read first: `docs/algorithms/ALG-18-commercial-funnel-metrics.md` and `ALG-18-cases.json` —
   **the specification of every number on the page.** This plan never restates its rules.
 - Read first: `docs/algorithms/ALG-10-lead-project-affinity.md` and
-  `frontend/src/lib/matching/leadProjectMatching.js` — the bands ALG-17 consumes, unchanged.
+  `frontend/src/lib/matching/leadProjectMatching.js` — the bands ALG-18 consumes, unchanged.
 - Read first: `supabase/migrations/20260930120000_commercial_stage.sql` and
   `docs/stories/commercial-stage/PLAN.md` — the stage tables, the `SECURITY DEFINER` + tenant
   helper style, and the SQL test style (`supabase/tests/commercial_stage.sql`) to mirror.
@@ -27,12 +27,12 @@ session"); only what is specific to this story goes here.
 - **The build has two parts.** Part A (steps 1–4) is pure frontend logic and can be built now.
   Part B (steps 5–12) needs both prerequisite branches merged into `develop`; step 5 checks that.
 - Stop and report if:
-  - `feat/commercial-stage-project-tracks` is not merged, or does not meet one of ALG-17's
+  - `feat/commercial-stage-project-tracks` is not merged, or does not meet one of ALG-18's
     "Requirements on other work" (nullable `proyecto_id`, the sell-out and restock jobs, the
     same-stage revival exception). Do **not** build those here — they belong to that branch.
-  - A metric seems to need a threshold, cutoff or weight that ALG-17 does not give.
+  - A metric seems to need a threshold, cutoff or weight that ALG-18 does not give.
   - The page seems to need a chart library. It doesn't: inline SVG/CSS bars only (guardrail 1).
-  - The RPC seems to need a field ALG-17's fact row doesn't list, or to return stage `reason`,
+  - The RPC seems to need a field ALG-18's fact row doesn't list, or to return stage `reason`,
     `actor_id`, a lead email or name.
   - Anything would change `POST /score`, `scoring_engine/`, ALG-10's numbers, or an existing RLS
     policy.
@@ -49,24 +49,24 @@ these numbers can be computed from recorded facts instead of estimated.
 ## Approach & decisions
 
 One `SECURITY DEFINER` RPC returns one fact row per lead in the caller's scope, plus the in-scope
-project list. A pure frontend function, `ALG-17`, turns them into every metric; the page only
-renders. All metric logic is therefore vitest-pinned by `ALG-17-cases.json`, and the database side
+project list. A pure frontend function, `ALG-18`, turns them into every metric; the page only
+renders. All metric logic is therefore vitest-pinned by `ALG-18-cases.json`, and the database side
 only answers "which facts may this caller see". The two grills' decisions (D1–D12, G1–G18) are
-recorded in ALG-17; the table below holds only the decisions this plan adds.
+recorded in ALG-18; the table below holds only the decisions this plan adds.
 
 | Decision | Rationale |
 | :------- | :-------- |
 | The RPC returns `{ proyectos, facts }` in one call | Scope is decided once, in SQL; the project list and the leads can never disagree about who is in scope |
-| `lead_id` in a fact row is `row_number()` over the lead's profile id, not the id | ALG-17 only needs a stable key within one call (ALG-17 Inputs). The dashboard is aggregate; it must not hand out joinable lead ids |
-| Ejecutivo scope = projects of their inmobiliaria where they are assigned with `proyecto_ejecutivos.estado = 'vinculado'` | Same rule as `getAvailableProjects` (drops pending links) and as ALG-17 G3 for writes |
+| `lead_id` in a fact row is `row_number()` over the lead's profile id, not the id | ALG-18 only needs a stable key within one call (ALG-18 Inputs). The dashboard is aggregate; it must not hand out joinable lead ids |
+| Ejecutivo scope = projects of their inmobiliaria where they are assigned with `proyecto_ejecutivos.estado = 'vinculado'` | Same rule as `getAvailableProjects` (drops pending links) and as ALG-18 G3 for writes |
 | Global admin (no inmobiliaria) and ejecutivos without an inmobiliaria get `forbidden` | D2 defines scope only for a tenant. Prod has 20 ejecutivos without a tenant (2026-10-04); the page shows an explanation, not an empty dashboard |
 | A project-goal evaluation counts as an application only when `financial_data → input → project_goal → id` is set | Pre-`project_goal.id` goals can be recovered only by matching a UF value (`ProjectsCatalog.jsx`), which is a guess. Under-counting old applications is stated; inventing them is not |
-| `now` is captured once per data load and passed to ALG-17 | ALG-17 is deterministic in `now`; filtering or changing granularity must not shift the horizon |
+| `now` is captured once per data load and passed to ALG-18 | ALG-18 is deterministic in `now`; filtering or changing granularity must not shift the horizon |
 | One new page, `metricas` (`/metricas`), with two tabs: "Embudo y tiempos" and "Evolución histórica" | E4 asks for a tab of historical evaluations; E1–E3 are one view with filters. A separate page keeps `DashboardLeads.jsx` (already large) untouched |
 | Charts are inline SVG / CSS, no dependency | Guardrail 1; the page needs a funnel, bars and line series, nothing a library is required for |
-| The priority label → key map lives in `lib/commercial/priorityActions.js`, with a vitest that parses `COMMERCIAL_ACTIONS` from `backend/app/scoring_engine/constants.py` | ALG-17 R1b: the stored value is the Spanish label. The parity test turns label drift into a red build instead of a silent `sin_prioridad` |
+| The priority label → key map lives in `lib/commercial/priorityActions.js`, with a vitest that parses `COMMERCIAL_ACTIONS` from `backend/app/scoring_engine/constants.py` | ALG-18 R1b: the stored value is the Spanish label. The parity test turns label drift into a red build instead of a silent `sin_prioridad` |
 | Counts are the headline, rates secondary with `n`; no minimum-n cutoff | Persona review (admin and ejecutivo): at real scale rates are low and read as failure; a cutoff would be an invented number |
-| No per-ejecutivo breakdown for admins; ejecutivos see only their own contacts via `por_mi` | Per-ejecutivo needs actor ids (reverses D9) plus an HR/privacy review, and both personas warned a ranking invites stage-gaming. The per-project table (ALG-17 R10) carries most of the signal |
+| No per-ejecutivo breakdown for admins; ejecutivos see only their own contacts via `por_mi` | Per-ejecutivo needs actor ids (reverses D9) plus an HR/privacy review, and both personas warned a ranking invites stage-gaming. The per-project table (ALG-18 R10) carries most of the signal |
 | The "llamar hoy" queue, reservas at risk and pending promesas stay out | They are lists of leads — the leads dashboard's job (HU 2 / HU 14) — not metrics |
 | The `lead_belongs_to_proyecto(p_lead, p_proyecto)` helper is created here unless the project-tracks branch already did | D2 names it; it is `lead_belongs_to_inmobiliaria`'s rule restricted to one project. One definition only — if both branches define it, keep one and stop if they differ |
 
@@ -74,10 +74,10 @@ recorded in ALG-17; the table below holds only the decisions this plan adds.
 
 | # | Question | Answer |
 | :- | :------- | :----- |
-| 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-17`** (frontend, no tunable numbers of its own). `ALG-10` consumed unchanged; its proposed A1 note is applied only if the author approves at review (step 12) |
+| 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-18`** (frontend, no tunable numbers of its own). `ALG-10` consumed unchanged; its proposed A1 note is applied only if the author approves at review (step 12) |
 | 2 | Needs RLS / multi-tenant scoping? | Yes — scoping is the RPC's whole job: role + `get_my_inmobiliaria()` + `vinculado` assignments, `SECURITY DEFINER`, granted to `authenticated` only. No table policy changes |
 | 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `<timestamp>_hu15_commercial_funnel_facts.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — **never pasted into the SQL editor** (see the 10-01 / 10-03 outages caused by hand-applied SQL) |
-| 4 | Changes the `POST /score` contract? | No. (ALG-17's `action_key` engine follow-up is additive and outside HU 15) |
+| 4 | Changes the `POST /score` contract? | No. (ALG-18's `action_key` engine follow-up is additive and outside HU 15) |
 | 5 | Consent / privacy impact? | Staff already read evaluations (policy `Evaluations select own`, migration `20261001120000`); the RPC exposes no more than that, scoped tighter. It returns no lead id, name or email, and no stage `reason` or actor. No new consent needed |
 
 > 1 and 3 are checked against the diff by CI.
@@ -100,7 +100,7 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
    `proyecto_ejecutivos` row `estado = 'vinculado'` matching `auth.uid()` or `get_my_email()`.
 3. Leads: profiles with `role = 'usuario'`, at least one evaluation, and
    `lead_belongs_to_proyecto(lead, p)` for at least one in-scope project. Deleted accounts have no
-   profile and are absent by construction (ALG-17 A5).
+   profile and are absent by construction (ALG-18 A5).
 4. Return
 
    ```json
@@ -108,7 +108,7 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
      "facts": [ FactRow ] }
    ```
 
-   where `FactRow` is **exactly** ALG-17's Inputs table, with these sources:
+   where `FactRow` is **exactly** ALG-18's Inputs table, with these sources:
 
    | Field | SQL |
    | :---- | :-- |
@@ -134,14 +134,14 @@ No existing rows change. No table, column or policy is added or altered.
 
 ## Algorithms
 
-- **`ALG-17`** — commercial funnel metrics. **New**, written before this plan:
-  `docs/algorithms/ALG-17-commercial-funnel-metrics.md`, cases `ALG-17-cases.json`. Implemented in
+- **`ALG-18`** — commercial funnel metrics. **New**, written before this plan:
+  `docs/algorithms/ALG-18-commercial-funnel-metrics.md`, cases `ALG-18-cases.json`. Implemented in
   `frontend/src/lib/commercial/funnelMetrics.js`; asserted by
   `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js`. 9 open assumptions logged.
-- **`ALG-10`** — implemented as-is, no changes. Called by ALG-17 for every band.
+- **`ALG-10`** — implemented as-is, no changes. Called by ALG-18 for every band.
 
 **Local logic** (no ALG number, story-local): the Santiago calendar helpers (period key and bounds
-for an instant) used only by ALG-17's R7; the priority label → key map; the page's presentation.
+for an instant) used only by ALG-18's R7; the priority label → key map; the page's presentation.
 
 ## Scope
 
@@ -149,7 +149,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
 
 - The `commercial_funnel_facts()` RPC (+ `lead_belongs_to_proyecto` if absent), rollback,
   `schema.sql` sync, SQL tests.
-- `ALG-17` implementation and tests; the priority map and its parity test.
+- `ALG-18` implementation and tests; the priority map and its parity test.
 - `services/commercialMetricsService.js`.
 - The `metricas` page with both tabs, the filters, routing and nav entries for ejecutivo,
   `admin_inmobiliario` and tenant `admin`.
@@ -159,7 +159,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
 
 - Stage keying by project, revival, the sell-out / restock jobs → `feat/commercial-stage-project-tracks`.
 - `admin_inmobiliario` role support → `fix/admin-inmobiliario-role`.
-- `action_key` in `commercial_priority_detail` → separate engine follow-up (ALG-17 G18).
+- `action_key` in `commercial_priority_detail` → separate engine follow-up (ALG-18 G18).
 - Global-admin cross-tenant dashboard → not in D2; a future story if wanted.
 - CSV export, alerts, saved filter presets, comparisons between two periods side by side → not
   asked for by E1–E4.
@@ -171,24 +171,24 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
 
 1. **Priority map.** `frontend/src/lib/commercial/priorityActions.js`: export
    `PRIORITY_ACTIONS` (key → label, mirroring `COMMERCIAL_ACTIONS`) and
-   `priorityKeyFromDetail(detail)` implementing ALG-17 R1b P1–P4 (returns
+   `priorityKeyFromDetail(detail)` implementing ALG-18 R1b P1–P4 (returns
    `{ key, reconocida }`). Test `__tests__/priorityActions.test.js`: each P-row, plus a parity test
    that reads `../../backend/app/scoring_engine/constants.py`, extracts the `COMMERCIAL_ACTIONS`
    dict and asserts the same six keys and labels.
 2. **Santiago calendar.** `frontend/src/lib/commercial/santiagoCalendar.js`, pure, using
    `Intl.DateTimeFormat` with `timeZone: "America/Santiago"` (no dependency):
    `periodOf(instant, granularidad) -> { clave, desde, hasta }` and
-   `periodsBetween(fromInstant, toInstant, granularidad) -> Periodo-bounds[]`, per ALG-17 R7 (ISO
+   `periodsBetween(fromInstant, toInstant, granularidad) -> Periodo-bounds[]`, per ALG-18 R7 (ISO
    week-year for `semana`, local-midnight bounds converted to instants, half-open). Test
    `__tests__/santiagoCalendar.test.js`: the R7 edge cases — Sunday 23:30 → same ISO week,
    2027-01-01 → `2026-W53`, `2026-07-01T03:30Z` → June, both 2026/2027 DST transitions, bounds of
    `2026-09` (`2026-09-01T04:00Z` → `2026-10-01T03:00Z`).
-3. **ALG-17.** `frontend/src/lib/commercial/funnelMetrics.js`: export
+3. **ALG-18.** `frontend/src/lib/commercial/funnelMetrics.js`: export
    `computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }, { match = matchLeadToProjects } = {})`
    implementing R0–R8 exactly. The second argument is the test seam only. Export
    `ALG17_VERSION = "hu15-commercial-funnel-v1"`. No `Date.now()`, no input mutation.
-4. **ALG-17 tests.** `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js`: load
-   `docs/algorithms/ALG-17-cases.json`; expand the shorthand described in its `nota` (defaults,
+4. **ALG-18 tests.** `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js`: load
+   `docs/algorithms/ALG-18-cases.json`; expand the shorthand described in its `nota` (defaults,
    `proyectos_comunes`, `prioridad_label` / `prioridad_key`, `alg10` → a fake `match` that returns
    the given rows for the projects it is passed and G0 rows for leads without `alg10`); deep-partial
    match `expect`, with `serie_claves` / `serie_por_clave`. On **every** case output, assert
@@ -224,7 +224,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
    8. A lead with no evaluation is absent; a lead whose profile was deleted is absent.
    9. A lead of A whose evaluation goal or plan target is a project of B gets `project_goal_id` /
       `target_proyecto_id` = `null`: no project id of another inmobiliaria leaves the database
-      (ALG-17 G19–G20).
+      (ALG-18 G19–G20).
 8. **Service.** `frontend/src/services/commercialMetricsService.js`:
    `getCommercialFunnelFacts()` → `supabase.rpc("commercial_funnel_facts")`, returning
    `{ proyectos, facts }`; maps `forbidden` to "Tu cuenta no tiene una inmobiliaria asignada para ver
@@ -236,7 +236,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
    - **Filters bar:** project (single select from `proyectos`, "Todos" = none), affinity, capacity,
      priority (multi-select chips; priority chips labelled from `PRIORITY_ACTIONS` plus "Sin
      prioridad"). Affinity and capacity disabled with an explanation while `bandas.sin_catalogo`.
-   - **Counts first, everywhere** (ALG-17 UI obligations): the big number is a count, the rate sits
+   - **Counts first, everywhere** (ALG-18 UI obligations): the big number is a count, the rate sits
      small beside it with its `n`; medians are the big time figure, averages small. No minimum-n
      cutoff.
    - **Tab "Embudo y tiempos"** (E1–E3), top to bottom:
@@ -244,7 +244,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
         mejora" (`plan_a_venta.con_plan_y_venta`, "de N con plan" small), "Leads activos este mes"
         (`engagement.mes_actual.activos`, rate small), "Ciclo de venta" (mediana big, promedio and
         `n` small).
-     2. **Seguimiento de contacto** (ALG-17 R9): "Sin contactar" (`sin_contactar.n`, with median and
+     2. **Seguimiento de contacto** (ALG-18 R9): "Sin contactar" (`sin_contactar.n`, with median and
         oldest age); "Contactados este mes"; for an ejecutivo "Contactados por ti" (total and this
         month); "Primer contacto a leads Compatible + Alcanza" (mediana, `n`, and "x aún sin
         contactar"). The "Sin contactar" tile links to the leads dashboard (`setPage("leads")`);
@@ -252,7 +252,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
         unfiltered list. Help text notes that times measure when the stage was recorded.
      3. The funnel: `alcanzaron` in the bars, `conversion` small; `abiertos`, ventas vigentes and
         `perdido_actual` (por gestión / por agotamiento) beside it. A "Todos / Mejores leads"
-        switch (ALG-17 R11) swaps in `mejores.embudo`, with a line "Solo leads Compatible + Alcanza
+        switch (ALG-18 R11) swaps in `mejores.embudo`, with a line "Solo leads Compatible + Alcanza
         (x de n)"; hidden while `mejores` is `null`.
      4. **Comparación por proyecto** (R10): a table, one row per project — leads, postularon,
         ventas, sin contactar.
@@ -270,7 +270,7 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
      with a one-sentence Spanish explanation. The copy is settled in the UI mock iteration
      (`frontend/mockups/hu15-metricas.html`) and must not restate a threshold — bands are explained
      in words ("alcanza el precio de la unidad más barata del proyecto"), never with ALG-10's numbers.
-   - **UI obligations from ALG-17:** `null` rates render as "—" with "sin datos (n = 0)", never
+   - **UI obligations from ALG-18:** `null` rates render as "—" with "sin datos (n = 0)", never
      "0 %"; days rounded to one decimal; `perdido` labelled "perdido en este proyecto" with a project
      filter or ejecutivo scope and "lead perdido" in the tenant view; a footer line: "Orientativo:
      no aprueba créditos ni reemplaza una evaluación bancaria."
@@ -281,10 +281,10 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
     home. `Navbar.jsx`: a "Métricas" entry in the ejecutivo and admin groups. Follow the existing
     `page` pattern — no React Router.
 11. **Wiki.** `Wiki RutaHogar/UserStories/HU15-dashboard-conversion-tiempos.md` notes: E2's
-    "diferencias entre eventos consecutivos" is replaced by time in each stage (ALG-17 R5); metrics
-    are computed per inmobiliaria and, inside it, per project record; link ALG-17. Spanish, per the
+    "diferencias entre eventos consecutivos" is replaced by time in each stage (ALG-18 R5); metrics
+    are computed per inmobiliaria and, inside it, per project record; link ALG-18. Spanish, per the
     handbook.
-12. **ALG-10 note (only with the author's approval at review).** Apply ALG-17's "Proposed note for
+12. **ALG-10 note (only with the author's approval at review).** Apply ALG-18's "Proposed note for
     ALG-10" to ALG-10's A1 row. Text only, no number. Otherwise leave ALG-10 untouched.
 
 ## Acceptance criteria map
@@ -301,11 +301,11 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
 | `E4` — evolución semana / mes / año | 2, 3, 4, 9 | `semana_iso_*`, `anio_calendario_no_es_anio_iso`, `offset_estacional_no_fijo`; `santiagoCalendar.test.js`; reviewer: switch granularity on the "Evolución histórica" tab |
 | Scope: tenant admin vs ejecutivo, `vinculado` only, no cross-tenant | 6, 7, 10 | `commercial_funnel_facts.sql` cases 1–4; reviewer: log in as each role |
 | Privacy: no ids, reasons or actors leave the database, nor another inmobiliaria's project ids | 6, 7 | `commercial_funnel_facts.sql` cases 5 and 9 |
-| No AI, deterministic in `now`, nothing recomputed | 3, 4 | ALG-17 invariants 7–9 asserted on every case |
+| No AI, deterministic in `now`, nothing recomputed | 3, 4 | ALG-18 invariants 7–9 asserted on every case |
 
 ## Assumptions
 
-- **`feat/commercial-stage-project-tracks` meets ALG-17's "Requirements on other work".** Part B is
+- **`feat/commercial-stage-project-tracks` meets ALG-18's "Requirements on other work".** Part B is
   written against it and must not stub it: if it is not merged, build Part A, open the PR as draft,
   and stop at step 5.
 - **`fix/admin-inmobiliario-role` is merged** and provides `frontend/src/lib/roles.js`
@@ -313,4 +313,4 @@ for an instant) used only by ALG-17's R7; the priority label → key map; the pa
   `admin_inmobiliario` key; do not add one here.
 - **Data volume fits in one RPC call** (prod on 2026-10-04: 163 leads, 434 evaluations). If a tenant
   grows past what one JSON payload handles comfortably, paging is a follow-up, not a reason to move
-  ALG-17 into SQL.
+  ALG-18 into SQL.
