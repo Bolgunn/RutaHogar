@@ -66,7 +66,7 @@ recorded in ALG-18; the table below holds only the decisions this plan adds.
 | Ejecutivo scope = projects of their inmobiliaria where they are assigned with `proyecto_ejecutivos.estado = 'vinculado'` | Same rule as `getAvailableProjects` (drops pending links) and as ALG-18 G3 for writes |
 | Global admin (no inmobiliaria) and ejecutivos without an inmobiliaria get `forbidden` | D2 defines scope only for a tenant. Prod has 20 ejecutivos without a tenant (2026-10-04); the page shows an explanation, not an empty dashboard |
 | A project-goal evaluation counts as an application only when `financial_data → input → project_goal → id` is set | Pre-`project_goal.id` goals can be recovered only by matching a UF value (`ProjectsCatalog.jsx`), which is a guess. Under-counting old applications is stated; inventing them is not |
-| `now` is captured once per data load and passed to ALG-18 | ALG-18 is deterministic in `now`; filtering or changing granularity must not shift the horizon |
+| `now` is the **database's** time, returned by the RPC with the facts, taken once per data load and passed to ALG-18 (ALG-18 G27) | ALG-18 is deterministic in `now`; filtering or changing granularity must not shift the horizon. The browser's clock may run behind the server's, which would put a lead that just signed up after `now` |
 | One new page, `metricas` (`/metricas`), with two tabs: "Embudo y tiempos" and "Evolución histórica" | E4 asks for a tab of historical evaluations; E1–E3 are one view with filters. A separate page keeps `DashboardLeads.jsx` (already large) untouched |
 | Charts are inline SVG / CSS, no dependency | Guardrail 1; the page needs a funnel, bars and line series, nothing a library is required for |
 | The priority label → key map lives in `lib/commercial/priorityActions.js`, with a vitest that parses `COMMERCIAL_ACTIONS` from `backend/app/scoring_engine/constants.py` | ALG-18 R1b: the stored value is the Spanish label. The parity test turns label drift into a red build instead of a silent `sin_prioridad` |
@@ -117,9 +117,13 @@ search_path = public`, revoked from `public, anon`, granted to `authenticated`.
 4. Return
 
    ```json
-   { "proyectos": [ { "id", "nombre", "comuna", "tipo", "precio_min_uf", "precio_max_uf", "estado" } ],
+   { "now": "<instant>",
+     "proyectos": [ { "id", "nombre", "comuna", "tipo", "precio_min_uf", "precio_max_uf", "estado" } ],
      "facts": [ FactRow ] }
    ```
+
+   `now` is `clock_timestamp()` taken after the facts are read, not `now()` (the transaction start):
+   it is never earlier than any timestamp the call can see (ALG-18 G27).
 
    where `FactRow` is **exactly** ALG-18's Inputs table, with these sources:
 
@@ -251,13 +255,16 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
    9. A lead of A whose evaluation goal or plan target is a project of B gets `project_goal_id` /
       `target_proyecto_id` = `null`: no project id of another inmobiliaria leaves the database
       (ALG-18 G19–G20).
+   10. `now` is present and not earlier than any `first_evaluation_at`, evaluation `at`, stage
+       `occurred_at` or other timestamp in the result, including a lead inserted in the same
+       transaction just before the call (ALG-18 G27).
 8. **Service.** `frontend/src/services/commercialMetricsService.js`:
    `getCommercialFunnelFacts()` → `supabase.rpc("commercial_funnel_facts")`, returning
-   `{ proyectos, facts }`; maps `forbidden` to "Tu cuenta no tiene una inmobiliaria asignada para ver
+   `{ now, proyectos, facts }`; maps `forbidden` to "Tu cuenta no tiene una inmobiliaria asignada para ver
    métricas comerciales."; logs other errors with `logSupabaseError`. Without Supabase
    (`!isSupabaseDataConfigured`) returns `null` — the legacy local path is not extended.
 9. **Page.** `frontend/src/components/CommercialMetrics.jsx` (+ styles in `styles.css`):
-   - Loads facts once; captures `now = new Date().toISOString()` at that moment; holds `filtros`
+   - Loads facts once and passes the RPC's `now` to ALG-18 (never `new Date()`, G27); holds `filtros`
      and `granularidad` in state; recomputes with `useMemo(() => computeFunnelMetrics(...))`.
    - **Filters bar:** project (single select from `proyectos`, "Todos" = none), affinity, capacity,
      priority (multi-select chips; priority chips labelled from `PRIORITY_ACTIONS` plus "Sin
@@ -343,6 +350,15 @@ for an instant) used only by ALG-18's R7; the priority label → key map; the pa
 - **Data volume fits in one RPC call** (prod on 2026-10-04: 163 leads, 434 evaluations). If a tenant
   grows past what one JSON payload handles comfortably, paging is a follow-up, not a reason to move
   ALG-18 into SQL.
+
+## Changes from the build review (2026-10-05)
+
+Part A's build raised two gaps in ALG-18; Bolgunn decided both. ALG-18 records them as G26–G27.
+
+| # | Change | Effect on HU 15 |
+| :- | :----- | :-------------- |
+| B1 | **G26.** In the series, a stage's `en_curso` counts in the period containing `now` only | Done in Part A: `funnelMetrics.js`, invariant 17, case `en_curso_en_el_periodo_actual`. The "Evolución histórica" times show "en curso" on the running period |
+| B2 | **G27.** `now` is the database's time, returned by the RPC | RPC returns `now` (Entities, step 6), SQL test case 10 (step 7), service returns it (step 8), the page uses it instead of `new Date()` (step 9) |
 
 ## Changes from the project-tracks PR (2026-10-05)
 
