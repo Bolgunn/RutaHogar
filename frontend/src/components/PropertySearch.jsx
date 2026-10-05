@@ -327,7 +327,6 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
                     <div className="portal-card-body">
                       <div className="portal-card-meta-row">
                         <span className="portal-commune-label">{prop.commune}</span>
-                        <span className="portal-source-label">{prop.source || "Portal Inmobiliario"}</span>
                       </div>
 
                       <h3 className="portal-card-title">{prop.title}</h3>
@@ -388,7 +387,7 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
                             rel="noopener noreferrer"
                             className="portal-external-link"
                           >
-                            Ver publicacion original
+                            Ver publicación original
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                             </svg>
@@ -474,7 +473,6 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
             <div className="portal-modal-body">
               <div className="portal-modal-header-info">
                 <span className="portal-modal-commune">📍 {selectedProperty.commune}</span>
-                <span className="portal-modal-source">{selectedProperty.source || "Portal Inmobiliario"}</span>
               </div>
               
               <h2 className="portal-modal-title">{selectedProperty.title}</h2>
@@ -554,7 +552,7 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
                     rel="noopener noreferrer"
                     className="secondary-button portal-modal-secondary-btn"
                   >
-                    Ver en {selectedProperty.source || "Portal Inmobiliario"} ↗
+                    Ver publicación original ↗
                   </a>
                 )}
               </div>
