@@ -15,6 +15,19 @@ const COMMUNES = [
   "Peñalolén", "Lo Barnechea", "Recoleta", "Estación Central",
 ];
 
+// Datos ingeridos antes de la normalización traen el tipo en plural ("casas").
+const QUALIFY_NOUNS = {
+  departamento: "este departamento",
+  departamentos: "este departamento",
+  casa: "esta casa",
+  casas: "esta casa",
+};
+
+export function getQualifyLabel(property) {
+  const tipo = String(property?.tipo_vivienda || property?.property_type || "").trim().toLowerCase();
+  return `Ver si califico para ${QUALIFY_NOUNS[tipo] || "esta propiedad"}`;
+}
+
 export default function PropertySearch({ evaluation, onStartEvaluation, onNavigate }) {
   const [query, setQuery] = useState("");
   const [commune, setCommune] = useState("");
@@ -329,7 +342,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
                           onClick={() => handleApplyToProperty(prop)}
                           id={`cta-qualify-${prop.id}`}
                         >
-                          {prop.cta_text || "Ver si califico para esta propiedad"}
+                          {getQualifyLabel(prop)}
                         </button>
                         {prop.url && (
                           <a
@@ -481,7 +494,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
                     setSelectedProperty(null);
                   }}
                 >
-                  {selectedProperty.cta_text || "Ver si califico para esta propiedad"}
+                  {getQualifyLabel(selectedProperty)}
                 </button>
                 {selectedProperty.url && (
                   <a

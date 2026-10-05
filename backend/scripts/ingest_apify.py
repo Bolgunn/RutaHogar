@@ -23,6 +23,7 @@ from typing import Any, Tuple, List, Dict
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import (
+    get_embedding_provider,
     get_supabase_url,
     get_supabase_key,
 )
@@ -425,7 +426,7 @@ def main():
         sys.exit(1)
 
     normalized_list = [normalize_property_item(it) for it in items]
-    print(f"📦 Procesados {len(normalized_list)} proyectos desde '{target_path.name}' con embeddings de 384 dimensiones.")
+    print(f"📦 Procesados {len(normalized_list)} proyectos desde '{target_path.name}' con embeddings de 384 dimensiones (proveedor: {get_embedding_provider()}).")
 
     if dry_run:
         print("🔍 Modo --dry-run activado. No se insertaron datos en public.proyectos_rag.")

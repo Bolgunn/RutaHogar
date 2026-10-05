@@ -3,7 +3,10 @@ import math
 import hashlib
 import re
 import html
+import json
 import logging
+import urllib.parse
+import urllib.request
 from typing import List, Dict, Any, Optional
 
 # Disclaimer legal obligatorio (Criterio E4)
@@ -26,6 +29,7 @@ VECTOR_DIMENSION = 384
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
 DEFAULT_SIMILARITY_THRESHOLD = 0.5
 SUPABASE_TIMEOUT_SECONDS = 5
+EMBEDDING_TIMEOUT_SECONDS = 8
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +74,12 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
         entero = m_uf.group(1).replace(".", "")
         decimales = m_uf.group(2)
         intent["req_max_uf"] = float(f"{entero}.{decimales}" if decimales else entero)
-    # 5. Comunas comunes
+    # 5. Tipo de vivienda ("depto", "dpto", "casas"... ya normalizados)
+    m_tipo = re.search(r"\b(departamento|casa)\b", _normalize_terms(q))
+    if m_tipo:
+        intent["req_tipo"] = m_tipo.group(1)
+
+    # 6. Comunas comunes
     comunas = ["santiago", "providencia", "ñuñoa", "las condes", "la florida", "san miguel", "vitacura", "macul", "peñalolén", "lo barnechea", "recoleta", "estación central"]
     for c in comunas:
         if c in q:
@@ -115,6 +124,13 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
         else:
             sim -= 0.40
 
+    # Pedir un tipo y recibir otro no es un resultado parcial: se descarta igual que la comuna.
+    req_t = intent.get("req_tipo")
+    if req_t:
+        item_tipo = _normalize_property_type(item.get("tipo_vivienda") or item.get("property_type"))
+        if item_tipo and item_tipo != req_t:
+            sim -= 2.0
+
     req_c = intent.get("req_comuna")
     if req_c:
         if req_c in commune:
@@ -127,12 +143,92 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
     return max(0.0, min(0.99, float(sim)))
 
 
+class EmbeddingError(RuntimeError):
+    """El proveedor de embeddings configurado no pudo vectorizar el texto."""
+
+
+# Abreviaturas que el usuario escribe y el catálogo no: sin esto "depto" no
+# comparte ningún token con "departamento" en el modelo de hashing.
+_TERM_SYNONYMS = {
+    "depto": "departamento",
+    "deptos": "departamento",
+    "dpto": "departamento",
+    "dptos": "departamento",
+    "depa": "departamento",
+    "depas": "departamento",
+    "departamentos": "departamento",
+    "casas": "casa",
+}
+
+
+def _normalize_terms(text: str) -> str:
+    return re.sub(
+        r"\b(" + "|".join(_TERM_SYNONYMS) + r")\b",
+        lambda m: _TERM_SYNONYMS[m.group(1)],
+        html.unescape(text or "").lower(),
+    )
+
+
+def _normalize_property_type(value: Any) -> str:
+    tipo = str(value or "").strip().lower()
+    return _TERM_SYNONYMS.get(tipo, tipo)
+
+
+def _cta_text(property_type: Any) -> str:
+    tipo = _normalize_property_type(property_type)
+    if tipo == "departamento":
+        return "Ver si califico para este departamento"
+    if tipo == "casa":
+        return "Ver si califico para esta casa"
+    return "Ver si califico para esta propiedad"
+
+
 def generate_text_embedding(text: str) -> List[float]:
     """
-    Genera un embedding denso normalizado de 384 dimensiones a partir del texto ingresado.
-    Utiliza proyección por hashing semántico determinístico sobre n-gramas de caracteres y palabras,
-    garantizando que textos con términos similares produzcan alta similitud de coseno
-    sin requerir llamadas a APIs de pago o servicios externos lentos.
+    Vectoriza con el proveedor configurado (EMBEDDING_PROVIDER). La ingesta y la
+    consulta llaman a esta misma función para que ambos vectores vivan en el mismo espacio.
+    """
+    from .config import get_embedding_provider
+
+    normalized = _normalize_terms(text)
+    if get_embedding_provider() == "openai":
+        return _openai_embedding(normalized)
+    return _hashing_embedding(normalized)
+
+
+def _openai_embedding(text: str) -> List[float]:
+    from .config import get_embedding_model, get_openai_api_key
+
+    api_key = get_openai_api_key()
+    if not api_key:
+        raise EmbeddingError("EMBEDDING_PROVIDER=openai requiere OPENAI_API_KEY")
+
+    payload = json.dumps({
+        "model": get_embedding_model(),
+        "input": text or " ",
+        "dimensions": VECTOR_DIMENSION,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/embeddings",
+        data=payload,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=EMBEDDING_TIMEOUT_SECONDS) as resp:
+            vec = json.loads(resp.read().decode("utf-8"))["data"][0]["embedding"]
+    except Exception as exc:
+        raise EmbeddingError(f"OpenAI embeddings falló: {exc}") from exc
+
+    if len(vec) != VECTOR_DIMENSION:
+        raise EmbeddingError(f"Embedding de {len(vec)} dimensiones; se esperaban {VECTOR_DIMENSION}")
+    return vec
+
+
+def _hashing_embedding(text: str) -> List[float]:
+    """
+    Proyección léxica por hashing de unigramas y bigramas (384 dims, norma L2).
+    No entiende sinónimos: solo sirve como modo local sin API externa.
     """
     vec = [0.0] * VECTOR_DIMENSION
     tokens = _tokenize(text)
@@ -289,12 +385,8 @@ SAMPLE_PROPERTIES_CATALOG: List[Dict[str, Any]] = [
 # Precomputar embeddings para la lista en memoria
 for prop in SAMPLE_PROPERTIES_CATALOG:
     text_content = f"{prop['title']} {prop['description']} {prop['commune']} {prop['property_type']} {prop['bedrooms']} dormitorios"
-    prop["embedding"] = generate_text_embedding(text_content)
+    prop["embedding"] = _hashing_embedding(_normalize_terms(text_content))
 
-
-import urllib.request
-import urllib.parse
-import json
 
 def _query_supabase_proyectos_rag(
     query_vec: List[float],
@@ -386,6 +478,24 @@ def _query_supabase_proyectos_rag(
     return None
 
 
+def _log_top_similarities(source: str, query_text: str, threshold: float, scored: List[tuple]) -> None:
+    """Top 5 previo al umbral, para calibrar DEFAULT_SIMILARITY_THRESHOLD con datos reales."""
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    top = sorted(scored, key=lambda entry: entry[0], reverse=True)[:5]
+    logger.debug(
+        "RAG %s query=%r threshold=%.2f candidatos=%d top5=%s",
+        source,
+        query_text,
+        threshold,
+        len(scored),
+        [
+            {"id": item.get("id"), "tipo": item.get("property_type"), "base": round(base, 4), "ajustada": round(adj, 4)}
+            for adj, base, item in top
+        ],
+    )
+
+
 def search_properties(
     query: str,
     commune: Optional[str] = None,
@@ -404,6 +514,7 @@ def search_properties(
             "suggestion": "Por favor ingresa un término o descripción de búsqueda."
         }
 
+    # EmbeddingError se propaga: comparar con un vector de otro modelo daría resultados basura.
     query_vec = generate_text_embedding(query_text)
     query_intent = _extract_query_intent(query_text)
 
@@ -418,6 +529,7 @@ def search_properties(
 
     if db_rows is not None and isinstance(db_rows, list):
         formatted_results = []
+        scored_rows = []
         for row in db_rows:
             p_uf = float(row.get("valor_uf") or row.get("price_uf") or 0.0)
             p_com = row.get("comuna") or row.get("commune") or "Santiago"
@@ -446,7 +558,7 @@ def search_properties(
                 "url": row.get("url") or "https://www.portalinmobiliario.com",
                 "image_url": row.get("imagen_url") or row.get("image_url") or "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2",
                 "source": row.get("fuente") or row.get("source") or "Portal Inmobiliario (Apify)",
-                "cta_text": "Ver si califico para este departamento",
+                "cta_text": _cta_text(row.get("tipo_vivienda") or row.get("property_type")),
                 "cta_url": f"/evaluacion?property_uf={p_uf}&commune={p_com}"
             }
             
@@ -454,9 +566,12 @@ def search_properties(
             base_sim = float(row.get("similarity") or 0.0)
             adj_sim = _adjust_similarity_score(raw_item, base_sim, query_intent, query_text)
             raw_item["similarity"] = round(adj_sim, 4)
+            scored_rows.append((adj_sim, base_sim, raw_item))
 
             if adj_sim >= similarity_threshold:
                 formatted_results.append(raw_item)
+
+        _log_top_similarities("supabase", query_text, similarity_threshold, scored_rows)
 
         # Reordenar por similitud ajustada descendente
         formatted_results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -475,7 +590,10 @@ def search_properties(
 
     # Fallback local determinístico cuando no hay conexión a Supabase
     scored_items = []
-    
+    scored_local = []
+    # El catálogo local se vectorizó con hashing al importar; la consulta debe usar el mismo modelo.
+    local_query_vec = _hashing_embedding(_normalize_terms(query_text))
+
     for item in SAMPLE_PROPERTIES_CATALOG:
         norm_item = {
             "id": item.get("id"),
@@ -509,18 +627,18 @@ def search_properties(
                 continue
 
         # Calcular similitud coseno entre el embedding de la consulta y la propiedad
-        item_vec = item.get("embedding") or generate_text_embedding(
-            f"{norm_item['title']} {norm_item['description']} {norm_item['commune']} {norm_item['property_type']}"
-        )
-        base_sim = calculate_cosine_similarity(query_vec, item_vec)
+        base_sim = calculate_cosine_similarity(local_query_vec, item["embedding"])
         adj_sim = _adjust_similarity_score(norm_item, base_sim, query_intent, query_text)
-        
+        scored_local.append((adj_sim, base_sim, norm_item))
+
         if adj_sim >= similarity_threshold:
             property_copy = dict(norm_item)
             property_copy["similarity"] = round(adj_sim, 4)
-            property_copy["cta_text"] = "Ver si califico para este departamento"
+            property_copy["cta_text"] = _cta_text(norm_item["property_type"])
             property_copy["cta_url"] = f"/evaluacion?property_uf={norm_item['price_uf']}&commune={norm_item['commune']}"
             scored_items.append(property_copy)
+
+    _log_top_similarities("local", query_text, similarity_threshold, scored_local)
 
     # Ordenar estrictamente por relevancia/similitud semántica descendente (Criterio E1)
     scored_items.sort(key=lambda x: x["similarity"], reverse=True)

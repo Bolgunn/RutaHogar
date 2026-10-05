@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import Any, Optional
 from fastapi import FastAPI, HTTPException
@@ -7,13 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
 from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
-from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, search_properties
+from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
     generate_executive_summary,
     generate_user_explanation,
 )
 from .academy_news import router as academy_news_router
+
+logger = logging.getLogger(__name__)
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -349,14 +352,18 @@ class PropertySearchRequest(BaseModel):
 @app.post("/api/properties/search")
 @app.post("/properties/search")
 async def properties_search_endpoint(payload: PropertySearchRequest):
-    return search_properties(
-        query=payload.query,
-        commune=payload.commune,
-        max_price_uf=payload.max_price_uf,
-        property_type=payload.property_type,
-        limit=payload.limit or 10,
-        similarity_threshold=payload.similarity_threshold,
-    )
+    try:
+        return search_properties(
+            query=payload.query,
+            commune=payload.commune,
+            max_price_uf=payload.max_price_uf,
+            property_type=payload.property_type,
+            limit=payload.limit or 10,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EmbeddingError as exc:
+        logger.warning("Búsqueda de propiedades sin embedding: %s", exc)
+        raise HTTPException(status_code=503, detail="El buscador no está disponible en este momento.")
 
 class ExplainRequest(ScoreRequest):
     # Narrative retry recalculates authoritative score inputs without spending AI.

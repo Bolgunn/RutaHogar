@@ -1,5 +1,7 @@
-import unittest
+import json
 import math
+import os
+import unittest
 from unittest.mock import patch
 from app.properties_search import (
     generate_text_embedding,
@@ -66,7 +68,8 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         for item in results:
             self.assertIn("cta_text", item)
             self.assertIn("cta_url", item)
-            self.assertEqual(item["cta_text"], "Ver si califico para este departamento")
+            expected = "este departamento" if item["property_type"] == "departamento" else "esta casa"
+            self.assertEqual(item["cta_text"], f"Ver si califico para {expected}")
             self.assertTrue(item["cta_url"].startswith("/evaluacion"))
 
     def test_empty_results_handling_criterion_E5(self):
@@ -117,6 +120,63 @@ class TestPropertiesSearchRAG(unittest.TestCase):
             res = search_properties(query="departamento en Santiago")
         self.assertEqual(res["total"], 0)
         self.assertEqual(res["suggestion"], EMPTY_RESULTS_SUGGESTION)
+
+    def test_depto_abbreviation_excludes_houses(self):
+        rows = [
+            {"id": "c", "nombre": "Casa amplia", "tipo_vivienda": "casas", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.9},
+            {"id": "d", "nombre": "Departamento centrico", "tipo_vivienda": "departamentos", "comuna": "Santiago", "valor_uf": 3000, "similarity": 0.6},
+        ]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="depto en santiago")
+        self.assertEqual([item["id"] for item in res["results"]], ["d"])
+        self.assertEqual(res["results"][0]["cta_text"], "Ver si califico para este departamento")
+
+    def test_cta_text_follows_property_type(self):
+        rows = [{"id": "c", "nombre": "Casa", "tipo_vivienda": "casa", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.9}]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="casa con jardin")
+        self.assertEqual(res["results"][0]["cta_text"], "Ver si califico para esta casa")
+
+    def test_depto_and_departamento_share_embedding(self):
+        self.assertEqual(
+            generate_text_embedding("depto 2 dormitorios"),
+            generate_text_embedding("departamento 2 dormitorios"),
+        )
+
+    def test_openai_provider_requests_384_dimensions(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return json.dumps({"data": [{"embedding": [0.1] * 384}]}).encode("utf-8")
+
+        def fake_urlopen(req, timeout):
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return FakeResponse()
+
+        env = {"EMBEDDING_PROVIDER": "openai", "OPENAI_API_KEY": "test-key"}
+        with patch.dict(os.environ, env), patch.object(properties_search_module.urllib.request, "urlopen", fake_urlopen):
+            vec = generate_text_embedding("depto en Ñuñoa")
+        self.assertEqual(len(vec), 384)
+        self.assertEqual(captured["body"]["dimensions"], 384)
+        self.assertEqual(captured["body"]["input"], "departamento en ñuñoa")
+
+    def test_openai_provider_without_key_returns_503(self):
+        env = {"EMBEDDING_PROVIDER": "openai", "OPENAI_API_KEY": ""}
+        with patch.dict(os.environ, env):
+            response = self.client.post("/api/properties/search", json={"query": "depto"})
+        self.assertEqual(response.status_code, 503)
+
+    def test_top_similarities_are_logged_at_debug_level(self):
+        with self.assertLogs(properties_search_module.logger, level="DEBUG") as logs:
+            search_properties(query="departamento en Santiago")
+        self.assertTrue(any("top5" in line and line.startswith("DEBUG") for line in logs.output))
 
 
 if __name__ == "__main__":
