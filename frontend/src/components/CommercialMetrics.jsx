@@ -53,6 +53,21 @@ const ACCIONES = [
 
 const GRANULARIDADES = [["semana", "Semana"], ["mes", "Mes"], ["año", "Año"]];
 
+const ETAPA_LABEL = Object.fromEntries(STAGES.map((stage) => [stage.value, stage.label]));
+
+const DIMENSIONES = [
+  ["proyecto", "Proyecto"],
+  ["afinidad", "Afinidad"],
+  ["capacidad", "Capacidad de compra"],
+  ["prioridad", "Prioridad comercial"],
+];
+
+const TIEMPOS_SERIE = [
+  ["ciclo", "Ciclo de venta"],
+  ["postular", "Días hasta postular"],
+  ...LADDER.slice(0, -1).map((stage, index) => [`par-${index}`, `${stage.label} → ${LADDER[index + 1].label}`]),
+];
+
 function days(value) {
   return value == null ? "—" : value.toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
@@ -138,8 +153,14 @@ function HBars({ rows, total, fill = "", onPick }) {
 
 function Funnel({ embudo, scopeLabel }) {
   const top = embudo.etapas[0].alcanzaron;
+  const ventas = embudo.etapas[embudo.etapas.length - 1].alcanzaron;
   return (
     <div className="cm-funnel">
+      <p className="cm-funnel__general cm-label-row">
+        Conversión general: <strong>{ventas} de {embudo.n}</strong> leads llegaron a venta cerrada
+        <Rate rate={embudo.conversion_general} n={embudo.n} />
+        <FieldTooltip text="Leads con una venta vigente sobre todos los leads del embudo: la conversión de punta a punta, desde que el lead llega hasta la venta cerrada." />
+      </p>
       {embudo.etapas.map((etapa, index) => {
         const label = LADDER[index].label;
         return (
@@ -191,6 +212,7 @@ function TimesTable({ enEtapa }) {
         <tr>
           {th("Etapa", "La etapa comercial en que estuvo el lead.", false)}
           {th("Mediana (días)", "Días que los leads permanecieron en la etapa. La mediana es el valor del medio: la mitad estuvo menos y la mitad más. Si un lead pasó dos veces por la misma etapa, se suman ambas estadías.")}
+          {th("Promedio (días)", "Promedio de días en la etapa de los leads que ya salieron de ella. Un lead muy lento lo sube; por eso la mediana es la cifra principal.")}
           {th("n", "Cuántos leads ya salieron de la etapa y entran al cálculo.")}
           {th("Siguen en la etapa", "Leads que hoy están en esa etapa. No entran al cálculo porque su tiempo todavía no termina.")}
         </tr>
@@ -202,6 +224,7 @@ function TimesTable({ enEtapa }) {
             <tr key={stage.value}>
               <td><span className="cm-label-row">{stage.label}<FieldTooltip text={ETAPA_HELP[stage.value]} /></span></td>
               <td className="num">{days(stat.mediana)}</td>
+              <td className="num">{days(stat.promedio)}</td>
               <td className="num">{stat.n}</td>
               <td className="num">{stat.en_curso}</td>
             </tr>
@@ -209,6 +232,121 @@ function TimesTable({ enEtapa }) {
         })}
       </tbody>
     </table>
+  );
+}
+
+function BetweenTable({ rows }) {
+  const th = (label, help, numeric = true) => (
+    <th className={numeric ? "num" : ""}>
+      <span className="cm-label-row" style={numeric ? { justifyContent: "flex-end" } : undefined}>{label}<FieldTooltip text={help} /></span>
+    </th>
+  );
+  return (
+    <table className="cm-table">
+      <thead>
+        <tr>
+          {th("De → a", "Dos etapas consecutivas del proceso comercial.", false)}
+          {th("Promedio (días)", "Días promedio desde que el lead llegó por primera vez a la primera etapa hasta que llegó a la siguiente.")}
+          {th("Mediana (días)", "El valor del medio: la mitad de los leads tardó menos y la mitad más.")}
+          {th("n", "Leads que pasaron de una etapa a la siguiente y entran al cálculo.")}
+          {th("Llegaron sin pasar por la primera", "Leads que llegaron a la segunda etapa sin haber estado antes en la primera, por ejemplo porque el ejecutivo la saltó. No entran al cálculo.")}
+          {th("Esperan en la primera", "Leads que hoy están en la primera etapa y todavía no llegan a la siguiente.")}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.desde}>
+            <td>{ETAPA_LABEL[row.desde]} → {ETAPA_LABEL[row.hasta]}</td>
+            <td className="num">{days(row.promedio)}</td>
+            <td className="num">{days(row.mediana)}</td>
+            <td className="num">{row.n}</td>
+            <td className="num">{row.saltaron}</td>
+            <td className="num">{row.en_curso}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function DesgloseTable({ rows, labelOf }) {
+  const cell = (count, tasa) => <>{count} <span className="cm-muted">{percent(tasa)}</span></>;
+  return (
+    <table className="cm-table">
+      <thead>
+        <tr>
+          <th>Grupo</th>
+          <th className="num">Leads</th>
+          <th className="num">Postularon</th>
+          <th className="num">Activos</th>
+          <th className="num">Activos este mes</th>
+          <th className="num">Ventas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.clave}>
+            <td>{labelOf(row.clave)}</td>
+            <td className="num">{row.leads}</td>
+            <td className="num">{cell(row.postulan, row.tasa_postulacion)}</td>
+            <td className="num">{cell(row.activos, row.tasa_activos)}</td>
+            <td className="num">{cell(row.activos_mes, row.tasa_activos_mes)}</td>
+            <td className="num">{cell(row.ventas, row.tasa_venta)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Tasas (0–1) por período como líneas; null corta la línea (sin datos).
+function RateChart({ periods, series, width, height, label }) {
+  const left = 40, right = 12, top = 18, bottom = 44;
+  const groupWidth = (width - left - right) / Math.max(1, periods.length);
+  const x = (i) => left + groupWidth * i + groupWidth / 2;
+  const y = (value) => top + (height - top - bottom) * (1 - value);
+  const showValues = periods.length <= 8;
+  return (
+    <svg className="cm-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+      {[0, 0.5, 1].map((fraction) => (
+        <g key={fraction}>
+          <line x1={left} x2={width - right} y1={y(fraction)} y2={y(fraction)} stroke="#E8E5DF" />
+          <text x="2" y={y(fraction) + 4}>{`${Math.round(fraction * 100)} %`}</text>
+        </g>
+      ))}
+      {periods.map((period, i) => (
+        <g key={period.clave}>
+          {period.en_curso && (
+            <rect x={left + groupWidth * i + 3} y={top} width={groupWidth - 6} height={height - top - bottom} rx="8" fill="none" stroke="#D4A843" strokeDasharray="5 4" />
+          )}
+          {(showValues || i % 3 === 0) && <text x={x(i)} y={height - 10} textAnchor="middle">{period.label}</text>}
+        </g>
+      ))}
+      {series.map((serie, j) => {
+        const points = periods.map((period, i) => ({ i, value: serie.value(period), period }));
+        const segments = [];
+        let current = [];
+        for (const point of points) {
+          if (point.value == null) { if (current.length) segments.push(current); current = []; } else current.push(point);
+        }
+        if (current.length) segments.push(current);
+        return (
+          <g key={serie.key}>
+            {segments.map((segment) => (
+              <polyline key={segment[0].i} fill="none" stroke={serie.color} strokeWidth="2.5" points={segment.map((p) => `${x(p.i)},${y(p.value)}`).join(" ")} />
+            ))}
+            {points.filter((p) => p.value != null).map((p) => (
+              <g key={p.i}>
+                <circle cx={x(p.i)} cy={y(p.value)} r="3.5" fill={serie.color}>
+                  <title>{`${p.period.label} · ${serie.name}: ${percent(p.value)} (${serie.detail(p.period)})`}</title>
+                </circle>
+                {showValues && <text x={x(p.i)} y={j % 2 ? y(p.value) + 15 : y(p.value) - 7} textAnchor="middle" className="cm-chart__value">{percent(p.value)}</text>}
+              </g>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -225,8 +363,8 @@ function axis(max, width, left, right, y) {
 }
 
 // Barras agrupadas por período; null se dibuja como "—" (sin datos).
-function BarsChart({ periods, series, width, height, label, format = (value) => value }) {
-  const left = 34, right = 12, top = 18, bottom = 30;
+function BarsChart({ periods, series, width, height, label, format = (value) => value, rateLine = null }) {
+  const left = 34, right = rateLine ? 40 : 12, top = 18, bottom = 30;
   const max = Math.max(1, ...periods.flatMap((period) => series.map((serie) => serie.value(period) ?? 0)));
   const groupWidth = (width - left - right) / Math.max(1, periods.length);
   const barWidth = (groupWidth * 0.7) / series.length;
@@ -256,6 +394,24 @@ function BarsChart({ periods, series, width, height, label, format = (value) => 
           {(showValues || i % 3 === 0) && <text x={left + groupWidth * i + groupWidth / 2} y={height - 10} textAnchor="middle">{period.label}</text>}
         </g>
       ))}
+      {rateLine && (() => {
+        const rateY = (value) => top + (height - top - bottom) * (1 - value);
+        const points = periods
+          .map((period, i) => ({ i, value: rateLine.value(period), period }))
+          .filter((point) => point.value != null);
+        const cx = (i) => left + groupWidth * i + groupWidth / 2;
+        return (
+          <g>
+            {[0, 1].map((fraction) => <text key={fraction} x={width - right + 4} y={rateY(fraction) + 4}>{`${Math.round(fraction * 100)} %`}</text>)}
+            <polyline fill="none" stroke={rateLine.color} strokeWidth="2" strokeDasharray="4 3" points={points.map((p) => `${cx(p.i)},${rateY(p.value)}`).join(" ")} />
+            {points.map((p) => (
+              <circle key={p.i} cx={cx(p.i)} cy={rateY(p.value)} r="3" fill={rateLine.color}>
+                <title>{`${p.period.label} · ${rateLine.name}: ${percent(p.value)}`}</title>
+              </circle>
+            ))}
+          </g>
+        );
+      })()}
     </svg>
   );
 }
@@ -266,6 +422,8 @@ export default function CommercialMetrics({ role, onNavigate }) {
   const [granularidad, setGranularidad] = useState("mes");
   const [tab, setTab] = useState("embudo");
   const [view, setView] = useState({ funnel: "todos", times: "todos" });
+  const [dimension, setDimension] = useState("proyecto");
+  const [tiempoSerie, setTiempoSerie] = useState("ciclo");
   const isEjecutivo = role === roles.sales;
 
   useEffect(() => {
@@ -318,8 +476,21 @@ export default function CommercialMetrics({ role, onNavigate }) {
   const mejores = m.mejores;
   const funnelData = view.funnel === "mejores" && mejores ? mejores.embudo : m.embudo;
   const timesData = view.times === "mejores" && mejores ? mejores.en_etapa : m.tiempos.en_etapa;
-  const mejoresScope = mejores ? `Solo leads Compatible + Alcanza (${mejores.n} de ${m.n})` : "";
   const proyectoNombre = (id) => proyectos.find((proyecto) => proyecto.id === id)?.nombre || "Proyecto";
+  const betweenData = view.times === "mejores" && mejores ? mejores.entre_etapas : m.tiempos.entre_etapas;
+  const desgloseDimension = sinCatalogo && (dimension === "afinidad" || dimension === "capacidad") ? "proyecto" : dimension;
+  const desgloseLabel = {
+    proyecto: proyectoNombre,
+    afinidad: (key) => AFINIDAD.find(([value]) => value === key)?.[1] || key,
+    capacidad: (key) => CAPACIDAD.find(([value]) => value === key)?.[1] || key,
+    prioridad: (key) => PRIORIDAD.find(([value]) => value === key)?.[1] || key,
+  }[desgloseDimension];
+  const tiempoValue = (period) => {
+    if (tiempoSerie === "ciclo") return period.tiempos.ciclo_venta;
+    if (tiempoSerie === "postular") return period.tiempos.dias_hasta_postular;
+    return period.tiempos.entre_etapas[Number(tiempoSerie.split("-")[1])];
+  };
+  const mejoresScope = mejores ? `Solo leads Compatible + Alcanza (${mejores.n} de ${m.n})` : "";
 
   const toggle = (dimension, value) => setFiltros((current) => ({
     ...current,
@@ -405,20 +576,27 @@ export default function CommercialMetrics({ role, onNavigate }) {
       </article>
 
       <div className="cm-tabs" role="tablist">
-        {[["embudo", "Embudo y seguimiento"], ["historia", "Evolución histórica"]].map(([key, label]) => (
+        {[["embudo", "Embudo y seguimiento"], ["historia", "Evaluaciones históricas"]].map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
         ))}
       </div>
 
       {tab === "embudo" ? (
         <>
-          <section className="admin-kpi-grid cm-surface-gap" aria-label="Indicadores">
+          <section className="admin-kpi-grid cm-kpis-5 cm-surface-gap" aria-label="Indicadores">
             <Kpi
               color="navy"
               label="Postularon a un proyecto"
               help="Leads que fijaron uno de tus proyectos como su meta de compra al menos una vez."
               value={m.captura.postulan}
               hint={<><Rate rate={m.captura.tasa} n={m.captura.n} /> de {m.captura.n} leads</>}
+            />
+            <Kpi
+              color="success"
+              label="De En plan de mejora a Venta cerrada"
+              help="Leads que estuvieron en la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta."
+              value={m.plan_mejora_a_venta.con_venta}
+              hint={<>de {m.plan_mejora_a_venta.en_plan_mejora} leads que estuvieron en plan de mejora <Rate rate={m.plan_mejora_a_venta.tasa} n={m.plan_mejora_a_venta.en_plan_mejora} /></>}
             />
             <Kpi
               color="success"
@@ -541,6 +719,11 @@ export default function CommercialMetrics({ role, onNavigate }) {
             </div>
             {view.times === "mejores" && mejores && <p className="cm-scope">{mejoresScope}</p>}
             <div className="cm-scroll"><TimesTable enEtapa={timesData} /></div>
+            <h3 className="cm-subheading cm-label-row">
+              Tiempo entre etapas
+              <FieldTooltip text="Días desde que el lead llegó por primera vez a una etapa hasta que llegó a la siguiente. Los leads que se saltaron la primera se cuentan aparte, sin inventarles un tiempo." />
+            </h3>
+            <div className="cm-scroll"><BetweenTable rows={betweenData} /></div>
             <div className="cm-callout">
               <span className="cm-label-row">Días hasta postular<FieldTooltip text="Días desde la primera precalificación del lead hasta que fijó por primera vez uno de tus proyectos como su meta." /></span>
               <strong>{days(postular.mediana)}</strong> mediana · n = {postular.n}
@@ -586,6 +769,32 @@ export default function CommercialMetrics({ role, onNavigate }) {
               )}
             </article>
           </div>
+
+          <article className="admin-surface cm-surface-top">
+            <div className="admin-surface__header">
+              <div className="admin-surface__title">
+                <h2>Desglose de engagement y conversión</h2>
+                <p>Las mismas métricas para cada grupo, lado a lado. Los filtros de arriba siguen aplicándose.</p>
+              </div>
+              <div className="cm-view">
+                {DIMENSIONES.map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={desgloseDimension === key ? "is-active" : ""}
+                    disabled={sinCatalogo && (key === "afinidad" || key === "capacidad")}
+                    onClick={() => setDimension(key)}
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+            <p className="cm-hint cm-hint--top">
+              {desgloseDimension === "proyecto"
+                ? "Cada fila cuenta los leads asociados a ese proyecto y sus acciones sobre él; un lead interesado en dos proyectos aparece en ambos."
+                : "Cada lead aparece en un solo grupo; las filas suman el total de leads."}
+            </p>
+            <div className="cm-scroll"><DesgloseTable rows={m.desglose[desgloseDimension]} labelOf={desgloseLabel} /></div>
+          </article>
         </>
       ) : (
         <>
@@ -643,6 +852,29 @@ export default function CommercialMetrics({ role, onNavigate }) {
                 </div>
               </article>
 
+              <article className="admin-surface cm-surface-gap">
+                <div className="admin-surface__header"><div className="admin-surface__title">
+                  <h2>Tasas de conversión por cohorte</h2>
+                  <p>Cómo cambian las tasas de conversión de cada cohorte. Las cohortes recientes aún pueden subir.</p>
+                </div></div>
+                <RateChart
+                  periods={periods}
+                  width={900}
+                  height={240}
+                  label="Tasas de conversión por cohorte"
+                  series={[
+                    { key: "post", name: "Postularon / leads", color: "#132B4A", value: (p) => p.captura.tasa, detail: (p) => `${p.captura.postulan} de ${p.captura.n}` },
+                    { key: "venta", name: "Ventas / leads", color: "#2d8a4e", value: (p) => p.embudo.conversion_general, detail: (p) => `${ventas(p.embudo)} de ${p.embudo.n}` },
+                    { key: "plan", name: "En plan de mejora → venta", color: "#C4841D", value: (p) => p.plan_mejora_a_venta.tasa, detail: (p) => `${p.plan_mejora_a_venta.con_venta} de ${p.plan_mejora_a_venta.en_plan_mejora}` },
+                  ]}
+                />
+                <div className="cm-legend">
+                  <span><i style={{ background: "#132B4A" }} />Postularon / leads</span>
+                  <span><i style={{ background: "#2d8a4e" }} />Ventas / leads</span>
+                  <span><i style={{ background: "#C4841D" }} />En plan de mejora → venta</span>
+                </div>
+              </article>
+
               <div className="admin-grid-2">
                 <article className="admin-surface">
                   <div className="admin-surface__header"><div className="admin-surface__title">
@@ -654,6 +886,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
                     width={440}
                     height={230}
                     label="Activos y contactados"
+                    rateLine={{ name: "Tasa de activos", color: "#C4841D", value: (p) => p.engagement.tasa }}
                     series={[
                       { key: "act", name: "Activos", color: "#D4A843", value: (p) => p.engagement.activos },
                       { key: "cont", name: "Contactados", color: "#132B4A", value: (p) => p.contacto.contactados },
@@ -662,24 +895,25 @@ export default function CommercialMetrics({ role, onNavigate }) {
                   <div className="cm-legend">
                     <span><i style={{ background: "var(--rh-yellow)" }} />Activos</span>
                     <span><i style={{ background: "var(--rh-blue)" }} />Contactados</span>
+                    <span><i className="cm-legend__line" style={{ borderColor: "#C4841D" }} />Tasa de activos (eje derecho)</span>
                   </div>
-                  <p className="cm-hint">
-                    Activos sobre los leads que ya existían en cada período:{" "}
-                    {periods.slice(-6).map((p) => `${p.label} ${percent(p.engagement.tasa)}`).join(" · ")}
-                  </p>
+                  <p className="cm-hint">La tasa de activos se calcula sobre los leads que ya existían en cada período.</p>
                 </article>
                 <article className="admin-surface">
                   <div className="admin-surface__header"><div className="admin-surface__title">
-                    <h2>Ciclo de venta</h2>
-                    <p>Mediana de días hasta la venta, según el período en que se cerró.</p>
+                    <h2>Tiempos</h2>
+                    <p>Mediana de días por período, según el período en que terminó cada tiempo.</p>
                   </div></div>
+                  <select className="cm-select" value={tiempoSerie} onChange={(event) => setTiempoSerie(event.target.value)} aria-label="Tiempo a mostrar">
+                    {TIEMPOS_SERIE.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  </select>
                   <BarsChart
                     periods={periods}
                     width={440}
                     height={230}
-                    label="Ciclo de venta"
-                    format={(value, p) => `${days(value)} (n=${p.tiempos.ciclo_venta.n})`}
-                    series={[{ key: "ciclo", name: "Mediana", color: "#132B4A", value: (p) => p.tiempos.ciclo_venta.mediana }]}
+                    label="Tiempos"
+                    format={(value, p) => `${days(value)} (n=${tiempoValue(p).n})`}
+                    series={[{ key: "mediana", name: "Mediana", color: "#132B4A", value: (p) => tiempoValue(p).mediana }]}
                   />
                 </article>
               </div>
