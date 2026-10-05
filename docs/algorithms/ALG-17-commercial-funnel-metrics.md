@@ -5,8 +5,8 @@
 | **Version** | `hu15-commercial-funnel-v1` |
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input) |
 | **Cases** | `docs/algorithms/ALG-17-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
-| **Open assumptions** | 9 open — see the log below |
-| **Last changed** | 2026-10-04 · HU 15 · draft, revised after the second grill (G1–G18) |
+| **Open assumptions** | 10 open — see the log below |
+| **Last changed** | 2026-10-04 · HU 15 · draft, revised after the second grill (G1–G18) and the UI review (G19–G20) |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -67,8 +67,12 @@ by week, month or year (E4).
    go backwards; "N → N+1" is undefined for a lead who skipped N+1 and double-counts a lead who went
    back. Time in a stage is always defined. The HU 15 wiki note ("diferencias de `occurred_at` entre
    eventos consecutivos") is superseded by this.
-6. **Unweighted engagement (D7).** Any weight per action would be an invented number with nothing to
-   calibrate it against. An unweighted "did anything" plus a per-action breakdown is honest.
+6. **Unweighted engagement (D7), about your projects only (G19).** Any weight per action would be an
+   invented number with nothing to calibrate it against. An unweighted "did anything" plus a
+   per-action breakdown is honest. Every action must concern one of the caller's projects: a lead
+   who accepts a plan aimed at another inmobiliaria's project tells this inmobiliaria nothing about
+   interest in *it*. Rejected: lead-level activity regardless of project (the first draft), which
+   counted the same plan as engagement in every inmobiliaria the lead belonged to.
 7. **One lead, one band (D8), across every in-scope project (G16).** A per-project breakdown would
    count a lead once per project and the buckets would not sum to the universe. Matching against all
    in-scope projects, not only the ones the lead named, follows ALG-10's first principle — preference
@@ -99,15 +103,15 @@ ISO-8601 instants (UTC offsets allowed). Arrays may be empty, never absent.
 | :---- | :--- | :----- | :---- |
 | `lead_id` | string | — | Opaque and stable within one call. Only used for determinism, never shown |
 | `first_evaluation_at` | instant | min `evaluations.created_at` | The preevaluación. Cohort key (R7) and start of every lead timeline |
-| `evaluation_ats` | instant[] | all `evaluations.created_at`, ascending | Includes the first. Every later one is a re-prequalification (R6) |
+| `evaluaciones` | `[{ at, project_goal_id }]` | every evaluation, ascending by `created_at` | Includes the first. `project_goal_id` = `financial_data → input → project_goal → id` **when that project is in scope**, else `null` — the RPC never reveals a project of another inmobiliaria. Every evaluation after the first is a re-prequalification (R6) |
 | `evaluacion_actual` | `{ input, onboarding, result }` | latest evaluation | Exactly what `matchLeadToProjects` reads (`ALG-10` Inputs). Also carries `result.commercial_priority_detail` |
 | `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) | In-scope projects the lead belongs to. Non-empty by D2. Carried for the UI; no rule below narrows by it (G16) |
 | `postulaciones` | `[{ proyecto_id, first_at }]` | project-goal evaluations | **First** time the lead set each project as its meta (D3), even if later changed. One entry per project |
-| `stage_events` | `[{ proyecto_id, stage_after, occurred_at, por_sistema }]` | `commercial_stage_events` | `proyecto_id: null` = lead-level move (D9). `por_sistema` = `actor_role = 'sistema'` (G8). Sorted by `(occurred_at, id)` by the RPC. Never `reason`, `actor_id`, `user_id` |
-| `plan_baseline_at` | instant or `null` | `tracking_plans.baseline_at` | One plan per lead (`tracking_plans.user_id` is unique) |
+| `stage_events` | `[{ proyecto_id, stage_after, occurred_at, por_sistema, por_mi }]` | `commercial_stage_events` | `proyecto_id: null` = lead-level move (D9). `por_sistema` = `actor_role = 'sistema'` (G8). `por_mi` = `actor_id = auth.uid()`, computed in the database (G23). Sorted by `(occurred_at, id)` by the RPC. Never `reason`, `actor_id`, `user_id` |
+| `plan` | `{ baseline_at, target_proyecto_id }` or `null` | `tracking_plans.baseline_at`, `target_project_snapshot → id` | One plan per lead (`tracking_plans.user_id` is unique). `target_proyecto_id` is `null` when the plan has no target project **or** its target is out of scope (same rule as `project_goal_id`) |
 | `favoritos` | `[{ proyecto_id, created_at }]` | `proyecto_favoritos` | |
-| `progress_update_ats` | instant[] | `tracking_events.recorded_at`, `event_kind` ∈ {`data_update`, `evaluation`} | |
-| `confirmed_goal_ats` | instant[] | `improvement_goal_events.recorded_at`, `confirmed = true` | |
+| `progress_update_ats` | instant[] | `tracking_events.recorded_at`, `event_kind` ∈ {`data_update`, `evaluation`} | Events of the lead's plan |
+| `confirmed_goal_ats` | instant[] | `improvement_goal_events.recorded_at`, `confirmed = true` | Events of the lead's plan |
 
 **`proyectos`** — the caller's in-scope projects (D2): every project of the tenant for a tenant
 admin, the assigned (`vinculado`) projects for an ejecutivo. HU 7 contract; ALG-17 reads `id` and
@@ -139,6 +143,9 @@ FunnelMetrics = {
   tiempos,                  // R5
   engagement,               // R6
   bandas,                   // R1 — current snapshot only, not bucketed
+  contacto,                 // R9
+  por_proyecto,             // R10
+  mejores,                  // R11 — the funnel and stage times of the best leads only
   serie: { granularidad, periodos: [Periodo] }   // R7
 }
 ```
@@ -149,11 +156,14 @@ FunnelMetrics = {
 | `embudo` | `{ n, etapas: [{ etapa, alcanzaron, conversion }], abiertos, perdido_actual: { total, por_agotamiento, por_gestion } }` — `etapas` in ladder order, all six always present |
 | `plan_a_venta` | `{ con_plan, con_plan_y_venta, tasa }` |
 | `tiempos` | `{ ciclo_venta: Stat, dias_hasta_postular: Stat, en_etapa: { [etapa]: StageStat } }` — `en_etapa` has all seven stages |
-| `engagement` | `{ n, activos, tasa, por_accion: { [accion]: { leads, eventos } } }` — all six actions always present |
+| `engagement` | `{ n, activos, tasa, por_accion: { [accion]: { leads, eventos } }, mes_actual: { n, activos, tasa } }` — all six actions always present; `mes_actual` only at top level (G21) |
+| `contacto` | `{ sin_contactar: { n, antiguedad_mediana, antiguedad_maxima }, contactados_mes_actual, contactados_por_mi: { total, mes_actual }, tiempo_primer_contacto }` — `tiempo_primer_contacto` is `StageStat`-shaped (`en_curso` = still uncontacted) or `null` with `bandas.sin_catalogo` (G22) |
+| `por_proyecto` | `[{ proyecto_id, leads, postulan, ventas, sin_contactar }]` — one row per in-scope project, in `proyectos` order (G24) |
+| `mejores` | `{ n, embudo, en_etapa }` with the same shapes as `embudo` and `tiempos.en_etapa`, or `null` with `bandas.sin_catalogo` (G25) |
 | `bandas` | `{ n, sin_catalogo: false, afinidad: { Compatible, Cercano, Marginal, fuera_de_alcance, requiere_antecedentes }, capacidad: { alcanza, cercano_por_capacidad, insuficiente, requiere_antecedentes } }` — every key always present; **or** `{ n, sin_catalogo: true, afinidad: null, capacidad: null }` (G11) |
 | `Stat` | `{ n, promedio, mediana }` — days, unrounded; `promedio` and `mediana` are `null` when `n = 0` |
 | `StageStat` | `Stat` plus `en_curso`: leads currently in that stage, excluded from `n` |
-| `Periodo` | `{ clave, desde, hasta, en_curso, captura, embudo, plan_a_venta, tiempos, engagement }` |
+| `Periodo` | `{ clave, desde, hasta, en_curso, captura, embudo, plan_a_venta, tiempos, engagement, contacto: { contactados, tiempo_primer_contacto } }` |
 
 Enumerations:
 
@@ -166,8 +176,11 @@ Enumerations:
 **Rates** (`tasa`, `conversion`) are `numerator ÷ denominator` in [0, 1], unrounded, and **`null`
 when the denominator is 0** — never 0. Rounding and the `%` sign are the UI's job.
 
-**UI obligations** (story-local, not rules): show `por_accion[].leads`, with `eventos` at most as
-detail (G13); round days to one decimal (G17); disable the affinity and capacity filters while
+**UI obligations** (story-local, not rules): **counts are the headline and rates are shown small
+beside them with their `n`** — at real scale most rates are low and a lone percentage reads as
+failure (UI review, both personas); show medians as the headline time and averages as detail; call
+capture "Postularon a un proyecto", never "tasa de captura"; show `por_accion[].leads`, with
+`eventos` at most as detail (G13); round days to one decimal (G17); disable the affinity and capacity filters while
 `bandas.sin_catalogo` is true (G11); show a cohort's `abiertos` next to its conversion (G14); label
 `perdido` as "perdido en este proyecto" in a project view and "lead perdido" in the tenant view (G5).
 
@@ -192,7 +205,7 @@ counting (D9).
 
 **The project filter is a lens, not a lead filter.** It does not remove leads from the universe
 (D3: "the universe does **not** narrow to that project"). It re-targets capture, bands, stage
-records and project-bound engagement to that project (G15).
+records, plan → venta and engagement to that project (G15, G19, G20).
 
 ### R1 — Affinity and capacity buckets (D8, G10, G11, G16)
 
@@ -337,16 +350,20 @@ stage below it: a promesa was signed.
 | `embudo.abiertos` | leads whose current overall stage is neither `venta_cerrada` nor `perdido` (G14) |
 | `embudo.perdido_actual` | `{ total, por_agotamiento, por_gestion }`: leads whose current overall stage is `perdido`, split by cause |
 
-### R4 — Plan → venta (D5, G9)
+### R4 — Plan → venta (D5, G9, G20)
 
 | Field | Value |
 | :---- | :---- |
-| `con_plan` | leads with `plan_baseline_at` not null and `<= now` |
-| `con_plan_y_venta` | of those, leads with a **standing sale date strictly after** `plan_baseline_at` |
+| `con_plan` | leads whose `plan` is not null, `plan.baseline_at <= now`, and `plan.target_proyecto_id ∈ S` |
+| `con_plan_y_venta` | of those, leads with a **standing sale date strictly after** `plan.baseline_at` |
 | `tasa` | `con_plan_y_venta ÷ con_plan`, `null` when `con_plan = 0` |
 
 Independent of whether `en_plan_mejora` was ever recorded. A plan accepted **after** the sale counts
-in `con_plan` and not in `con_plan_y_venta`. An undone sale does not count (G9).
+in `con_plan` and not in `con_plan_y_venta`. An undone sale does not count (G9). **Only plans aimed
+at one of the caller's projects count (G20):** a plan with no target project, or aimed at another
+inmobiliaria's project, is outside both numerator and denominator. The standing sale may be on any
+project in `S`, not necessarily the plan's target — a plan that led to a different unit of the same
+inmobiliaria still shows the plan's impact.
 
 ### R5 — Times (D6, G9, G17)
 
@@ -370,22 +387,25 @@ two middle values. **No minimum-n cutoff.**
 - In tenant view the spells are those of the **overall** stage (assumption A6), not of any one
   project record.
 
-### R6 — Engagement (D7, G12, G13, G15)
+### R6 — Engagement (D7, G12, G13, G15, G19)
 
-A lead is **activo** in an interval if at least one of its actions falls in it:
+A lead is **activo** in an interval if at least one of its actions falls in it. **Every action
+counts only when it concerns a project in `S`** (G19):
 
-| `accion` | Timestamps |
-| :------- | :--------- |
-| `favorito` | `favoritos[].created_at` with `proyecto_id ∈ S` |
-| `reprecalificacion` | `evaluation_ats` except the first |
-| `postulacion` | `postulaciones[].first_at` with `proyecto_id ∈ S` |
-| `plan_aceptado` | `plan_baseline_at` |
-| `actualizacion_progreso` | `progress_update_ats` |
-| `meta_confirmada` | `confirmed_goal_ats` |
+| `accion` | Timestamps | Counts when |
+| :------- | :--------- | :---------- |
+| `favorito` | `favoritos[].created_at` | `proyecto_id ∈ S` |
+| `reprecalificacion` | `evaluaciones[i].at`, every evaluation except the first | `project_goal_id ∈ S` |
+| `postulacion` | `postulaciones[].first_at` | `proyecto_id ∈ S` |
+| `plan_aceptado` | `plan.baseline_at` | `plan.target_proyecto_id ∈ S` |
+| `actualizacion_progreso` | `progress_update_ats` | `plan.target_proyecto_id ∈ S` |
+| `meta_confirmada` | `confirmed_goal_ats` | `plan.target_proyecto_id ∈ S` |
 
 Only timestamps `<= now` count. **Unweighted**: one action or twenty, the lead is activo once.
-Favorites and applications are project-bound and follow `S`, so with a project filter they count
-only on that project (G15); the other four are not tied to a project.
+Because every action follows `S`, a project filter narrows all six to that project (G15), and an
+ejecutivo's engagement covers only their assigned projects. A re-evaluation aimed at the caller's
+project is both a `reprecalificacion` and, the first time for that project, a `postulacion`; each
+breakdown row counts it, the lead is activo once.
 
 | Field | Value |
 | :---- | :---- |
@@ -398,6 +418,12 @@ only on that project (G15); the other four are not tied to a project.
 A lead cannot be active before it exists, so a period's denominator counts only leads that already
 had their first evaluation. Otherwise early periods would be depressed by later signups and the
 series would mostly measure growth.
+
+The top-level interval is the full history up to `now`; in a `Periodo` it is the period (R7).
+**`engagement.mes_actual`** (G21) is the same computation over the calendar month (in
+America/Santiago) that contains `now`, with the G12 denominator — every lead after filters already
+exists by then, so it equals `n`. It is what the KPI card shows: an all-time active count only grows,
+so it cannot tell a manager whether interest is rising or falling.
 
 ### R7 — Periods and buckets (D10, G14)
 
@@ -426,6 +452,7 @@ history.
 | `ciclo_venta`, `dias_hasta_postular` | the interval's **end** | |
 | `en_etapa[s]` | the end of the lead's **last** closed spell in `s` | The lead's whole summed time lands in that one period |
 | `engagement` | each action's timestamp | A lead is activo in every period where it has an action. Denominator per R6 (G12) |
+| `contacto.contactados`, `contacto.tiempo_primer_contacto` | the lead's **first-contact** instant (R9) | |
 
 ### R8 — Filters (D11, G11)
 
@@ -447,6 +474,80 @@ n = leads.length
 - With an empty band catalog the band filters are ignored (G11); the UI disables them.
 - Every output carries its `n`; `n = 0` is an explicit empty result (rates `null`, `Stat` with
   `n = 0` and `null` averages, every count 0, `periodos: []`).
+
+### R9 — Contact follow-up (G22, G23)
+
+**First contact.** A lead's first contact is the earliest considered event (R0) whose `stage_after`
+is a ranked stage above `nuevo` — `contactado` or any later stage, so a lead moved straight to
+`en_negociacion` was contacted then. `perdido` is not ranked, so losing a lead that was never
+contacted is not a contact. The **first-contact event** is that event; it is the same event that
+first makes `reached(contactado)` true.
+
+| Field | Value |
+| :---- | :---- |
+| `sin_contactar.n` | leads with no first contact whose current overall stage is not `perdido` |
+| `sin_contactar.antiguedad_mediana`, `antiguedad_maxima` | over those leads, days from `first_evaluation_at` to `now` (elapsed, R5); `null` when `n = 0` |
+| `contactados_mes_actual` | leads whose first contact falls in the calendar month (America/Santiago) containing `now` |
+| `contactados_por_mi.total` | leads whose first-contact event has `por_mi = true` |
+| `contactados_por_mi.mes_actual` | of those, first contact in the month containing `now` |
+| `tiempo_primer_contacto` | **only the best leads** — affinity `Compatible` and capacity `alcanza` (R1, the definition R11 reuses): `Stat` of days from `first_evaluation_at` to the first contact over those contacted; `en_curso` = those still `sin_contactar`. `null` when `bandas.sin_catalogo` |
+
+**Why the time to first contact covers only the best leads.** Across every lead the median is
+dominated by leads nobody should hurry to call — out of reach, missing data, critically blocked.
+The number a manager acts on is how fast the team reaches the leads most likely to buy. Bands come
+from the current evaluation (A3), so a lead counts with the band it has today, not the one it had
+when it arrived; logged as A10.
+
+**`por_mi` is the caller's own count, never anyone else's.** The database marks each event made by
+the caller; no actor id reaches the browser (G23). An ejecutivo sees how many leads they contacted;
+a tenant admin sees their own moves, which are usually few. A per-ejecutivo breakdown for admins is
+**not** offered: it would need actor ids (reversing D9), and both persona reviews warned that a
+visible ranking invites moving stages to look good. R10's per-project comparison carries most of the
+same signal.
+
+**What it measures.** The first-contact instant is when someone recorded the stage in RutaHogar, not
+when the call happened. An ejecutivo who updates stages late looks slower than they are; the UI says
+so in the help text.
+
+In a `Periodo`, `contacto.contactados` counts leads whose first contact falls in the period, and
+`contacto.tiempo_primer_contacto` is the R9 `Stat` restricted to those first contacts (its
+`en_curso` is always 0 there).
+
+### R10 — Per-project comparison (G24)
+
+One row per in-scope project `p`, in `proyectos` order, computed on the leads after filters (R8)
+**that belong to `p`** (`p ∈ lead.proyectos`) — unlike the rest of the page, where the project filter
+is a lens and does not narrow the universe. Each row is evaluated with `S = {p}` (R0):
+
+| Field | Value |
+| :---- | :---- |
+| `leads` | leads after filters with `p ∈ proyectos` |
+| `postulan` | of those, leads that postula to `p` (R2) |
+| `ventas` | of those, leads with a standing sale on `p`'s project record |
+| `sin_contactar` | of those, leads with no first contact (R9) with `S = {p}`, not `perdido` |
+
+A lead belonging to two projects appears in both rows, so the rows do **not** sum to `n` — the table
+compares projects, it does not partition leads. With a project filter the table still lists every
+in-scope project, so the selected one can be read against the others.
+
+### R11 — The best leads' funnel and stage times (G25)
+
+The **best leads** are the leads after filters (R8) whose affinity is `Compatible` **and** capacity
+is `alcanza` (R1, A10) — the same set R9 uses for the time to first contact. `mejores` is R3's funnel
+and R5's `en_etapa` recomputed on that set alone:
+
+| Field | Value |
+| :---- | :---- |
+| `mejores.n` | number of best leads |
+| `mejores.embudo` | R3 on the best leads: `alcanzaron`, `conversion`, `abiertos`, `perdido_actual` |
+| `mejores.en_etapa` | R5's `en_etapa` on the best leads |
+| `mejores` | `null` when `bandas.sin_catalogo` — without bands there is no "best" |
+
+It is a narrower view, not a different rule: every R3 / R5 invariant holds inside it, with `n`
+replaced by `mejores.n`. It is offered next to the full figures because a funnel over every lead
+in scope is dominated by leads nobody expects to buy; managers asked to see the pipeline of the
+leads most likely to close. If the dashboard's own affinity or capacity filter already excludes
+`Compatible` or `alcanza`, `mejores.n` is 0 and the result is the explicit empty one.
 
 ## Invariants and edge cases
 
@@ -478,6 +579,18 @@ n = leads.length
 11. Filters only remove leads: adding a value to an already non-empty filter never decreases `n`;
     turning on a filter that was empty never increases it.
 12. `computeFunnelMetrics` does not mutate its arguments.
+13. `contacto.sin_contactar.n <= embudo.abiertos`;
+    `sin_contactar.n + alcanzaron(contactado) <= n`;
+    `contactados_por_mi.mes_actual <= contactados_por_mi.total <= alcanzaron(contactado)`;
+    `contactados_mes_actual <= alcanzaron(contactado)`.
+14. `tiempo_primer_contacto.n + tiempo_primer_contacto.en_curso <=` the number of leads that are
+    `Compatible` **and** `alcanza`.
+15. For every `por_proyecto` row: `postulan <= leads`, `ventas <= leads`, `sin_contactar <= leads`,
+    and `leads <= n`.
+16. Unless `mejores` is `null`: `mejores.n <= n`, `mejores.n >= tiempo_primer_contacto.n +
+    tiempo_primer_contacto.en_curso`, and every
+    `mejores.embudo.etapas[k].alcanzaron <= embudo.etapas[k].alcanzaron`; invariants 3 and 4 hold
+    within `mejores` with `mejores.n`.
 
 **Edge cases:**
 
@@ -503,6 +616,13 @@ n = leads.length
 | stored priority label matches nothing | `sin_prioridad`, counted in `prioridad_no_reconocida` | G18 |
 | application before the first evaluation | impossible: an application *is* an evaluation; `dias_hasta_postular` can be 0, never negative | |
 | plan accepted after the sale | in `con_plan`, not in `con_plan_y_venta` | D5 |
+| plan with no target project, or aimed at another inmobiliaria's project | outside plan → venta; its acceptance, progress updates and confirmed goals are not engagement | G19, G20. The RPC returns `target_proyecto_id: null` for both, so the two cases are indistinguishable by design |
+| re-evaluation with no project goal, or a goal outside `S` | not a `reprecalificacion` | G19 |
+| lead moved straight from `nuevo` to a later stage | its first contact is that move | R9 |
+| lead lost before any contact | neither contacted nor `sin_contactar` | R9 |
+| `Compatible` + `alcanza` lead not yet contacted | counted in `tiempo_primer_contacto.en_curso` | R9 |
+| first contact recorded by a colleague | counts in `contactados_mes_actual`, not in `contactados_por_mi` | G23 |
+| lead belonging to two projects | appears in both `por_proyecto` rows | R10 |
 | DST changes in America/Santiago (first Saturday→Sunday of April and of September, at local midnight) | durations unaffected (elapsed time); buckets use the offset of each instant, so `2026-07-01T03:30Z` is **30 June** 23:30 local | R5, R7 |
 | ISO week across a year boundary | `2027-01-01` is `2026-W53` for `semana` but `2027-01` / `2027` for `mes` / `año` | R7 |
 | Sunday 23:30 in Santiago | still that ISO week, although it is already Monday in UTC | R7 |
@@ -535,6 +655,14 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G16 | Bands across every in-scope project, not only the lead's `proyectos[]` | OQ9 |
 | G17 | Durations are elapsed time; the UI rounds to one decimal | OQ10 |
 | G18 | Priority via label → key (stored `action` is the label); unmatched → `sin_prioridad` plus `prioridad_no_reconocida`; engine follow-up adds `action_key` | OQ11 |
+| G19 | All six engagement actions count only when they concern a project in `S`: re-evaluations by their `project_goal`, plan acceptance, progress updates and confirmed goals by the plan's target project | UI review: lead-level actions told an inmobiliaria nothing about interest in its own projects |
+| G20 | Plan → venta counts only plans whose target project is in `S` | UI review, for consistency with G19 |
+| G21 | `engagement.mes_actual`: engagement over the current calendar month, shown on the KPI card instead of the all-time figure | Persona review: the all-time active count only grows |
+| G22 | Contact follow-up (R9): uncontacted leads and their age, contacts this month, and median time to first contact **only for `Compatible` + `alcanza` leads** | Persona review: the biggest gap for both roles; restriction by Bolgunn |
+| G23 | Stage events carry `por_mi` (made by the caller), computed in the database; `contactados_por_mi` uses it. No per-ejecutivo breakdown for admins | Persona review; keeps D9's "no actor ids leave the database" |
+| G24 | Per-project comparison table (R10) | Persona review (admin): most of the per-ejecutivo signal without actor data |
+| G25 | `mejores` (R11): the funnel and stage times recomputed on the best leads (`Compatible` + `alcanza`), shown through a "Todos / Mejores leads" switch | UI review (Bolgunn): show each role the leads that matter to them |
+| — | Counts as headline, rates secondary with `n`; no minimum-n cutoff | Persona review; a cutoff would be an invented number (D6) |
 
 ## Requirements on other work
 
@@ -562,8 +690,11 @@ transitions" and D9's "no lead-level `perdido`"):
 7. A `reason` for system events that does not identify the lead (e.g. a fixed code), since `reason`
    is never exported but is kept in the history.
 
-**`commercial_funnel_facts()` RPC** (PLAN.md): emit `por_sistema` per stage event (G8); order
-`stage_events` by `(occurred_at, id)`; recognise project-goal evaluations written before
+**`commercial_funnel_facts()` RPC** (PLAN.md): emit `por_sistema` and `por_mi`
+(`actor_id = auth.uid()`) per stage event (G8, G23); order
+`stage_events` by `(occurred_at, id)`; emit each evaluation's `project_goal_id` and the plan's
+`target_proyecto_id` (G19, G20) **only when that project is in scope**, else `null`, so no project of
+another inmobiliaria ever leaves the database; recognise project-goal evaluations written before
 `project_goal.id` existed (`ProjectsCatalog.jsx` recovers those only when the UF value identifies
 one project), or document that they are not applications.
 
@@ -575,7 +706,7 @@ the label. Additive, so the `POST /score` contract is not broken.
 | # | Assumption | Made by | Date | Would be wrong if | Status |
 | :- | :--------- | :------ | :--- | :---------------- | :----- |
 | A1 | **Captura = postulación a proyecto**: a lead is captured when it sets an in-scope project as its meta at least once, even if it later changes it | Bolgunn (grill) | 2026-10-04 | The client means "interesados → precalificados" by *postulan*. It cannot: signup requires a prequalification, so that ratio is 100 % by construction | open |
-| A2 | **Engagement is unweighted, over exactly these six signals** (favorito, re-prequalification, postulación, plan aceptado, actualización de progreso, meta confirmada) | Bolgunn (grill) | 2026-10-04 | Some action proves to predict a sale far better than the others, or a signal the client cares about (e.g. contacting the executive) is missing | open |
+| A2 | **Engagement is unweighted, over exactly these six signals, each counted only when it concerns one of the caller's projects** (favorito, re-prequalification, postulación, plan aceptado, actualización de progreso, meta confirmada — G19) | Bolgunn (grill; scoped in UI review) | 2026-10-04 | Some action proves to predict a sale far better than the others; a signal the client cares about (e.g. contacting the executive) is missing; or general activity of a lead without a project goal turns out to predict interest in the inmobiliaria anyway | open |
 | A3 | **Bands and priority come from the current evaluation only**; history is not re-banded | Bolgunn (grill) | 2026-10-04 | The question is "how did leads that *were* Compatible convert". Today's band is a survivor's band: a lead who improved shows its improved band against its whole history | open |
 | A4 | **`agotado` projects are excluded from the default rollup** (allowed when that project is selected) | Bolgunn (grill) | 2026-10-04 | Sold-out projects are re-opened or re-stocked in practice, so their compatible leads are still sellable | open |
 | A5 | **Deleted accounts leave the universe and their history no longer counts**, including in past periods | Bolgunn (grill) | 2026-10-04 | Historical series must be stable across deletions (they will shift when an account is erased). The erasure design keeps pseudonymised stage history precisely so counts *could* survive (commercial-stage plan, Erasure) | open |
@@ -583,6 +714,7 @@ the label. Additive, so the `POST /score` contract is not broken.
 | A7 | **A sell-out closes every open opportunity on the project up to `en_negociacion`, and a restock reopens only what the system closed** (G6, G7) | Bolgunn (grill 2) | 2026-10-04 | Executives keep selling a sold-out project from a waiting list or from cancelled reservas, so those leads were never really lost; or `en_negociacion` usually means a unit is already held | open |
 | A8 | **A sale counts only while it stands** (G9) | Bolgunn (grill 2) | 2026-10-04 | Management wants gross sales (including those that fell through) as the conversion figure, with fall-throughs reported separately | open |
 | A9 | **A critical-blocker lead is never "cercano por capacidad"** (G10) | Bolgunn (grill 2) | 2026-10-04 | The capacity filter is used as a pure affordability view, independent of routability | open |
+| A10 | **The best leads = affinity `Compatible` and capacity `alcanza`, from the current evaluation** — used by the time to first contact (G22) and the best-leads funnel and stage times (G25) | Bolgunn (UI review) | 2026-10-04 | Managers want `Cercano` leads included too, or the band the lead had when it arrived rather than today's | confirmed (definition) · open (calibration) |
 
 ## Proposed note for ALG-10
 
@@ -602,3 +734,6 @@ wrong if` column), to add when the author agrees:
 | :--- | :----- |
 | 2026-10-04 | Drafted for HU 15 from the grill decisions D1–D12. |
 | 2026-10-04 | Revised with the second grill (G1–G18): overall-stage rule with revival and sell-out causes, standing-sale rule, empty catalog, per-period engagement denominator, cohort `abiertos`, priority label mapping, requirements on the project-tracks branch. Open questions closed. |
+| 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
+| 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
+| 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |

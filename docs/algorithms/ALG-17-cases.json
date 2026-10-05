@@ -1,7 +1,7 @@
 {
   "algorithm": "ALG-17",
   "version": "hu15-commercial-funnel-v1",
-  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan_baseline_at is null, omitted evaluation_ats is [first_evaluation_at], omitted stage-event por_sistema is false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-17's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-12 of the document are asserted on every case's output in addition to `expect`.",
+  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-17's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-12 of the document are asserted on every case's output in addition to `expect`.",
   "proyectos_comunes": {
     "A": { "id": "A", "nombre": "Proyecto A", "estado": "disponible" },
     "B": { "id": "B", "nombre": "Proyecto B", "estado": "disponible" },
@@ -101,6 +101,8 @@
       "expect": {
         "n": 2,
         "bandas": { "n": 2, "sin_catalogo": true, "afinidad": null, "capacidad": null },
+        "contacto": { "tiempo_primer_contacto": null },
+        "mejores": null,
         "embudo": { "n": 2 }
       }
     },
@@ -356,30 +358,36 @@
     },
     {
       "name": "plan_a_venta_baseline_antes_y_despues",
-      "por_que": "R4, D5, G9. L1 accepted its plan before selling: counts. L2 accepted after selling: in con_plan only. L3 has a plan and no sale. L4 sold without a plan and is outside the denominator. L5 accepted before a sale that was later undone: in con_plan only. None needed the en_plan_mejora stage.",
+      "por_que": "R4, D5, G9, G20. L1 accepted a plan aimed at A before selling: counts. L2 accepted after selling: in con_plan only. L3 has a plan and no sale. L4 sold without a plan and is outside the denominator. L5 accepted before a sale that was later undone: in con_plan only. L6 sold on A after a plan with no target in scope (no target, or another inmobiliaria's project; the RPC sends null for both): outside both numbers. L7 aimed its plan at B and bought on A: counts, the sale may be on any in-scope project. None needed the en_plan_mejora stage.",
       "input": {
         "proyectos": ["A", "B"],
         "facts": [
           { "lead_id": "L1", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
-            "plan_baseline_at": "2026-08-05T12:00:00Z",
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "A" },
             "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
           { "lead_id": "L2", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["B"],
-            "plan_baseline_at": "2026-09-10T12:00:00Z",
+            "plan": { "baseline_at": "2026-09-10T12:00:00Z", "target_proyecto_id": "B" },
             "stage_events": [{ "proyecto_id": "B", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
           { "lead_id": "L3", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
-            "plan_baseline_at": "2026-08-01T12:00:00Z" },
+            "plan": { "baseline_at": "2026-08-01T12:00:00Z", "target_proyecto_id": "A" } },
           { "lead_id": "L4", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
             "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
           { "lead_id": "L5", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
-            "plan_baseline_at": "2026-08-05T12:00:00Z",
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "A" },
             "stage_events": [
               { "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" },
               { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-05T12:00:00Z" }
-            ] }
+            ] },
+          { "lead_id": "L6", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": null },
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
+          { "lead_id": "L7", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A", "B"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "B" },
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] }
         ]
       },
       "expect": {
-        "plan_a_venta": { "con_plan": 4, "con_plan_y_venta": 1, "tasa": 0.25 }
+        "plan_a_venta": { "con_plan": 5, "con_plan_y_venta": 2, "tasa": 0.4 }
       }
     },
     {
@@ -499,8 +507,49 @@
       }
     },
     {
+      "name": "engagement_solo_acciones_sobre_tus_proyectos",
+      "por_que": "R6, G19. Proyecto A is the caller's only project. L1 re-prequalified with A as goal: counts as reprecalificacion (and as postulacion, its first application to A). L2 re-prequalified with no goal in scope and works a plan not aimed at A (target null): none of it counts, L2 is not activo. L3's plan is aimed at A: acceptance, progress update and confirmed goal all count.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "evaluaciones": [
+              { "at": "2026-09-01T12:00:00Z", "project_goal_id": null },
+              { "at": "2026-09-10T12:00:00Z", "project_goal_id": "A" }
+            ],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-10T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "evaluaciones": [
+              { "at": "2026-09-01T12:00:00Z", "project_goal_id": null },
+              { "at": "2026-09-12T12:00:00Z", "project_goal_id": null }
+            ],
+            "plan": { "baseline_at": "2026-09-12T12:00:00Z", "target_proyecto_id": null },
+            "progress_update_ats": ["2026-09-20T12:00:00Z"],
+            "confirmed_goal_ats": ["2026-09-25T12:00:00Z"] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-09-05T12:00:00Z", "target_proyecto_id": "A" },
+            "progress_update_ats": ["2026-09-15T12:00:00Z", "2026-09-22T12:00:00Z"],
+            "confirmed_goal_ats": ["2026-09-28T12:00:00Z"] }
+        ]
+      },
+      "expect": {
+        "engagement": {
+          "n": 3, "activos": 2, "tasa": 0.6666666666666666,
+          "por_accion": {
+            "favorito": { "leads": 0, "eventos": 0 },
+            "reprecalificacion": { "leads": 1, "eventos": 1 },
+            "postulacion": { "leads": 1, "eventos": 1 },
+            "plan_aceptado": { "leads": 1, "eventos": 1 },
+            "actualizacion_progreso": { "leads": 1, "eventos": 2 },
+            "meta_confirmada": { "leads": 1, "eventos": 1 }
+          }
+        },
+        "plan_a_venta": { "con_plan": 1, "con_plan_y_venta": 0, "tasa": 0 }
+      }
+    },
+    {
       "name": "engagement_borde_de_mes_y_denominador_por_periodo",
-      "por_que": "R6, R7, G12. L1's favorite at 2026-09-01T03:30Z is 31 August 23:30 in Santiago (UTC-4 before the September DST change): August. L2's confirmed goal at 2026-09-01T04:00Z is exactly 1 September 00:00 local: September (periods are half-open, start inclusive). L3 first evaluates on 09-20, so it is not in August's denominator but is in September's and October's. October has no activity: tasa 0, not null.",
+      "por_que": "R6, R7, G12. L1's favorite at 2026-09-01T03:30Z is 31 August 23:30 in Santiago (UTC-4 before the September DST change): August. L2's plan (aimed at A) and its confirmed goal at 2026-09-01T04:00Z are exactly 1 September 00:00 local: September (periods are half-open, start inclusive). L3 first evaluates on 09-20, so it is not in August's denominator but is in September's and October's. October has no activity: tasa 0, not null.",
       "input": {
         "proyectos": ["A"],
         "granularidad": "mes",
@@ -508,21 +557,139 @@
           { "lead_id": "L1", "first_evaluation_at": "2026-08-15T12:00:00Z", "proyectos": ["A"],
             "favoritos": [{ "proyecto_id": "A", "created_at": "2026-09-01T03:30:00Z" }] },
           { "lead_id": "L2", "first_evaluation_at": "2026-08-15T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-09-01T04:00:00Z", "target_proyecto_id": "A" },
             "confirmed_goal_ats": ["2026-09-01T04:00:00Z"] },
           { "lead_id": "L3", "first_evaluation_at": "2026-09-20T12:00:00Z", "proyectos": ["A"] }
         ]
       },
       "expect": {
-        "engagement": { "n": 3, "activos": 2, "tasa": 0.6666666666666666 },
+        "engagement": { "n": 3, "activos": 2, "tasa": 0.6666666666666666, "mes_actual": { "n": 3, "activos": 0, "tasa": 0 } },
         "serie_claves": ["2026-08", "2026-09", "2026-10"],
         "serie_por_clave": {
           "2026-08": { "engagement": { "n": 2, "activos": 1, "tasa": 0.5,
                          "por_accion": { "favorito": { "leads": 1, "eventos": 1 }, "meta_confirmada": { "leads": 0, "eventos": 0 } } } },
           "2026-09": { "desde": "2026-09-01T04:00:00Z", "hasta": "2026-10-01T03:00:00Z",
                        "engagement": { "n": 3, "activos": 1, "tasa": 0.3333333333333333,
-                         "por_accion": { "favorito": { "leads": 0, "eventos": 0 }, "meta_confirmada": { "leads": 1, "eventos": 1 } } } },
+                         "por_accion": { "favorito": { "leads": 0, "eventos": 0 }, "plan_aceptado": { "leads": 1, "eventos": 1 }, "meta_confirmada": { "leads": 1, "eventos": 1 } } } },
           "2026-10": { "en_curso": true, "engagement": { "n": 3, "activos": 0, "tasa": 0 } }
         }
+      }
+    },
+    {
+      "name": "seguimiento_de_contacto",
+      "por_que": "R9, G22, G23. L1 (Compatible, alcanza) was contacted by the caller after 3 days. L2 (Compatible, alcanza) has waited 10 days uncontacted: sin_contactar and en_curso of the time to first contact. L3 (Cercano) was contacted by the caller this month but is outside the time to first contact. L4 (Compatible, alcanza) went straight to en_negociacion after 5 days, by a colleague: that move is its first contact. L5 was lost before any contact: neither contacted nor uncontacted. L6 has waited 3 days.",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "mes",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-20T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-20T15:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-23T15:00:00Z", "por_mi": true }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-24T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-20T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-10-02T15:00:00Z", "por_mi": true }
+            ] },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-14T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-19T15:00:00Z" }
+            ] },
+          { "lead_id": "L5", "first_evaluation_at": "2026-09-10T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } },
+            "stage_events": [
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-12T15:00:00Z" }
+            ] },
+          { "lead_id": "L6", "first_evaluation_at": "2026-10-01T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } } }
+        ]
+      },
+      "expect": {
+        "contacto": {
+          "sin_contactar": { "n": 2, "antiguedad_mediana": 6.5, "antiguedad_maxima": 10 },
+          "contactados_mes_actual": 1,
+          "contactados_por_mi": { "total": 2, "mes_actual": 1 },
+          "tiempo_primer_contacto": { "n": 2, "promedio": 4, "mediana": 4, "en_curso": 1 }
+        },
+        "embudo": { "abiertos": 5, "perdido_actual": { "total": 1, "por_agotamiento": 0, "por_gestion": 1 } },
+        "serie_claves": ["2026-09", "2026-10"],
+        "serie_por_clave": {
+          "2026-09": { "contacto": { "contactados": 2, "tiempo_primer_contacto": { "n": 2, "mediana": 4, "en_curso": 0 } } },
+          "2026-10": { "contacto": { "contactados": 1, "tiempo_primer_contacto": { "n": 0, "mediana": null, "en_curso": 0 } } }
+        }
+      }
+    },
+    {
+      "name": "mejores_leads_embudo_y_tiempos",
+      "por_que": "R11, G25. Only L1 and L3 are Compatible + alcanza. L1 was contacted after 3 days; L3 is still nuevo. L2 (Cercano) was contacted too but is outside the best-leads view: the full funnel shows 2 contacted, the best-leads funnel 1.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-04T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" }
+            ] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "embudo": { "etapas": [ { "etapa": "nuevo", "alcanzaron": 3 }, { "etapa": "contactado", "alcanzaron": 2 }, {}, {}, {}, {} ] },
+        "mejores": {
+          "n": 2,
+          "embudo": {
+            "n": 2,
+            "etapas": [
+              { "etapa": "nuevo", "alcanzaron": 2, "conversion": null },
+              { "etapa": "contactado", "alcanzaron": 1, "conversion": 0.5 },
+              { "etapa": "en_plan_mejora", "alcanzaron": 0, "conversion": 0 },
+              { "etapa": "en_negociacion", "alcanzaron": 0, "conversion": null },
+              { "etapa": "reserva", "alcanzaron": 0, "conversion": null },
+              { "etapa": "venta_cerrada", "alcanzaron": 0, "conversion": null }
+            ],
+            "abiertos": 2,
+            "perdido_actual": { "total": 0, "por_agotamiento": 0, "por_gestion": 0 }
+          },
+          "en_etapa": {
+            "nuevo": { "n": 1, "promedio": 3, "mediana": 3, "en_curso": 1 },
+            "contactado": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "comparacion_por_proyecto",
+      "por_que": "R10, G24. Each row counts only the leads that belong to that project, so L2 (belonging to A and B) appears in both rows and the rows do not sum to n. L1 counts as contacted on A because its sale on A is a first contact; L3's lead-level contact counts on B.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-05T12:00:00Z" }],
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-20T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "B"],
+            "postulaciones": [{ "proyecto_id": "B", "first_at": "2026-09-06T12:00:00Z" }] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "stage_events": [{ "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-03T12:00:00Z" }] }
+        ]
+      },
+      "expect": {
+        "n": 3,
+        "por_proyecto": [
+          { "proyecto_id": "A", "leads": 2, "postulan": 1, "ventas": 1, "sin_contactar": 1 },
+          { "proyecto_id": "B", "leads": 2, "postulan": 1, "ventas": 0, "sin_contactar": 1 }
+        ]
       }
     },
     {
@@ -741,6 +908,13 @@
           "afinidad": { "Compatible": 0, "Cercano": 0, "Marginal": 0, "fuera_de_alcance": 0, "requiere_antecedentes": 0 },
           "capacidad": { "alcanza": 0, "cercano_por_capacidad": 0, "insuficiente": 0, "requiere_antecedentes": 0 }
         },
+        "contacto": {
+          "sin_contactar": { "n": 0, "antiguedad_mediana": null, "antiguedad_maxima": null },
+          "contactados_mes_actual": 0,
+          "contactados_por_mi": { "total": 0, "mes_actual": 0 },
+          "tiempo_primer_contacto": { "n": 0, "promedio": null, "mediana": null, "en_curso": 0 }
+        },
+        "por_proyecto": [{ "proyecto_id": "A", "leads": 0, "postulan": 0, "ventas": 0, "sin_contactar": 0 }],
         "serie_claves": []
       }
     }
