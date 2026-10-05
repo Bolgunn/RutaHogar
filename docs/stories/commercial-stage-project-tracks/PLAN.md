@@ -34,6 +34,10 @@ session"); only what is specific to this story goes here.
 - Before `supabase db push`: run `supabase migration list --linked` and confirm the remote history
   matches the repository. Prod has a hand-applied, unregistered `20261003000000` (HU 16). Never paste
   this migration into the SQL editor (two outages so far: 2026-10-01 and 2026-10-03).
+  **Known blocker (checked 2026-10-04):** `20261003120000_lead_status_history_read` (PR #108) is
+  applied in prod but exists on neither `main` nor `develop`. `db push` refuses while the remote
+  has a version the local folder lacks. That file must reach `develop` before this story's
+  migration is pushed. Do not `migration repair` it away.
 
 ## Goal
 
@@ -454,7 +458,14 @@ helper needs in HU 15's plan), and the R-table above.
 - **`fix/admin-inmobiliario-role`** may merge before or after this branch. The SQL already accepts
   `admin_inmobiliario` (PR #101). The frontend uses the existing `role` prop and needs no role key of
   its own. The SQL tests skip the `admin_inmobiliario` cases until `profiles_role_check` admits the
-  role. Do not add the role to the check here.
+  role. Do not add the role to the check here. Prod already admits it, and one `admin_inmobiliario`
+  profile exists (checked 2026-10-04), so the R4 tenant-admin path is live there even though
+  `develop`'s `schema.sql` may not allow it yet.
+- **Prod schema facts the migration relies on** (read-only, 2026-10-04): `commercial_stage_events`
+  has no `proyecto_id` yet; the only trigger on `proyectos` is `proyectos_set_updated_at`; no
+  function named `lead_belongs_to_proyecto`, `is_ejecutivo_vinculado` or `commercial_stage_scope`
+  exists; `proyecto_ejecutivos` has 27 rows (25 `vinculado` with an `ejecutivo_id`, 2 `pendiente`
+  without one).
 - **`setProjectStatus` keeps writing `proyectos.estado` directly.** The jobs depend only on the
   column changing, not on who changes it. `proyectos` updates stay admin-only by RLS
   (`can_admin_inmobiliaria`), and that is not changed here.
