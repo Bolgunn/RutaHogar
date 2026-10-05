@@ -1,7 +1,7 @@
 {
   "algorithm": "ALG-18",
   "version": "hu15-commercial-funnel-v1",
-  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-18's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-12 of the document are asserted on every case's output in addition to `expect`.",
+  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-18's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-17 of the document are asserted on every case's output in addition to `expect`.",
   "proyectos_comunes": {
     "A": { "id": "A", "nombre": "Proyecto A", "estado": "disponible" },
     "B": { "id": "B", "nombre": "Proyecto B", "estado": "disponible" },
@@ -916,6 +916,135 @@
         },
         "por_proyecto": [{ "proyecto_id": "A", "leads": 0, "postulan": 0, "ventas": 0, "sin_contactar": 0 }],
         "serie_claves": []
+      }
+    },
+    {
+      "name": "en_curso_en_el_periodo_actual",
+      "por_que": "R7, G26. Stage times go to the period where the spell ends; leads still in a stage go to the period containing now. L1 is still in contactado (since 09-03): October counts it in en_curso, September does not. L2 left contactado on 09-10 after 8 days (September) and is still in en_plan_mejora: October's en_curso. Both nuevo spells closed in September (2 and 1 days).",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "granularidad": "mes",
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-02T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": {
+              "n": 2,
+              "promedio": 1.5,
+              "mediana": 1.5,
+              "en_curso": 0
+            },
+            "contactado": {
+              "n": 1,
+              "promedio": 8,
+              "mediana": 8,
+              "en_curso": 1
+            },
+            "en_plan_mejora": {
+              "n": 0,
+              "promedio": null,
+              "mediana": null,
+              "en_curso": 1
+            }
+          }
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "en_curso": false,
+            "tiempos": {
+              "en_etapa": {
+                "nuevo": {
+                  "n": 2,
+                  "promedio": 1.5,
+                  "en_curso": 0
+                },
+                "contactado": {
+                  "n": 1,
+                  "promedio": 8,
+                  "en_curso": 0
+                },
+                "en_plan_mejora": {
+                  "n": 0,
+                  "promedio": null,
+                  "en_curso": 0
+                }
+              }
+            }
+          },
+          "2026-10": {
+            "en_curso": true,
+            "tiempos": {
+              "en_etapa": {
+                "nuevo": {
+                  "n": 0,
+                  "en_curso": 0
+                },
+                "contactado": {
+                  "n": 0,
+                  "promedio": null,
+                  "en_curso": 1
+                },
+                "en_plan_mejora": {
+                  "n": 0,
+                  "en_curso": 1
+                }
+              }
+            }
+          }
+        }
       }
     }
   ]

@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
-| **Last changed** | 2026-10-04 · HU 15 · draft, revised after the second grill (G1–G18) and the UI review (G19–G20) |
+| **Last changed** | 2026-10-05 · HU 15 · build review (G26–G27): `en_curso` of a period, `now` from the database |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -126,7 +126,10 @@ admin, the assigned (`vinculado`) projects for an ejecutivo. HU 7 contract; ALG-
 | `capacidad` | string[] | `alcanza` · `cercano_por_capacidad` · `insuficiente` · `requiere_antecedentes` |
 | `prioridad` | string[] | `contact_now` · `contact_with_review` · `nurture` · `reorient` · `request_info` · `do_not_route` · `sin_prioridad` |
 
-**`now`** — instant. The horizon of every metric: any input timestamp after `now` is ignored.
+**`now`** — instant. The horizon of every metric: any input timestamp after `now` is ignored. It is
+the **database's** time, returned by `commercial_funnel_facts()` with the facts (G27), so `now` and
+every input timestamp come from one clock. A browser clock running behind the server would put a
+lead that just signed up after `now`; with the database's `now` that cannot happen.
 
 **`granularidad`** — `semana` · `mes` · `año` (R7).
 
@@ -451,6 +454,7 @@ history.
 | `captura`, `embudo`, `plan_a_venta` | the lead's `first_evaluation_at` (**cohort**) | The cohort's stages, applications and sales are evaluated at `now`, not at the period's end. `n` of the period = its cohort size |
 | `ciclo_venta`, `dias_hasta_postular` | the interval's **end** | |
 | `en_etapa[s]` | the end of the lead's **last** closed spell in `s` | The lead's whole summed time lands in that one period |
+| `en_etapa[s].en_curso` | the period containing `now` (G26) | Leads currently in `s` are counted only in the running period, the one with `en_curso: true`; every other period has `en_curso` 0. Summed over the periods it equals the top-level `en_curso` |
 | `engagement` | each action's timestamp | A lead is activo in every period where it has an action. Denominator per R6 (G12) |
 | `contacto.contactados`, `contacto.tiempo_primer_contacto` | the lead's **first-contact** instant (R9) | |
 
@@ -591,6 +595,8 @@ leads most likely to close. If the dashboard's own affinity or capacity filter a
     tiempo_primer_contacto.en_curso`, and every
     `mejores.embudo.etapas[k].alcanzaron <= embudo.etapas[k].alcanzaron`; invariants 3 and 4 hold
     within `mejores` with `mejores.n`.
+17. Unless `periodos` is empty, for every stage `s`: `Σ periodos[i].tiempos.en_etapa[s].en_curso =
+    tiempos.en_etapa[s].en_curso`, and it is 0 in every period whose `en_curso` is `false`.
 
 **Edge cases:**
 
@@ -662,6 +668,8 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G23 | Stage events carry `por_mi` (made by the caller), computed in the database; `contactados_por_mi` uses it. No per-ejecutivo breakdown for admins | Persona review; keeps D9's "no actor ids leave the database" |
 | G24 | Per-project comparison table (R10) | Persona review (admin): most of the per-ejecutivo signal without actor data |
 | G25 | `mejores` (R11): the funnel and stage times recomputed on the best leads (`Compatible` + `alcanza`), shown through a "Todos / Mejores leads" switch | UI review (Bolgunn): show each role the leads that matter to them |
+| G26 | In the series, a stage's `en_curso` (leads currently in it) is counted in the period containing `now` only; other periods show 0 | Build review (Bolgunn, 2026-10-05): R7 assigned stage times to the end of a spell but said nothing about spells that have not ended. Rejected: 0 in every period (hides them from the series), the period the lead entered the stage |
+| G27 | `now` is the database's time, returned by the RPC with the facts, not the browser's clock | Build review (Bolgunn, 2026-10-05): a browser clock behind the server would make a fresh lead's first evaluation later than `now` (negative waiting time, cohort outside the series). Rejected: a rule dropping such leads |
 | — | Counts as headline, rates secondary with `n`; no minimum-n cutoff | Persona review; a cutoff would be an invented number (D6) |
 
 ## Requirements on other work
@@ -737,3 +745,4 @@ wrong if` column), to add when the author agrees:
 | 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
 | 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
 | 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |
+| 2026-10-05 | Build review (G26–G27): a stage's `en_curso` belongs to the period containing `now` (R7, invariant 17, case `en_curso_en_el_periodo_actual`); `now` comes from the database. |
