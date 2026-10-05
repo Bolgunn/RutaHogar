@@ -28,7 +28,7 @@ VECTOR_DIMENSION = 384
 
 # Única fuente del umbral: se aplica sobre la similitud ya ajustada por intención,
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
-DEFAULT_SIMILARITY_THRESHOLD = 0.5
+DEFAULT_SIMILARITY_THRESHOLD = 0.80
 SUPABASE_TIMEOUT_SECONDS = 5
 # Serverless Inference API de Hugging Face: torch no cabe en el límite de 250 MB de Vercel.
 # Sus 384 dims calzan con proyectos_rag.embedding vector(384).
@@ -37,7 +37,7 @@ EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-small"
 HUGGINGFACE_EMBEDDINGS_URL = (
     f"https://router.huggingface.co/hf-inference/models/{EMBEDDING_MODEL_NAME}/pipeline/feature-extraction"
 )
-HUGGINGFACE_TIMEOUT_SECONDS = 30
+HUGGINGFACE_TIMEOUT_SECONDS = 40
 # Reintentos ante 503 (modelo dormido en cold start), con espera exponencial.
 HUGGINGFACE_MAX_RETRIES = 3
 HUGGINGFACE_BACKOFF_SECONDS = 2

@@ -1,7 +1,7 @@
 // Servicio de búsqueda RAG de propiedades para RutaHogar.
 // El umbral de similitud vive solo en el backend (DEFAULT_SIMILARITY_THRESHOLD).
 
-const SEARCH_TIMEOUT_MS = 15000;
+const SEARCH_TIMEOUT_MS = 45000;
 
 export async function searchProperties({
   query,
