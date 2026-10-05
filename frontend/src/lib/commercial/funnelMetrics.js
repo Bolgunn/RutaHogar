@@ -1,11 +1,11 @@
-// Métricas del embudo comercial (HU 15). Implementa ALG-18 R0–R11 tal como están escritas en
+// Métricas del embudo comercial (HU 15). Implementa ALG-18 R0–R14 tal como están escritas en
 // docs/algorithms/ALG-18-commercial-funnel-metrics.md; los casos de ALG-18-cases.json la fijan.
 // Función pura: `now` es una entrada, nada fechado después de `now` cuenta. Las bandas son las de
 // ALG-10 (matchLeadToProjects) y la etapa global la de overallStage(); aquí no se declara ningún
 // umbral.
 import { matchLeadToProjects } from "../matching/leadProjectMatching";
 import { overallStage } from "./overallStage";
-import { priorityKeyFromDetail } from "./priorityActions";
+import { PRIORITY_ACTIONS, SIN_PRIORIDAD, priorityKeyFromDetail } from "./priorityActions";
 import { periodOf, periodsBetween } from "./santiagoCalendar";
 import { DEFAULT_STAGE, STAGES } from "./stageRules";
 
@@ -17,6 +17,8 @@ const LADDER = ALL_STAGES.filter((stage) => stage !== "perdido");
 const ACCIONES = ["favorito", "reprecalificacion", "postulacion", "plan_aceptado", "actualizacion_progreso", "meta_confirmada"];
 const AFINIDADES = ["Compatible", "Cercano", "Marginal", "fuera_de_alcance", "requiere_antecedentes"];
 const CAPACIDADES = ["alcanza", "cercano_por_capacidad", "insuficiente", "requiere_antecedentes"];
+const PRIORIDADES = [...Object.keys(PRIORITY_ACTIONS), SIN_PRIORIDAD];
+const PAIRS = LADDER.slice(0, -1).map((desde, index) => [desde, LADDER[index + 1]]);
 
 const instant = (value) => Date.parse(value);
 const days = (from, to) => (to - from) / DAY_MS;
@@ -66,8 +68,8 @@ function bandsOf({ matches, excluidos }) {
   return { afinidad, capacidad };
 }
 
-// R0, R3, R9 — repite los eventos considerados: registros, tramos de la etapa global, rango
-// máximo alcanzado, venta vigente y primer contacto.
+// R0, R3, R9, R12 — repite los eventos considerados: registros, tramos de la etapa global, rango
+// máximo alcanzado, venta vigente, primer contacto y primer en_plan_mejora registrado.
 function replay(lead, S, nowMs) {
   const events = lead.stage_events.filter((event) =>
     (event.proyecto_id == null || S.has(event.proyecto_id)) && instant(event.occurred_at) <= nowMs);
@@ -79,6 +81,7 @@ function replay(lead, S, nowMs) {
   let spellStart = t0;
   let maxRank = 1;
   let firstContact = null;
+  let firstPlanStage = null;
 
   for (const event of events) {
     const at = instant(event.occurred_at);
@@ -95,6 +98,7 @@ function replay(lead, S, nowMs) {
     const eventRank = rank(event.stage_after);
     if (eventRank !== null) maxRank = Math.max(maxRank, eventRank);
     if (!firstContact && eventRank !== null && eventRank > 1) firstContact = { at, por_mi: event.por_mi === true };
+    if (firstPlanStage === null && event.stage_after === "en_plan_mejora") firstPlanStage = at;
 
     const next = overallStage([...records.values()]).stage;
     if (next !== stage) {
@@ -108,7 +112,13 @@ function replay(lead, S, nowMs) {
   const sales = [...records.values()]
     .filter((record) => record.proyecto_id != null && record.stage === "venta_cerrada")
     .map((record) => record.since);
-  return { stage, causa, spells, maxRank, firstContact, saleAt: sales.length ? Math.min(...sales) : null };
+  const saleAt = sales.length ? Math.min(...sales) : null;
+  // R13 — entradas a cada etapa en la línea de tiempo global; a venta_cerrada solo la venta vigente.
+  const entries = [...spells, { stage, start: spellStart }]
+    .filter((spell) => spell.stage !== "venta_cerrada")
+    .map((spell) => ({ stage: spell.stage, at: spell.start }));
+  if (saleAt !== null) entries.push({ stage: "venta_cerrada", at: saleAt });
+  return { stage, causa, spells, entries, maxRank, firstContact, firstPlanStage, saleAt };
 }
 
 function analyze(lead, S, nowMs) {
@@ -146,7 +156,7 @@ function captura(items) {
   return { n: items.length, postulan, tasa: rate(postulan, items.length) };
 }
 
-// R3
+// R3, R13 (conversion_general, G29)
 function embudo(items) {
   const reached = LADDER.map((etapa) => count(items, ({ a }) =>
     (etapa === "venta_cerrada" ? a.saleAt !== null : rank(etapa) <= a.maxRank)));
@@ -158,6 +168,7 @@ function embudo(items) {
       alcanzaron: reached[k],
       conversion: k === 0 ? null : rate(reached[k], reached[k - 1]),
     })),
+    conversion_general: rate(reached[reached.length - 1], items.length),
     abiertos: count(items, ({ a }) => a.stage !== "venta_cerrada" && a.stage !== "perdido"),
     perdido_actual: {
       total: perdidos.length,
@@ -172,6 +183,36 @@ function planAVenta(items) {
   const conPlan = items.filter(({ a }) => a.planBaseline !== null);
   const conVenta = count(conPlan, ({ a }) => a.saleAt !== null && a.saleAt > a.planBaseline);
   return { con_plan: conPlan.length, con_plan_y_venta: conVenta, tasa: rate(conVenta, conPlan.length) };
+}
+
+// R12
+function planMejoraAVenta(items) {
+  const enPlan = items.filter(({ a }) => a.firstPlanStage !== null);
+  const conVenta = count(enPlan, ({ a }) => a.saleAt !== null && a.saleAt > a.firstPlanStage);
+  return { en_plan_mejora: enPlan.length, con_venta: conVenta, tasa: rate(conVenta, enPlan.length) };
+}
+
+// R13 — días desde la primera entrada a N hasta la primera entrada a M posterior. Quien llegó a M
+// sin pasar antes por N cuenta en `saltaron`; quien sigue en N esperando M, en `en_curso`.
+function entreEtapas(items, range = null, countsEnCurso = true) {
+  return PAIRS.map(([desde, hasta]) => {
+    const values = [];
+    let saltaron = 0;
+    let enCurso = 0;
+    for (const { a } of items) {
+      const from = a.entries.find((entry) => entry.stage === desde)?.at ?? null;
+      const arrivals = a.entries.filter((entry) => entry.stage === hasta).map((entry) => entry.at);
+      const arrival = from === null ? undefined : arrivals.find((at) => at > from);
+      if (arrival !== undefined) {
+        if (!range || within(range, arrival)) values.push(days(from, arrival));
+      } else if (arrivals.length) {
+        if (!range || within(range, arrivals[0])) saltaron += 1;
+      } else if (from !== null && a.stage === desde && countsEnCurso) {
+        enCurso += 1;
+      }
+    }
+    return { desde, hasta, ...stat(values), saltaron, en_curso: enCurso };
+  });
 }
 
 // R5 — sin `range`, toda la historia; con `range`, cada tiempo cae en el periodo de su fin y los
@@ -200,6 +241,7 @@ function tiempos(items, range = null, countsEnCurso = true) {
     dias_hasta_postular: stat(items.filter(({ a }) => ends(a.firstApplication))
       .map(({ a }) => days(a.firstEval, a.firstApplication))),
     en_etapa: enEtapa(items, range, countsEnCurso),
+    entre_etapas: entreEtapas(items, range, countsEnCurso),
   };
 }
 
@@ -242,6 +284,27 @@ function contacto(items, best, nowMs, month) {
     tiempo_primer_contacto: best
       ? stageStat(firstContactDays(best), count(best, ({ a }) => isUncontacted(a)))
       : null,
+  };
+}
+
+// R14
+function desgloseRow(clave, analyses, month) {
+  const leads = analyses.length;
+  const postulan = count(analyses, (a) => a.firstApplication !== null);
+  const activos = count(analyses, (a) => a.actions.length > 0);
+  const activosMes = count(analyses, (a) => a.actions.some((action) => within(month, action.at)));
+  const ventas = count(analyses, (a) => a.saleAt !== null);
+  return {
+    clave,
+    leads,
+    postulan,
+    tasa_postulacion: rate(postulan, leads),
+    activos,
+    tasa_activos: rate(activos, leads),
+    activos_mes: activosMes,
+    tasa_activos_mes: rate(activosMes, leads),
+    ventas,
+    tasa_venta: rate(ventas, leads),
   };
 }
 
@@ -288,12 +351,15 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
       capacidad: Object.fromEntries(CAPACIDADES.map((band) => [band, count(items, ({ bandas: b }) => b.capacidad === band)])),
     };
 
-  // R10
-  const porProyecto = proyectos.map((proyecto) => {
+  // R10, R14 (filas por proyecto)
+  const ownByProject = proyectos.map((proyecto) => {
     const Sp = new Set([proyecto.id]);
-    const own = items
+    return items
       .filter(({ lead }) => lead.proyectos.includes(proyecto.id))
       .map(({ lead }) => analyze(lead, Sp, nowMs));
+  });
+  const porProyecto = proyectos.map((proyecto, index) => {
+    const own = ownByProject[index];
     return {
       proyecto_id: proyecto.id,
       leads: own.length,
@@ -302,6 +368,14 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
       sin_contactar: count(own, isUncontacted),
     };
   });
+  const byKey = (keys, keyOf) => keys.map((key) =>
+    desgloseRow(key, items.filter((item) => keyOf(item) === key).map(({ a }) => a), month));
+  const desglose = {
+    proyecto: proyectos.map((proyecto, index) => desgloseRow(proyecto.id, ownByProject[index], month)),
+    afinidad: sinCatalogo ? null : byKey(AFINIDADES, ({ bandas: b }) => b.afinidad),
+    capacidad: sinCatalogo ? null : byKey(CAPACIDADES, ({ bandas: b }) => b.capacidad),
+    prioridad: byKey(PRIORIDADES, ({ prioridad }) => prioridad.key),
+  };
 
   // R7
   const periodos = n === 0
@@ -319,6 +393,7 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
           captura: captura(cohort),
           embudo: embudo(cohort),
           plan_a_venta: planAVenta(cohort),
+          plan_mejora_a_venta: planMejoraAVenta(cohort),
           tiempos: tiempos(items, range, enCurso),
           engagement: engagement(items, range),
           contacto: {
@@ -345,7 +420,9 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
     bandas,
     contacto: contacto(items, best, nowMs, month),
     por_proyecto: porProyecto,
-    mejores: best ? { n: best.length, embudo: embudo(best), en_etapa: enEtapa(best) } : null,
+    mejores: best ? { n: best.length, embudo: embudo(best), en_etapa: enEtapa(best), entre_etapas: entreEtapas(best) } : null,
+    plan_mejora_a_venta: planMejoraAVenta(items),
+    desglose,
     serie: { granularidad, periodos },
   };
 }
