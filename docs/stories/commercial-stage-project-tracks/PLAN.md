@@ -5,7 +5,7 @@
   Ejecutivo comercial · Administrador inmobiliario · the system (sell-out / restock job)
 - **Status:** planned 2026-10-04 (grill Q1–Q9 with Bolgunn, owner of PR #101) · **Depends on:** PR #101
   (merged, live since 2026-10-04) · **Required by:** HU 15 steps 6–12
-  (`docs/stories/HU15-dashboard-conversion-tiempos/PLAN.md` and `docs/algorithms/ALG-17-commercial-funnel-metrics.md`,
+  (`docs/stories/HU15-dashboard-conversion-tiempos/PLAN.md` and `docs/algorithms/ALG-18-commercial-funnel-metrics.md`,
   both on `feat/hu15-dashboard-conversion-tiempos`, not yet on `develop`)
 - **Branch:** `feat/commercial-stage-project-tracks` from `origin/develop` · **PR target:** `develop`
 
@@ -23,14 +23,14 @@ session"); only what is specific to this story goes here.
   The old file must still pass with only the minimal edits listed in *Amendments during build* A1
   (it cannot pass byte-for-byte: it moves a lead to `reserva` without a project, which R1 forbids).
   Together with T13 that is the proof that requirement 11 holds.
-- Read first: ALG-17 **R3** (overall stage O1–O5, cause of loss) and **Requirements on other work**,
-  in `docs/algorithms/ALG-17-commercial-funnel-metrics.md` on `feat/hu15-dashboard-conversion-tiempos`
-  (`git show origin/feat/hu15-dashboard-conversion-tiempos:docs/algorithms/ALG-17-commercial-funnel-metrics.md`,
+- Read first: ALG-18 **R3** (overall stage O1–O5, cause of loss) and **Requirements on other work**,
+  in `docs/algorithms/ALG-18-commercial-funnel-metrics.md` on `feat/hu15-dashboard-conversion-tiempos`
+  (`git show origin/feat/hu15-dashboard-conversion-tiempos:docs/algorithms/ALG-18-commercial-funnel-metrics.md`,
   or the `hu15` worktree). `overallStage.js` implements R3 as written there.
 - Read first: `frontend/src/lib/commercial/stageRules.js`, `frontend/src/services/commercialStageService.js`,
   `frontend/src/components/CommercialStagePanel.jsx`. They change in place.
 - Stop and report if: a fixed requirement (table below) cannot be met as written. That changes
-  ALG-17 and goes back to HU 15's author. Also stop if the migration's guard raises against prod at
+  ALG-18 and goes back to HU 15's author. Also stop if the migration's guard raises against prod at
   push time, if an automatic transition other than the two jobs seems needed, or if a stage or
   transition not listed here comes up.
 - Before `supabase db push`: run `supabase migration list --linked` and confirm the remote history
@@ -52,9 +52,9 @@ restock reopens them. It is the last prerequisite of HU 15 apart from `fix/admin
 
 ## Fixed requirements
 
-Decided in HU 15's grills (ALG-17 G1–G8, "Requirements on other work"). They are the specification
+Decided in HU 15's grills (ALG-18 G1–G8, "Requirements on other work"). They are the specification
 and the grill did not reopen them. **None proved infeasible.** One reading is made explicit (R5,
-"every project record" implies at least one exists, matching ALG-17 O2/O3).
+"every project record" implies at least one exists, matching ALG-18 O2/O3).
 
 | # | Requirement |
 | :- | :---------- |
@@ -85,20 +85,20 @@ unchanged.
 | Q3 | **Extend the one RPC.** Drop `change_commercial_stage(uuid,text,text,text)` and recreate it with a trailing `p_proyecto uuid default null`. `p_expected_stage` is compared with the **targeted record** (missing = `nuevo`). The advisory lock stays **per (lead, inmobiliaria)**. New codes: `project_required`, `proyecto_not_in_scope`. The return adds `proyecto_id` | Current callers (4 named args) keep working as lead-level moves. Dropping the old signature avoids two overloads that PostgREST would find ambiguous. One lock per lead serializes the cross-record checks (R1's "has a project record", R5's "all `perdido`") with every write and job on that lead. Rejected: a second RPC that duplicates every check |
 | Q4 | **The jobs are a trigger**: `after update of estado on proyectos`, `when (old.estado is distinct from new.estado)`, `security definer`. Records are processed in `(subject_user_id, inmobiliaria_id)` order under the same advisory lock. `events.proyecto_id` has **no FK**. `lead_project_commercial_stage.proyecto_id` has an FK to `proyectos` **`on delete restrict`**, so a project with any commercial record cannot be deleted, and the delete flow says "márcalo agotado" | The frontend writes `estado` directly (`projectService.setProjectStatus`) and the local provider must keep working, so the job cannot live in a service. A trigger catches every writer. Repeated toggles are safe because each run reads current state, and `agotado → agotado` does not fire. An FK on events could never cascade (the immutability trigger rejects deletes), and `restrict` on history would also block deletion. `restrict` on records stops a reservation or sale from silently vanishing from HU 15. Rejected: cascading records away, and job logic in `setProjectStatus` |
 | Q5 | **Sticky records.** Creating a project record needs `lead_belongs_to_proyecto(lead, P)`. Once it exists it stays writable by anyone with write scope on P, even after the lead stops belonging (removed favorite, changed comuna). Lead-level writes keep PR #101's rule (`lead_belongs_to_inmobiliaria` now) | An executive must be able to close `reserva → venta_cerrada` after the buyer unfavorites. This is not the self-widening PR #101 rejected: creating the record needed real eligibility, read scope (RLS) is per tenant either way, and history never grants a new lead or a new project. Rejected: strict eligibility (drift blocks closing a deal), and automatic closure on drift (a second automatic transition, contradicts R6) |
-| Q6 | **The overall-stage rule (ALG-17 R3 O1–O5 + cause G8) is implemented once**, in a new pure `frontend/src/lib/commercial/overallStage.js`, **landed by this story**. The lead-card badge is its first consumer. HU 15's `funnelMetrics.js` calls it at each replay step instead of re-implementing it. The badge shows the **tenant-wide** overall stage (all records of the caller's inmobiliaria) | The handbook's promotion rule: a second consumer means a shared `lib/` function. The badge cannot stay on the lead-level row once project records exist. Its input (each record's current stage plus the instant and `por_sistema` of its latest event) is exactly what O3's "strictly later" test and G8 need, and HU 15's replay can build the same input at any moment. The behaviour is ALG-17's, unchanged. ALG-17's "implemented in" row is amended in HU 15's PR (below), not here |
+| Q6 | **The overall-stage rule (ALG-18 R3 O1–O5 + cause G8) is implemented once**, in a new pure `frontend/src/lib/commercial/overallStage.js`, **landed by this story**. The lead-card badge is its first consumer. HU 15's `funnelMetrics.js` calls it at each replay step instead of re-implementing it. The badge shows the **tenant-wide** overall stage (all records of the caller's inmobiliaria) | The handbook's promotion rule: a second consumer means a shared `lib/` function. The badge cannot stay on the lead-level row once project records exist. Its input (each record's current stage plus the instant and `por_sistema` of its latest event) is exactly what O3's "strictly later" test and G8 need, and HU 15's replay can build the same input at any moment. The behaviour is ALG-18's, unchanged. ALG-18's "implemented in" row is amended in HU 15's PR (below), not here |
 | Q7 | **A read RPC `commercial_stage_scope(p_lead)`** feeds the panel: the records the caller may see and which ones they may write. The panel gains a "Registro" selector (lead-level + projects). `stageRules.js` mirrors the new lead-level limits and revival. History labels each event with its project. The badge uses `overallStage` | Write scope (R4 + vinculado + sticky eligibility) and eligibility are server-side facts. An ejecutivo cannot read unassigned projects through RLS. Computing them in the browser would duplicate G3 in JS. `writable` is computed by the same SQL function the RPC uses, so the UI and the database cannot disagree |
 | Q8 | **Two helpers, one rule each.** `lead_belongs_to_proyecto(p_lead, p_proyecto)` holds the comuna/favorite rule for one project, and `lead_belongs_to_inmobiliaria` is **redefined** as "exists a tenant project the lead belongs to". `is_ejecutivo_vinculado(p_proyecto)` = `is_ejecutivo_asignado` + `estado = 'vinculado'`. `is_ejecutivo_asignado` is **unchanged** (the `proyectos` RLS depends on it) | R10, and the rule then exists once. The redefinition is behaviour-preserving: favorite-on-a-tenant-project OR comuna-of-a-tenant-project equals "exists a tenant project p with favorite-on-p OR comuna-of-p". A SQL test asserts the equivalence on every fixture pair. HU 15's `commercial_funnel_facts()` reuses both helpers |
 | Q9 | **The HU 16 reliability guard is not built here.** When it lands it applies **per record**: forward moves on any record are rejected for `silenciado`/`descartado`. `perdido`, backward moves, revival and both jobs stay allowed | `reliability_status` exists in prod only by hand (PR #97 unmerged, drift memo). Building against it would repeat the 2026-10-01/03 outages. Recording the per-record semantics now saves HU 16 a grill question |
 | D1 | **Lead-level same-stage events are revival only.** Revival needs ≥ 1 project record, every one `perdido`, the lead-level current stage **not** `perdido`, and a non-blank reason. Otherwise same-stage stays `same_stage` | O3 requires a non-`perdido` lead-level stage to revive. With no project record, "all `perdido`" is vacuous and would reopen `same_stage` for every lead |
 | D2 | **The database enforces what it can without reading other rows.** The new checks are: late stages need a `proyecto_id`; a same-stage event must be lead-level, non-system and carry a reason; `source = 'job'` needs a `proyecto_id`. The cross-row rules (lead-level `perdido` vs existing project records, "all `perdido`") live in the RPC under the lock | A CHECK cannot read other rows. Everything else is pinned below the RPC, so a future writer (backend, `service_role`) cannot bypass R1/R5's shape |
-| D3 | **No extra rule for records on an already-`agotado` project.** A person may still create or move a record on an `agotado` project. The job fires only on the transition | Not in R1–R11, and adding one would amend G6. HU 15's default band catalog already excludes `agotado` projects (ALG-17 A4). `reserva → venta_cerrada` on a sold-out project must stay possible anyway |
+| D3 | **No extra rule for records on an already-`agotado` project.** A person may still create or move a record on an `agotado` project. The job fires only on the transition | Not in R1–R11, and adding one would amend G6. HU 15's default band catalog already excludes `agotado` projects (ALG-18 A4). `reserva → venta_cerrada` on a sold-out project must stay possible anyway |
 | D4 | **`commercial_stage_scope` reveals to an ejecutivo only** the projects they are `vinculado` to, plus projects where the lead already has a record (names needed for history and the badge). Admins see every tenant project the lead belongs to or has a record on | It keeps HU 10's rule that an ejecutivo does not browse unassigned projects, while history stays legible |
 
 ## Standing questions
 
 | # | Question | Answer |
 | :- | :------- | :----- |
-| 1 | Touches scoring? Which ALG, numbers changed? | No. No path under `backend/app/scoring_engine/`, no ALG changed, no number introduced. `overallStage.js` implements ALG-17 R3 without numbers. ALG-17's "implemented in" row is amended by HU 15's PR |
+| 1 | Touches scoring? Which ALG, numbers changed? | No. No path under `backend/app/scoring_engine/`, no ALG changed, no number introduced. `overallStage.js` implements ALG-18 R3 without numbers. ALG-18's "implemented in" row is amended by HU 15's PR |
 | 2 | Needs RLS / multi-tenant scoping? | Yes. `lead_project_commercial_stage` gets PR #101's policy verbatim (staff of the tenant + global admin read; no lead read; browser roles read only). Writes only through `security definer` functions that take the tenant from `get_my_inmobiliaria()`. `commercial_stage_scope` is tenant-scoped and returns `[]` for a null tenant. Helpers are not granted to browser roles. S6 holds |
 | 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `supabase/migrations/<ts>_commercial_stage_project_tracks.sql`, `<ts>` later than every migration on `develop` and `main` (≥ `20261005120000`), plus rollback and `schema.sql` sync. Applied **after merge** by the merger (Bolgunn) with `supabase db push`, after `supabase migration list --linked` shows aligned history. Never via the SQL editor. If the Q2 guard raises, stop and decide by hand |
 | 4 | Changes the `POST /score` contract? | No |
@@ -242,7 +242,7 @@ revoked from browser roles. Trigger `proyectos_commercial_stage_jobs`:
 
 None change. The 22 backfill events become lead-level events (`proyecto_id null`), which they
 already are by construction, and the 22 `lead_commercial_stage` rows become lead-level records. No
-project record is created for existing leads (R6's "no record is created"; ALG-17 O1/R2 read a
+project record is created for existing leads (R6's "no record is created"; ALG-18 O1/R2 read a
 missing record as `nuevo`). The 3 projects already `agotado` have no records, so no job runs for them.
 
 ### Rollback — `supabase/rollback/<ts>_commercial_stage_project_tracks_rollback.sql`
@@ -265,9 +265,9 @@ second copies.
 
 ## Algorithms
 
-- `ALG-17` (on `feat/hu15-dashboard-conversion-tiempos`) — **consumed, not modified here**. R3's
+- `ALG-18` (on `feat/hu15-dashboard-conversion-tiempos`) — **consumed, not modified here**. R3's
   overall stage and cause of loss (O1–O5, G8) are implemented as written in `overallStage.js`.
-  **Amendment owed by HU 15's PR:** the ALG-17 header "Runs on / implemented in" names
+  **Amendment owed by HU 15's PR:** the ALG-18 header "Runs on / implemented in" names
   `frontend/src/lib/commercial/overallStage.js` for R3's overall stage, and `funnelMetrics.js`
   imports it.
 
@@ -287,7 +287,7 @@ updates listed in step 12.
   standing question 5 and in the wiki.
 - `admin_inmobiliario` frontend support → `fix/admin-inmobiliario-role`. The SQL already accepts the role.
 - A stage filter on the dashboard (RNF 7 E2), the funnel, charts → follow-ups.
-- Any edit to ALG-17, HU 15's plan, or PR #101's migration. The amendments owed are listed below.
+- Any edit to ALG-18, HU 15's plan, or PR #101's migration. The amendments owed are listed below.
 
 ## Steps
 
@@ -306,9 +306,9 @@ updates listed in step 12.
    `records = [{ proyecto_id: string | null, stage, at, por_sistema }]` (each record's current stage,
    plus the instant and `por_sistema` of its latest event; `[]` allowed). `causa` is
    `'por_agotamiento' | 'por_gestion'` when `stage = 'perdido'`, else `null`. Rows O1–O5 and G8
-   exactly as ALG-17 R3 states them, with ranks from `STAGES`. Instants are compared as instants, not
+   exactly as ALG-18 R3 states them, with ranks from `STAGES`. Instants are compared as instants, not
    strings. Tests in `frontend/src/lib/commercial/__tests__/overallStage.test.js`, one `it` per R3 row
-   and edge case, **named by the ALG-17 id** (`O1 …`, `O3 strictly later revives`,
+   and edge case, **named by the ALG-18 id** (`O1 …`, `O3 strictly later revives`,
    `O3 same instant does not revive`, `O4 …`, `O5 …`, `G8 all system → por_agotamiento`,
    `G8 mixed → por_gestion`, `lead-level perdido ignored once a project record exists`), plus
    "does not mutate input".
@@ -405,22 +405,22 @@ with a `raise notice`, and the `admin` cases cover R4.
 
 ## Acceptance criteria map
 
-Every HU 15 requirement on this branch (ALG-17 "Requirements on other work" 1–7, plus the RPC and
+Every HU 15 requirement on this branch (ALG-18 "Requirements on other work" 1–7, plus the RPC and
 helper needs in HU 15's plan), and the R-table above.
 
 | Criterion | Step(s) | Verified by |
 | :-------- | :------ | :---------- |
-| ALG-17 req 1 / R1 — nullable `proyecto_id`; late stages need a project; lead-level `perdido` only without project records | 1, 4 | T1, T2; check constraint in T1 |
-| ALG-17 req 2 / R2, R3 — independent records, missing = `nuevo`, transition table per record | 1, 4 | T3, T4 |
-| ALG-17 req 3 / R4 — write scope (vinculado, tenant admins, admin-only undo, actor/tenant from session) | 1, 4 | T4, T5 |
-| ALG-17 req 4 / R5 — same-stage lead-level revival with reason, only while every project record is `perdido` | 1, 4, 6 | T7; `stageRules.test.js` revival case |
-| ALG-17 req 5 / R6 — sell-out job | 1, 4 | T8 |
-| ALG-17 req 6 / R7 — restock job, persons' later moves respected | 1, 4 | T9 |
-| ALG-17 req 7 / R8 — non-identifying system reasons | 1, 4 | T10 |
+| ALG-18 req 1 / R1 — nullable `proyecto_id`; late stages need a project; lead-level `perdido` only without project records | 1, 4 | T1, T2; check constraint in T1 |
+| ALG-18 req 2 / R2, R3 — independent records, missing = `nuevo`, transition table per record | 1, 4 | T3, T4 |
+| ALG-18 req 3 / R4 — write scope (vinculado, tenant admins, admin-only undo, actor/tenant from session) | 1, 4 | T4, T5 |
+| ALG-18 req 4 / R5 — same-stage lead-level revival with reason, only while every project record is `perdido` | 1, 4, 6 | T7; `stageRules.test.js` revival case |
+| ALG-18 req 5 / R6 — sell-out job | 1, 4 | T8 |
+| ALG-18 req 6 / R7 — restock job, persons' later moves respected | 1, 4 | T9 |
+| ALG-18 req 7 / R8 — non-identifying system reasons | 1, 4 | T10 |
 | HU 15 plan `stage_events` source (`proyecto_id`, `actor_role`, `actor_id` kept for `por_sistema` / `por_mi`, ordering by `(occurred_at, id)`) / R9 | 1 | T11; index `(subject_user_id, inmobiliaria_id, proyecto_id, occurred_at, id)` present |
 | HU 15 plan `lead_belongs_to_proyecto` exists, not browser-granted / R10 | 1, 4 | T12 |
 | HU 15 plan ejecutivo scope = `vinculado` projects (reusable helper) | 1 | T5, T12 (`is_ejecutivo_vinculado`) |
-| ALG-17 R3 O1–O5 + G8 implemented once, in `lib/` | 5, 8 | `overallStage.test.js` cases named O1–O5, G8 |
+| ALG-18 R3 O1–O5 + G8 implemented once, in `lib/` | 5, 8 | `overallStage.test.js` cases named O1–O5, G8 |
 | R11 — PR #101 guarantees intact | 1–4 | `commercial_stage.sql` passes with the A1 edits only; the original file passes on the rolled-back schema; T13 |
 | Q2 — no existing row violates R1; guard | 1 | prod counts above (2026-10-04); T16; push succeeds (merger) |
 | Q4 — project with commercial records cannot be deleted; clear message | 1, 10 | T14; reviewer: as admin, try deleting a project with a record → Spanish message, project still listed |
@@ -441,17 +441,17 @@ helper needs in HU 15's plan), and the R-table above.
 
 ## Owed by other work (for the PR description; not edited here)
 
-- **ALG-17 (HU 15's PR):** the "Runs on / implemented in" row adds
+- **ALG-18 (HU 15's PR):** the "Runs on / implemented in" row adds
   `frontend/src/lib/commercial/overallStage.js` for R3's overall stage and cause, and
   `funnelMetrics.js` calls it at each replay step.
 - **HU 15 plan:** `commercial_funnel_facts()` should reuse `is_ejecutivo_vinculado` (its step 2
   inlines the vinculado check today) and `lead_belongs_to_proyecto` (created here, so the "unless
   already present" branch applies).
-- **HU 15 / ALG-17, for Bolgunn to decide:** with sticky records (Q5), a lead can keep a standing
+- **HU 15 / ALG-18, for Bolgunn to decide:** with sticky records (Q5), a lead can keep a standing
   sale on P after it stops belonging to P. HU 15's fact universe (leads with `lead_belongs_to_proyecto`
   on an in-scope project *today*) and R10's `p ∈ lead.proyectos` would then drop that sale from the
   dashboard. Including "or has a record on an in-scope project" in the universe would fix it. That is
-  an ALG-17 change, not made here.
+  an ALG-18 change, not made here.
 - **HU 16:** the per-record reliability guard (Q9).
 - **§5.8 erasure procedure:** re-key `subject_user_id` in `lead_project_commercial_stage` too.
 
@@ -484,3 +484,4 @@ Made by the build session (2026-10-04) and approved by Bolgunn where marked. No 
 | A1 | **`supabase/tests/commercial_stage.sql` is edited minimally** (approved by Bolgunn). Lead A's moves in the executive-A and admin-A sections target CS Proyecto A's record (`p_proyecto`), executive A gets a `vinculado` row on it, test 1 reads `lead_project_commercial_stage`, and test 11's `job` row names a project. Every expected error code and every other case is unchanged | The plan required the file to pass unchanged, but it cannot. Its test 1 moves a lead to `reserva` and later `venta_cerrada` without a project, exactly what R1 forbids (`project_required`). Its test 11 inserts a lead-level `job` row expecting `system_actor_check`, and Postgres checks CHECK constraints in name order, so the new `job_project_check` fires first. R1 and R11 both hold: only the plan's way of proving R11 was infeasible. The original file still passes on the schema after the rollback (step 4) |
 | A2 | T12 also compares `lead_belongs_to_inmobiliaria` with **PR #101's original body** (recreated inside the test transaction) on every fixture pair, in addition to the "exists over projects" equivalence | Q8 claims the redefinition preserves behaviour; comparing with the old body proves it directly |
 | A3 | The new test file grants `select, update on proyectos` to `authenticated` inside its rolled-back transaction, and fixture comunas vary spacing but not case | Hosted Supabase grants table privileges to `authenticated` and lets RLS decide, but the disposable database does not, and T8/T9 must fire the jobs from an admin's RLS-checked update. A disposable cluster created with `--locale=C` does not lower-case `Ñ`, which would make the case-folding comparison environment-dependent |
+| A4 | **The commercial-funnel algorithm is renumbered ALG-17 → ALG-18** (decided by Bolgunn, HU 15's author, after IsaiasACF's review). Every reference in this plan, `overallStage.js`, its test and the wiki now says ALG-18. The header comment of migration `20261005120000` still says ALG-17, because that file was already applied in prod and is not edited | HU 18 (PR #111) published `ALG-17-co-debtor-consent-resolution.md` and `ALG-17-cases.json` first. The funnel's document existed only on the local HU 15 branch, which renames it to `ALG-18-commercial-funnel-metrics.md`. ALG-18 is unused on every branch |

@@ -33,7 +33,7 @@ Migrations: `supabase/migrations/20260930120000_commercial_stage.sql` (base) and
 
 **Revival.** While every project record of the lead (at least one) is `perdido`, staff can record a lead-level event that keeps the lead-level stage (for example `contactado → contactado`) with a **required reason**: "this lead is still alive, just not on those projects". It is the only same-stage event allowed, and never from `perdido`.
 
-**Overall stage.** The badge on the lead card shows one stage per lead, computed from all its records by `frontend/src/lib/commercial/overallStage.js` (ALG-17 R3). It is the highest stage among records that are not lost, or `perdido` when every project record is lost, unless a later revival exists. When lost, it says whether the loss was only **por agotamiento** (every loss made by the sell-out job) or **por gestión**.
+**Overall stage.** The badge on the lead card shows one stage per lead, computed from all its records by `frontend/src/lib/commercial/overallStage.js` (ALG-18 R3). It is the highest stage among records that are not lost, or `perdido` when every project record is lost, unless a later revival exists. When lost, it says whether the loss was only **por agotamiento** (every loss made by the sell-out job) or **por gestión**.
 
 ## Transitions
 
@@ -166,7 +166,7 @@ The history columns are the Spike §5.5 subset. When `audit_events` exists, the 
 ## Consumers
 
 - [[../UserStories/HU15-dashboard-conversion-tiempos|HU 15]]:
-  - the funnel replays `commercial_stage_events` per record and uses the overall stage (`overallStage.js`, ALG-17 R3), with `perdido` split by cause;
+  - the funnel replays `commercial_stage_events` per record and uses the overall stage (`overallStage.js`, ALG-18 R3), with `perdido` split by cause;
   - time from preevaluación to `venta_cerrada` = the `venta_cerrada` event's `occurred_at` minus the lead's first `evaluations.created_at`;
   - times between stages = differences between consecutive events;
   - plan impact = leads with `tracking_plans.baseline_at` before their `venta_cerrada` event.

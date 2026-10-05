@@ -4,7 +4,7 @@ import { overallStage } from "../overallStage";
 const lead = (stage, at, por_sistema = false) => ({ proyecto_id: null, stage, at, por_sistema });
 const project = (id, stage, at, por_sistema = false) => ({ proyecto_id: id, stage, at, por_sistema });
 
-describe("overallStage (ALG-17 R3)", () => {
+describe("overallStage (ALG-18 R3)", () => {
   it("O1 no record → nuevo", () => {
     expect(overallStage([])).toEqual({ stage: "nuevo", causa: null });
     expect(overallStage()).toEqual({ stage: "nuevo", causa: null });

@@ -1,6 +1,6 @@
 // Etapa comercial global de un lead a partir de sus registros (general + uno por proyecto).
-// Implementa ALG-17 R3 (filas O1–O5) y la causa de pérdida G8, tal como están escritas en
-// docs/algorithms/ALG-17-commercial-funnel-metrics.md. Única implementación: la insignia del
+// Implementa ALG-18 R3 (filas O1–O5) y la causa de pérdida G8, tal como están escritas en
+// docs/algorithms/ALG-18-commercial-funnel-metrics.md. Única implementación: la insignia del
 // lead la usa hoy y funnelMetrics.js (HU 15) la llama en cada paso de su repetición.
 //
 // records: [{ proyecto_id: string | null, stage, at, por_sistema }], uno por registro existente:
