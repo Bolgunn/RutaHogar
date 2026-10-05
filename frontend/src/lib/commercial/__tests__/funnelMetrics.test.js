@@ -107,7 +107,7 @@ function expectCase(output, expected) {
   }
 }
 
-// --- Invariants 1–17 (ALG-18, "Invariants and edge cases") ---
+// --- Invariants 1–21 (ALG-18, "Invariants and edge cases") ---
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 const alcanzaron = (embudo, etapa) => embudo.etapas.find((e) => e.etapa === etapa).alcanzaron;
@@ -133,7 +133,68 @@ function expectFunnel(embudo, n, path) {
   }
   const { total, por_agotamiento, por_gestion } = embudo.perdido_actual;
   expect(embudo.abiertos + alcanzaron(embudo, "venta_cerrada") + total, `${path} current stages partition n`).toBe(n);
+  // 18
+  expectRate(embudo.conversion_general, n, `${path}.conversion_general`);
+  if (n) expect(embudo.conversion_general, `${path}.conversion_general`).toBe(alcanzaron(embudo, "venta_cerrada") / n);
   expect(por_agotamiento + por_gestion, `${path} perdido split`).toBe(total);
+}
+
+// 19
+function expectPlanMejora(planMejora, embudo, path) {
+  expect(planMejora.con_venta, `${path} con_venta <= en_plan_mejora`).toBeLessThanOrEqual(planMejora.en_plan_mejora);
+  expect(planMejora.en_plan_mejora, `${path} en_plan_mejora <= n`).toBeLessThanOrEqual(embudo.n);
+  expect(planMejora.con_venta, `${path} con_venta <= ventas`).toBeLessThanOrEqual(alcanzaron(embudo, "venta_cerrada"));
+  expectRate(planMejora.tasa, planMejora.en_plan_mejora, `${path}.tasa`);
+}
+
+const LADDER = ["nuevo", "contactado", "en_plan_mejora", "en_negociacion", "reserva", "venta_cerrada"];
+
+// 20 (totals)
+function expectEntreEtapas(rows, embudo, path) {
+  expect(rows.map((row) => `${row.desde}>${row.hasta}`), `${path} pairs`)
+    .toEqual(LADDER.slice(0, -1).map((desde, k) => `${desde}>${LADDER[k + 1]}`));
+  for (const row of rows) {
+    expect(row.n + row.saltaron, `${path} ${row.hasta} n + saltaron <= alcanzaron`).toBeLessThanOrEqual(alcanzaron(embudo, row.hasta));
+    expect(row.n + row.saltaron + row.en_curso, `${path} ${row.desde} groups within n`).toBeLessThanOrEqual(embudo.n);
+    expect(Number.isInteger(row.saltaron) && row.saltaron >= 0, `${path} saltaron`).toBe(true);
+  }
+}
+
+// 21
+const DESGLOSE_KEYS = {
+  afinidad: ["Compatible", "Cercano", "Marginal", "fuera_de_alcance", "requiere_antecedentes"],
+  capacidad: ["alcanza", "cercano_por_capacidad", "insuficiente", "requiere_antecedentes"],
+  prioridad: ["contact_now", "contact_with_review", "nurture", "reorient", "request_info", "do_not_route", "sin_prioridad"],
+};
+
+function expectDesglose(out) {
+  const { desglose } = out;
+  const rowChecks = (row, path) => {
+    for (const [field, tasa] of [["postulan", "tasa_postulacion"], ["activos", "tasa_activos"], ["activos_mes", "tasa_activos_mes"], ["ventas", "tasa_venta"]]) {
+      expect(row[field], `${path}.${field} <= leads`).toBeLessThanOrEqual(row.leads);
+      expectRate(row[tasa], row.leads, `${path}.${tasa}`);
+    }
+  };
+  for (const [dimension, keys] of Object.entries(DESGLOSE_KEYS)) {
+    const rows = desglose[dimension];
+    if (dimension !== "prioridad" && out.bandas.sin_catalogo) {
+      expect(rows, `desglose.${dimension} null without catalog`).toBeNull();
+      continue;
+    }
+    expect(rows.map((row) => row.clave), `desglose.${dimension} keys`).toEqual(keys);
+    rows.forEach((row) => rowChecks(row, `desglose.${dimension}[${row.clave}]`));
+    expect(sum(rows.map((row) => row.leads)), `desglose.${dimension} Σ leads = n`).toBe(out.n);
+    expect(sum(rows.map((row) => row.postulan)), `desglose.${dimension} Σ postulan`).toBe(out.captura.postulan);
+    expect(sum(rows.map((row) => row.activos)), `desglose.${dimension} Σ activos`).toBe(out.engagement.activos);
+    expect(sum(rows.map((row) => row.ventas)), `desglose.${dimension} Σ ventas`).toBe(alcanzaron(out.embudo, "venta_cerrada"));
+  }
+  expect(desglose.proyecto.map((row) => row.clave)).toEqual(out.por_proyecto.map((row) => row.proyecto_id));
+  desglose.proyecto.forEach((row, i) => {
+    rowChecks(row, `desglose.proyecto[${row.clave}]`);
+    const { leads, postulan, ventas } = out.por_proyecto[i];
+    expect({ leads: row.leads, postulan: row.postulan, ventas: row.ventas }, `desglose.proyecto[${row.clave}] = por_proyecto`)
+      .toEqual({ leads, postulan, ventas });
+  });
 }
 
 function expectEngagement(engagement, path) {
@@ -182,6 +243,9 @@ function expectInvariants(out) {
   expect(out.captura.postulan).toBeLessThanOrEqual(n);
   expectRate(out.captura.tasa, out.captura.n, "captura.tasa");
   expectFunnel(out.embudo, n, "embudo");
+  expectPlanMejora(out.plan_mejora_a_venta, out.embudo, "plan_mejora_a_venta");
+  expectEntreEtapas(out.tiempos.entre_etapas, out.embudo, "tiempos.entre_etapas");
+  expectDesglose(out);
   expect(out.plan_a_venta.con_plan_y_venta).toBeLessThanOrEqual(out.plan_a_venta.con_plan);
   expectRate(out.plan_a_venta.tasa, out.plan_a_venta.con_plan, "plan_a_venta.tasa");
   expect(out.engagement.n).toBe(n);
@@ -207,6 +271,7 @@ function expectInvariants(out) {
     expect(periodo.captura.n, `${path} captura.n = cohort`).toBe(periodo.embudo.n);
     expectRate(periodo.captura.tasa, periodo.captura.n, `${path}.captura.tasa`);
     expectFunnel(periodo.embudo, periodo.embudo.n, `${path}.embudo`);
+    expectPlanMejora(periodo.plan_mejora_a_venta, periodo.embudo, `${path}.plan_mejora_a_venta`);
     expectRate(periodo.plan_a_venta.tasa, periodo.plan_a_venta.con_plan, `${path}.plan_a_venta.tasa`);
     expectEngagement(periodo.engagement, `${path}.engagement`);
     if (i > 0) {
@@ -218,6 +283,16 @@ function expectInvariants(out) {
   expect(sum(periodos.map((p) => p.embudo.n)), "Σ cohort n = n").toBe(n);
   expect(sum(periodos.map((p) => p.captura.postulan)), "Σ cohort postulan").toBe(out.captura.postulan);
   if (periodos.length) expect(periodos[periodos.length - 1].engagement.n, "last denominator = n").toBe(n);
+
+  // 20 (per period)
+  if (periodos.length) {
+    out.tiempos.entre_etapas.forEach((row, k) => {
+      for (const field of ["n", "saltaron", "en_curso"]) {
+        expect(sum(periodos.map((p) => p.tiempos.entre_etapas[k][field])), `Σ period entre_etapas[${row.desde}].${field}`).toBe(row[field]);
+      }
+      for (const p of periodos) if (!p.en_curso) expect(p.tiempos.entre_etapas[k].en_curso, `${p.clave} entre_etapas en_curso`).toBe(0);
+    });
+  }
 
   // 17
   if (periodos.length) {
@@ -247,6 +322,7 @@ function expectInvariants(out) {
     expect(tpc.n + tpc.en_curso).toBeLessThanOrEqual(Math.min(out.bandas.afinidad.Compatible, out.bandas.capacidad.alcanza));
     expect(out.mejores.n).toBeLessThanOrEqual(n);
     expectFunnel(out.mejores.embudo, out.mejores.n, "mejores.embudo");
+    expectEntreEtapas(out.mejores.entre_etapas, out.mejores.embudo, "mejores.entre_etapas");
     out.mejores.embudo.etapas.forEach((etapa, k) => {
       expect(etapa.alcanzaron, `mejores <= embudo at ${etapa.etapa}`).toBeLessThanOrEqual(out.embudo.etapas[k].alcanzaron);
     });
@@ -300,7 +376,7 @@ function deepFreeze(value) {
 describe("ALG-18 cases", () => {
   it("covers every case of the file", () => {
     expect(spec.version).toBe(ALG18_VERSION);
-    expect(spec.cases).toHaveLength(34);
+    expect(spec.cases).toHaveLength(37);
   });
 
   for (const testCase of spec.cases) {
@@ -312,7 +388,7 @@ describe("ALG-18 cases", () => {
         expectCase(run(args), testCase.expect);
       });
 
-      it("holds invariants 1–6, 10, 13–17", () => {
+      it("holds invariants 1–6, 10, 13–21", () => {
         expectInvariants(run(args));
       });
 
