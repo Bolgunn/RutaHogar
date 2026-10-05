@@ -13,6 +13,7 @@ export function resolveStaffRoute(path, role) {
     if (path === "/inicio") return { page: "home" };
     if (path === "/proyectos") return { page: "projects" };
     if (path === "/perfil") return { page: "sales-profile" };
+    if (path === "/metricas") return { page: "metricas" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") {
       return { page: "leads", path: path === "/dashboard" ? undefined : "/dashboard" };
     }
@@ -24,6 +25,7 @@ export function resolveStaffRoute(path, role) {
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
     if (path === "/admin/perfil") return { page: "admin-profile" };
+    if (path === "/metricas") return { page: "metricas" };
     if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
@@ -35,6 +37,7 @@ export function resolveStaffRoute(path, role) {
 
 const staffPageGuards = {
   leads: isStaffRole,
+  metricas: isStaffRole,
   projects: (role) => role === roles.sales,
   "sales-profile": (role) => role === roles.sales,
   admin: isAdminRole,
