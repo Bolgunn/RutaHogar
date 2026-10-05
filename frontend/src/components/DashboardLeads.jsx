@@ -10,6 +10,7 @@ import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
 import { getCommercialRecords } from "../services/commercialStageService";
+import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
 import {
   formatScore,
@@ -451,10 +452,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     return () => { active = false; };
   }, [leadUserIds, inmobiliariaId]);
 
-  const handleStageChanged = (leadId) => {
-    getCommercialRecords([leadId], inmobiliariaId)
-      .then((records) => setCommercialRecords((current) => ({ ...current, [leadId]: records[leadId] || [] })));
-  };
+  const handleStageChanged = useMemo(() => createLeadRecordsReloader(
+    (leadId) => getCommercialRecords([leadId], inmobiliariaId),
+    (leadId, records) => setCommercialRecords((current) => ({ ...current, [leadId]: records })),
+  ), [inmobiliariaId]);
 
   useEffect(() => {
     setSelectedLead((current) => {
