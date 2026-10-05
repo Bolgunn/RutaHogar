@@ -329,7 +329,9 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", "/portal", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    // El portal es la puerta de entrada pública: un lead busca antes de tener cuenta.
+    if (path === "/portal") return { page: "anon-portal" };
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -370,6 +372,7 @@ const getRouteForPage = (page, profile, options = {}) => {
   if (page === "set-password") return "/definir-password";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
+  if (page === "anon-portal") return "/portal";
   if (!profile) return "/login";
   return getPrivatePathForPage(page);
 };
@@ -381,6 +384,7 @@ const pagesWithoutBackButton = new Set([
   "onboarding",
   "anon-onboarding",
   "anon-evaluate",
+  "anon-portal",
   "dataconsent",
   "signup-offer",
   "set-password",
@@ -932,6 +936,16 @@ export default function App() {
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
   };
 
+  const startAnonEvaluation = (initialData) => {
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    navigateToPage(anonOnboarding ? "anon-evaluate" : "anon-onboarding");
+  };
+
   const handleAuth = (nextAuth) => {
     setResult(null);
     setResultSaved(null);
@@ -1288,7 +1302,17 @@ export default function App() {
             }
             onAuth={handleAuth}
             onEvalAnon={() => navigateToPage("anon-onboarding")}
+            onPortalAnon={() => navigateToPage("anon-portal")}
           />
+        </div>
+      );
+    }
+
+    if (page === "anon-portal") {
+      return (
+        <div className="anon-shell">
+          <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
+          <PropertySearch onStartEvaluation={startAnonEvaluation} onNavigate={navigateToPage} />
         </div>
       );
     }
@@ -1348,8 +1372,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
             <ScoreForm
-              targetCommune={anonOnboarding?.comuna_interes}
+              targetCommune={portalProperty?.comuna || anonOnboarding?.comuna_interes}
               objective={anonOnboarding?.objetivo_principal}
               onboardingData={anonOnboarding}
               birthDate={anonOnboarding?.birth_date || null}
@@ -1696,6 +1728,7 @@ export default function App() {
         ) : page === "portal" && profile.role === roles.user ? (
           <PropertySearch
             evaluation={currentEvaluation}
+            onboarding={userOnboarding}
             onStartEvaluation={startEvaluation}
             onNavigate={navigateToPage}
           />

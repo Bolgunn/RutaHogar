@@ -327,6 +327,12 @@ const authStyles = `
   width: 16px;
   height: 16px;
 }
+.auth-left-cta--secondary {
+  margin-left: 12px;
+  background: transparent;
+  border: 1.5px solid #D4A843;
+  color: #D4A843;
+}
 
 /* ── Right Panel ── */
 .auth-right {
@@ -767,7 +773,7 @@ const authStyles = `
 }
 `;
 
-export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon }) {
+export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon }) {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     full_name: "",
@@ -937,6 +943,12 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
             {onEvalAnon && (
               <button type="button" className="auth-left-cta" onClick={onEvalAnon}>
                 Evaluar tu perfil gratis
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            )}
+            {onPortalAnon && (
+              <button type="button" className="auth-left-cta auth-left-cta--secondary" onClick={onPortalAnon}>
+                Buscar propiedades
                 <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             )}

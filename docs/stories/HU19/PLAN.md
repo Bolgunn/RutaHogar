@@ -29,10 +29,22 @@ Como lead, quiero buscar opciones de vivienda utilizando descripciones naturales
 
 Embeddings: `intfloat/multilingual-e5-small` (384 dims) vía Hugging Face Inference API (`HUGGINGFACE_API_KEY`); torch no cabe en el límite de Vercel. Umbral `DEFAULT_SIMILARITY_THRESHOLD = 0.85`, aplicado sobre la similitud ajustada por intención.
 
+## 3. E2 y E3 según el estado del lead
+
+El portal es una puerta de entrada pública (`/portal`, botón "Buscar propiedades" en el login): un lead descubre propiedades antes de tener cuenta y RutaHogar lo lleva a evaluar su crédito.
+
+| Estado | Tarjeta (E2) | Detalle (E3) |
+|---|---|---|
+| Sin cuenta | "Evaluar mi crédito en RutaHogar" → precalificación anónima con el precio precargado → oferta de registro (lead) | "Ver si califico para este departamento" → igual, con la propiedad seleccionada visible |
+| Con cuenta, sin precalificación | Igual, dentro de su sesión | Igual |
+| Con cuenta y precalificado | Etiqueta Compatible / Cercano / Requiere ajuste + "Ver mi compatibilidad" | Veredicto inmediato con mensaje y recomendación (mismas reglas que el catálogo de proyectos, capacidad ALG-9) + "Reevaluar con este departamento" |
+
+La IA no participa: el veredicto sale de `lib/simulation/compatibility.js`.
+
 ## 3. Mapeo de criterios
 
 - **E1:** `test_semantic_ranking_criterion_E1`, `test_intent_boosts_keep_semantic_order_without_ties`, `test_compound_communes_are_detected`.
-- **E2 / E3:** `test_ctas_and_disclaimer_criteria_E2_E3_E4`, `test_cta_text_follows_property_type`, `PropertySearch.test.jsx`.
+- **E2 / E3:** `test_ctas_and_disclaimer_criteria_E2_E3_E4`, `test_cta_text_follows_property_type`, `PropertySearch.test.jsx` (`getQualifyLabel`, `getPropertyCompatibility`).
 - **E4:** disclaimer en cada respuesta del backend, visible en la vista.
 - **E5:** `test_empty_results_handling_criterion_E5`, `test_commune_without_inventory_returns_no_results`.
 

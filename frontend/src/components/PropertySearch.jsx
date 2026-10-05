@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { searchProperties } from "../services/propertyService";
+import { buildSimulationContext, evaluateScenario, projectToScenario } from "../lib/simulation/compatibility";
 
 // Validadas contra el catálogo ingerido: cada una devuelve resultados pertinentes.
 // El embedding se arma con título, comuna, tipo y dormitorios (no la dirección),
@@ -29,7 +30,28 @@ export function getQualifyLabel(property) {
   return `Ver si califico para ${QUALIFY_NOUNS[tipo] || "esta propiedad"}`;
 }
 
-export default function PropertySearch({ evaluation, onStartEvaluation, onNavigate }) {
+const STATUS_CLASS = { Compatible: "compatible", Cercano: "near", "Requiere ajuste": "adjust" };
+
+// Mismo veredicto que el catálogo de proyectos (capacidad ALG-9): portal y catálogo
+// no pueden discrepar sobre si un lead puede comprar algo.
+export function getPropertyCompatibility(context, property) {
+  const ufValueClp = Number(context?.uf_value_clp);
+  if (!context?.classification || !(ufValueClp > 0) || !(property?.price_uf > 0)) return null;
+  return evaluateScenario(
+    context,
+    projectToScenario(
+      { id: property.id, nombre: property.title, comuna: property.commune, tipo_vivienda: property.property_type, valor_uf: property.price_uf },
+      ufValueClp,
+    ),
+  );
+}
+
+export default function PropertySearch({ evaluation, onboarding, onStartEvaluation, onNavigate }) {
+  // Con precalificación previa, E3 se responde al instante; sin ella, el CTA la inicia.
+  const compatibilityContext = useMemo(
+    () => (evaluation?.result ? buildSimulationContext(evaluation, onboarding) : null),
+    [evaluation, onboarding],
+  );
   const [query, setQuery] = useState("");
   const [commune, setCommune] = useState("");
   const [maxPriceUf, setMaxPriceUf] = useState("");
@@ -39,6 +61,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
   const [resultsData, setResultsData] = useState(null);
   const [error, setError] = useState("");
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const selectedCompatibility = getPropertyCompatibility(compatibilityContext, selectedProperty);
   const searchControllerRef = useRef(null);
 
   const handleSearch = async (
@@ -277,6 +300,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
 
             <div className="portal-properties-grid">
               {resultsData.results.map((prop) => {
+                const compatibility = getPropertyCompatibility(compatibilityContext, prop);
                 const simPercent = Math.round((prop.similarity || 0.8) * 100);
                 return (
                   <article 
@@ -337,14 +361,26 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
                       </div>
 
                       <div className="portal-card-actions">
-                        <button
-                          type="button"
-                          className="primary-button portal-qualify-btn"
-                          onClick={() => handleApplyToProperty(prop)}
-                          id={`cta-qualify-${prop.id}`}
-                        >
-                          {getQualifyLabel(prop)}
-                        </button>
+                        {compatibility ? (
+                          <button
+                            type="button"
+                            className="primary-button portal-qualify-btn"
+                            onClick={() => setSelectedProperty(prop)}
+                            id={`cta-qualify-${prop.id}`}
+                          >
+                            <span className={`simulation-status ${STATUS_CLASS[compatibility.status] || "adjust"}`}>{compatibility.status}</span>
+                            {" "}Ver mi compatibilidad
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="primary-button portal-qualify-btn"
+                            onClick={() => handleApplyToProperty(prop)}
+                            id={`cta-qualify-${prop.id}`}
+                          >
+                            Evaluar mi crédito en RutaHogar
+                          </button>
+                        )}
                         {prop.url && (
                           <a
                             href={prop.url}
@@ -486,6 +522,20 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
                 <p>{selectedProperty.description}</p>
               </div>
 
+              {selectedCompatibility && (
+                <div className="portal-modal-description">
+                  <h3>
+                    Tu compatibilidad:{" "}
+                    <strong className={`simulation-status ${STATUS_CLASS[selectedCompatibility.status] || "adjust"}`}>
+                      {selectedCompatibility.status}
+                    </strong>
+                  </h3>
+                  <p>{selectedCompatibility.message}</p>
+                  <p>{selectedCompatibility.recommendation}</p>
+                  <p><small>Calculado con tu última precalificación. Es referencial y no equivale a aprobación bancaria.</small></p>
+                </div>
+              )}
+
               <div className="portal-modal-actions">
                 <button
                   type="button"
@@ -495,7 +545,7 @@ export default function PropertySearch({ evaluation, onStartEvaluation, onNaviga
                     setSelectedProperty(null);
                   }}
                 >
-                  {getQualifyLabel(selectedProperty)}
+                  {selectedCompatibility ? `Reevaluar con ${getQualifyLabel(selectedProperty).replace("Ver si califico para ", "")}` : getQualifyLabel(selectedProperty)}
                 </button>
                 {selectedProperty.url && (
                   <a
