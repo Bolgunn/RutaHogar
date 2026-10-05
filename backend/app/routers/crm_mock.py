@@ -3,6 +3,11 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+import logging
+
+# Configurar el logger en INFO para que imprima en la consola
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -102,9 +107,6 @@ async def get_leads():
 
 # --- Endpoints de simulación para proveedores de la industria ---
 
-import logging
-
-logger = logging.getLogger(__name__)
 
 @router.post("/sync/planok", status_code=status.HTTP_200_OK, dependencies=[Depends(verify_api_key)])
 async def sync_planok(payload: PlanOKPayload):
