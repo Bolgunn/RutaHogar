@@ -372,6 +372,7 @@ records the rules as G29–G31; no database change was needed.
 | W4 | E3 "desglosar las métricas de engagement y conversión por …" | ALG-18 R14 and the "Desglose de engagement y conversión" section. Filters stay |
 | W5 | E4 "la pestaña de evaluaciones históricas" | Tab renamed "Evaluaciones históricas" |
 | W6 | E4 "cómo han cambiado el interés (engagement), las tasas de conversión y los tiempos" | Conversion-rate chart per cohort, the active-lead rate on the activity chart, and a times chart (sales cycle, days to apply, each stage pair) |
+| W7 | E1 "cuando el usuario revise el gráfico de embudo"; E2 "cuando reviso el KPI de tiempo ... el promedio ... además de los tiempos intermedios" (PR #115 review) | The funnel card shows the capture rate and en plan de mejora → venta next to the overall conversion ("Todos" view). The "Ciclo de venta" KPI leads with the average, median beside it, and links to "Tiempo entre etapas" |
 
 ## Changes from the build review (2026-10-05)
 
