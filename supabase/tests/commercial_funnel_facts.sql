@@ -14,7 +14,8 @@ insert into public.proyectos(id, inmobiliaria_id, nombre, comuna, tipo, precio_m
 
 -- L1 declares Ñuñoa (P1 in A, PB in B); its goals were P1, then PB, then a legacy goal without
 -- id; its plan targets PB. L2 favorited P2 only. L3 belongs to nothing today but holds a sale on
--- P1 (its favorite was removed). L4 has no evaluation. L5 is deleted below. LB favorited PB only.
+-- P1 (its favorite was removed). L4 has no evaluation. L5's account was erased: no profile and no
+-- evaluation left, only its stage history (which survives erasure by design). LB favorited PB only.
 -- L7 is inserted in this transaction with the default created_at.
 -- E1 is vinculado on P1 and pendiente on P2; E2 is vinculado on P1. AA is admin of A, AI is
 -- admin_inmobiliario of A, GA the global admin, EN an ejecutivo without inmobiliaria.
@@ -37,7 +38,6 @@ insert into public.profiles(id, role, inmobiliaria_id, onboarding_data) values
   ('c5000000-0000-0000-0000-000000000002', 'usuario', null, null),
   ('c5000000-0000-0000-0000-000000000003', 'usuario', null, null),
   ('c5000000-0000-0000-0000-000000000004', 'usuario', null, '{"comuna_interes": "Ñuñoa"}'),
-  ('c5000000-0000-0000-0000-000000000005', 'usuario', null, '{"comuna_interes": "Ñuñoa"}'),
   ('c5000000-0000-0000-0000-000000000006', 'usuario', null, null),
   ('c5000000-0000-0000-0000-000000000007', 'usuario', null, '{"comuna_interes": "Ñuñoa"}'),
   ('c5000000-0000-0000-0000-000000000011', 'ejecutivo', 'a5000000-0000-0000-0000-000000000001', null),
@@ -55,7 +55,6 @@ insert into public.evaluations(id, user_id, score, classification, target_commun
    '{"input": {"project_goal": {"nombre": "Meta antigua"}, "ingreso_mensual": 1}, "result": {"score": 74}}', '2026-03-10Z'),
   ('d5000000-0000-0000-0000-000000000004', 'c5000000-0000-0000-0000-000000000002', 55, 'Medio', 'HU15 Ninguna', null, '2026-01-11Z'),
   ('d5000000-0000-0000-0000-000000000005', 'c5000000-0000-0000-0000-000000000003', 80, 'Alto', 'HU15 Ninguna', null, '2026-01-12Z'),
-  ('d5000000-0000-0000-0000-000000000006', 'c5000000-0000-0000-0000-000000000005', 60, 'Medio', 'Ñuñoa', null, '2026-01-13Z'),
   ('d5000000-0000-0000-0000-000000000007', 'c5000000-0000-0000-0000-000000000006', 60, 'Medio', 'HU15 Ninguna', null, '2026-01-14Z');
 insert into public.evaluations(id, user_id, score, classification, target_commune) values
   ('d5000000-0000-0000-0000-000000000008', 'c5000000-0000-0000-0000-000000000007', 60, 'Medio', 'Ñuñoa');
@@ -117,10 +116,9 @@ insert into public.commercial_stage_events(
   ('2026-01-16Z', 'c5000000-0000-0000-0000-000000000006', 'a5000000-0000-0000-0000-000000000002', null,
    null, 'sistema', null, 'nuevo', null, 'backfill');
 
--- L3 stops belonging to P1; L5's account is deleted (its stage history survives, by design).
+-- L3 stops belonging to P1.
 delete from public.proyecto_favoritos
   where usuario_id = 'c5000000-0000-0000-0000-000000000003' and proyecto_id = 'b5000000-0000-0000-0000-000000000001';
-delete from public.profiles where id = 'c5000000-0000-0000-0000-000000000005';
 
 set constraints all immediate;
 
@@ -250,8 +248,8 @@ begin
   assert not (r::text like '%c5000000-%'), '5: no profile id';
   assert not (r::text like '%example.invalid%'), '5: no email';
   assert not (r::text like '%Llamado de prueba%') and not (r::text like '%proyecto_agotado%'), '5: no reason';
-  select string_agg(f ->> 'lead_id', ',' order by (f ->> 'lead_id')::int) into lead_ids
-  from jsonb_array_elements(r -> 'facts') f;
+  select string_agg(x ->> 'lead_id', ',' order by (x ->> 'lead_id')::int) into lead_ids
+  from jsonb_array_elements(r -> 'facts') x;
   assert lead_ids = '1,2,3,4', format('5: lead ids %s', lead_ids);
 end;
 $$;
@@ -300,12 +298,12 @@ begin
 end;
 $$;
 
--- 8. A lead with no evaluation (L4) and a deleted account (L5) are absent.
+-- 8. A lead with no evaluation (L4) and an erased account (L5, stage history only) are absent.
 do $$
 declare
   r jsonb := public.hu15_call('c5000000-0000-0000-0000-000000000014');
 begin
-  assert public.hu15_fact(r, '2026-01-13Z') is null, '8: deleted L5 absent';
+  assert jsonb_array_length(r -> 'facts') = 4, '8: L4 and L5 absent';
   assert not exists (
     select 1 from jsonb_array_elements(r -> 'facts') f
     where f -> 'evaluaciones' = '[]'::jsonb or f -> 'first_evaluation_at' = 'null'::jsonb), '8: every fact has an evaluation';
