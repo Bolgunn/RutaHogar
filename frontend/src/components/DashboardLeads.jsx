@@ -785,7 +785,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         <div className="admin-modal-card admin-modal-card--xl executive-opportunities-modal__card" onClick={(event) => event.stopPropagation()}>
           <div className="admin-modal-header executive-opportunities-modal__header">
             <div className="admin-modal-heading">
-              <span className="eyebrow">HU14 · E2</span>
               <h2>Oportunidades de contacto</h2>
               <p>Revisa mejoras recientes y decide si contactar, ver ficha o descartar.</p>
             </div>
