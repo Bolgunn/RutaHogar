@@ -2106,3 +2106,128 @@ end;
 $$;
 
 revoke all on function public.commercial_stage_backfill() from public, anon, authenticated;
+
+
+-- =============================================================
+-- HU19 — Portal Inmobiliario (RAG) sobre public.proyectos_rag
+-- =============================================================
+-- Espejo de migrations/20260920000000_hu19_proyectos_rag.sql con
+-- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql ya aplicada.
+
+create extension if not exists vector;
+
+create table if not exists public.proyectos_rag (
+    id uuid primary key default gen_random_uuid(),
+    nombre text,
+    descripcion text,
+    valor_uf numeric,
+    precio_clp numeric,
+    comuna text,
+    direccion text,
+    tipo_vivienda text,
+    dormitorios integer default 0,
+    banos integer default 0,
+    superficie_m2 numeric default 0,
+    url text,
+    imagen_url text,
+    fuente text,
+    estado text default 'disponible',
+    embedding vector(384),
+    created_at timestamptz default now()
+);
+
+-- Indice HNSW para busqueda por similitud semantica de coseno
+create index if not exists proyectos_rag_embedding_hnsw_idx
+  on public.proyectos_rag using hnsw (embedding vector_cosine_ops);
+
+-- Indice secundario por comuna para acelerar filtros
+create index if not exists proyectos_rag_comuna_idx
+  on public.proyectos_rag (lower(comuna));
+
+-- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
+-- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
+alter table public.proyectos_rag enable row level security;
+
+drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;
+create policy "Allow public read access to proyectos_rag"
+  on public.proyectos_rag for select
+  using (true);
+
+-- Defensa en profundidad: aunque alguien recree una policy permisiva, anon y
+-- authenticated no tienen el privilegio de tabla para escribir.
+revoke insert, update, delete, truncate on table public.proyectos_rag from anon, authenticated;
+grant select on table public.proyectos_rag to anon, authenticated;
+grant select, insert, update, delete, truncate on table public.proyectos_rag to service_role;
+
+create or replace function public.truncate_proyectos_rag ()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.proyectos_rag;
+end;
+$$;
+
+revoke execute on function public.truncate_proyectos_rag() from public, anon, authenticated;
+grant execute on function public.truncate_proyectos_rag() to service_role;
+
+-- RPC Function: match_proyectos_rag
+create or replace function public.match_proyectos_rag (
+  query_embedding vector(384),
+  match_threshold float default 0.0,
+  match_count int default 20,
+  filter_commune text default null,
+  filter_max_price_uf float default null,
+  filter_property_type text default null
+)
+returns table (
+  id uuid,
+  nombre text,
+  descripcion text,
+  valor_uf numeric,
+  precio_clp numeric,
+  comuna text,
+  direccion text,
+  tipo_vivienda text,
+  dormitorios int,
+  banos int,
+  superficie_m2 numeric,
+  url text,
+  imagen_url text,
+  fuente text,
+  estado text,
+  similarity float
+)
+language plpgsql
+stable
+as $$
+begin
+  return query
+  select
+    p.id,
+    p.nombre,
+    p.descripcion,
+    p.valor_uf,
+    p.precio_clp,
+    p.comuna,
+    p.direccion,
+    p.tipo_vivienda,
+    p.dormitorios,
+    p.banos,
+    p.superficie_m2,
+    p.url,
+    p.imagen_url,
+    p.fuente,
+    p.estado,
+    cast(1 - (p.embedding <=> query_embedding) as float) as similarity
+  from public.proyectos_rag p
+  where (1 - (p.embedding <=> query_embedding)) >= match_threshold
+    and (filter_commune is null or lower(p.comuna) = lower(filter_commune))
+    and (filter_max_price_uf is null or p.valor_uf <= filter_max_price_uf)
+    and (filter_property_type is null or lower(p.tipo_vivienda) = lower(filter_property_type))
+  order by p.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;

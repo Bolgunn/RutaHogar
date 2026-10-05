@@ -1,29 +1,48 @@
 # Plan: HU19 - Portal Inmobiliario Inteligente (RAG)
 
-## 1. Contexto y Objetivo
-Implementar la búsqueda de propiedades basada en descripciones de lenguaje natural utilizando recuperación aumentada por vectores (RAG), incorporando el catálogo inicial extraído mediante scraping (Apify) desde Portal Inmobiliario. Asegurar que cada tarjeta incluya los CTAs para evaluar la compatibilidad financiera en RutaHogar y los avisos de carácter referencial.
+**Categoría:** Importante
 
-## 2. Pasos de Implementación
-1. **Backend / Base de Datos:** Configurar la consulta de similitud vectorial (usando `pgvector` en Supabase) para procesar el texto de búsqueda natural sobre el catálogo obtenido vía Apify, retornando propiedades ordenadas por relevancia semántica (E1).
-2. **API Endpoint:** Exponer el endpoint de búsqueda que reciba la consulta natural y devuelva el listado de propiedades.
-3. **Frontend / Componentes:** 
-   - Desarrollar la barra de entrada de texto libre para la búsqueda inmobiliaria.
-   - Diseñar la tarjeta de propiedad (*Property Card*) con el CTA claro para evaluar el crédito en RutaHogar (“Ver si califico para este departamento”) en la vista general y de detalle (E2, E3).
-4. **Disclaimers y Manejo de Vacíos:**
-   - Añadir el aviso visible de que la información es referencial y debe verificarse en el portal de origen debido a la naturaleza del origen de los datos (E4).
-   - Implementar la UI para cuando la búsqueda no devuelva coincidencias, sugiriendo modificar restricciones o comuna (E5).
+## 1. Historia oficial
 
-## 3. Mapeo de Criterios de Aceptación
-- **E1 (Búsqueda vectorial):** Validado mediante integración del servicio semántico.
-- **E2 & E3 (CTAs de RutaHogar):** Verificado visualmente en tarjetas y detalle.
-- **E4 (Disclaimer referencial):** Verificado por presencia de texto legal/referencial visible.
-- **E5 (Mensaje de resultados vacíos):** Verificado mediante pruebas con consultas restrictivas.
+Como lead, quiero buscar opciones de vivienda utilizando descripciones naturales (ej. "departamento con vista al atardecer, cocina integrada, cerca del metro"), para encontrar propiedades reales que se ajusten a mis gustos sin depender de filtros rígidos y descubrir si califico financieramente para ellas en RutaHogar.
 
-## 4. Suposiciones y Asuntos Abiertos (Assumptions Log)
-- El catálogo inicial de propiedades se poblará mediante un proceso de extracción acotado utilizando la capa gratuita de Apify desde Portal Inmobiliario.
-- Se asume que la base de datos en Supabase cuenta con la extensión `pgvector` habilitada.
+### Criterios de aceptación
 
-## 5. Start Here (Instrucciones de Arranque)
-1. Crear y cambiar a la rama de trabajo: git checkout -b feat/hu19-portal-inmobiliario-rag
-2. Validar la estructura de la tabla de propiedades y la configuración de pgvector en Supabase.
-3. Implementar el servicio backend de búsqueda semántica y los componentes frontend correspondientes.
+- **E1:** Dado que existen propiedades reales extraídas en la base de datos, cuando el usuario realice una búsqueda con lenguaje natural, entonces el sistema debe buscar mediante vectores y retornar las propiedades semánticamente más relevantes.
+- **E2:** Dado que el sistema retorna resultados de búsqueda, cuando el usuario visualice las propiedades, entonces cada tarjeta debe incluir un llamado a la acción (CTA) para redirigirlo a RutaHogar a evaluar su crédito.
+- **E3:** Dado que el usuario está revisando una propiedad en los resultados, cuando seleccione una propiedad que le interesa, entonces el sistema debe mostrar un llamado a la acción (CTA) claro que lo invite a evaluar su compatibilidad financiera para esa propiedad en RutaHogar (ej. "Ver si califico para este departamento").
+- **E4:** Dado que el catálogo de propiedades puede no estar actualizado en tiempo real, cuando el usuario revise los resultados de búsqueda, entonces el sistema debe indicar de forma visible que la información es referencial y que los detalles definitivos (disponibilidad, precio exacto, condiciones) deben verificarse en el portal inmobiliario de origen.
+- **E5:** Dado que el usuario realiza una búsqueda muy específica o con pocos resultados, cuando el sistema no encuentre propiedades que coincidan, entonces debe mostrar un mensaje claro indicando que no hay resultados y, si es posible, sugerir ampliar o modificar su descripción (ej. "Prueba buscando con menos restricciones o cambiando la comuna").
+
+## 2. Implementación
+
+| Pieza | Dónde |
+|---|---|
+| Catálogo vectorial `proyectos_rag` (pgvector, HNSW, RPC `match_proyectos_rag`) | `supabase/migrations/20260920000000_hu19_proyectos_rag.sql` |
+| Escritura solo para `service_role` | `supabase/migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql` |
+| Tipos en singular (corrige filas ya cargadas) | `supabase/migrations/20261005160000_hu19_proyectos_rag_tipo_singular.sql` |
+| Ingesta Apify → e5 → Supabase | `backend/scripts/dump_apify.py`, `backend/scripts/ingest_apify.py` (ver `README_INGESTION.md`) |
+| Búsqueda semántica, intención (tipo, comuna, dormitorios, baños, UF) y umbral | `backend/app/properties_search.py` |
+| Endpoint `POST /api/properties/search` | `backend/app/main.py` |
+| Barra, tarjetas, modal de detalle, disclaimer y estado vacío | `frontend/src/components/PropertySearch.jsx` |
+| CTA → precalificación con la propiedad precargada | `startEvaluation` en `frontend/src/App.jsx` |
+
+Embeddings: `intfloat/multilingual-e5-small` (384 dims) vía Hugging Face Inference API (`HUGGINGFACE_API_KEY`); torch no cabe en el límite de Vercel. Umbral `DEFAULT_SIMILARITY_THRESHOLD = 0.85`, aplicado sobre la similitud ajustada por intención.
+
+## 3. Mapeo de criterios
+
+- **E1:** `test_semantic_ranking_criterion_E1`, `test_intent_boosts_keep_semantic_order_without_ties`, `test_compound_communes_are_detected`.
+- **E2 / E3:** `test_ctas_and_disclaimer_criteria_E2_E3_E4`, `test_cta_text_follows_property_type`, `PropertySearch.test.jsx`.
+- **E4:** disclaimer en cada respuesta del backend, visible en la vista.
+- **E5:** `test_empty_results_handling_criterion_E5`, `test_commune_without_inventory_returns_no_results`.
+
+## 4. Despliegue
+
+1. Variable `HUGGINGFACE_API_KEY` en Vercel (sin ella el portal responde 503).
+2. Aplicar a mano en el Supabase hosteado, en orden: `20261005150000_hu19_proyectos_rag_lock_writes.sql` y `20261005160000_hu19_proyectos_rag_tipo_singular.sql` (la tabla base ya existe).
+3. La ingesta usa `SUPABASE_SERVICE_ROLE_KEY`; los volcados `raw_apify_dump*.json` no se versionan.
+
+## 5. Limitaciones conocidas
+
+- El 98% del catálogo actual es de la comuna de Santiago: buscar otra comuna devuelve el mensaje de E5 con la sugerencia de cambiarla. Ampliar a otras comunas de la RM queda para una HU propia (ver `docs/ADR_HU19_Ingesta_Hibrida.md`).
+- Los avisos scrapeados traen solo el título como descripción, así que la búsqueda semántica trabaja sobre títulos.

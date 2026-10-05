@@ -31,27 +31,13 @@ create index if not exists proyectos_rag_embedding_hnsw_idx
 create index if not exists proyectos_rag_comuna_idx
   on public.proyectos_rag (lower(comuna));
 
--- RLS policies: Acceso completo para proyectos_rag
+-- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
+-- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
 alter table public.proyectos_rag enable row level security;
 
 drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;
 create policy "Allow public read access to proyectos_rag"
   on public.proyectos_rag for select
-  using (true);
-
-drop policy if exists "Allow public delete access to proyectos_rag" on public.proyectos_rag;
-create policy "Allow public delete access to proyectos_rag"
-  on public.proyectos_rag for delete
-  using (true);
-
-drop policy if exists "Allow public insert access to proyectos_rag" on public.proyectos_rag;
-create policy "Allow public insert access to proyectos_rag"
-  on public.proyectos_rag for insert
-  with check (true);
-
-drop policy if exists "Allow public update access to proyectos_rag" on public.proyectos_rag;
-create policy "Allow public update access to proyectos_rag"
-  on public.proyectos_rag for update
   using (true);
 
 -- RPC Function: truncate_proyectos_rag

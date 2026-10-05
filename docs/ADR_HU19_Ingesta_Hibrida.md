@@ -17,8 +17,8 @@ Se ha completado exitosamente la fase inicial de infraestructura y pipeline desa
    - Definición de la función RPC `match_proyectos_rag` para consultas vectoriales optimizadas con filtrado por atributos.
 
 2. **Desacoplamiento del Pipeline de Ingesta:**
-   - **[`backend/scripts/dump_apify.py`](file:///home/mo/Escritorio/UNIVERSIDAD/2026-1/Feria1/ScoreLeads/backend/scripts/dump_apify.py):** Módulo exclusivo para autenticación y extracción HTTP desde el actor Apify (`scraperschile/portal-inmobiliario-chile-scraper-api`), desacoplado del consumo de cuota y procesamiento de embeddings.
-   - **[`backend/scripts/ingest_apify.py`](file:///home/mo/Escritorio/UNIVERSIDAD/2026-1/Feria1/ScoreLeads/backend/scripts/ingest_apify.py):** Módulo de transformación e ingesta local que procesa volcados estáticos (`raw_apify_dump.json`), genera embeddings vectoriales determinísticos y realiza la carga a Supabase.
+   - **[`backend/scripts/dump_apify.py`](../backend/scripts/dump_apify.py):** Módulo exclusivo para autenticación y extracción HTTP desde el actor Apify (`scraperschile/portal-inmobiliario-chile-scraper-api`), desacoplado del consumo de cuota y procesamiento de embeddings.
+   - **[`backend/scripts/ingest_apify.py`](../backend/scripts/ingest_apify.py):** Módulo de transformación e ingesta local que procesa volcados estáticos (`raw_apify_dump.json`), genera embeddings `intfloat/multilingual-e5-small` vía Hugging Face Inference API y realiza la carga a Supabase. Los volcados quedan solo en la máquina local (`.gitignore`).
 
 3. **Saneamiento del Locale Chileno y Extracción Dinámica de Comunas:**
    - **Parsing numérico chileno:** Resolución de problemas de miles (`.`) y decimales (`,`), auto-corrigiendo casos de truncamiento en valores UF expresados en miles.

@@ -55,3 +55,6 @@ Makefile
 
 # Antigravity artifacts
 install.cmd
+
+# Volcados crudos de Apify (HU19): datos scrapeados, solo en la máquina de quien ingesta.
+backend/raw_apify_dump*.json
