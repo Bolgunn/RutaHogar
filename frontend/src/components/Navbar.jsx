@@ -1,5 +1,6 @@
 import React from "react";
 import { roleLabels, roles } from "../services/auth";
+import { isAdminRole } from "../lib/roles";
 
 const navByRole = {
   [roles.user]: [
@@ -54,21 +55,23 @@ const sidebarSupportByRole = {
 
 export default function Navbar({ profile, page, currentScore, onNavigate, onLogout }) {
   const role = profile?.role || roles.user;
-  const groups = navByRole[role] || navByRole[roles.user];
-  const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[roles.user];
+  const isAdmin = isAdminRole(role);
+  const fallbackRole = isAdmin ? roles.admin : roles.user;
+  const groups = navByRole[role] || navByRole[fallbackRole];
+  const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[fallbackRole];
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Usuario";
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email = profile?.email || "";
-  const accountTarget = role === roles.user ? "profile" : role === roles.admin ? "admin-profile" : "sales-profile";
-  const brandTarget = role === roles.admin ? "admin" : "home";
-  const brandHref = role === roles.admin ? "/admin" : "/inicio";
+  const accountTarget = role === roles.user ? "profile" : isAdmin ? "admin-profile" : "sales-profile";
+  const brandTarget = isAdmin ? "admin" : "home";
+  const brandHref = isAdmin ? "/admin" : "/inicio";
 
   const handleNavigate = (id) => {
     onNavigate(id);
   };
 
   return (
-    <aside className={`sidebar ${role === roles.admin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
+    <aside className={`sidebar ${isAdmin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
       <a className="sidebar-brand" href={brandHref} onClick={(e) => { e.preventDefault(); handleNavigate(brandTarget); }}>
         <span className="sidebar-brand__pill">
           <img className="sidebar-brand__logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />

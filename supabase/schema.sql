@@ -21,7 +21,7 @@ create table if not exists public.profiles (
   onboarding_data jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin'))
+  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin', 'admin_inmobiliario'))
 );
 
 alter table public.profiles
