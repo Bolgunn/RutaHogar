@@ -966,7 +966,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
                       await reportLead(selectedLead.user_id, executiveScope.id, reportReason);
                       // Optimistic UI update
                       setLocalEvaluations(prev => prev.map(item =>
-                        item.id === selectedLead.id
+                        item.user_id === selectedLead.user_id
                           ? { ...item, reliability_status: "en_revision" }
                           : item
                       ));

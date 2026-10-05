@@ -18,7 +18,8 @@ def predict_fraud(data: Dict) -> Tuple[float, List[str]]:
     """
     Predice la probabilidad de fraude y extrae los factores usando reglas determinísticas.
     """
-    time_to_submit = float(data.get("time_to_submit") or 30)
+    raw_time = data.get("time_to_submit")
+    time_to_submit = 30.0 if raw_time is None else float(raw_time)
     ingreso_mensual = float(data.get("ingreso_mensual") or 0)
     ahorro_disponible = float(data.get("ahorro_disponible") or 0)
 

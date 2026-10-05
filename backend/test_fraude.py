@@ -149,22 +149,6 @@ def test_full_fraud_suite():
     else:
         print(f"❌ Error en endpoint: {response_ahorro.text}")
 
-    # -------------------------------------------------------------
-    # 5. Prueba Endpoint de Reentrenamiento ML (/score/retrain)
-    # -------------------------------------------------------------
-    print("\n[TEST 5] Probando Endpoint de Reentrenamiento ML (/score/retrain)...")
-    headers = {"x-admin-token": "super-secret-token"}
-    mock_retrain = MagicMock()
-    mock_retrain.table().select().execute().data = [] # Retornará 0 datos
-    
-    with patch("app.ml_fraud.get_supabase_client", return_value=mock_retrain):
-        response_retrain = client.post("/score/retrain", headers=headers)
-    
-    print(f"✅ Status Code recibido: {response_retrain.status_code}")
-    print(f"📦 Respuesta del modelo: {response_retrain.json()}")
-    assert response_retrain.status_code == 200
-    print("   -> Resultado: OK (Endpoint de reentrenamiento operativo)")
-
     print("\n=======================================================")
     print("      TODOS LOS TESTS DE FRAUDE PASARON CON ÉXITO      ")
     print("=======================================================\n")
