@@ -208,13 +208,7 @@ export function evaluationAnnotationOwner(role, userId) {
 }
 
 export async function getEvaluations(userId, role) {
-  requireConnection
-  if (!isSupabaseDataConfigured) {
-    const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
-    if (isSales) return readLocalEvaluations();
-    return readLocalEvaluations().filter((item) => item.user_id === userId || item.email === userId);
-  }
-
+  requireConnection();
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
@@ -225,14 +219,13 @@ export async function getEvaluations(userId, role) {
   if (error) throw error;
   let contactsMap = {};
   if (isSales && data?.length) {
-    const { data: contacts } = await supabase.rpc("list_lead_contacts", {
+    const { data: contacts, error: contactsError } = await supabase.rpc("list_lead_contacts", {
       p_user_ids: [...new Set(data.map((row) => row.user_id))],
     });
-    contactsMap = Object.fromEntries((contacts || []).map((contact) => [contact.id, contact]));
     if (contactsError) {
-      logSupabaseError(contactsError);
-    } else if (contactsData) {
-      contactsMap = Object.fromEntries(contactsData.map((contact) => [
+      console.error("Error fetching lead contacts:", contactsError);
+    } else if (contacts) {
+      contactsMap = Object.fromEntries(contacts.map((contact) => [
         contact.id,
         { ...contact, reliability_status: contact.reliability_status || "normal" }
       ]));
