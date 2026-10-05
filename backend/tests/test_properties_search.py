@@ -42,6 +42,11 @@ class FakeEncoder:
         return [v / norm for v in vec]
 
 
+# El doble de bolsa de palabras da cosenos ~0.3-0.6, no el rango ~0.8-0.9 de E5:
+# los tests de orden y CTA usan un umbral bajo que solo descarta los descalces duros.
+FAKE_ENCODER_THRESHOLD = 0.1
+
+
 class TestPropertiesSearchRAG(unittest.TestCase):
 
     def setUp(self):
@@ -78,7 +83,7 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
     def test_semantic_ranking_criterion_E1(self):
         """Verifica que la búsqueda vectorial ordene por similitud semántica descendente (E1)."""
-        res = search_properties(query="departamento en Santiago cerca de metro bellas artes", limit=5)
+        res = search_properties(query="departamento en Santiago cerca de metro bellas artes", limit=5, similarity_threshold=FAKE_ENCODER_THRESHOLD)
         results = res.get("results", [])
         self.assertGreater(len(results), 0)
         
@@ -92,7 +97,7 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
     def test_ctas_and_disclaimer_criteria_E2_E3_E4(self):
         """Verifica la presencia de los CTAs de RutaHogar (E2/E3) y el disclaimer referencial (E4)."""
-        res = search_properties(query="departamento 2 dormitorios", limit=3)
+        res = search_properties(query="departamento 2 dormitorios", limit=3, similarity_threshold=FAKE_ENCODER_THRESHOLD)
         
         # Disclaimer referencial (E4)
         self.assertIn("disclaimer", res)
@@ -117,7 +122,7 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
     def test_bathrooms_intent_ranking(self):
         """Verifica que buscar 'departamento con 2 baños' priorice propiedades con >=2 baños sobre las de 1 baño."""
-        res = search_properties(query="departamento con 2 baños", limit=5)
+        res = search_properties(query="departamento con 2 baños", limit=5, similarity_threshold=FAKE_ENCODER_THRESHOLD)
         results = res.get("results", [])
         self.assertGreater(len(results), 0)
         first_item = results[0]
@@ -128,7 +133,8 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         payload = {
             "query": "casa 4 dormitorios en Las Condes",
             "property_type": "casa",
-            "limit": 3
+            "limit": 3,
+            "similarity_threshold": FAKE_ENCODER_THRESHOLD,
         }
         response = self.client.post("/api/properties/search", json=payload)
         self.assertEqual(response.status_code, 200)
@@ -152,14 +158,14 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
     def test_empty_database_result_is_not_replaced_by_local_catalog(self):
         with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=[]):
-            res = search_properties(query="departamento en Santiago")
+            res = search_properties(query="departamento")
         self.assertEqual(res["total"], 0)
         self.assertEqual(res["suggestion"], EMPTY_RESULTS_SUGGESTION)
 
     def test_depto_abbreviation_excludes_houses(self):
         rows = [
-            {"id": "c", "nombre": "Casa amplia", "tipo_vivienda": "casas", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.9},
-            {"id": "d", "nombre": "Departamento centrico", "tipo_vivienda": "departamentos", "comuna": "Santiago", "valor_uf": 3000, "similarity": 0.6},
+            {"id": "c", "nombre": "Casa amplia", "tipo_vivienda": "casas", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.95},
+            {"id": "d", "nombre": "Departamento centrico", "tipo_vivienda": "departamentos", "comuna": "Santiago", "valor_uf": 3000, "similarity": 0.88},
         ]
         with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
             res = search_properties(query="depto en santiago")
@@ -171,6 +177,49 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
             res = search_properties(query="casa con jardin")
         self.assertEqual(res["results"][0]["cta_text"], "Ver si califico para esta casa")
+
+    def test_compound_communes_are_detected(self):
+        from app.properties_search import _extract_query_intent
+        casos = {
+            "casa con jardín en Puente Alto": "puente alto",
+            "depto en Estación Central": "estacion central",
+            "casa en San Joaquín": "san joaquin",
+            "depto en san miguel 2d2b": "san miguel",
+            "casa en Isla de Maipo": "isla de maipo",
+            "depto en Maipú": "maipu",
+            "departamento en Santiago": "santiago",
+        }
+        for consulta, comuna in casos.items():
+            with self.subTest(consulta=consulta):
+                self.assertEqual(_extract_query_intent(consulta).get("req_comuna"), comuna)
+
+    def test_commune_without_inventory_returns_no_results(self):
+        rows = [
+            {"id": f"s{i}", "nombre": "Casa con jardin", "tipo_vivienda": "casa", "comuna": "Santiago", "valor_uf": 4000, "similarity": 0.92}
+            for i in range(3)
+        ]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="casa con jardín en Puente Alto")
+        self.assertEqual(res["total"], 0)
+        self.assertIn("Puente Alto", res["suggestion"])
+
+    def test_commune_match_ignores_accents(self):
+        rows = [{"id": "n", "nombre": "Depto", "tipo_vivienda": "departamento", "comuna": "Ñuñoa", "valor_uf": 3000, "similarity": 0.88}]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="depto en nunoa")
+        self.assertEqual([item["id"] for item in res["results"]], ["n"])
+
+    def test_intent_boosts_keep_semantic_order_without_ties(self):
+        rows = [
+            {"id": "b", "nombre": "Depto", "tipo_vivienda": "departamento", "comuna": "Santiago", "dormitorios": 2, "valor_uf": 2500, "similarity": 0.89},
+            {"id": "a", "nombre": "Depto", "tipo_vivienda": "departamento", "comuna": "Santiago", "dormitorios": 2, "valor_uf": 2500, "similarity": 0.91},
+        ]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="depto 2 dormitorios en santiago hasta 3000 uf")
+        self.assertEqual([item["id"] for item in res["results"]], ["a", "b"])
+        similitudes = [item["similarity"] for item in res["results"]]
+        self.assertNotEqual(similitudes[0], similitudes[1])
+        self.assertLessEqual(similitudes[0], 1.0)
 
     def test_depto_and_departamento_share_embedding(self):
         self.assertEqual(

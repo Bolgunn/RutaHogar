@@ -5,6 +5,7 @@ import html
 import json
 import logging
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,7 +29,7 @@ VECTOR_DIMENSION = 384
 
 # Única fuente del umbral: se aplica sobre la similitud ya ajustada por intención,
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
-DEFAULT_SIMILARITY_THRESHOLD = 0.80
+DEFAULT_SIMILARITY_THRESHOLD = 0.85
 SUPABASE_TIMEOUT_SECONDS = 5
 # Serverless Inference API de Hugging Face: torch no cabe en el límite de 250 MB de Vercel.
 # Sus 384 dims calzan con proyectos_rag.embedding vector(384).
@@ -44,6 +45,36 @@ HUGGINGFACE_BACKOFF_SECONDS = 2
 HUGGINGFACE_BATCH_SIZE = 32
 
 logger = logging.getLogger(__name__)
+
+# Las 52 comunas de la Región Metropolitana, sin tildes. Una comuna que no se
+# reconoce no penaliza, y el catálogo de otra comuna se colaría como resultado.
+RM_COMMUNES = (
+    "santiago", "cerrillos", "cerro navia", "conchali", "el bosque", "estacion central",
+    "huechuraba", "independencia", "la cisterna", "la florida", "la granja", "la pintana",
+    "la reina", "las condes", "lo barnechea", "lo espejo", "lo prado", "macul", "maipu",
+    "nunoa", "pedro aguirre cerda", "penalolen", "providencia", "pudahuel", "quilicura",
+    "quinta normal", "recoleta", "renca", "san joaquin", "san miguel", "san ramon",
+    "vitacura", "puente alto", "pirque", "san jose de maipo", "colina", "lampa", "tiltil",
+    "san bernardo", "buin", "calera de tango", "paine", "melipilla", "alhue", "curacavi",
+    "maria pinto", "san pedro", "talagante", "el monte", "isla de maipo",
+    "padre hurtado", "penaflor",
+)
+_RM_COMMUNES_BY_LENGTH = sorted(RM_COMMUNES, key=len, reverse=True)
+
+# Las bonificaciones solo desempatan: el rango útil de E5 es ~0.78-0.92, así que
+# sumas mayores aplastan la similitud semántica contra el tope.
+ATTRIBUTE_EXACT_BOOST = 0.02
+ATTRIBUTE_ABOVE_BOOST = 0.01
+ATTRIBUTE_MISS_PENALTY = 0.10
+# Tipo o comuna distintos a los pedidos no son un resultado parcial: se descartan.
+HARD_MISMATCH_PENALTY = 2.0
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(
+        char for char in unicodedata.normalize("NFD", text) if unicodedata.category(char) != "Mn"
+    )
+
 
 def _extract_query_intent(query_text: str) -> Dict[str, Any]:
     """Extracts numerical intent from query (bathrooms, bedrooms, max price UF)."""
@@ -84,11 +115,11 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
     if m_tipo:
         intent["req_tipo"] = m_tipo.group(1)
 
-    # 6. Comunas comunes
-    comunas = ["santiago", "providencia", "ñuñoa", "las condes", "la florida", "san miguel", "vitacura", "macul", "peñalolén", "lo barnechea", "recoleta", "estación central"]
-    for c in comunas:
-        if c in q:
-            intent["req_comuna"] = c
+    # 6. Comuna: la más larga primero, para que "san joaquin" no se lea como "san" + otra.
+    q_plain = _strip_accents(q)
+    for comuna in _RM_COMMUNES_BY_LENGTH:
+        if re.search(rf"\b{re.escape(comuna)}\b", q_plain):
+            intent["req_comuna"] = comuna
             break
 
     return intent
@@ -99,53 +130,40 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
     banos = int(item.get("banos") or item.get("bathrooms") or 1)
     dormitorios = int(item.get("dormitorios") or item.get("bedrooms") or 1)
     precio_uf = float(item.get("valor_uf") or item.get("price_uf") or 0.0)
-    commune = str(item.get("comuna") or item.get("commune") or "").lower()
+    commune = _strip_accents(str(item.get("comuna") or item.get("commune") or "").lower().strip())
 
-    # Requisito de Baños
-    req_b = intent.get("req_banos")
-    if req_b is not None:
-        if banos == req_b:
-            sim += 0.35
-        elif banos > req_b:
-            sim += 0.25
+    for requerido, actual in ((intent.get("req_banos"), banos), (intent.get("req_dormitorios"), dormitorios)):
+        if requerido is None:
+            continue
+        if actual == requerido:
+            sim += ATTRIBUTE_EXACT_BOOST
+        elif actual > requerido:
+            sim += ATTRIBUTE_ABOVE_BOOST
         else:
-            sim -= 0.45
+            sim -= ATTRIBUTE_MISS_PENALTY
 
-    # Requisito de Dormitorios
-    req_d = intent.get("req_dormitorios")
-    if req_d is not None:
-        if dormitorios == req_d:
-            sim += 0.35
-        elif dormitorios > req_d:
-            sim += 0.25
-        else:
-            sim -= 0.45
-
-    # Requisito de UF
     req_uf = intent.get("req_max_uf")
     if req_uf is not None and req_uf > 0:
         if precio_uf <= req_uf:
-            sim += 0.15
+            sim += ATTRIBUTE_EXACT_BOOST
         else:
-            sim -= 0.40
+            sim -= ATTRIBUTE_MISS_PENALTY
 
-    # Pedir un tipo y recibir otro no es un resultado parcial: se descarta igual que la comuna.
     req_t = intent.get("req_tipo")
     if req_t:
         item_tipo = _normalize_property_type(item.get("tipo_vivienda") or item.get("property_type"))
         if item_tipo and item_tipo != req_t:
-            sim -= 2.0
+            sim -= HARD_MISMATCH_PENALTY
 
     req_c = intent.get("req_comuna")
     if req_c:
-        if req_c in commune:
-            sim += 0.25
+        if commune == req_c:
+            sim += ATTRIBUTE_EXACT_BOOST
         else:
-            sim -= 2.0
-    elif commune and commune in query_text.lower():
-        sim += 0.15
+            sim -= HARD_MISMATCH_PENALTY
 
-    return max(0.0, min(0.99, float(sim)))
+    # Tope en 1.0 solo para que el porcentaje mostrado no pase de 100%.
+    return max(0.0, min(1.0, float(sim)))
 
 
 class EmbeddingError(RuntimeError):
@@ -458,6 +476,15 @@ def _query_supabase_proyectos_rag(
     return None
 
 
+def _empty_results_suggestion(intent: Dict[str, Any]) -> str:
+    if intent.get("req_comuna"):
+        return (
+            f"Por ahora no tenemos propiedades en {intent['req_comuna'].title()}. "
+            "Prueba con otra comuna o quítala de la búsqueda para ver todo el catálogo."
+        )
+    return EMPTY_RESULTS_SUGGESTION
+
+
 def _log_top_similarities(source: str, query_text: str, threshold: float, scored: List[tuple]) -> None:
     """Top 5 previo al umbral, para calibrar DEFAULT_SIMILARITY_THRESHOLD con datos reales."""
     if not logger.isEnabledFor(logging.DEBUG):
@@ -565,7 +592,7 @@ def search_properties(
             "disclaimer": RUTAHOGAR_REFERENTIAL_DISCLAIMER
         }
         if total_count == 0:
-            response_payload["suggestion"] = EMPTY_RESULTS_SUGGESTION
+            response_payload["suggestion"] = _empty_results_suggestion(query_intent)
         return response_payload
 
     # Fallback local determinístico cuando no hay conexión a Supabase
@@ -634,7 +661,7 @@ def search_properties(
 
     # Criterio E5: Manejo de resultados vacíos
     if total_count == 0:
-        response_payload["suggestion"] = EMPTY_RESULTS_SUGGESTION
+        response_payload["suggestion"] = _empty_results_suggestion(query_intent)
 
     return response_payload
 
