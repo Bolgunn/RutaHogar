@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getEvaluations, normalizeEvaluation } from "../services/evaluationService";
 import { isUUID, updateLastLeadSeenAt } from "../services/profileService";
-import { updateStoredProfile, roles } from "../services/auth";
+import { updateStoredProfile } from "../services/auth";
+import { isStaffRole } from "../lib/roles";
 import { supabase } from "../utils/supabase";
 
 const CLASSIFICATION_ORDER = { Alto: 1, Medio: 2, Bajo: 3 };
@@ -20,7 +21,7 @@ export function useLeads({ userId, profile }) {
   const [newHighLeadsCount, setNewHighLeadsCount] = useState(0);
   const [error, setError] = useState("");
 
-  const isStaff = profile?.role === roles.sales || profile?.role === roles.admin;
+  const isStaff = isStaffRole(profile?.role);
 
   useEffect(() => {
     let active = true;
