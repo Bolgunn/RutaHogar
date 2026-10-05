@@ -1,0 +1,694 @@
+import React, { useEffect, useMemo, useState } from "react";
+import FieldTooltip from "./FieldTooltip";
+import { computeFunnelMetrics } from "../lib/commercial/funnelMetrics";
+import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
+import { STAGES } from "../lib/commercial/stageRules";
+import { roles } from "../lib/roles";
+import { getCommercialFunnelFacts } from "../services/commercialMetricsService";
+
+// HU 15 — métricas comerciales. Todo número sale de ALG-18 (computeFunnelMetrics); esta vista
+// solo filtra y dibuja. Copia y estructura: frontend/mockups/hu15-metricas.html.
+
+const EMPTY_FILTERS = { proyecto_id: null, afinidad: [], capacidad: [], prioridad: [] };
+const LADDER = STAGES.filter((stage) => stage.value !== "perdido");
+const TIME_STAGES = LADDER.filter((stage) => stage.value !== "venta_cerrada");
+
+const ANTECEDENTES = "Su precalificación más reciente no tiene datos suficientes para estimar su capacidad de compra. Necesita volver a precalificarse; no significa que no pueda comprar.";
+const MEJORES_HELP = "Solo leads Compatible que además alcanzan a comprar: los que tienen más probabilidad de cerrar.";
+
+const AFINIDAD = [
+  ["Compatible", "Compatible", "Alta afinidad con al menos uno de tus proyectos disponibles: su capacidad de compra, la comuna y el tipo de vivienda que busca y su situación financiera calzan bien."],
+  ["Cercano", "Cercano", "Afinidad media con su mejor proyecto: calza en lo principal, pero algo le resta, como poca holgura de capacidad, otra comuna u otro tipo de vivienda."],
+  ["Marginal", "Marginal", "Podría optar a alguno de tus proyectos, pero con baja afinidad: varios factores le restan."],
+  ["fuera_de_alcance", "Fuera de alcance", "No calza con ninguno de tus proyectos disponibles: su capacidad está lejos del precio de entrada o tiene un bloqueador crítico, como morosidad vigente."],
+  ["requiere_antecedentes", "Requiere antecedentes", ANTECEDENTES],
+];
+
+const CAPACIDAD = [
+  ["alcanza", "Alcanza", "Su capacidad de compra estimada alcanza el precio de la unidad más barata de al menos uno de tus proyectos disponibles."],
+  ["cercano_por_capacidad", "Cerca de alcanzar", "Todavía no alcanza la unidad más barata, pero está cerca: con algo más de ahorro o renta, o con apoyos como FOGAES, podría lograrlo."],
+  ["insuficiente", "Insuficiente", "Su capacidad de compra está lejos del precio de entrada de tus proyectos, o tiene un bloqueador crítico que impide derivarlo."],
+  ["requiere_antecedentes", "Requiere antecedentes", ANTECEDENTES],
+];
+
+const PRIORIDAD = [...Object.entries(PRIORITY_ACTIONS), [SIN_PRIORIDAD, "Sin prioridad"]];
+
+const ETAPA_HELP = {
+  nuevo: "El lead está asociado a tus proyectos (los marcó como favoritos o busca en su comuna) y nadie lo ha contactado todavía.",
+  contactado: "Un ejecutivo registró el primer contacto con el lead.",
+  en_plan_mejora: "El lead está trabajando un plan para mejorar su perfil financiero antes de comprar. Lo registra el ejecutivo.",
+  en_negociacion: "El lead está negociando una unidad de un proyecto específico.",
+  reserva: "El lead reservó una unidad del proyecto.",
+  venta_cerrada: "El lead firmó la promesa de compraventa. Si la venta se revierte, deja de contarse como venta.",
+};
+
+const ACCIONES = [
+  ["favorito", "Favorito", "El lead marcó como favorito uno de tus proyectos."],
+  ["postulacion", "Postulación", "El lead fijó uno de tus proyectos como su meta de compra. Se cuenta la primera vez por proyecto, aunque después cambie de meta."],
+  ["reprecalificacion", "Re-precalificación", "El lead volvió a precalificarse teniendo uno de tus proyectos como meta. Su primera precalificación no cuenta."],
+  ["plan_aceptado", "Plan aceptado", "El lead aceptó un plan de mejora orientado a uno de tus proyectos."],
+  ["actualizacion_progreso", "Actualización de progreso", "El lead registró avances (datos nuevos o una nueva evaluación) en su plan de mejora orientado a uno de tus proyectos."],
+  ["meta_confirmada", "Meta confirmada", "El lead cumplió y confirmó una meta de su plan de mejora orientado a uno de tus proyectos."],
+];
+
+const GRANULARIDADES = [["semana", "Semana"], ["mes", "Mes"], ["año", "Año"]];
+
+function days(value) {
+  return value == null ? "—" : value.toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function percent(rate) {
+  return rate == null ? "—" : `${Math.round(rate * 100)} %`;
+}
+
+// Una tasa nula nunca es "0 %": no hay datos (ALG-18, obligaciones de la interfaz).
+function Rate({ rate, n }) {
+  return <span className="cm-rate">{rate == null ? `— sin datos (n = ${n})` : percent(rate)}</span>;
+}
+
+function asOf(now) {
+  return new Date(now).toLocaleString("es-CL", {
+    timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function periodLabel(clave, granularidad) {
+  if (granularidad !== "mes") return clave;
+  const [year, month] = clave.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 15)).toLocaleString("es-CL", { month: "short", year: "2-digit", timeZone: "UTC" });
+}
+
+function LabelHelp({ label, help, className = "cm-label" }) {
+  return <span className="cm-label-row"><span className={className}>{label}</span><FieldTooltip text={help} /></span>;
+}
+
+function Kpi({ color, label, help, value, hint }) {
+  return (
+    <article className={`admin-kpi-card admin-kpi-card--${color}`}>
+      <LabelHelp label={label} help={help} className="admin-kpi-card__label" />
+      <strong className="admin-kpi-card__value">{value}</strong>
+      <p className="admin-kpi-card__hint">{hint}</p>
+    </article>
+  );
+}
+
+function ContactItem({ label, help, value, hint, alert = false, children }) {
+  return (
+    <div className={`cm-contact__item ${alert ? "cm-contact__item--alert" : ""}`}>
+      <LabelHelp label={label} help={help} />
+      <span className="cm-contact__value">{value}</span>
+      <p className="cm-contact__hint">{hint}</p>
+      {children}
+    </div>
+  );
+}
+
+function ViewSwitch({ value, onChange }) {
+  return (
+    <div className="cm-view">
+      {[["todos", "Todos"], ["mejores", "Mejores leads"]].map(([key, label]) => (
+        <button key={key} type="button" className={value === key ? "is-active" : ""} onClick={() => onChange(key)}>{label}</button>
+      ))}
+      <FieldTooltip text={MEJORES_HELP} />
+    </div>
+  );
+}
+
+function HBars({ rows, total, fill = "", onPick }) {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <div className="cm-hbars">
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          className={`cm-hbar ${onPick ? "cm-hbar--click" : ""}`}
+          onClick={onPick ? () => onPick(row.key) : undefined}
+          role={onPick ? "button" : undefined}
+          tabIndex={onPick ? 0 : undefined}
+          onKeyDown={onPick ? (event) => { if (event.key === "Enter") onPick(row.key); } : undefined}
+        >
+          <span className="cm-hbar__label">{row.label}<FieldTooltip text={row.help} /></span>
+          <span className="cm-hbar__track"><span className={`cm-hbar__fill ${row.fill || fill}`} style={{ width: `${(100 * row.value) / max}%` }} /></span>
+          <span className="cm-hbar__val">{row.value} <small>{total ? percent(row.value / total) : "—"}</small></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Funnel({ embudo, scopeLabel }) {
+  const top = embudo.etapas[0].alcanzaron;
+  return (
+    <div className="cm-funnel">
+      {embudo.etapas.map((etapa, index) => {
+        const label = LADDER[index].label;
+        return (
+          <div key={etapa.etapa} className={`cm-funnel__row ${etapa.etapa === "venta_cerrada" ? "cm-funnel__row--sale" : ""}`}>
+            <span className="cm-funnel__name cm-label-row">{label}<FieldTooltip text={ETAPA_HELP[etapa.etapa]} /></span>
+            <div className="cm-funnel__track">
+              <div className="cm-funnel__bar" style={{ width: `${top ? (100 * etapa.alcanzaron) / top : 0}%` }}>{etapa.alcanzaron}</div>
+            </div>
+            <span className="cm-funnel__conv">
+              {index === 0 ? scopeLabel : etapa.conversion == null ? "— sin datos" : `${percent(etapa.conversion)} desde la anterior`}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FunnelStatus({ embudo, perdidoLabel, perdidoHelp }) {
+  const ventas = embudo.etapas.find((etapa) => etapa.etapa === "venta_cerrada").alcanzaron;
+  const { total, por_gestion: gestion, por_agotamiento: agotamiento } = embudo.perdido_actual;
+  return (
+    <div className="cm-status">
+      <div className="cm-status__item">
+        <LabelHelp label="Abiertos" help="Leads que hoy no tienen una venta vigente ni están perdidos: todavía se puede trabajar con ellos." />
+        <strong>{embudo.abiertos}</strong><p>Ni vendidos ni perdidos</p>
+      </div>
+      <div className="cm-status__item">
+        <LabelHelp label="Ventas vigentes" help="Leads con una promesa de compraventa firmada en alguno de tus proyectos que no ha sido revertida." />
+        <strong>{ventas}</strong><p>Promesa firmada, no revertida</p>
+      </div>
+      <div className="cm-status__item">
+        <LabelHelp label={perdidoLabel} help={perdidoHelp} />
+        <strong>{total}</strong><p>{gestion} por gestión · {agotamiento} por proyecto agotado</p>
+      </div>
+    </div>
+  );
+}
+
+function TimesTable({ enEtapa }) {
+  const th = (label, help, numeric = true) => (
+    <th className={numeric ? "num" : ""}>
+      <span className="cm-label-row" style={numeric ? { justifyContent: "flex-end" } : undefined}>{label}<FieldTooltip text={help} /></span>
+    </th>
+  );
+  return (
+    <table className="cm-table">
+      <thead>
+        <tr>
+          {th("Etapa", "La etapa comercial en que estuvo el lead.", false)}
+          {th("Mediana (días)", "Días que los leads permanecieron en la etapa. La mediana es el valor del medio: la mitad estuvo menos y la mitad más. Si un lead pasó dos veces por la misma etapa, se suman ambas estadías.")}
+          {th("n", "Cuántos leads ya salieron de la etapa y entran al cálculo.")}
+          {th("Siguen en la etapa", "Leads que hoy están en esa etapa. No entran al cálculo porque su tiempo todavía no termina.")}
+        </tr>
+      </thead>
+      <tbody>
+        {TIME_STAGES.map((stage) => {
+          const stat = enEtapa[stage.value];
+          return (
+            <tr key={stage.value}>
+              <td><span className="cm-label-row">{stage.label}<FieldTooltip text={ETAPA_HELP[stage.value]} /></span></td>
+              <td className="num">{days(stat.mediana)}</td>
+              <td className="num">{stat.n}</td>
+              <td className="num">{stat.en_curso}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function axis(max, width, left, right, y) {
+  return [0, 0.5, 1].map((fraction) => {
+    const yy = y(max * fraction);
+    return (
+      <g key={fraction}>
+        <line x1={left} x2={width - right} y1={yy} y2={yy} stroke="#E8E5DF" />
+        <text x="2" y={yy + 4}>{Math.round(max * fraction)}</text>
+      </g>
+    );
+  });
+}
+
+// Barras agrupadas por período; null se dibuja como "—" (sin datos).
+function BarsChart({ periods, series, width, height, label, format = (value) => value }) {
+  const left = 34, right = 12, top = 18, bottom = 30;
+  const max = Math.max(1, ...periods.flatMap((period) => series.map((serie) => serie.value(period) ?? 0)));
+  const groupWidth = (width - left - right) / Math.max(1, periods.length);
+  const barWidth = (groupWidth * 0.7) / series.length;
+  const y = (value) => top + (height - top - bottom) * (1 - value / max);
+  const showValues = periods.length <= 8;
+  return (
+    <svg className="cm-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+      {axis(max, width, left, right, y)}
+      {periods.map((period, i) => (
+        <g key={period.clave}>
+          {period.en_curso && (
+            <rect x={left + groupWidth * i + 3} y={top} width={groupWidth - 6} height={height - top - bottom} rx="8" fill="none" stroke="#D4A843" strokeDasharray="5 4" />
+          )}
+          {series.map((serie, j) => {
+            const value = serie.value(period);
+            const x = left + groupWidth * i + groupWidth * 0.15 + j * barWidth;
+            if (value == null) return <text key={serie.key} x={x + barWidth / 2} y={height - bottom - 4} textAnchor="middle">—</text>;
+            return (
+              <g key={serie.key}>
+                <rect x={x} y={y(value)} width={Math.max(1, barWidth - 3)} height={height - bottom - y(value)} rx="4" fill={serie.color}>
+                  <title>{`${period.label} · ${serie.name}: ${format(value, period)}`}</title>
+                </rect>
+                {showValues && <text x={x + (barWidth - 3) / 2} y={y(value) - 5} textAnchor="middle" className="cm-chart__value">{format(value, period)}</text>}
+              </g>
+            );
+          })}
+          {(showValues || i % 3 === 0) && <text x={left + groupWidth * i + groupWidth / 2} y={height - 10} textAnchor="middle">{period.label}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+export default function CommercialMetrics({ role, onNavigate }) {
+  const [state, setState] = useState({ status: "loading", data: null, error: "" });
+  const [filtros, setFiltros] = useState(EMPTY_FILTERS);
+  const [granularidad, setGranularidad] = useState("mes");
+  const [tab, setTab] = useState("embudo");
+  const [view, setView] = useState({ funnel: "todos", times: "todos" });
+  const isEjecutivo = role === roles.sales;
+
+  useEffect(() => {
+    let active = true;
+    getCommercialFunnelFacts()
+      .then((data) => { if (active) setState({ status: data ? "ready" : "offline", data, error: "" }); })
+      .catch((error) => { if (active) setState({ status: "error", data: null, error: error.message }); });
+    return () => { active = false; };
+  }, []);
+
+  const metrics = useMemo(() => {
+    if (!state.data) return null;
+    const { facts, proyectos, now } = state.data;
+    return computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad });
+  }, [state.data, filtros, granularidad]);
+
+  const heading = (
+    <div className="section-heading">
+      <span className="eyebrow">Gestión comercial</span>
+      <h1>Métricas comerciales</h1>
+      <p>{isEjecutivo
+        ? "Conversión, tiempos y seguimiento de los leads de tus proyectos asignados."
+        : "Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos."}</p>
+      {state.data && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
+    </div>
+  );
+
+  if (state.status !== "ready" || !state.data.facts.length) {
+    const message = state.status === "loading" ? "Cargando métricas…"
+      : state.status === "offline" ? "Las métricas requieren conexión a Supabase."
+        : state.status === "error" ? state.error
+          : isEjecutivo ? "Todavía no hay leads asociados a tus proyectos asignados."
+            : "Todavía no hay leads asociados a los proyectos de tu inmobiliaria.";
+    return (
+      <section className="section-block cm-page">
+        {heading}
+        <article className="admin-surface"><p className="cm-empty">{message}</p></article>
+      </section>
+    );
+  }
+
+  const { proyectos, facts } = state.data;
+  const m = metrics;
+  const sinCatalogo = m.bandas.sin_catalogo;
+  const projectView = Boolean(filtros.proyecto_id) || isEjecutivo;
+  const perdidoLabel = projectView ? "Perdidos en este proyecto" : "Leads perdidos";
+  const perdidoHelp = projectView
+    ? "Leads cuya oportunidad en este proyecto está cerrada. 'Por gestión': un ejecutivo la cerró. 'Por proyecto agotado': se cerró solo porque el proyecto se agotó."
+    : "Leads cuyas oportunidades en tus proyectos están todas cerradas. 'Por gestión': un ejecutivo lo marcó como perdido. 'Por proyecto agotado': se cerró solo porque el proyecto se agotó. Un lead puede reactivarse si el ejecutivo lo vuelve a trabajar.";
+  const mejores = m.mejores;
+  const funnelData = view.funnel === "mejores" && mejores ? mejores.embudo : m.embudo;
+  const timesData = view.times === "mejores" && mejores ? mejores.en_etapa : m.tiempos.en_etapa;
+  const mejoresScope = mejores ? `Solo leads Compatible + Alcanza (${mejores.n} de ${m.n})` : "";
+  const proyectoNombre = (id) => proyectos.find((proyecto) => proyecto.id === id)?.nombre || "Proyecto";
+
+  const toggle = (dimension, value) => setFiltros((current) => ({
+    ...current,
+    [dimension]: current[dimension].includes(value)
+      ? current[dimension].filter((item) => item !== value)
+      : [...current[dimension], value],
+  }));
+  const pick = (dimension) => (value) => {
+    setFiltros((current) => (current[dimension].includes(value) ? current : { ...current, [dimension]: [...current[dimension], value] }));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const activeLabels = [
+    ...(filtros.proyecto_id ? [proyectoNombre(filtros.proyecto_id)] : []),
+    ...(sinCatalogo ? [] : AFINIDAD.filter(([key]) => filtros.afinidad.includes(key)).map(([, label]) => label)),
+    ...(sinCatalogo ? [] : CAPACIDAD.filter(([key]) => filtros.capacidad.includes(key)).map(([, label]) => label)),
+    ...PRIORIDAD.filter(([key]) => filtros.prioridad.includes(key)).map(([, label]) => label),
+  ];
+
+  const chips = (dimension, options, disabled = false) => (
+    <div className="cm-chips">
+      {options.map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          className={`cm-chip ${filtros[dimension].includes(key) ? "is-active" : ""}`}
+          disabled={disabled}
+          onClick={() => toggle(dimension, key)}
+        >{label}</button>
+      ))}
+    </div>
+  );
+
+  const periods = m.serie.periodos.map((period) => ({ ...period, label: periodLabel(period.clave, granularidad) }));
+  const ventas = (embudo) => embudo.etapas.find((etapa) => etapa.etapa === "venta_cerrada").alcanzaron;
+  const tpc = m.contacto.tiempo_primer_contacto;
+  const ciclo = m.tiempos.ciclo_venta;
+  const postular = m.tiempos.dias_hasta_postular;
+
+  return (
+    <section className="section-block cm-page">
+      {heading}
+
+      <article className="admin-surface cm-filters" aria-label="Filtros">
+        <div className="cm-filters__row">
+          <div className="cm-filters__group">
+            <span className="cm-label">Proyecto</span>
+            <select
+              value={filtros.proyecto_id || ""}
+              onChange={(event) => setFiltros((current) => ({ ...current, proyecto_id: event.target.value || null }))}
+            >
+              <option value="">{isEjecutivo ? "Todos tus proyectos" : "Todos los proyectos"}</option>
+              {proyectos.map((proyecto) => (
+                <option key={proyecto.id} value={proyecto.id}>{proyecto.nombre}{proyecto.estado === "agotado" ? " (agotado)" : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div className="cm-filters__group">
+            <span className="cm-label">Afinidad</span>
+            {chips("afinidad", AFINIDAD, sinCatalogo)}
+          </div>
+        </div>
+        <div className="cm-filters__row">
+          <div className="cm-filters__group">
+            <span className="cm-label">Capacidad de compra</span>
+            {chips("capacidad", CAPACIDAD, sinCatalogo)}
+          </div>
+          <div className="cm-filters__group">
+            <span className="cm-label">Prioridad comercial</span>
+            {chips("prioridad", PRIORIDAD)}
+          </div>
+        </div>
+        {sinCatalogo && (
+          <p className="cm-hint">Afinidad y capacidad no están disponibles: todos tus proyectos están agotados, así que no hay con qué compararlos. Elige un proyecto para verlas contra él.</p>
+        )}
+        <div className="cm-filters__foot">
+          <span className="cm-summary">
+            Mostrando <strong>{m.n} de {facts.length} leads</strong> · {activeLabels.length ? activeLabels.join(" · ") : "sin filtros"}
+            {m.prioridad_no_reconocida > 0 && ` · ${m.prioridad_no_reconocida} con una prioridad que no se reconoce (cuentan como sin prioridad)`}
+          </span>
+          <button className="secondary-button compact-button" type="button" onClick={() => setFiltros(EMPTY_FILTERS)}>Limpiar filtros</button>
+        </div>
+      </article>
+
+      <div className="cm-tabs" role="tablist">
+        {[["embudo", "Embudo y seguimiento"], ["historia", "Evolución histórica"]].map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "embudo" ? (
+        <>
+          <section className="admin-kpi-grid cm-surface-gap" aria-label="Indicadores">
+            <Kpi
+              color="navy"
+              label="Postularon a un proyecto"
+              help="Leads que fijaron uno de tus proyectos como su meta de compra al menos una vez."
+              value={m.captura.postulan}
+              hint={<><Rate rate={m.captura.tasa} n={m.captura.n} /> de {m.captura.n} leads</>}
+            />
+            <Kpi
+              color="success"
+              label="Ventas con plan de mejora"
+              help="Leads que aceptaron un plan de mejora orientado a uno de tus proyectos y después cerraron una venta vigente."
+              value={m.plan_a_venta.con_plan_y_venta}
+              hint={<>de {m.plan_a_venta.con_plan} leads con plan <Rate rate={m.plan_a_venta.tasa} n={m.plan_a_venta.con_plan} /></>}
+            />
+            <Kpi
+              color="gold"
+              label="Leads activos este mes"
+              help="Leads que hicieron al menos una acción sobre tus proyectos este mes: favorito, postulación, re-precalificación o avance en su plan de mejora."
+              value={m.engagement.mes_actual.activos}
+              hint={<><Rate rate={m.engagement.mes_actual.tasa} n={m.engagement.mes_actual.n} /> de {m.engagement.mes_actual.n} leads</>}
+            />
+            <Kpi
+              color="soft"
+              label="Ciclo de venta"
+              help="Días desde la primera precalificación hasta la venta cerrada, considerando solo ventas vigentes. La mediana es el valor del medio: no la distorsionan las ventas muy lentas."
+              value={<>{days(ciclo.mediana)} <small>días (mediana)</small></>}
+              hint={`promedio ${days(ciclo.promedio)} · n = ${ciclo.n} ventas`}
+            />
+          </section>
+
+          <article className="admin-surface cm-surface-gap">
+            <div className="admin-surface__header"><div className="admin-surface__title">
+              <h2>Seguimiento de contacto</h2>
+              <p>{isEjecutivo
+                ? "Leads que esperan un primer llamado en tus proyectos, y tus contactos."
+                : "Leads que esperan un primer llamado y qué tan rápido responde tu equipo."}</p>
+            </div></div>
+            <div className={`cm-contact ${isEjecutivo ? "" : "cm-contact--3"}`}>
+              <ContactItem
+                alert
+                label="Sin contactar"
+                help="Leads que nadie ha marcado todavía como contactados (y que no están perdidos). La antigüedad se cuenta desde su primera precalificación."
+                value={m.contacto.sin_contactar.n}
+                hint={m.contacto.sin_contactar.n
+                  ? `esperan ${days(m.contacto.sin_contactar.antiguedad_mediana)} días (mediana) · el más antiguo, ${days(m.contacto.sin_contactar.antiguedad_maxima)} días`
+                  : "ningún lead espera su primer contacto"}
+              >
+                <button type="button" className="cm-link" onClick={() => onNavigate("leads")}>Ver en Leads →</button>
+              </ContactItem>
+              <ContactItem
+                label="Contactados este mes"
+                help="Leads que recibieron su primer contacto registrado durante este mes."
+                value={m.contacto.contactados_mes_actual}
+                hint={isEjecutivo ? "primeros contactos en tus proyectos" : "primeros contactos de tu equipo"}
+              />
+              {isEjecutivo && (
+                <ContactItem
+                  label="Contactados por ti"
+                  help="Leads cuyo primer contacto registraste tú. Solo tú ves este número."
+                  value={m.contacto.contactados_por_mi.total}
+                  hint={`${m.contacto.contactados_por_mi.mes_actual} este mes`}
+                />
+              )}
+              <ContactItem
+                label="Primer contacto a los mejores leads"
+                help="Días desde la precalificación hasta el primer contacto, solo para leads Compatible y que alcanzan a comprar. Se mide cuando la etapa se registra en RutaHogar, no cuando ocurrió la llamada."
+                value={tpc ? <>{days(tpc.mediana)} <small>días (mediana)</small></> : "—"}
+                hint={tpc
+                  ? <>n = {tpc.n} leads Compatible + Alcanza · <strong>{tpc.en_curso}</strong> aún sin contactar</>
+                  : "No disponible: no hay proyectos con los que comparar a los leads."}
+              />
+            </div>
+          </article>
+
+          <article className="admin-surface cm-surface-gap">
+            <div className="admin-surface__header">
+              <div className="admin-surface__title">
+                <h2>Embudo comercial</h2>
+                <p className="cm-label-row">
+                  Leads que alcanzaron cada etapa alguna vez. Junto a cada barra, la conversión desde la etapa anterior.
+                  <FieldTooltip text="Un lead cuenta en una etapa si llegó a ella en algún momento, aunque después haya avanzado, retrocedido o se haya perdido. Si saltó etapas, cuenta también en las que se saltó. Así cada etapa siempre tiene igual o menos leads que la anterior." />
+                </p>
+              </div>
+              {mejores && <ViewSwitch value={view.funnel} onChange={(value) => setView((current) => ({ ...current, funnel: value }))} />}
+            </div>
+            {view.funnel === "mejores" && mejores && <p className="cm-scope">{mejoresScope}</p>}
+            <div className="cm-funnel-wrap">
+              <Funnel embudo={funnelData} scopeLabel={view.funnel === "mejores" && mejores ? "mejores leads" : "todos los leads"} />
+              <FunnelStatus embudo={funnelData} perdidoLabel={perdidoLabel} perdidoHelp={perdidoHelp} />
+            </div>
+          </article>
+
+          <article className="admin-surface cm-surface-gap">
+            <div className="admin-surface__header"><div className="admin-surface__title">
+              <h2>Comparación por proyecto</h2>
+              <p>Cada fila cuenta solo los leads asociados a ese proyecto. Un lead interesado en dos proyectos aparece en ambos.</p>
+            </div></div>
+            <div className="cm-scroll">
+              <table className="cm-table">
+                <thead><tr><th>Proyecto</th><th className="num">Leads</th><th className="num">Postularon</th><th className="num">Ventas</th><th className="num">Sin contactar</th></tr></thead>
+                <tbody>
+                  {m.por_proyecto.map((row) => {
+                    const proyecto = proyectos.find((item) => item.id === row.proyecto_id);
+                    return (
+                      <tr key={row.proyecto_id}>
+                        <td>{proyecto?.nombre} {proyecto?.estado === "agotado" && <span className="cm-pill cm-pill--agotado">Agotado</span>}</td>
+                        <td className="num">{row.leads}</td>
+                        <td className="num">{row.postulan} <span className="cm-muted">{row.leads ? percent(row.postulan / row.leads) : "—"}</span></td>
+                        <td className="num">{row.ventas}</td>
+                        <td className="num">{row.sin_contactar}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article className="admin-surface cm-surface-gap">
+            <div className="admin-surface__header">
+              <div className="admin-surface__title">
+                <h2>Tiempo en cada etapa</h2>
+                <p>Días que los leads permanecieron en cada etapa (mediana). Los que siguen en ella no entran al cálculo. Los tiempos se miden desde que la etapa se registra en RutaHogar.</p>
+              </div>
+              {mejores && <ViewSwitch value={view.times} onChange={(value) => setView((current) => ({ ...current, times: value }))} />}
+            </div>
+            {view.times === "mejores" && mejores && <p className="cm-scope">{mejoresScope}</p>}
+            <div className="cm-scroll"><TimesTable enEtapa={timesData} /></div>
+            <div className="cm-callout">
+              <span className="cm-label-row">Días hasta postular<FieldTooltip text="Días desde la primera precalificación del lead hasta que fijó por primera vez uno de tus proyectos como su meta." /></span>
+              <strong>{days(postular.mediana)}</strong> mediana · n = {postular.n}
+              <span className="cm-muted">(promedio {days(postular.promedio)})</span>
+            </div>
+          </article>
+
+          <div className="admin-grid-2">
+            <article className="admin-surface">
+              <div className="admin-surface__header"><div className="admin-surface__title">
+                <h2>Engagement por acción</h2>
+                <p>Leads que realizaron cada acción sobre tus proyectos al menos una vez.</p>
+              </div></div>
+              <HBars
+                total={m.engagement.n}
+                fill="cm-hbar__fill--gold"
+                rows={ACCIONES.map(([key, label, help]) => ({ key, label, help, value: m.engagement.por_accion[key].leads }))}
+              />
+            </article>
+            <article className="admin-surface">
+              <div className="admin-surface__header"><div className="admin-surface__title">
+                <h2>Afinidad y capacidad</h2>
+                <p>Cada lead cuenta una vez, en su mejor resultado entre tus proyectos disponibles, según su precalificación más reciente.</p>
+              </div></div>
+              {sinCatalogo ? (
+                <p className="cm-empty">No disponible: todos tus proyectos están agotados. Elige un proyecto en los filtros para ver a los leads contra él.</p>
+              ) : (
+                <>
+                  <span className="cm-label">Afinidad</span>
+                  <div className="cm-bands"><HBars
+                    total={m.bandas.n}
+                    onPick={pick("afinidad")}
+                    rows={AFINIDAD.map(([key, label, help]) => ({ key, label, help, value: m.bandas.afinidad[key], fill: key === "requiere_antecedentes" ? "cm-hbar__fill--soft" : "" }))}
+                  /></div>
+                  <span className="cm-label">Capacidad de compra</span>
+                  <div className="cm-bands"><HBars
+                    total={m.bandas.n}
+                    onPick={pick("capacidad")}
+                    rows={CAPACIDAD.map(([key, label, help]) => ({ key, label, help, value: m.bandas.capacidad[key], fill: key === "requiere_antecedentes" ? "cm-hbar__fill--soft" : "" }))}
+                  /></div>
+                  <p className="cm-hint">Haz clic en una barra para filtrar el dashboard por ese grupo.</p>
+                </>
+              )}
+            </article>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="cm-gran">
+            <div className="executive-home-recent-filter">
+              {GRANULARIDADES.map(([key, label]) => (
+                <button key={key} type="button" className={granularidad === key ? "is-active" : ""} onClick={() => setGranularidad(key)}>{label}</button>
+              ))}
+            </div>
+            <span className="cm-summary">Desde la primera precalificación hasta hoy</span>
+          </div>
+
+          {periods.length === 0 ? (
+            <article className="admin-surface"><p className="cm-empty">Ningún lead coincide con los filtros.</p></article>
+          ) : (
+            <>
+              <article className="admin-surface cm-surface-gap">
+                <div className="admin-surface__header"><div className="admin-surface__title">
+                  <h2>Cohortes: leads, postulaciones y ventas</h2>
+                  <p>Leads agrupados por el período de su primera precalificación. Las cohortes recientes aún pueden avanzar.</p>
+                </div></div>
+                <BarsChart
+                  periods={periods}
+                  width={900}
+                  height={260}
+                  label="Cohortes"
+                  series={[
+                    { key: "n", name: "Leads nuevos", color: "rgba(19,43,74,.16)", value: (p) => p.embudo.n },
+                    { key: "post", name: "Postularon", color: "#132B4A", value: (p) => p.captura.postulan },
+                    { key: "venta", name: "Ventas", color: "#2d8a4e", value: (p) => ventas(p.embudo) },
+                  ]}
+                />
+                <div className="cm-legend">
+                  <span><i style={{ background: "rgba(19,43,74,.16)" }} />Leads nuevos</span>
+                  <span><i style={{ background: "var(--rh-blue)" }} />Postularon</span>
+                  <span><i style={{ background: "#2d8a4e" }} />Ventas</span>
+                  <span><i className="cm-legend__curso" />Período en curso</span>
+                </div>
+                <div className="cm-scroll">
+                  <table className="cm-table cm-table--spaced">
+                    <thead><tr><th>Cohorte</th><th className="num">Leads</th><th className="num">Postularon</th><th className="num">Ventas</th><th className="num">Aún abiertos</th><th /></tr></thead>
+                    <tbody>
+                      {periods.slice(-6).map((p) => (
+                        <tr key={p.clave}>
+                          <td>{p.label}</td>
+                          <td className="num">{p.embudo.n}</td>
+                          <td className="num">{p.captura.postulan} <span className="cm-muted">{percent(p.captura.tasa)}</span></td>
+                          <td className="num">{ventas(p.embudo)}</td>
+                          <td className="num">{p.embudo.abiertos} de {p.embudo.n}</td>
+                          <td>{p.en_curso && <span className="cm-pill cm-pill--curso">En curso</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+
+              <div className="admin-grid-2">
+                <article className="admin-surface">
+                  <div className="admin-surface__header"><div className="admin-surface__title">
+                    <h2>Leads activos y contactados</h2>
+                    <p>Leads con alguna acción sobre tus proyectos, y primeros contactos registrados, por período.</p>
+                  </div></div>
+                  <BarsChart
+                    periods={periods}
+                    width={440}
+                    height={230}
+                    label="Activos y contactados"
+                    series={[
+                      { key: "act", name: "Activos", color: "#D4A843", value: (p) => p.engagement.activos },
+                      { key: "cont", name: "Contactados", color: "#132B4A", value: (p) => p.contacto.contactados },
+                    ]}
+                  />
+                  <div className="cm-legend">
+                    <span><i style={{ background: "var(--rh-yellow)" }} />Activos</span>
+                    <span><i style={{ background: "var(--rh-blue)" }} />Contactados</span>
+                  </div>
+                  <p className="cm-hint">
+                    Activos sobre los leads que ya existían en cada período:{" "}
+                    {periods.slice(-6).map((p) => `${p.label} ${percent(p.engagement.tasa)}`).join(" · ")}
+                  </p>
+                </article>
+                <article className="admin-surface">
+                  <div className="admin-surface__header"><div className="admin-surface__title">
+                    <h2>Ciclo de venta</h2>
+                    <p>Mediana de días hasta la venta, según el período en que se cerró.</p>
+                  </div></div>
+                  <BarsChart
+                    periods={periods}
+                    width={440}
+                    height={230}
+                    label="Ciclo de venta"
+                    format={(value, p) => `${days(value)} (n=${p.tiempos.ciclo_venta.n})`}
+                    series={[{ key: "ciclo", name: "Mediana", color: "#132B4A", value: (p) => p.tiempos.ciclo_venta.mediana }]}
+                  />
+                </article>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      <p className="cm-disclaimer">Orientativo: estas métricas no aprueban créditos ni reemplazan una evaluación bancaria.</p>
+    </section>
+  );
+}
