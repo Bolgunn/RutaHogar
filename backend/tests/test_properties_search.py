@@ -1,7 +1,10 @@
-import importlib.util
+import io
+import json
 import math
+import os
 import re
 import unittest
+import urllib.error
 from unittest.mock import patch
 from app.properties_search import (
     EmbeddingError,
@@ -16,31 +19,27 @@ from app import properties_search as properties_search_module
 from app.main import app
 
 
-class _Vector(list):
-    def tolist(self):
-        return list(self)
-
-
 class FakeEncoder:
-    """Doble de MiniLM: bolsa de palabras hasheada, determinista y sin descargar el modelo."""
+    """Doble de la API de Hugging Face: bolsa de palabras hasheada, determinista y sin red."""
 
     def __init__(self):
         self.calls = []
 
-    def encode(self, texts, **kwargs):
-        self.calls.append(list(texts))
-        return [self._encode_one(text) for text in texts]
+    def __call__(self, inputs):
+        self.calls.append(list(inputs))
+        return [self._encode_one(text) for text in inputs]
 
     @staticmethod
     def _encode_one(text):
         vec = [0.0] * 384
-        for token in re.findall(r"\w+", text.lower()):
+        # El prefijo e5 ("query: "/"passage: ") no aporta significado al doble.
+        for token in re.findall(r"\w+", text.lower().split(": ", 1)[-1]):
             h = 0
             for char in token:
                 h = (h * 31 + ord(char)) & 0xFFFFFFFF
             vec[h % 384] += 1.0
         norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-        return _Vector(v / norm for v in vec)
+        return [v / norm for v in vec]
 
 
 class TestPropertiesSearchRAG(unittest.TestCase):
@@ -53,7 +52,7 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         supabase_patch.start()
         self.addCleanup(supabase_patch.stop)
         self.encoder = FakeEncoder()
-        model_patch = patch.object(properties_search_module, "_get_embedding_model", return_value=self.encoder)
+        model_patch = patch.object(properties_search_module, "_request_embeddings", self.encoder)
         model_patch.start()
         self.addCleanup(model_patch.stop)
         catalog_patch = patch.object(properties_search_module, "_local_catalog_vectors", None)
@@ -181,10 +180,10 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
     def test_model_receives_normalized_abbreviations(self):
         generate_text_embedding("Depto en Ñuñoa")
-        self.assertEqual(self.encoder.calls[-1], ["departamento en ñuñoa"])
+        self.assertEqual(self.encoder.calls[-1], ["query: departamento en ñuñoa"])
 
     def test_missing_embedding_model_returns_503(self):
-        with patch.object(properties_search_module, "_get_embedding_model", side_effect=EmbeddingError("sin modelo")):
+        with patch.object(properties_search_module, "_request_embeddings", side_effect=EmbeddingError("sin modelo")):
             response = self.client.post("/api/properties/search", json={"query": "depto"})
         self.assertEqual(response.status_code, 503)
 
@@ -207,23 +206,58 @@ class TestPropertiesSearchRAG(unittest.TestCase):
 
 
 
-@unittest.skipUnless(importlib.util.find_spec("sentence_transformers"), "sentence-transformers no instalado")
-class TestMiniLMModel(unittest.TestCase):
-    """Usa el modelo real (descarga ~90 MB la primera vez)."""
+class _FakeResponse(io.BytesIO):
+    def __enter__(self):
+        return self
 
-    def test_real_model_outputs_384_normalized_dimensions(self):
-        vec = generate_text_embedding("departamento 2 dormitorios en Santiago")
-        self.assertEqual(len(vec), 384)
-        self.assertAlmostEqual(math.sqrt(sum(v * v for v in vec)), 1.0, places=4)
+    def __exit__(self, *exc):
+        return False
 
-    def test_real_model_ranks_related_listing_higher(self):
-        query = generate_text_embedding("depto cerca del metro")
-        related = generate_text_embedding("departamento a pasos de estación de metro")
-        unrelated = generate_text_embedding("casa con jardín y quincho en la precordillera")
-        self.assertGreater(
-            calculate_cosine_similarity(query, related),
-            calculate_cosine_similarity(query, unrelated),
-        )
+
+def _http_503():
+    return urllib.error.HTTPError("url", 503, "Model is loading", {}, None)
+
+
+class TestHuggingFaceClient(unittest.TestCase):
+
+    def setUp(self):
+        self.enterContext(patch.dict(os.environ, {"HUGGINGFACE_API_KEY": "hf_test"}))
+        self.sleep = self.enterContext(patch.object(properties_search_module.time, "sleep"))
+
+    def test_sends_e5_prefix_token_and_timeout(self):
+        body = json.dumps([[0.0] * 384]).encode()
+        with patch.object(properties_search_module.urllib.request, "urlopen", return_value=_FakeResponse(body)) as urlopen:
+            generate_text_embedding("depto")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(json.loads(request.data), {"inputs": ["query: departamento"]})
+        self.assertEqual(request.get_header("Authorization"), "Bearer hf_test")
+        self.assertGreaterEqual(urlopen.call_args.kwargs["timeout"], 30)
+
+    def test_retries_with_backoff_while_model_is_loading(self):
+        body = json.dumps([[0.0] * 384]).encode()
+        responses = [_http_503(), _http_503(), _FakeResponse(body)]
+        with patch.object(properties_search_module.urllib.request, "urlopen", side_effect=responses):
+            self.assertEqual(len(generate_text_embedding("casa")), 384)
+        delays = [c.args[0] for c in self.sleep.call_args_list]
+        self.assertEqual(len(delays), 2)
+        self.assertLess(delays[0], delays[1])
+
+    def test_gives_up_after_max_retries(self):
+        attempts = properties_search_module.HUGGINGFACE_MAX_RETRIES + 1
+        with patch.object(properties_search_module.urllib.request, "urlopen", side_effect=[_http_503()] * attempts):
+            with self.assertRaises(EmbeddingError):
+                generate_text_embedding("casa")
+
+    def test_missing_api_key_raises_embedding_error(self):
+        with patch.dict(os.environ, {"HUGGINGFACE_API_KEY": ""}):
+            with self.assertRaises(EmbeddingError):
+                generate_text_embedding("casa")
+
+    def test_ingest_batches_requests(self):
+        with patch.object(properties_search_module, "_request_embeddings", side_effect=lambda inputs: [[0.0] * 384] * len(inputs)) as request:
+            vectors = properties_search_module.generate_text_embeddings(["x"] * 70)
+        self.assertEqual(len(vectors), 70)
+        self.assertEqual([len(c.args[0]) for c in request.call_args_list], [32, 32, 6])
 
 
 if __name__ == "__main__":

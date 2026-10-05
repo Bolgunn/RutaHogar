@@ -4,7 +4,7 @@ Script de transformación e ingesta de propiedades hacia Supabase con pgvector.
 Desacoplado de la extracción de red de Apify.
 
 Sin argumentos ingesta raw_apify_dump.json (departamentos) y raw_apify_dump_casas.json (casas),
-vectorizando con el modelo local MiniLM de app.properties_search.
+vectorizando con multilingual-e5-small (Hugging Face API) de app.properties_search.
 
 Soporta parámetros CLI:
 - raw_apify_dump_casas.json o --file=raw_apify_dump_casas.json : Ingesta solo ese archivo
@@ -312,7 +312,7 @@ def embedding_text(proyecto: dict) -> str:
 
 
 def attach_embeddings(proyectos: list) -> None:
-    # Un solo encode en lote: llamar al modelo fila por fila es ~10x más lento.
+    # En lotes: una petición por fila agotaría la cuota gratuita de Hugging Face.
     vectors = generate_text_embeddings([embedding_text(p) for p in proyectos])
     for proyecto, vector in zip(proyectos, vectors):
         proyecto["embedding"] = vector

@@ -66,3 +66,8 @@ def get_apify_actor_id() -> str:
 def get_groq_api_key() -> str:
     """Retorna la API Key oficial de Groq para explicaciones IA."""
     return os.environ.get("GROQ_API_KEY", "")
+
+
+def get_huggingface_api_key() -> str:
+    """Retorna el token de Hugging Face para los embeddings del portal (HU19)."""
+    return os.environ.get("HUGGINGFACE_API_KEY", "")

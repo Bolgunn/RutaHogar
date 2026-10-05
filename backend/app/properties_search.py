@@ -4,6 +4,8 @@ import re
 import html
 import json
 import logging
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import List, Dict, Any, Optional
@@ -28,9 +30,18 @@ VECTOR_DIMENSION = 384
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
 DEFAULT_SIMILARITY_THRESHOLD = 0.5
 SUPABASE_TIMEOUT_SECONDS = 5
-# Modelo local y open-source; su salida de 384 dims calza con proyectos_rag.embedding vector(384).
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-_embedding_model = None
+# Serverless Inference API de Hugging Face: torch no cabe en el límite de 250 MB de Vercel.
+# Sus 384 dims calzan con proyectos_rag.embedding vector(384).
+EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-small"
+# api-inference.huggingface.co ya no responde; el router es su reemplazo oficial.
+HUGGINGFACE_EMBEDDINGS_URL = (
+    f"https://router.huggingface.co/hf-inference/models/{EMBEDDING_MODEL_NAME}/pipeline/feature-extraction"
+)
+HUGGINGFACE_TIMEOUT_SECONDS = 30
+# Reintentos ante 503 (modelo dormido en cold start), con espera exponencial.
+HUGGINGFACE_MAX_RETRIES = 3
+HUGGINGFACE_BACKOFF_SECONDS = 2
+HUGGINGFACE_BATCH_SIZE = 32
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +152,8 @@ class EmbeddingError(RuntimeError):
     """El proveedor de embeddings configurado no pudo vectorizar el texto."""
 
 
-# Abreviaturas chilenas que el usuario escribe y el catálogo no; MiniLM se entrenó
-# mayormente en inglés y no sabe que "depto" es "departamento".
+# Abreviaturas chilenas que el usuario escribe y el catálogo no; el modelo no sabe
+# que "depto" es "departamento".
 _TERM_SYNONYMS = {
     "depto": "departamento",
     "deptos": "departamento",
@@ -177,38 +188,58 @@ def _cta_text(property_type: Any) -> str:
     return "Ver si califico para esta propiedad"
 
 
-def _get_embedding_model():
-    """Carga perezosa: el primer uso descarga el modelo (~90 MB) a la caché de Hugging Face."""
-    global _embedding_model
-    if _embedding_model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as exc:
-            raise EmbeddingError("Falta sentence-transformers: pip install -r backend/requirements.txt") from exc
-        try:
-            _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
-        except Exception as exc:
-            raise EmbeddingError(f"No se pudo cargar {EMBEDDING_MODEL_NAME}: {exc}") from exc
-    return _embedding_model
+def _request_embeddings(inputs: List[str]) -> List[List[float]]:
+    from .config import get_huggingface_api_key
 
+    api_key = get_huggingface_api_key()
+    if not api_key:
+        raise EmbeddingError("Falta HUGGINGFACE_API_KEY para generar embeddings.")
 
-def generate_text_embeddings(texts: List[str]) -> List[List[float]]:
-    """
-    Vectoriza en lote con MiniLM (384 dims, norma L2). La ingesta y la consulta pasan
-    por aquí para que los vectores de Supabase y los de la consulta vivan en el mismo espacio.
-    """
-    model = _get_embedding_model()
-    vectors = model.encode(
-        [_normalize_terms(text) for text in texts],
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=False,
+    request = urllib.request.Request(
+        HUGGINGFACE_EMBEDDINGS_URL,
+        data=json.dumps({"inputs": inputs}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
     )
-    return [vector.tolist() for vector in vectors]
+    for attempt in range(HUGGINGFACE_MAX_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=HUGGINGFACE_TIMEOUT_SECONDS) as response:
+                vectors = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code == 503 and attempt < HUGGINGFACE_MAX_RETRIES:
+                delay = HUGGINGFACE_BACKOFF_SECONDS * 2 ** attempt
+                logger.info("Hugging Face 503 (modelo cargando); reintento %d en %ds", attempt + 1, delay)
+                time.sleep(delay)
+                continue
+            raise EmbeddingError(f"Hugging Face respondió HTTP {exc.code}") from exc
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            raise EmbeddingError(f"No se pudo contactar a Hugging Face: {exc}") from exc
+
+    if (
+        not isinstance(vectors, list)
+        or len(vectors) != len(inputs)
+        or any(not isinstance(v, list) or len(v) != VECTOR_DIMENSION for v in vectors)
+    ):
+        raise EmbeddingError("Hugging Face devolvió embeddings con un formato inesperado.")
+    return vectors
 
 
-def generate_text_embedding(text: str) -> List[float]:
-    return generate_text_embeddings([text])[0]
+def generate_text_embeddings(texts: List[str], kind: str = "passage") -> List[List[float]]:
+    """
+    Vectoriza en lotes con multilingual-e5-small (384 dims, norma L2). La ingesta y la
+    consulta pasan por aquí para que los vectores de Supabase y los de la consulta vivan
+    en el mismo espacio. e5 exige el prefijo "query: " o "passage: " según el lado.
+    """
+    inputs = [f"{kind}: {_normalize_terms(text)}" for text in texts]
+    vectors: List[List[float]] = []
+    for i in range(0, len(inputs), HUGGINGFACE_BATCH_SIZE):
+        vectors.extend(_request_embeddings(inputs[i:i + HUGGINGFACE_BATCH_SIZE]))
+    return vectors
+
+
+def generate_text_embedding(text: str, kind: str = "query") -> List[float]:
+    return generate_text_embeddings([text], kind=kind)[0]
 
 
 def calculate_cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
