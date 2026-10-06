@@ -17537,7 +17537,7 @@ th {
 .project-evaluation-result.is-close { border-color: rgba(180,83,9,0.25); background: rgba(180,83,9,0.07); color: #78350f; }
 .project-evaluation-result.is-far { border-color: rgba(153,27,27,0.22); background: rgba(153,27,27,0.06); color: #7f1d1d; }
 .project-evaluation-modal__actions, .project-evaluation-modal__message { display: grid; gap: 10px; margin-top: var(--rh-space-5); }
-.project-evaluation-modal__actions button, .project-evaluation-modal__message button { width: 100%; margin: 0; }
+.project-evaluation-modal__actions button, .project-evaluation-modal__actions a, .project-evaluation-modal__message button { width: 100%; margin: 0; text-align: center; box-sizing: border-box; }
 .project-evaluation-modal__message { padding: 14px; border-radius: var(--rh-radius-md); }
 .project-evaluation-modal__message p { margin: 0; line-height: 1.5; }
 .project-evaluation-modal__message.is-error { background: rgba(153,27,27,0.07); color: #7f1d1d; }

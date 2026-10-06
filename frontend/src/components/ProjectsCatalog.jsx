@@ -163,7 +163,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       return matchesType && matchesCommune && matchesAvailability && matchesFavorite && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
   }, [availability, commune, favorites, listedProjects, propertyType, query, showFavoritesOnly]);
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
+  const selectedProject = listedProjects.find((project) => project.id === selectedProjectId) || null;
   const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
   const handleSimulateProject = (project) => {
@@ -273,7 +273,9 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
             {isPortal ? (
               <div className="project-catalog-card__actions">
-                {!context && <button type="button" className="primary-button compact-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>}
+                {context
+                  ? <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
+                  : <button type="button" className="primary-button compact-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>}
                 <a href={project.url} target="_blank" rel="noopener noreferrer" className="secondary-button compact-button">Ver publicación original ↗</a>
               </div>
             ) : context ? (
