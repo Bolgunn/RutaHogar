@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import { formatChileanRutInput, normalizeChileanRut } from "../utils/chileanRut";
+import { formatMoneyInput as formatInteger, stripMoneyInput as stripFormat } from "../services/moneyFormat";
 import { formatFormValue } from "../constants";
 import {
   calculateMortgageDividend,
@@ -177,20 +179,7 @@ function buildPropertyValues(value, unit, ufValueClp) {
 }
 
 // Formatea un string de dígitos a formato es-CL (puntos de miles)
-function formatInteger(raw) {
-  if (raw === "" || raw == null) return "";
-  const digits = String(raw).replace(/\D/g, "");
-  if (digits === "") return "";
-  return Number(digits).toLocaleString("es-CL");
-}
-
 // Quita los puntos de miles para obtener el valor numérico raw
-function stripFormat(value) {
-  return String(value)
-    .replace(/\./g, "")
-    .replace(/[^0-9]/g, "");
-}
-
 function isContinuityIncompatibleWithAge(continuity, age) {
   if (!continuity || !Number.isFinite(age)) return false;
   const minimumYears = continuityMinimumYears[continuity];
@@ -278,6 +267,8 @@ export default function ScoreForm({
     continuidad_laboral_complementario: "",
     morosidad_complementario: "",
     relacion_complementario: "",
+    rut_codeudor: "",
+    correo_codeudor: "",
     consentimiento: false,
     declara_patrimonio: false,
     valor_vehiculos: "",
@@ -351,7 +342,6 @@ export default function ScoreForm({
   const showComplementRelationWarning = weakComplementRelations.has(
     form.relacion_complementario,
   );
-  const showComplementMorosityWarning = form.morosidad_complementario === "si";
   const complementRequiredFields = [
     form.ingreso_mensual_complementario,
     form.deuda_mensual_complementario,
@@ -363,6 +353,9 @@ export default function ScoreForm({
   const complementFieldsIncomplete = complementRequiredFields.some(
     (value) => value === "" || value == null,
   );
+  const normalizedCoDebtorRut = normalizeChileanRut(form.rut_codeudor);
+  const normalizedCoDebtorEmail = String(form.correo_codeudor || "").trim().toLowerCase();
+  const coDebtorEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCoDebtorEmail);
   const patrimonioValues = [form.valor_vehiculos, form.valor_inmuebles];
   const patrimonioFieldsIncomplete = patrimonioValues.every(
     (value) => value === "" || value == null,
@@ -672,6 +665,16 @@ export default function ScoreForm({
       return false;
     }
 
+    if (form.complemento_renta && !normalizedCoDebtorRut) {
+      setError("Ingresa un RUT válido para el co-deudor.");
+      return false;
+    }
+
+    if (form.complemento_renta && !coDebtorEmailIsValid) {
+      setError("Ingresa un correo válido para el co-deudor.");
+      return false;
+    }
+
     if (form.declara_patrimonio && patrimonioFieldsIncomplete) {
       setError(
         "Completa la información de patrimonio antes de calcular tu precalificación.",
@@ -954,7 +957,19 @@ export default function ScoreForm({
         entryPoint: isAnon ? "anonymous_prequalification" : "prequalification",
         hasComplementaryIncome: Boolean(form.complemento_renta),
       });
-      onResult(res.data, payload);
+      onResult(res.data, payload, form.complemento_renta ? {
+        coDebtorInvitation: {
+          recipientEmail: normalizedCoDebtorEmail,
+          recipientRut: normalizedCoDebtorRut,
+          declaredComplement: {
+            ingreso_mensual_complementario: payload.ingreso_mensual_complementario,
+            deuda_mensual_complementario: payload.deuda_mensual_complementario,
+            tipo_contrato_complementario: payload.tipo_contrato_complementario,
+            continuidad_laboral_complementario: payload.continuidad_laboral_complementario,
+            morosidad_complementario: payload.morosidad_complementario,
+          },
+        },
+      } : undefined);
     } catch (err) {
       const calledUrl = scoreUrl || `${resolveApiBase()}/score`;
       const errorLog = {
@@ -1447,6 +1462,43 @@ export default function ScoreForm({
               <div className="pre-wizard-grid-2">
                 <div className="pre-wizard-field">
                   <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="rut_codeudor">RUT del co-deudor</label>
+                    <FieldTooltip text="RUT declarado por ti para enviar la invitación. No verifica la identidad de esta persona." />
+                  </div>
+                  <input
+                    type="text"
+                    id="rut_codeudor"
+                    name="rut_codeudor"
+                    value={form.rut_codeudor}
+                    onChange={(event) => {
+                      trackPrequalificationStart(currentStep);
+                      setForm((prev) => ({ ...prev, rut_codeudor: formatChileanRutInput(event.target.value) }));
+                    }}
+                    onBlur={() => setForm((prev) => ({ ...prev, rut_codeudor: formatChileanRutInput(normalizeChileanRut(prev.rut_codeudor) || prev.rut_codeudor) }))}
+                    placeholder="Ej: 12.345.678-5"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="correo_codeudor">Correo del co-deudor</label>
+                    <FieldTooltip text="Usaremos este correo para enviar la invitación a completar y autorizar sus propios antecedentes." />
+                  </div>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    id="correo_codeudor"
+                    name="correo_codeudor"
+                    value={form.correo_codeudor}
+                    onChange={handleChange}
+                    placeholder="nombre@correo.cl"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
                     <label className="pre-wizard-field-label" htmlFor="ingreso_mensual_complementario">Ingreso mensual complementario</label>
                     <FieldTooltip text="Sueldo líquido o renta promedio de la persona que complementa tu renta." />
                   </div>
@@ -1524,11 +1576,6 @@ export default function ScoreForm({
                   )}
                 </div>
               </div>
-              {showComplementMorosityWarning && (
-                <div className="pre-wizard-warning">
-                  Si la persona complementaria declara morosidad, no se considerará válida para mejorar el score orientativo.
-                </div>
-              )}
             </div>
           )}
 

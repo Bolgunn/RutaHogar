@@ -2230,6 +2230,414 @@ $$;
 revoke all on function public.commercial_stage_backfill() from public, anon, authenticated;
 
 -- =============================================================
+-- HU18 — Participación y consentimiento del co-deudor
+-- Espejo acumulado de las migraciones HU18 de consentimiento.
+-- =============================================================
+
+create table if not exists public.co_debtor_invitations (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.profiles(id) on delete restrict,
+  recipient_email text not null check (length(trim(recipient_email)) > 0),
+  recipient_rut text
+    check (recipient_rut is null or recipient_rut ~ '^[0-9]{7,8}-[0-9K]$'),
+  ingreso_mensual_complementario numeric,
+  deuda_mensual_complementario numeric,
+  tipo_contrato_complementario text,
+  continuidad_laboral_complementario text,
+  morosidad_complementario text,
+  token_digest text not null unique check (length(trim(token_digest)) > 0),
+  management_token_digest text
+    check (management_token_digest is null or length(trim(management_token_digest)) > 0),
+  status text not null default 'pending'
+    check (status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  replaced_at timestamptz,
+  replacement_of_invitation_id uuid
+    references public.co_debtor_invitations(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint co_debtor_invitations_expiry_check check (expires_at > created_at),
+  constraint co_debtor_invitations_replacement_check check (
+    replacement_of_invitation_id is distinct from id
+  ),
+  constraint co_debtor_invitations_declared_complement_check check (
+    num_nonnulls(
+      ingreso_mensual_complementario,
+      deuda_mensual_complementario,
+      tipo_contrato_complementario,
+      continuidad_laboral_complementario,
+      morosidad_complementario
+    ) = 0
+    or (
+      num_nonnulls(
+        ingreso_mensual_complementario,
+        deuda_mensual_complementario,
+        tipo_contrato_complementario,
+        continuidad_laboral_complementario,
+        morosidad_complementario
+      ) = 5
+      and ingreso_mensual_complementario >= 0
+      and deuda_mensual_complementario >= 0
+      and tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')
+      and continuidad_laboral_complementario in ('menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios')
+      and morosidad_complementario in ('si', 'no')
+    )
+  )
+);
+
+create unique index if not exists co_debtor_invitations_one_pending_per_lead_idx
+  on public.co_debtor_invitations (lead_id)
+  where status = 'pending';
+create unique index if not exists co_debtor_invitations_management_token_digest_idx
+  on public.co_debtor_invitations (management_token_digest)
+  where management_token_digest is not null;
+create index if not exists co_debtor_invitations_lead_created_idx
+  on public.co_debtor_invitations (lead_id, created_at desc);
+create index if not exists co_debtor_invitations_expiry_idx
+  on public.co_debtor_invitations (expires_at)
+  where status = 'pending';
+
+create table if not exists public.co_debtor_confirmations (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null unique
+    references public.co_debtor_invitations(id) on delete restrict,
+  ingreso_mensual_complementario numeric not null
+    check (ingreso_mensual_complementario >= 0),
+  deuda_mensual_complementario numeric not null
+    check (deuda_mensual_complementario >= 0),
+  tipo_contrato_complementario text not null
+    check (tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')),
+  continuidad_laboral_complementario text not null
+    check (continuidad_laboral_complementario in (
+      'menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios'
+    )),
+  morosidad_complementario text not null
+    check (morosidad_complementario in ('si', 'no')),
+  treatment_consent_version text not null
+    check (length(trim(treatment_consent_version)) > 0),
+  treatment_consented_at timestamptz not null,
+  confirmed_at timestamptz not null default now()
+);
+
+create index if not exists co_debtor_confirmations_confirmed_idx
+  on public.co_debtor_confirmations (confirmed_at desc);
+
+create table if not exists public.co_debtor_consent_events (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null
+    references public.co_debtor_invitations(id) on delete restrict,
+  event_type text not null
+    check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked')),
+  actor_type text not null
+    check (actor_type in ('lead', 'co_debtor', 'system')),
+  invitation_status text not null
+    check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  occurred_at timestamptz not null default clock_timestamp()
+);
+
+create index if not exists co_debtor_consent_events_invitation_occurred_idx
+  on public.co_debtor_consent_events (invitation_id, occurred_at, id);
+
+create or replace function public.hu18_reject_consent_event_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'co_debtor_consent_events_are_append_only' using errcode = '23514';
+end;
+$$;
+
+drop trigger if exists co_debtor_consent_events_append_only on public.co_debtor_consent_events;
+create trigger co_debtor_consent_events_append_only
+  before update or delete on public.co_debtor_consent_events
+  for each row execute function public.hu18_reject_consent_event_mutation();
+
+alter table public.co_debtor_invitations enable row level security;
+alter table public.co_debtor_confirmations enable row level security;
+alter table public.co_debtor_consent_events enable row level security;
+
+drop policy if exists "Co-debtor invitations select own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations select own lead"
+  on public.co_debtor_invitations
+  for select to authenticated
+  using (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor invitations insert own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations insert own lead"
+  on public.co_debtor_invitations
+  for insert to authenticated
+  with check (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor confirmations select own lead" on public.co_debtor_confirmations;
+create policy "Co-debtor confirmations select own lead"
+  on public.co_debtor_confirmations
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Co-debtor consent events select own lead" on public.co_debtor_consent_events;
+create policy "Co-debtor consent events select own lead"
+  on public.co_debtor_consent_events
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+revoke all on table public.co_debtor_invitations,
+  public.co_debtor_confirmations,
+  public.co_debtor_consent_events from anon, authenticated;
+grant select, insert on table public.co_debtor_invitations to authenticated;
+grant select on table public.co_debtor_confirmations,
+  public.co_debtor_consent_events to authenticated;
+grant select, insert, update, delete on table public.co_debtor_invitations,
+  public.co_debtor_confirmations to service_role;
+grant select, insert on table public.co_debtor_consent_events to service_role;
+
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid, p_recipient_email text, p_token_digest text, p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare existing_invitation public.co_debtor_invitations%rowtype; created_id uuid;
+begin
+  perform 1 from public.profiles where id = p_lead_id for update;
+  if not found then raise exception 'hu18_lead_not_found' using errcode = 'P0001'; end if;
+  select * into existing_invitation from public.co_debtor_invitations
+    where lead_id = p_lead_id and status = 'pending' for update;
+  if found and existing_invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'expired', 'system', 'expired');
+    existing_invitation := null;
+  elsif found then
+    update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+      where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'replaced', 'lead', 'replaced');
+  end if;
+  insert into public.co_debtor_invitations
+    (lead_id, recipient_email, token_digest, expires_at, replacement_of_invitation_id)
+    values (p_lead_id, lower(trim(p_recipient_email)), p_token_digest, p_expires_at,
+      case when existing_invitation.id is null then null else existing_invitation.id end)
+    returning id into created_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (created_id, 'invited', 'lead', 'pending');
+  return query select created_id, existing_invitation.id;
+end;
+$$;
+
+-- Declared-complement overload used by the authenticated Edge Function. Its
+-- values stay on the invitation until the co-debtor confirms their own data.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz,
+  p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric,
+  p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text,
+  p_morosidad_complementario text
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_recipient_rut, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set ingreso_mensual_complementario = p_ingreso_mensual_complementario,
+        deuda_mensual_complementario = p_deuda_mensual_complementario,
+        tipo_contrato_complementario = p_tipo_contrato_complementario,
+        continuidad_laboral_complementario = p_continuidad_laboral_complementario,
+        morosidad_complementario = p_morosidad_complementario
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+-- RUT-aware overload used only by the authenticated Edge Function. The
+-- original four-argument operation remains for existing hosted callers.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  if p_recipient_rut !~ '^[0-9]{7,8}-[0-9K]$' then
+    raise exception 'hu18_invalid_recipient_rut' using errcode = 'P0001';
+  end if;
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set recipient_rut = p_recipient_rut
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+create or replace function public.hu18_revert_invitation_after_delivery_failure(
+  p_invitation_id uuid, p_previous_invitation_id uuid default null
+)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations
+    where id = p_invitation_id for update;
+  if current_status is distinct from 'pending' then return false; end if;
+  update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+    where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'replaced', 'system', 'replaced');
+  if p_previous_invitation_id is not null then
+    update public.co_debtor_invitations set status = 'pending', replaced_at = null
+      where id = p_previous_invitation_id and status = 'replaced';
+  end if;
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitation(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found or invitation.status <> 'pending' or invitation.expires_at > clock_timestamp() then return false; end if;
+  update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'expired', 'system', 'expired');
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitations()
+returns table (invitation_id uuid, recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  for invitation in select * from public.co_debtor_invitations
+    where status = 'pending' and expires_at <= clock_timestamp() for update skip locked
+  loop
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    invitation_id := invitation.id; recipient_email := invitation.recipient_email; lead_id := invitation.lead_id;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public.hu18_confirm_invitation(
+  p_invitation_id uuid, p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric, p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text, p_morosidad_complementario text,
+  p_treatment_consent_version text, p_management_token_digest text
+)
+returns table (recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if invitation.status = 'pending' and invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    return;
+  end if;
+  if invitation.status <> 'pending' then raise exception 'hu18_invitation_not_pending' using errcode = 'P0001'; end if;
+  if length(trim(p_management_token_digest)) = 0 then
+    raise exception 'hu18_management_token_missing' using errcode = 'P0001';
+  end if;
+  insert into public.co_debtor_confirmations (
+    invitation_id, ingreso_mensual_complementario, deuda_mensual_complementario,
+    tipo_contrato_complementario, continuidad_laboral_complementario, morosidad_complementario,
+    treatment_consent_version, treatment_consented_at
+  ) values (
+    invitation.id, p_ingreso_mensual_complementario, p_deuda_mensual_complementario,
+    p_tipo_contrato_complementario, p_continuidad_laboral_complementario, p_morosidad_complementario,
+    p_treatment_consent_version, clock_timestamp()
+  );
+  update public.co_debtor_invitations set status = 'confirmed', consumed_at = clock_timestamp(),
+    management_token_digest = p_management_token_digest where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'consent_granted', 'co_debtor', 'confirmed'),
+      (invitation.id, 'confirmed', 'co_debtor', 'confirmed');
+  return query select invitation.recipient_email, invitation.lead_id;
+end;
+$$;
+
+create or replace function public.hu18_revoke_consent(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if current_status = 'revoked' then return false; end if;
+  if current_status <> 'confirmed' then raise exception 'hu18_consent_not_confirmed' using errcode = 'P0001'; end if;
+  update public.co_debtor_invitations set status = 'revoked' where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'revoked', 'co_debtor', 'revoked');
+  return true;
+end;
+$$;
+
+revoke all on function public.hu18_create_invitation(uuid, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revert_invitation_after_delivery_failure(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitation(uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitations() from public, anon, authenticated;
+revoke all on function public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revoke_consent(uuid) from public, anon, authenticated;
+grant execute on function public.hu18_create_invitation(uuid, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text),
+  public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
+  public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
+  public.hu18_revoke_consent(uuid) to service_role;
+
+-- HU18 Step 8: staff never reads raw evaluation/history snapshots directly.
+-- The backend applies consent-state redaction and the existing commercial
+-- tenant scope before returning an executive projection.
+drop policy if exists "Evaluations select own" on public.evaluations;
+create policy "Evaluations select own"
+  on public.evaluations
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Evaluations select sales" on public.evaluations;
+
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
 -- ScoreLeads — HU16: Historial de estados de leads para admins
 -- =============================================================
 

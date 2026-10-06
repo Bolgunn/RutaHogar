@@ -2,7 +2,7 @@ import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
 import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
 import { isStaffRole } from "../lib/roles";
-import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
+import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
   if (value === undefined || value === null) return fallback;
@@ -38,14 +38,20 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     : recommendationData.items || [];
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
-  const contact = contactsMap[row.user_id] || {};
+  const contact = contactsMap[row.user_id] || row;
+  const input = financialData.input || financialData.input_snapshot || financialData;
+  const onboardingSnapshot = input?.onboarding_snapshot;
+  const hasSnapshotField = (field) => Object.prototype.hasOwnProperty.call(onboardingSnapshot || {}, field);
 
   const onboarding = {
-    objetivo_principal: row.objective || "",
-    tipo_propiedad: row.property_type || "",
-    comuna_interes: row.target_commune || "",
-    comuna_alternativa: row.alternative_commune || "",
-    plazo_compra: row.purchase_timeline || "",
+    objetivo_principal: hasSnapshotField("objetivo_principal") ? onboardingSnapshot.objetivo_principal : row.objective || "",
+    tipo_propiedad: hasSnapshotField("tipo_propiedad") ? onboardingSnapshot.tipo_propiedad : row.property_type || "",
+    comuna_interes: hasSnapshotField("comuna_interes") ? onboardingSnapshot.comuna_interes : input?.comuna_objetivo || row.target_commune || "",
+    comuna_alternativa: hasSnapshotField("comuna_alternativa") ? onboardingSnapshot.comuna_alternativa : input?.comuna_alternativa || row.alternative_commune || "",
+    plazo_compra: hasSnapshotField("plazo_compra") ? onboardingSnapshot.plazo_compra : input?.plazo_compra || row.purchase_timeline || "",
+    tiene_propiedad_vista: hasSnapshotField("tiene_propiedad_vista")
+      ? onboardingSnapshot.tiene_propiedad_vista === true
+      : input?.tiene_propiedad_vista,
   };
 
   return {
@@ -66,7 +72,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     },
     user_id: row.user_id,
     onboarding,
-    input: financialData.input || financialData.input_snapshot || financialData,
+    input,
     result: {
       ...storedResult,
       score: storedResult.score ?? row.score,
@@ -221,32 +227,16 @@ export async function getEvaluations(userId, role) {
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
   const isSales = isStaffRole(role);
-  let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
-  if (!isSales) query = query.eq("user_id", user.id);
-  const { data, error } = await query;
-  if (error) throw error;
-  let contactsMap = {};
-  if (isSales && data?.length) {
-    const userIds = [...new Set(data.map((r) => r.user_id).filter(Boolean))];
-    const { data: contactsData, error: contactsError } = await supabase
-      .rpc("list_lead_contacts", { p_user_ids: userIds });
-
-    if (contactsError) {
-      logSupabaseError(contactsError);
-    } else if (contactsData) {
-      contactsMap = Object.fromEntries(contactsData.map((contact) => [
-        contact.id, 
-        { 
-          ...contact, 
-          nombre: contact.nombre,
-          apellido_paterno: contact.apellido_paterno,
-          apellido_materno: contact.apellido_materno,
-          rut: contact.rut,
-          reliability_status: contact.reliability_status || "normal" 
-        }
-      ]));
-    }
+  if (isSales) {
+    // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
+    const projection = await getStaffEvaluations();
+    const rows = projection.items || [];
+    const contactsMap = await listLeadContacts(rows);
+    return rows.map((row) => normalizeEvaluation(row, contactsMap));
   }
+  const { data, error } = await supabase.from("evaluations").select("*")
+    .eq("user_id", user.id).order("created_at", { ascending: false });
+  if (error) throw error;
   if (!data?.length) return [];
   let annotationQuery = supabase.from("evaluation_events").select("*")
     .in("evaluation_id", data.map((row) => row.id));
@@ -255,8 +245,25 @@ export async function getEvaluations(userId, role) {
   const { data: annotations, error: annotationError } = await annotationQuery
     .order("recorded_at", { ascending: true });
   if (annotationError) throw annotationError;
-  return (data || []).map((row) => normalizeEvaluation(
-    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), contactsMap));
+  return data.map((row) => normalizeEvaluation(
+    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), {}));
+}
+
+// OVERLAP: HU12/HU16 leen nombre, RUT y reliability_status de list_lead_contacts; HU18 trae solo
+// nombre y teléfono en la proyección. Se mantienen ambos hasta unificar la proyección staff.
+async function listLeadContacts(rows) {
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  if (!userIds.length) return {};
+  const { data: contactsData, error: contactsError } = await supabase
+    .rpc("list_lead_contacts", { p_user_ids: userIds });
+  if (contactsError) {
+    logSupabaseError(contactsError);
+    return {};
+  }
+  return Object.fromEntries((contactsData || []).map((contact) => [
+    contact.id,
+    { ...contact, reliability_status: contact.reliability_status || "normal" },
+  ]));
 }
 
 export async function getLatestEvaluation(userId) {

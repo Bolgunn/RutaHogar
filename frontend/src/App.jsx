@@ -12,6 +12,7 @@ import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
+import { createCoDebtorInvitation } from "./services/coDebtorService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
@@ -20,6 +21,7 @@ import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
 import ProjectsWorkspace from "./components/ProjectsWorkspace";
+import { CoDebtorInvitationPage, CoDebtorManagementPage } from "./components/PublicCoDebtorPages";
 import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
@@ -69,6 +71,7 @@ const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
 const ANON_RESULT_KEY = "RutaHogar_anon_result";
 const ANON_INPUT_KEY = "RutaHogar_anon_input";
+const ANON_CO_DEBTOR_INVITATION_KEY = "RutaHogar_anon_co_debtor_invitation";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -159,7 +162,16 @@ const buildResultSnapshot = (scoreResult = {}) => ({
   commercial_guidance: normalizeDisplayText(scoreResult.commercial_guidance),
 });
 
-const buildFinancialInput = (input = {}) => ({
+export const buildOnboardingSnapshot = (onboarding = {}) => ({
+  objetivo_principal: onboarding?.objetivo_principal || "",
+  tipo_propiedad: onboarding?.tipo_propiedad || "",
+  comuna_interes: onboarding?.comuna_interes || "",
+  comuna_alternativa: onboarding?.comuna_alternativa || "",
+  plazo_compra: onboarding?.plazo_compra || "",
+  tiene_propiedad_vista: onboarding?.tiene_propiedad_vista === true,
+});
+
+export const buildFinancialInput = (input = {}, onboarding = null) => ({
   birth_date: input.birth_date,
   ingreso_mensual: input.ingreso_mensual,
   deuda_mensual: input.deuda_mensual,
@@ -206,6 +218,9 @@ const buildFinancialInput = (input = {}) => ({
   pie_en_cuotas_interes: input.pie_en_cuotas_interes,
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
+  ...(onboarding || input.onboarding_snapshot
+    ? { onboarding_snapshot: buildOnboardingSnapshot(onboarding || input.onboarding_snapshot) }
+    : {}),
   time_to_submit: input.time_to_submit,
   device_id_hash: input.device_id_hash,
 });
@@ -295,6 +310,12 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
+  // These token-gated pages belong to the co-debtor, never to a RutaHogar
+  // account. Resolve them before any profile or session redirect.
+  if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
+  if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
+    return { page: "co-debtor-management" };
+  }
   const trackingPage = resolveTrackingRoute(path);
   const unknownRoute = ![
     "/",
@@ -368,6 +389,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
 const getRouteForPage = (page, profile, options = {}) => {
   if (page === "landing") return "/landing.html";
   if (page === "set-password") return "/definir-password";
+  if (page === "co-debtor-invitation") return "/co-deudor/invitacion";
+  if (page === "co-debtor-management") return "/co-deudor/gestion";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
   if (!profile) return "/login";
@@ -384,6 +407,8 @@ const pagesWithoutBackButton = new Set([
   "dataconsent",
   "signup-offer",
   "set-password",
+  "co-debtor-invitation",
+  "co-debtor-management",
 ]);
 
 function AppBackButton({ onBack }) {
@@ -402,6 +427,7 @@ export default function App() {
   const initialAnonOnboarding = useMemo(() => readSessionJson(ANON_ONBOARDING_KEY), []);
   const initialAnonResult = useMemo(() => readSessionJson(ANON_RESULT_KEY), []);
   const initialAnonInput = useMemo(() => readSessionJson(ANON_INPUT_KEY), []);
+  const initialAnonCoDebtorInvitation = useMemo(() => readSessionJson(ANON_CO_DEBTOR_INVITATION_KEY), []);
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [auth, setAuth] = useState(storedAuth);
   const [page, setPage] = useState(
@@ -442,6 +468,7 @@ export default function App() {
   const [anonOnboarding, setAnonOnboarding] = useState(initialAnonOnboarding);
   const [anonResult, setAnonResult] = useState(initialAnonResult);
   const [anonInput, setAnonInput] = useState(initialAnonInput);
+  const [anonCoDebtorInvitation, setAnonCoDebtorInvitation] = useState(initialAnonCoDebtorInvitation);
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
@@ -481,6 +508,23 @@ export default function App() {
     setTrackingRevision((revision) => revision + 1);
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
+  };
+  const refreshEvaluationView = async () => {
+    const [nextTracking, nextEvaluations] = await Promise.all([
+      getTracking(),
+      getEvaluations(userId, profile?.role),
+    ]);
+    setTrackingState(nextTracking);
+    setEvaluations(nextEvaluations);
+    return { tracking: nextTracking, evaluations: nextEvaluations };
+  };
+  const refreshScoreAfterCoDebtorConfirmation = async () => {
+    try {
+      return await refreshEvaluationView();
+    } catch {
+      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
+    }
   };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
@@ -733,9 +777,11 @@ export default function App() {
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
     sessionStorage.removeItem(ANON_RESULT_KEY);
     sessionStorage.removeItem(ANON_INPUT_KEY);
+    sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
     setAnonOnboarding(null);
     setAnonResult(null);
     setAnonInput(null);
+    setAnonCoDebtorInvitation(null);
     setScoreFormDraft(null);
   };
 
@@ -757,6 +803,7 @@ export default function App() {
     const pendingOnboarding = anonOnboarding;
     const pendingResult = anonResult;
     const pendingInput = anonInput;
+    const pendingCoDebtorInvitation = anonCoDebtorInvitation;
     const nextProfile = nextAuth?.profile;
 
     if (
@@ -806,7 +853,7 @@ export default function App() {
 
     let savedEvaluation = null;
     if (pendingResult && pendingInput) {
-      const financialInput = buildFinancialInput(pendingInput);
+      const financialInput = buildFinancialInput(pendingInput, onboardingToSave);
       const existingEvaluations = nextUserId
         ? await getEvaluations(nextUserId, migratedProfile?.role)
         : [];
@@ -822,6 +869,22 @@ export default function App() {
           channel: getChannel(),
         });
       }
+    }
+
+    if (pendingCoDebtorInvitation) {
+      try {
+        await createCoDebtorInvitation(
+          pendingCoDebtorInvitation.recipientEmail,
+          pendingCoDebtorInvitation.recipientRut,
+          pendingCoDebtorInvitation.declaredComplement || {
+            ingreso_mensual_complementario: pendingInput?.ingreso_mensual_complementario,
+            deuda_mensual_complementario: pendingInput?.deuda_mensual_complementario,
+            tipo_contrato_complementario: pendingInput?.tipo_contrato_complementario,
+            continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
+            morosidad_complementario: pendingInput?.morosidad_complementario,
+          },
+        );
+      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
     }
 
     clearAnonSession();
@@ -842,7 +905,7 @@ export default function App() {
     navigateToPage("anon-evaluate");
   };
 
-  const handleAnonResult = (scoreResult, input) => {
+  const handleAnonResult = (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const anonymousFlowId =
@@ -851,11 +914,17 @@ export default function App() {
     const financialInput = buildFinancialInput({
       ...input,
       anonymous_flow_id: anonymousFlowId,
-    });
+    }, anonOnboarding);
     sessionStorage.setItem(ANON_RESULT_KEY, JSON.stringify(resultSnapshot));
     sessionStorage.setItem(ANON_INPUT_KEY, JSON.stringify(financialInput));
+    if (metadata.coDebtorInvitation) {
+      sessionStorage.setItem(ANON_CO_DEBTOR_INVITATION_KEY, JSON.stringify(metadata.coDebtorInvitation));
+    } else {
+      sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
+    }
     setAnonResult(resultSnapshot);
     setAnonInput(financialInput);
+    setAnonCoDebtorInvitation(metadata.coDebtorInvitation || null);
     setPage("signup-offer");
   };
 
@@ -1049,10 +1118,10 @@ export default function App() {
     resultRef.current = result;
   }, [result]);
 
-  const handleResult = async (scoreResult, input) => {
+  const handleResult = async (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
-    const financialInput = buildFinancialInput(input);
+    const financialInput = buildFinancialInput(input, userOnboarding);
 
     try {
       // Se siembra la ref en el mismo tick: el efecto corre después del
@@ -1079,22 +1148,38 @@ export default function App() {
         channel: getChannel(),
       });
 
-      // Si el usuario ya evaluó de nuevo, este guardado quedó obsoleto y no
-      // debe tocar el resultado visible, que pertenece a otra evaluación.
-      if (resultRef.current === resultSnapshot) {
-        setResultSaved(true);
-        // El snapshot visible queda ligado a la evaluación guardada: sin esto
-        // no hay forma de saber si `result` y `currentEvaluation` son lo mismo.
-        setResult((prev) =>
-          prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
-        );
-      }
-
       setEvaluations((prev) => {
         const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
         return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
       });
       prependEvaluation(savedEvaluation);
+
+      if (metadata.coDebtorInvitation) {
+        try {
+          await createCoDebtorInvitation(
+            metadata.coDebtorInvitation.recipientEmail,
+            metadata.coDebtorInvitation.recipientRut,
+            metadata.coDebtorInvitation.declaredComplement,
+          );
+        } catch {
+          // A delivery failure must never roll back or hide the saved score.
+        }
+      }
+
+      try {
+        await refreshEvaluationView();
+        // Keep the just-calculated preview visible until both the historical
+        // evaluation and the invitation state are current. This prevents the
+        // previous confirmed co-debtor from flashing after a new evaluation.
+        if (resultRef.current === resultSnapshot) {
+          setResultSaved(true);
+          setResult((prev) =>
+            prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
+          );
+        }
+      } catch {
+        setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      }
     } catch (err) {
       console.error(err);
       if (resultRef.current !== resultSnapshot) return;
@@ -1241,6 +1326,9 @@ export default function App() {
       </div>
     );
   }
+
+  if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
+  if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
@@ -1621,61 +1709,63 @@ export default function App() {
             onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
-          <FinancialTracking
-            evaluation={currentEvaluation}
-            onAcceptPlan={handleAcceptPlan}
-            onStartEvaluation={startEvaluation}
-            onOpenProgress={() => navigateToPage("progress")}
-            onOpenHousingPlan={(pieType) => {
-              setHousingInitialPieType(pieType || "minimo");
-              setPage("housing-plan");
-            }}
-            onNavigate={navigateToPage}
-          />
-        ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
-          <ProgressPage
-            onOpenHistory={() => navigateToPage("progress-history")}
-            onStartEvaluation={startEvaluation}
-            onChanged={refreshTracking}
-          />
-        ) : page === "progress-history" && profile.role === roles.user ? (
-          <TrackingHistoryPage
-            onChanged={refreshTracking}
-          />
-        ) : page === "housing-plan" && profile.role === roles.user ? (
-          <HousingSavingsPlan
-            evaluation={currentEvaluation}
-            initialPieType={housingInitialPieType}
-            onBack={() => navigateToPage("tracking")}
-            onSaveHousingProgress={handleSaveHousingProgress}
-            onLogScoringEvent={handleLogScoringEvent}
-          />
-        ) : page === "objective-review" && profile.role === roles.user ? (
-          <ObjectiveReview
-            evaluation={currentEvaluation}
-            onBack={() => navigateToPage("tracking")}
-          />
-        ) : page === "recommendations" && profile.role === roles.user ? (
-          <Recommendations
-            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-            onStartEvaluation={startEvaluation}
-            onNavigate={navigateToPage}
-            onRetryExplanation={handleRetryAiExplanation}
-          />
-        ) : page === "subsidios" && profile.role === roles.user ? (
-          <Subsidios
-            evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
-            onNavigate={navigateToPage}
-          />
-        ) : page === "simulation" && profile.role === roles.user ? (
-          <SimulationPage
-            evaluation={currentEvaluation}
-            onboarding={userOnboarding}
-            onStartEvaluation={startEvaluation}
-            onNavigate={navigateToPage}
-            initialProjectId={simulationInitialProjectId}
-            onRetryExplanation={handleRetryAiExplanation}
-          />
+        <FinancialTracking
+          evaluation={currentEvaluation}
+          onAcceptPlan={handleAcceptPlan}
+          onStartEvaluation={startEvaluation}
+          onOpenProgress={() => navigateToPage("progress")}
+          onOpenHousingPlan={(pieType) => {
+            setHousingInitialPieType(pieType || "minimo");
+            setPage("housing-plan");
+          }}
+          onNavigate={navigateToPage}
+        />
+      ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
+        <ProgressPage
+          onOpenHistory={() => navigateToPage("progress-history")}
+          onStartEvaluation={startEvaluation}
+          onChanged={refreshTracking}
+        />
+      ) : page === "progress-history" && profile.role === roles.user ? (
+        <TrackingHistoryPage
+          onChanged={refreshTracking}
+        />
+      ) : page === "housing-plan" && profile.role === roles.user ? (
+        <HousingSavingsPlan
+          evaluation={currentEvaluation}
+          initialPieType={housingInitialPieType}
+          onBack={() => navigateToPage("tracking")}
+          onSaveHousingProgress={handleSaveHousingProgress}
+          onLogScoringEvent={handleLogScoringEvent}
+        />
+      ) : page === "objective-review" && profile.role === roles.user ? (
+        <ObjectiveReview
+          evaluation={currentEvaluation}
+          onBack={() => navigateToPage("tracking")}
+        />
+      ) : page === "recommendations" && profile.role === roles.user ? (
+        <Recommendations
+          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+          onStartEvaluation={startEvaluation}
+          onNavigate={navigateToPage}
+          onRetryExplanation={handleRetryAiExplanation}
+          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
+          trackingState={trackingState}
+        />
+      ) : page === "subsidios" && profile.role === roles.user ? (
+        <Subsidios
+          evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
+          onNavigate={navigateToPage}
+        />
+      ) : page === "simulation" && profile.role === roles.user ? (
+        <SimulationPage
+          evaluation={currentEvaluation}
+          onboarding={userOnboarding}
+          onStartEvaluation={startEvaluation}
+          onNavigate={navigateToPage}
+          initialProjectId={simulationInitialProjectId}
+          onRetryExplanation={handleRetryAiExplanation}
+        />
         ) : page === "academia" && profile.role === roles.user ? (
           <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
         ) : page === "projects" && profile.role === roles.user ? (

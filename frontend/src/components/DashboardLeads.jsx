@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
 import { syncLeadToSimulatedCrm, getSimulatedCrmLeads, buildCrmPayload } from "../services/crmService";
 import { reportLead } from "../services/leadManagementService";
@@ -142,39 +141,6 @@ function latestEvaluationPerLead(items = []) {
     }
   }
   return [...latestByLead.values()];
-}
-
-function evaluationsForSameLead(items = [], lead) {
-  const key = leadIdentity(lead);
-  if (!key) return [];
-  return items
-    .filter((item) => leadIdentity(item) === key)
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-}
-
-function historyFallbackFromEvaluation(item) {
-  if (!item) return null;
-  const result = item.result || {};
-  return {
-    id: `evaluation-${item.id}`,
-    evaluation_id: item.id,
-    score: result.score,
-    base_score: result.base_score,
-    adjusted_score: result.adjusted_score,
-    score_adjustment_reason: result.score_adjustment_reason || "",
-    original_classification: result.original_classification || "",
-    classification: result.classification,
-    snapshot: {
-      ...(item.input || {}),
-      input: item.input || {},
-      onboarding: item.onboarding || {},
-      result,
-    },
-    component_scores: result.component_scores || {},
-    algorithm_version: result.algorithm_version || "",
-    created_at: item.created_at,
-    events: [],
-  };
 }
 
 function readDismissedOpportunities(scope) {
@@ -441,10 +407,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   );
   const dismissedScope = executiveId || executiveEmail || "global";
   const latestEvaluations = useMemo(() => latestEvaluationPerLead(localEvaluations), [localEvaluations]);
-  const selectedLeadEvaluations = useMemo(
-    () => evaluationsForSameLead(localEvaluations, selectedLead),
-    [localEvaluations, selectedLead],
-  );
   const comparisonLeads = useMemo(
     () => comparisonLeadIds.map((id) => latestEvaluations.find((lead) => lead.id === id)).filter(Boolean),
     [comparisonLeadIds, latestEvaluations],
@@ -460,26 +422,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       .finally(() => { if (active) setProjectsLoaded(true); });
     return () => { active = false; };
   }, [inmobiliariaId, executiveScope]);
-
-  useEffect(() => {
-    if (!selectedLead) { setHistory([]); return; }
-    let active = true;
-    const evaluationIds = selectedLeadEvaluations.length
-      ? selectedLeadEvaluations.map((item) => item.id)
-      : [selectedLead.id];
-    Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
-      .then((groups) => {
-        if (!active) return;
-        const rows = groups.flat().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        if (rows.length) {
-          setHistory(rows);
-          return;
-        }
-        setHistory(selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean));
-      })
-      .catch(() => { if (active) setHistory([]); });
-    return () => { active = false; };
-  }, [selectedLead, selectedLeadEvaluations]);
 
   const leadUserIds = useMemo(
     () => latestEvaluations.map((item) => item.user_id).filter(Boolean).sort().join(","),

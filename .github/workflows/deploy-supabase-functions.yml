@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - master
       - deploy
       - Isaias
@@ -16,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  deploy-submit-feedback:
-    name: Deploy submit-feedback
+  deploy-functions:
+    name: Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -25,6 +26,10 @@ jobs:
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       FEEDBACK_TO_EMAIL: ${{ secrets.FEEDBACK_TO_EMAIL }}
       FEEDBACK_FROM_EMAIL: ${{ secrets.FEEDBACK_FROM_EMAIL }}
+      APP_PUBLIC_URL: ${{ secrets.APP_PUBLIC_URL }}
+      CO_DEBTOR_FROM_EMAIL: ${{ secrets.CO_DEBTOR_FROM_EMAIL }}
+      CO_DEBTOR_INVITATION_TTL_DAYS: ${{ secrets.CO_DEBTOR_INVITATION_TTL_DAYS }}
+      HU18_CRON_SECRET: ${{ secrets.HU18_CRON_SECRET }}
 
     steps:
       - name: Checkout repository
@@ -41,7 +46,11 @@ jobs:
             SUPABASE_PROJECT_REF \
             RESEND_API_KEY \
             FEEDBACK_TO_EMAIL \
-            FEEDBACK_FROM_EMAIL
+            FEEDBACK_FROM_EMAIL \
+            APP_PUBLIC_URL \
+            CO_DEBTOR_FROM_EMAIL \
+            CO_DEBTOR_INVITATION_TTL_DAYS \
+            HU18_CRON_SECRET
           do
             if [ -z "${!secret_name}" ]; then
               echo "::error::GitHub Secret ${secret_name} is not configured."
@@ -64,6 +73,10 @@ jobs:
             RESEND_API_KEY="$RESEND_API_KEY" \
             FEEDBACK_TO_EMAIL="$FEEDBACK_TO_EMAIL" \
             FEEDBACK_FROM_EMAIL="$FEEDBACK_FROM_EMAIL" \
+            APP_PUBLIC_URL="$APP_PUBLIC_URL" \
+            CO_DEBTOR_FROM_EMAIL="$CO_DEBTOR_FROM_EMAIL" \
+            CO_DEBTOR_INVITATION_TTL_DAYS="$CO_DEBTOR_INVITATION_TTL_DAYS" \
+            HU18_CRON_SECRET="$HU18_CRON_SECRET" \
             --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy submit-feedback function
@@ -71,3 +84,9 @@ jobs:
         run: |
           set -euo pipefail
           supabase functions deploy submit-feedback --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy co-debtor-consent function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy co-debtor-consent --project-ref "$SUPABASE_PROJECT_REF"

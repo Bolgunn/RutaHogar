@@ -12,6 +12,9 @@ from .scoring_adapter import (
     complete_snapshot, financial_field_contract, market_snapshot_from_result,
     provenance, resolve_tracking_market_snapshot, score_snapshot,
 )
+from ..scoring_engine.co_debtor_inputs import assemble_co_debtor_scoring_input
+
+CO_DEBTOR_CONFIRMATION_REASON = "confirmacion_codeudor"
 
 
 def canonical_command(command):
@@ -94,11 +97,85 @@ class TrackingService:
             return self.scorer(complete, market_snapshot=market_snapshot)
         return self.scorer(complete)
 
+    def _co_debtor_consent(self, user_id):
+        """Keep legacy/in-memory repositories usable while HU18 is optional."""
+        loader = getattr(self.repository, "load_co_debtor_consent", None)
+        return loader(user_id) if callable(loader) else None
+
+    @staticmethod
+    def _confirmation_id(consent_facts):
+        confirmation = (consent_facts or {}).get("co_debtor_confirmed")
+        confirmation_id = confirmation.get("id") if isinstance(confirmation, dict) else None
+        return str(confirmation_id) if confirmation_id else None
+
+    @staticmethod
+    def _confirmation_was_applied(bundle, confirmation_id):
+        return any(
+            event.get("reason") == CO_DEBTOR_CONFIRMATION_REASON
+            and (event.get("provenance") or {}).get("co_debtor_confirmation_id") == confirmation_id
+            for event in bundle.get("events", [])
+        )
+
+    def _co_debtor_update_state(self, bundle, user_id):
+        """Expose the current confirmation's one-time score-update state only."""
+        consent_facts = self._co_debtor_consent(user_id)
+        confirmation_id = self._confirmation_id(consent_facts)
+        required = bool(
+            (consent_facts or {}).get("invitation_status") == "confirmed"
+            and confirmation_id
+            and not self._confirmation_was_applied(bundle, confirmation_id)
+        )
+        return {"score_update_required": required}
+
+    def update_score_with_confirmed_co_debtor(self, user_id):
+        """Append an explicit HU18 re-evaluation for the authenticated lead."""
+        bundle = self.repository.load(user_id)
+        history = source_events(bundle)
+        lineage = reconstruct(history, user_id, financial_field_contract())
+        if not lineage["active_line"]:
+            raise TrackingError("not_found")
+        consent_facts = self._co_debtor_consent(user_id)
+        if (consent_facts or {}).get("invitation_status") == "revoked":
+            raise TrackingError("co_debtor_consent_revoked")
+        confirmation_id = self._confirmation_id(consent_facts)
+        if (consent_facts or {}).get("invitation_status") != "confirmed" or not confirmation_id:
+            raise TrackingError("co_debtor_confirmation_required")
+        if self._confirmation_was_applied(bundle, confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
+        now = self.clock().isoformat()
+        try:
+            return self.execute(
+                user_id,
+                {
+                    "event_id": self.new_id(),
+                    "event_kind": "evaluation",
+                    "effective_at": now,
+                    "reason": CO_DEBTOR_CONFIRMATION_REASON,
+                    "previous_event_id": lineage["active_line"][-1]["event_id"],
+                    "patch": {},
+                },
+                require_co_debtor_confirmation=True,
+                co_debtor_confirmation_id=confirmation_id,
+            )
+        except TrackingError as error:
+            # A simultaneous request can lose the normal HU13 revision race.
+            # Re-read only to report the domain outcome when the winner consumed
+            # this exact confirmation; no retry can create a second evaluation.
+            if error.code == "lineage_conflict" and self._confirmation_was_applied(
+                self.repository.load(user_id), confirmation_id
+            ):
+                raise TrackingError("co_debtor_confirmation_already_applied") from None
+            raise
+
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
         bundle = self.repository.load(user_id)
+        co_debtor = self._co_debtor_update_state(bundle, user_id)
         if not bundle["plan"]:
-            return {"status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": []}
+            return {
+                "status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": [],
+                "co_debtor": co_debtor,
+            }
         # Cutoff is effective time; recorded audit remains complete and immutable.
         lineage = reconstruct(source_events(bundle), user_id, financial_field_contract())
         active = [row for row in lineage["active_line"] if parse_time(row["effective_at"]) <= cutoff]
@@ -115,6 +192,7 @@ class TrackingService:
             "goals": goal_view(bundle, line_at_cutoff, cutoff),
             "last_active_update_at": last_update,
             "update_due": bool(last_update and cutoff - parse_time(last_update) >= timedelta(days=30)),
+            "co_debtor": co_debtor,
         }
 
     def _append(self, history, event, user_id):
@@ -186,11 +264,14 @@ class TrackingService:
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
 
-    def execute(self, user_id, command, target_event_id=None):
+    def execute(self, user_id, command, target_event_id=None, *, require_co_debtor_confirmation=False,
+                co_debtor_confirmation_id=None):
         command = canonical_command(command)
         if target_event_id:
             command["target_event_id"] = target_event_id
         bundle = self.repository.load(user_id)
+        if co_debtor_confirmation_id and self._confirmation_was_applied(bundle, co_debtor_confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
         prior = next((row for row in bundle["events"] if row["event_id"] == command["event_id"]), None)
         if prior:
             if prior["canonical_request"] != command:
@@ -198,7 +279,8 @@ class TrackingService:
             return deepcopy(prior["command_result"])
         history = source_events(bundle)
         before = reconstruct(history, user_id, financial_field_contract())
-        now = self.clock().isoformat()
+        recorded_at = self.clock()
+        now = recorded_at.isoformat()
         latest_id = before["active_line"][-1]["event_id"] if before["active_line"] else None
         event = {
             "event_id": command["event_id"], "subject_user_id": user_id,
@@ -226,12 +308,44 @@ class TrackingService:
         event = outcome["appended_record"]
         events, evaluations, goals, plan = [event], [], [], None
         market_snapshot = self._stored_market_snapshot(before.get("active_line")) or self.market_snapshot_resolver()
+        consent_facts = None
+        consent_loaded = False
 
-        def evaluate(source, snapshot):
-            result = self._score(snapshot, market_snapshot)
-            details = {**provenance(result), "source_event_ids": [source["event_id"]], "cutoff_at": now}
-            evaluation = {"id": self.new_id(), "snapshot": deepcopy(snapshot), "result": result, "provenance": details}
-            source.update(evaluation_id=evaluation["id"], evaluation=result, provenance=details)
+        def evaluate(source_event, snapshot):
+            nonlocal consent_facts, consent_loaded
+            if (snapshot.get("complemento_renta") or require_co_debtor_confirmation) and not consent_loaded:
+                consent_facts = self._co_debtor_consent(user_id)
+                consent_loaded = True
+            resolved_input, consent_provenance = assemble_co_debtor_scoring_input(
+                snapshot,
+                co_debtor_consent=consent_facts,
+                now=recorded_at,
+            )
+            if require_co_debtor_confirmation:
+                if self._confirmation_id(consent_facts) != co_debtor_confirmation_id:
+                    raise TrackingError("co_debtor_confirmation_required")
+                complement_source = consent_provenance["complement_source"]
+                if complement_source == "excluded_after_revocation":
+                    raise TrackingError("co_debtor_consent_revoked")
+                if complement_source != "co_debtor_confirmed":
+                    raise TrackingError("co_debtor_confirmation_required")
+            complete_input = complete_snapshot(resolved_input)
+            result = self._score(complete_input, market_snapshot)
+            details = {
+                **provenance(result),
+                "source_event_ids": [source_event["event_id"]],
+                "cutoff_at": now,
+                "co_debtor_consent": consent_provenance,
+            }
+            if co_debtor_confirmation_id:
+                details["co_debtor_confirmation_id"] = co_debtor_confirmation_id
+            evaluation = {
+                "id": self.new_id(), "snapshot": deepcopy(complete_input),
+                "result": result, "provenance": details,
+            }
+            source_event.update(
+                evaluation_id=evaluation["id"], evaluation=result, provenance=details
+            )
             evaluations.append(evaluation)
             return evaluation
 

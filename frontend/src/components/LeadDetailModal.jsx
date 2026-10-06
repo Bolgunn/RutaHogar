@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getEvaluations } from "../services/evaluationService";
+import { getStaffLeadDetail } from "../services/trackingService";
 import { reportLead, resolveLeadStatus } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import CommercialStagePanel from "./CommercialStagePanel";
+import ExecutiveCoDebtorSection from "./ExecutiveCoDebtorSection";
 import { getCommercialRecords } from "../services/commercialStageService";
 import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
@@ -310,6 +312,7 @@ export default function LeadDetailModal({
   const [showAllContactQuestions, setShowAllContactQuestions] = useState(false);
   const [questionsCopied, setQuestionsCopied] = useState(false);
   const [history, setHistory] = useState([]);
+  const [coDebtor, setCoDebtor] = useState(null);
   const [ownCommercialRecords, setOwnCommercialRecords] = useState({});
 
   useEffect(() => {
@@ -353,22 +356,34 @@ export default function LeadDetailModal({
   useEffect(() => {
     if (!activeLead) {
       setHistory([]);
+      setCoDebtor(null);
       return;
     }
     let active = true;
     const evaluationIds = selectedLeadEvaluations.length
       ? selectedLeadEvaluations.map((item) => item.id)
       : [activeLead.id].filter(Boolean);
-
-    Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
+    const loadLegacyHistory = () => Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
       .then((groups) => {
-        if (!active) return;
         const rows = groups.flat().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        if (rows.length) {
-          setHistory(rows);
-          return;
-        }
-        setHistory(selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean));
+        return rows.length ? rows : selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean);
+      });
+
+    // OVERLAP: HU18 sirve historial + codeudor desde el backend (sin datos crudos del codeudor);
+    // la lectura directa de scoring_history (HU16) queda como respaldo hasta unificar.
+    const leadUserId = activeLead.user_id || activeLead.id;
+    getStaffLeadDetail(leadUserId)
+      .then((detail) => {
+        if (!active) return null;
+        setCoDebtor(detail.co_debtor || null);
+        return detail.history?.length ? detail.history : loadLegacyHistory();
+      })
+      .catch(() => {
+        if (active) setCoDebtor(null);
+        return loadLegacyHistory();
+      })
+      .then((rows) => {
+        if (active && rows) setHistory(rows);
       })
       .catch(() => {
         if (active) setHistory([]);
@@ -752,6 +767,8 @@ export default function LeadDetailModal({
                   {selectedOnboarding.comuna_alternativa && <DetailRow label="Comuna alternativa">{selectedOnboarding.comuna_alternativa}</DetailRow>}
                 </dl>
               </article>
+
+              <ExecutiveCoDebtorSection coDebtor={coDebtor} />
 
               {selectedMainBlocker && (
                 <article className="admin-panel-card admin-panel-card--warning executive-snapshot-card executive-lead-detail__blocker">
