@@ -14,7 +14,7 @@ Para una sesion de build. Las instrucciones permanentes estan en `docs/HANDBOOK.
 - Leer primero: `frontend/src/App.jsx`; contiene Inicio, resumen de perfil, novedades agrupadas, popup de detalle y actualizacion rapida.
 - Leer primero: `frontend/src/components/ProfilePage.jsx`; contiene switches por tipo/canal para Inicio y Correo.
 - Leer primero: `frontend/src/services/leadChangeService.js`; contiene lectura de eventos no vistos, preferencias y registro de update rapido.
-- Leer primero: `supabase/migrations/20261003120000_lead_change_events.sql`; define tablas, RPCs e indices de eventos/notificaciones/preferencias.
+- Leer primero: `supabase/migrations/20261006120000_lead_change_events.sql`; define tablas, RPCs e indices de eventos/notificaciones/preferencias.
 - Detenerse y reportar si el build requiere cambiar scoring base, pesos financieros, RLS, autenticacion, permisos o hacer updates sobre `evaluations` existentes.
 - Detenerse y reportar si un cambio pretende enviar emails individuales por evento; la decision vigente es digest semanal por lead.
 - Detenerse y reportar si se quiere incluir `quick_update_submitted` en email; la decision vigente es excluir actualizaciones manuales del digest.
