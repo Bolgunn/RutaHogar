@@ -5,6 +5,7 @@ dashboard receives redacted evaluation/history snapshots plus a deliberately
 small, current-consent projection for the selected lead.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -26,6 +27,9 @@ CO_DEBTOR_CONFIRMED_FIELDS = (
     "continuidad_laboral_complementario",
     "morosidad_complementario",
 )
+# Una consulta de alcance por lead; en serie superaban el timeout de 15 s del
+# frontend con ~140 leads. Cada llamada del repositorio abre su propio cliente HTTP.
+SCOPE_CHECK_WORKERS = 16
 
 
 def redact_co_debtor_data(value):
@@ -117,16 +121,11 @@ class StaffLeadService:
     def evaluations(self, token):
         actor = self._actor(token)
         rows = self.repository.staff_evaluations()
-        allowed = {}
-        result = []
-        for row in rows:
-            lead_id = row.get("user_id")
-            if not lead_id:
-                continue
-            if lead_id not in allowed:
-                allowed[lead_id] = self.repository.staff_can_access(actor, lead_id)
-            if allowed[lead_id]:
-                result.append(redact_co_debtor_data(row))
+        lead_ids = list(dict.fromkeys(row["user_id"] for row in rows if row.get("user_id")))
+        with ThreadPoolExecutor(max_workers=SCOPE_CHECK_WORKERS) as pool:
+            access = pool.map(lambda lead_id: self.repository.staff_can_access(actor, lead_id), lead_ids)
+            allowed = {lead_id for lead_id, ok in zip(lead_ids, access) if ok}
+        result = [redact_co_debtor_data(row) for row in rows if row.get("user_id") in allowed]
         contacts = self.repository.staff_contacts([row["user_id"] for row in result])
         return {
             "items": [
