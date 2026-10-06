@@ -2,7 +2,11 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProgressView, TrackingHistoryView } from "./ProgressPage";
+import {
+  PointTooltip, ProgressView, TrackingHistoryView, formatHistoricalProjectGoal,
+  historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
+  tooltipPlacement,
+} from "./ProgressPage";
 
 const data = {
   active_line: [],
@@ -67,8 +71,8 @@ describe("HU13 goal cards and client language", () => {
     const goalData = { ...data, goals: [{
       goal_id: "goal-1", action_status: "en_progreso", temporal_status: "atrasado",
       definition: {
-        title: "Aumentar ahorro disponible", description: "Texto secundario que no debe repetirse",
-        target_at: "2026-12-01T00:00:00Z",
+        source_action_type: "increase_savings", title: "Aumentar ahorro para el pie",
+        description: "Texto secundario que no debe repetirse", unit: "CLP", target_at: "2026-12-01T00:00:00Z",
       },
       progress: { percentage: 40, current_value: 4000000, target_value: 7000000, remaining_value: 3000000 },
       schedule: { expected_percentage: 55 },
@@ -80,14 +84,54 @@ describe("HU13 goal cards and client language", () => {
       status: "not_projectable", cause: "insufficient_data", target_compatible_at: null,
     }} />);
 
-    expect(html.indexOf("Aumentar ahorro disponible")).toBeLessThan(html.indexOf("En progreso"));
+    expect(html.indexOf("Aumentar ahorro para el pie")).toBeLessThan(html.indexOf("En progreso"));
+    expect(html).toContain("Aumenta tu ahorro disponible hasta alcanzar el monto objetivo de pie.");
     expect(html).toContain("40%");
     expect(html).toContain("Actual");
     expect(html).toContain("Objetivo");
     expect(html).toContain("Restante");
+    expect(html).toContain("$4.000.000");
+    expect(html).not.toContain("$4.000.000 / mes");
     expect(html).toContain("Atrasado");
     expect(html).not.toContain("Texto secundario que no debe repetirse");
     expect(html).not.toContain("<dt>Inicio</dt>");
+  });
+
+  it("uses the frozen unit and contextual copy for dividend, debt, and credit-term goals", () => {
+    const goalData = { ...data, goals: [
+      {
+        goal_id: "dividend", action_status: "en_progreso", temporal_status: "dentro_de_lo_esperado",
+        definition: { source_action_type: "adjust_property_goal", title: "Ajustar objetivo inmobiliario", unit: "CLP/month" },
+        progress: { percentage: 50, current_value: 470411, target_value: 250000, remaining_value: 220411 },
+        schedule: {}, evidence: { ever_completed: false }, verification: { verifiable: true },
+      },
+      {
+        goal_id: "debt", action_status: "en_progreso", temporal_status: "atrasado",
+        definition: { source_action_type: "reduce_debt", title: "Reducir deuda mensual", unit: "CLP/month" },
+        progress: { percentage: 25, current_value: 500000, target_value: 200000, remaining_value: 300000 },
+        schedule: {}, evidence: { ever_completed: false }, verification: { verifiable: true },
+      },
+      {
+        goal_id: "term", action_status: "pendiente", temporal_status: null,
+        definition: { source_action_type: "adjust_credit_term", title: "Ajustar plazo del crédito", unit: "years" },
+        progress: { percentage: 0, current_value: 30, target_value: 25, remaining_value: 5 },
+        schedule: {}, evidence: { ever_completed: false }, verification: { verifiable: true },
+      },
+    ] };
+
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={goalData} projection={{ status: "not_projectable" }} />);
+
+    expect(html).toContain("Reducir dividendo estimado");
+    expect(html).toContain("Ajusta pie, plazo o valor de la vivienda para acercar el dividendo a un nivel más sostenible.");
+    expect(html).toContain("$470.411 / mes");
+    expect(html).toContain("$220.411 / mes");
+    expect(html).toContain("Reduce tus pagos mensuales para mejorar tu carga financiera.");
+    expect(html).toContain("$500.000 / mes");
+    expect(html).toContain("Acerca el plazo del crédito al rango definido por el plan.");
+    expect(html).toContain("30 años");
+    expect(html).toContain("Dentro de lo esperado");
+    expect(html).toContain("Atrasado");
+    expect(html).toContain("25%");
   });
 
   it("keeps technical data listings and the large change history out of the main view", () => {
@@ -108,6 +152,148 @@ describe("HU13 goal cards and client language", () => {
 
     expect(html).toContain("Historial de cambios");
     expect(html).toContain("Ver datos registrados");
+    expect(html).toContain("Corregir registro");
+  });
+});
+
+describe("HU13 evolution graph resilience", () => {
+  it("renders one real observation as a focusable point without a fabricated delta", () => {
+    const single = {
+      ...data,
+      active_line: [{
+        event_id: "baseline", effective_at: "2026-01-01T00:00:00Z",
+        snapshot: { ingreso_mensual: 1200000, deuda_mensual: 180000, ahorro_disponible: 4000000 },
+        evaluation: { score: 65, classification: "Medio" },
+      }],
+    };
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={single} projection={{ status: "not_projectable" }} />);
+
+    expect(html).toContain("tabindex=\"0\"");
+    expect(html).toContain("Score: 65.");
+    expect(html).not.toContain("(+0)");
+  });
+
+  it("keeps the tooltip as a point-anchored overlay with historical evaluation context", () => {
+    const placement = tooltipPlacement({ x: 150, y: 72 });
+    const html = renderToStaticMarkup(<PointTooltip tooltipId="tooltip-score" field="score" label="Score"
+      placement={placement} point={{
+        at: "2026-10-06T00:00:00Z", score: 85.4,
+        deltas: { score: 27.5, capacity: 486.6 },
+        classificationChange: { from: "Medio", to: "Alto" },
+        capacity: 1216, compatibilityChange: { from: "Cercano", to: "Compatible" },
+      }} />);
+
+    expect(placement).toMatchObject({ horizontal: "center", vertical: "above", style: { left: "50%", top: "72%" } });
+    expect(html).toContain("progress-trend-tooltip--above");
+    expect(html).toContain("role=\"tooltip\"");
+    expect(html).toContain("Score:</b> 85,4");
+    expect(html).toContain("(+27,5)");
+    expect(html).toContain("Clasificación:</b> Medio → Alto");
+    expect(html).toContain("Capacidad de compra:</b> 1.216 UF");
+    expect(html).toContain("Compatibilidad:</b> Cercano → Compatible");
+    expect(html).not.toContain("Fecha compatible estimada");
+  });
+
+  it("anchors edge and top points without letting their tooltip leave the chart", () => {
+    expect(tooltipPlacement({ x: 10, y: 10 })).toMatchObject({
+      horizontal: "start", vertical: "below", style: { left: "6px", top: "10%" },
+    });
+    expect(tooltipPlacement({ x: 290, y: 90 })).toMatchObject({
+      horizontal: "end", vertical: "above", style: { right: "6px", top: "90%" },
+    });
+  });
+
+  it("omits capacity and compatibility rows when historic values are not comparable", () => {
+    const html = renderToStaticMarkup(<PointTooltip tooltipId="tooltip-income" field="income" label="Ingreso"
+      placement={tooltipPlacement({ x: 150, y: 50 })} point={{
+        at: "2026-10-06T00:00:00Z", income: 1200000,
+        deltas: { income: 100000, score: null, capacity: null }, score: 65, capacity: null,
+      }} />);
+
+    expect(html).toContain("Ingreso:</b> $1.200.000");
+    expect(html).not.toContain("Capacidad de compra");
+    expect(html).not.toContain("Compatibilidad");
+  });
+});
+
+describe("HU13 readable recorded history", () => {
+  const historicalRecord = {
+    event_id: "update-1", event_kind: "data_update", effective_at: "2026-02-01T12:00:00Z",
+    reason: "Actualización mensual", patch: { ahorro_disponible: 22000000, continuidad_laboral: "mas_3_anios" },
+    recorded_complete_snapshot: {
+      ingreso_mensual: 2200000, deuda_mensual: 180000, ahorro_disponible: 22000000,
+      morosidad_actual: "no", tipo_contrato: "indefinido", continuidad_laboral: "mas_3_anios",
+      plazo_compra: "6_a_12_meses",
+      project_goal: { nombre: "Terrazas de Maipú", precio_min_uf: 2900, comuna: "Maipú" },
+      anonymous_flow_id: "never-render-this", birth_date: "1990-01-01", property_value_clp: 150000000,
+    },
+    evaluation: {
+      score: 68, classification: "Medio",
+      financial_indicators: { capacidad_compra_estimada_uf: 2740 },
+    },
+  };
+
+  const historyData = {
+    ...data,
+    audit_line: [historicalRecord],
+    current_evaluation: { score: 99, classification: "No debe aparecer" },
+    latest_effective_snapshot: { ingreso_mensual: 9999999, ahorro_disponible: 99999999 },
+  };
+
+  it("renders only the compact, human-readable historical subset", () => {
+    const html = renderToStaticMarkup(<TrackingHistoryView data={historyData} busy={false} onCorrect={vi.fn()} />);
+
+    expect(html).toContain("$2.200.000");
+    expect(html).toContain("$180.000");
+    expect(html).toContain("$22.000.000");
+    expect(html).toContain("Contrato indefinido");
+    expect(html).toContain("Más de 3 años");
+    expect(html).toContain("6 a 12 meses");
+    expect(html).toContain("Terrazas de Maipú · 2.900 UF");
+    expect(html).toContain("Score");
+    expect(html).toContain("Clasificación");
+    expect(html).toContain("Capacidad");
+    expect(html).toContain("2.740 UF");
+    expect(html).not.toContain("never-render-this");
+    expect(html).not.toContain("birth_date");
+    expect(html).not.toContain("property_value_clp");
+    expect(html).not.toContain("&quot;nombre&quot;");
+    expect(html).not.toContain("$9.999.999");
+    expect(html).not.toContain("No debe aparecer");
+    expect(html.match(/Actualizado/g)).toHaveLength(2);
+  });
+
+  it("marks only fields that belong to a non-baseline row patch", () => {
+    const baselineRow = { ...historicalRecord, event_id: "baseline", event_kind: "baseline" };
+    const html = renderToStaticMarkup(<TrackingHistoryView data={{ ...historyData, audit_line: [baselineRow] }}
+      busy={false} onCorrect={vi.fn()} />);
+
+    expect(isUpdatedField(historicalRecord, "ahorro_disponible")).toBe(true);
+    expect(isUpdatedField(historicalRecord, "ingreso_mensual")).toBe(false);
+    expect(isUpdatedField(baselineRow, "ahorro_disponible")).toBe(false);
+    expect(html).not.toContain("Actualizado");
+  });
+
+  it("does not fill incomplete snapshots or evaluation results with current values", () => {
+    expect(historySnapshotFields({ ahorro_disponible: 10 })).toEqual([{
+      field: "ahorro_disponible", label: "Ahorro disponible", format: "clp", value: "$10",
+    }]);
+    expect(historicalEvaluationSummary({ evaluation: { score: 41, classification: "Bajo" } })).toEqual([
+      { label: "Score", value: "41" }, { label: "Clasificación", value: "Bajo" },
+    ]);
+  });
+
+  it("formats a historical project without exposing its raw object", () => {
+    expect(formatHistoricalProjectGoal(historicalRecord.recorded_complete_snapshot.project_goal))
+      .toBe("Terrazas de Maipú · 2.900 UF");
+    expect(formatHistoricalProjectGoal({ precio_max_uf: 3200 })).toBe("3.200 UF");
+    expect(formatHistoricalProjectGoal("project-1")).toBeNull();
+  });
+
+  it("keeps the correction action available beside each record", () => {
+    const html = renderToStaticMarkup(<TrackingHistoryView data={historyData} busy={false} onCorrect={vi.fn()} />);
+
+    expect(html).toContain("progress-audit-record__correct");
     expect(html).toContain("Corregir registro");
   });
 });

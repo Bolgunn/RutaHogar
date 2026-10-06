@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   decideExecutiveBinding,
-  derivedTestPassword,
   filterAssignedTo,
   filterAvailable,
   validateExecutive,
@@ -204,22 +203,6 @@ describe("validateExecutive", () => {
 
   it("no acepta un nombre en blanco", () => {
     expect(validateExecutive({ ...validExecutive, full_name: "   " }).errors.full_name).toBeTruthy();
-  });
-});
-
-describe("derivedTestPassword", () => {
-  it("usa el texto antes del @", () => {
-    expect(derivedTestPassword("testejecutivocomercial@email.com")).toBe("testejecutivocomercial");
-    expect(derivedTestPassword("ana.soto@andes.cl")).toBe("ana.soto");
-  });
-
-  it("rellena hasta el mínimo de 6 caracteres que exige Supabase", () => {
-    expect(derivedTestPassword("ab@x.com")).toBe("ab0000");
-    expect(derivedTestPassword("exacto@x.com")).toBe("exacto");
-  });
-
-  it("tolera entradas vacías", () => {
-    expect(derivedTestPassword("")).toBe("000000");
   });
 });
 

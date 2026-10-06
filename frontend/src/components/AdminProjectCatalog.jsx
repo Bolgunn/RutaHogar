@@ -99,7 +99,6 @@ export default function AdminProjectCatalog() {
   const [executiveForm, setExecutiveForm] = useState(emptyExecutiveForm);
   const [creatingExecutive, setCreatingExecutive] = useState(false);
   const [executiveModalError, setExecutiveModalError] = useState("");
-  const [newExecutiveCredentials, setNewExecutiveCredentials] = useState(null);
   const [executiveSubmitAttempted, setExecutiveSubmitAttempted] = useState(false);
 
   const [adminModal, setAdminModal] = useState(false);
@@ -438,15 +437,7 @@ export default function AdminProjectCatalog() {
       const rows = await getExecutives({ inmobiliariaId: selectedInmobiliaria });
       setExecutiveRoster(rows);
 
-      if (result?.password_temporal) {
-        // Modo de prueba: se muestra una sola vez para poder entrar sin correo.
-        setNewExecutiveCredentials({
-          email: result.ejecutivo?.email || executiveForm.email,
-          password: result.password_temporal,
-        });
-      } else {
-        setExecutiveModal(false);
-      }
+      setExecutiveModal(false);
 
       setFeedback({
         type: "success",
@@ -990,32 +981,7 @@ export default function AdminProjectCatalog() {
             <div className="admin-modal-body">
               {executiveModalError && <div className="error-message">{executiveModalError}</div>}
 
-              {newExecutiveCredentials ? (
-                <>
-                  <div className="success-message">Cuenta creada para {newExecutiveCredentials.email}.</div>
-
-                  <div className="admin-panel-card admin-panel-card--success">
-                    <div className="admin-panel-card__header">
-                      <h3>Contraseña de prueba</h3>
-                    </div>
-                    <dl className="admin-definition-list">
-                      <div className="admin-definition-row">
-                        <dt>Correo</dt>
-                        <dd>{newExecutiveCredentials.email}</dd>
-                      </div>
-                      <div className="admin-definition-row">
-                        <dt>Contraseña</dt>
-                        <dd>{newExecutiveCredentials.password}</dd>
-                      </div>
-                    </dl>
-                    <p className="field-warning admin-modal-credentials-warning">
-                      Modo de prueba activo: la contraseña es el texto antes del @ del correo. Anótala
-                      ahora, no se vuelve a mostrar.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
+              <>
                   <div className="admin-panel-card admin-panel-card--soft">
                     <div className="admin-panel-card__header">
                       <h3>Datos de la cuenta</h3>
@@ -1100,34 +1066,25 @@ export default function AdminProjectCatalog() {
                   <div className="admin-callout admin-callout--info">
                     <p>Se enviará un correo con un enlace para que el ejecutivo defina su contraseña.</p>
                   </div>
-                </>
-              )}
+              </>
             </div>
 
             <div className="admin-modal-footer">
-              {newExecutiveCredentials ? (
-                <button type="button" onClick={() => setExecutiveModal(false)}>
-                  Listo
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setExecutiveModal(false)}
-                    disabled={creatingExecutive}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateExecutive}
-                    disabled={creatingExecutive}
-                  >
-                    {creatingExecutive ? "Creando…" : "Crear ejecutivo"}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setExecutiveModal(false)}
+                disabled={creatingExecutive}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateExecutive}
+                disabled={creatingExecutive}
+              >
+                {creatingExecutive ? "Creando…" : "Crear ejecutivo"}
+              </button>
             </div>
           </div>
         </div>
