@@ -283,6 +283,11 @@ export function getHousingPropertyPrice(evaluation) {
   const input = evaluation?.input || {};
   if (input.property_value_clp) return Number(input.property_value_clp);
 
+  const persistedMarketSnapshot =
+    evaluation?.result?.financial_indicators?.capacidad_supuestos?.market_snapshot;
+  const ufValueClp =
+    Number(persistedMarketSnapshot?.uf_value_clp) || Number(input.uf_value_clp) || 0;
+
   const priceRef = {
     "Buin": 2800, "Calera de Tango": 4300, "Cerrillos": 3000, "Cerro Navia": 2400,
     "Conchalí": 2800, "El Bosque": 2300, "Estación Central": 3100, "Huechuraba": 4700,
@@ -298,8 +303,9 @@ export function getHousingPropertyPrice(evaluation) {
   };
 
   const commune = input.comuna_objetivo || evaluation?.onboarding?.comuna_interes;
-  const UF_CLP = 40695;
-  if (commune && priceRef[commune]) return priceRef[commune] * UF_CLP;
+  if (commune && priceRef[commune] && ufValueClp > 0) {
+    return priceRef[commune] * ufValueClp;
+  }
 
   return 0;
 }

@@ -10,6 +10,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, TrackingError
 from .repository import TrackingRepository
 from .service import TrackingService
+from .staff import StaffLeadService
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 bearer = HTTPBearer(auto_error=False)
@@ -28,6 +29,8 @@ def checked(call):
         status = {
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
+            "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
+            "co_debtor_consent_revoked": 409, "co_debtor_confirmation_already_applied": 409,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 
@@ -38,6 +41,13 @@ def context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(
         raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
     user_id = checked(lambda: repo.authenticate(credentials.credentials))
     return user_id, repo, TrackingService(repo)
+
+
+def staff_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                  repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, StaffLeadService(repo)
 
 
 @router.get("")
@@ -83,12 +93,39 @@ def projection(ctx=Depends(context), as_of: AwareDatetime | None = None):
     return checked(lambda: service.projection(user_id, as_of))
 
 
+@router.get("/staff/evaluations")
+def staff_evaluations(ctx=Depends(staff_context)):
+    token, service = ctx
+    return checked(lambda: service.evaluations(token))
+
+
+@router.get("/staff/leads/{lead_id}")
+def staff_lead_detail(lead_id: UUID, ctx=Depends(staff_context)):
+    token, service = ctx
+    return checked(lambda: service.lead_detail(token, str(lead_id)))
+
+
 class EvaluationAnnotation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     event_id: UUID
     effective_at: AwareDatetime
     kind: Literal["plan_accepted", "narrative", "housing_plan", "milestone"]
     payload: dict = Field(default_factory=dict)
+
+
+class CoDebtorConfirmationEvaluationCommand(BaseModel):
+    """Deliberately empty: the authenticated session is the only lead input."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.post("/evaluations/co-debtor-confirmation")
+def update_score_with_confirmed_co_debtor(
+    _command: CoDebtorConfirmationEvaluationCommand | None = None,
+    ctx=Depends(context),
+):
+    user_id, _, service = ctx
+    return checked(lambda: service.update_score_with_confirmed_co_debtor(user_id))
 
 
 @router.post("/evaluations/{evaluation_id}/events")

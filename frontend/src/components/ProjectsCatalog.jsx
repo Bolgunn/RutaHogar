@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
-import { buildSimulationContext, DEFAULT_UF_CLP } from "../lib/simulation/compatibility";
-import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
-import { getAvailableProjects } from "../services/projectService";
+import { buildSimulationContext } from "../lib/simulation/compatibility";
+import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice, portalProjectToCatalogCard } from "../lib/simulation/projectAdapter";
+import { getAvailableProjects, getPortalProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
 import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
+import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -70,6 +71,7 @@ function ProjectsCarousel({ children }) {
 
 export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
+  const [portalProjects, setPortalProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -87,6 +89,15 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       .then((rows) => { if (active) setProjects(catalogProjectsToSimulation(rows)); })
       .catch((cause) => { if (active) setError(cause.message || "No se pudo cargar el catálogo de proyectos."); })
       .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  // Los avisos del portal complementan el catálogo: si fallan, el catálogo sigue igual.
+  useEffect(() => {
+    let active = true;
+    getPortalProjects()
+      .then((rows) => { if (active) setPortalProjects(rows.map(portalProjectToCatalogCard)); })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -118,13 +129,11 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   }, [favorites, userId]);
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
-  const ufValueClp = Number(context?.uf_value_clp) || DEFAULT_UF_CLP;
-  const currentGoal = evaluationBase?.input?.property_value_source === "project_selection"
-    ? evaluationBase.input.project_goal
-    : null;
+  const ufValueClp = Number(context?.uf_value_clp) || 0;
+  const currentGoal = getCurrentProjectGoal(evaluationBase);
   const currentGoalProject = useMemo(() => {
-    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
     if (currentGoal) return projects.find((project) => project.id === currentGoal.id) || currentGoal;
+    if (evaluationBase?.input?.property_value_source !== "project_selection") return null;
 
     // Las metas previas a project_goal no tenían identificador. Solo se
     // recuperan si el valor UF identifica de forma única al proyecto actual.
@@ -139,10 +148,13 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   const hasDifferentCurrentGoal = Boolean(frozenGoalProject && currentGoalProject
     && frozenGoalProject.id !== currentGoalProject.id);
   const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
-  const communes = useMemo(() => [...new Set(projects.map((project) => project.comuna).filter(Boolean))].sort(), [projects]);
+  // Favoritos, meta y compatibilidad se apoyan en public.proyectos, así que solo
+  // listado y filtros incluyen los avisos del portal.
+  const listedProjects = useMemo(() => [...projects, ...portalProjects], [portalProjects, projects]);
+  const communes = useMemo(() => [...new Set(listedProjects.map((project) => project.comuna).filter(Boolean))].sort(), [listedProjects]);
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es-CL");
-    return projects.filter((project) => {
+    return listedProjects.filter((project) => {
       const matchesType = propertyType === "todos" || project.tipo_vivienda === propertyType;
       const matchesCommune = !commune || project.comuna === commune;
       const matchesAvailability = availability === "todos" || project.estado === availability;
@@ -150,8 +162,8 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       const searchable = `${project.nombre} ${project.comuna || ""}`.toLocaleLowerCase("es-CL");
       return matchesType && matchesCommune && matchesAvailability && matchesFavorite && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
-  }, [availability, commune, favorites, propertyType, projects, query, showFavoritesOnly]);
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
+  }, [availability, commune, favorites, listedProjects, propertyType, query, showFavoritesOnly]);
+  const selectedProject = listedProjects.find((project) => project.id === selectedProjectId) || null;
   const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
   const handleSimulateProject = (project) => {
@@ -176,7 +188,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
     {favoritesError && <div className="warning-note">{favoritesError}</div>}
     {loading ? <div className="admin-compact-empty"><strong>Cargando proyectos disponibles...</strong></div> : error ? (
       <div className="admin-compact-empty"><strong>{error}</strong><button type="button" className="secondary-button compact-button" onClick={() => window.location.reload()}>Reintentar</button></div>
-    ) : !projects.length ? (
+    ) : !listedProjects.length ? (
       <div className="admin-compact-empty"><strong>No hay proyectos disponibles.</strong><p>Vuelve más tarde para revisar nuevas alternativas.</p></div>
     ) : <>
       {frozenGoalProject && <section className="projects-current-goal projects-current-goal--frozen" aria-labelledby="frozen-goal-title">
@@ -235,11 +247,12 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
         </div>
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
+             const isPortal = project.origen === "portal";
              const isFavorite = favorites.includes(project.id);
-             const isCurrentGoal = currentGoalProject?.id === project.id;
+             const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
-          {userId && (
+          {userId && !isPortal && (
             <button
               type="button"
               className={`project-catalog-favorite-button ${isFavorite ? "is-active" : ""}`}
@@ -251,14 +264,21 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
           )}
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong>Preferencia actual</strong>}</div>
+          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}</div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>
             <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
-            {context ? (
+            {isPortal ? (
+              <div className="project-catalog-card__actions">
+                {context
+                  ? <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
+                  : <button type="button" className="primary-button compact-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>}
+                <a href={project.url} target="_blank" rel="noopener noreferrer" className="secondary-button compact-button">Ver publicación original ↗</a>
+              </div>
+            ) : context ? (
               <div className="project-catalog-card__actions">
                 <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
                 <button type="button" className="secondary-button compact-button" onClick={() => handleSimulateProject(project)}>Simular</button>

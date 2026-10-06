@@ -4,6 +4,7 @@ import {
   catalogProjectsToSimulation,
   formatDeliveryMonth,
   formatProjectPrice,
+  portalProjectToCatalogCard,
 } from "../projectAdapter";
 
 const catalogProject = {
@@ -111,5 +112,41 @@ describe("formatDeliveryMonth", () => {
     expect(formatDeliveryMonth(null)).toBe("");
     expect(formatDeliveryMonth("2027-13")).toBe("");
     expect(formatDeliveryMonth("enero 2027")).toBe("");
+  });
+});
+
+describe("portalProjectToCatalogCard", () => {
+  const row = {
+    id: "r-1",
+    nombre: "Edificio Ambar",
+    comuna: "Santiago",
+    tipo_vivienda: "departamento",
+    valor_uf: "2983",
+    precio_desde: true,
+    estado: "en_construccion",
+    inmobiliaria: "Euro Inmobiliaria",
+    url: "https://www.portalinmobiliario.com/MLC-1",
+  };
+
+  it("mapea el aviso al formato de tarjeta del catálogo", () => {
+    expect(portalProjectToCatalogCard(row)).toEqual({
+      id: "portal-r-1",
+      nombre: "Edificio Ambar",
+      comuna: "Santiago",
+      tipo_vivienda: "departamento",
+      valor_uf: 2983,
+      precio_min_uf: 2983,
+      precio_max_uf: 2983,
+      precio_desde: true,
+      estado: "en_construccion",
+      inmobiliaria: "Euro Inmobiliaria",
+      url: "https://www.portalinmobiliario.com/MLC-1",
+      origen: "portal",
+    });
+  });
+
+  it("muestra 'desde' solo si el aviso es un proyecto con precio desde", () => {
+    expect(formatProjectPrice(portalProjectToCatalogCard(row))).toBe("desde 2.983 UF");
+    expect(formatProjectPrice(portalProjectToCatalogCard({ ...row, precio_desde: false }))).toBe("2.983 UF");
   });
 });

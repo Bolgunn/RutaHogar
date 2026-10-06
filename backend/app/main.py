@@ -1,15 +1,30 @@
+import asyncio
+import logging
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde el archivo .env local si existe
+load_dotenv()
+
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
+from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
+from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
+from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
     generate_executive_summary,
     generate_user_explanation,
 )
+from .routers import crm_mock
+from .tracking.routes import router as tracking_router
+from .academy_news import router as academy_news_router
 
+logger = logging.getLogger(__name__)
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -34,9 +49,10 @@ VALID_RELATION_TYPES = {
 }
 
 app = FastAPI(title="RutaHogar")
+app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
+app.include_router(academy_news_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
-from .tracking.routes import router as tracking_router
 app.include_router(tracking_router)
 
 LOCAL_FRONTEND_ORIGINS = [
@@ -84,7 +100,8 @@ class ScoreRequest(BaseModel):
     property_value_uf: Optional[float] = None
     property_value_clp: Optional[float] = None
     uf_value_clp: Optional[float] = None
-    plazo_credito_hipotecario: int
+    market_snapshot_fetched_at: Optional[str] = None
+    plazo_credito_hipotecario: Optional[int] = None
     tipo_contrato: str  # 'indefinido', 'plazo_fijo', 'independiente'
     continuidad_laboral: str
     morosidad_actual: str
@@ -117,6 +134,8 @@ class ScoreRequest(BaseModel):
     valor_vehiculos: Optional[float] = 0.0
     valor_inmuebles: Optional[float] = 0.0
     patrimonio_unit: Optional[str] = "clp"
+    time_to_submit: Optional[int] = None
+    device_id_hash: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -182,7 +201,7 @@ class ScoreRequest(BaseModel):
     @field_validator("plazo_credito_hipotecario")
     @classmethod
     def validate_mortgage_term(cls, value):
-        if value not in VALID_MORTGAGE_TERMS:
+        if value is not None and value not in VALID_MORTGAGE_TERMS:
             raise ValueError("Plazo de crédito hipotecario inválido")
         return value
 
@@ -289,13 +308,127 @@ class ScoreRequest(BaseModel):
 
 @app.post("/score")
 async def score_endpoint(payload: ScoreRequest):
-    result = calculate_score(payload.model_dump())
-    return result
+    # The request never calls BCCh or starts a refresh: it only resolves storage.
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if (
+        payload.market_snapshot_fetched_at
+        and payload.market_snapshot_fetched_at != snapshot["fetched_at"]
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de calcular.",
+        )
 
+    data = payload.model_dump()
+
+    # -------------------------------------------------------------
+    # REGLA DE BACKEND: Tanteo / Múltiples Intentos
+    # -------------------------------------------------------------
+    device_hash = data.get("device_id_hash")
+    intentos_previos = 0
+    ahorro_previo = None
+
+    if device_hash:
+        try:
+            from .ml_fraud import get_supabase_client
+            supabase = get_supabase_client()
+
+            hace_24_horas = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+
+            response = supabase.table("evaluations") \
+                .select("financial_data, created_at") \
+                .eq("financial_data->input->>device_id_hash", device_hash) \
+                .gte("created_at", hace_24_horas) \
+                .order("created_at", desc=False) \
+                .execute()
+
+            filas = response.data if response.data else []
+
+            quince_minutos_atras = datetime.now(timezone.utc) - timedelta(minutes=15)
+            intentos_15m = 0
+
+            for f in filas:
+                dt = datetime.fromisoformat(f["created_at"].replace("Z", "+00:00"))
+                if dt >= quince_minutos_atras:
+                    intentos_15m += 1
+
+                if ahorro_previo is None:
+                    fin_data = f.get("financial_data") or {}
+                    inp = fin_data.get("input") or {}
+                    ah_disp = inp.get("ahorro_disponible")
+                    if ah_disp is not None:
+                        ahorro_previo = float(ah_disp)
+
+            intentos_previos = intentos_15m
+
+        except Exception as e:
+            print(f"Error consultando historial de intentos: {e}")
+
+    # Inyectamos el historial de intentos al payload
+    data["intentos_previos"] = intentos_previos
+
+    if ahorro_previo is not None:
+        data["ahorro_previo_24h"] = ahorro_previo
+
+    return calculate_score(data, market_snapshot=snapshot)
+
+
+def resolve_market_snapshot() -> dict:
+    """Small injectable boundary used by the endpoint and its contract tests."""
+    return resolve_market_snapshot_from_environment()
+
+
+@app.get("/market-reference")
+async def market_reference_endpoint():
+    """Public projection of the persisted snapshot; never calls BCCh."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    uf_source = snapshot["source"]["uf_value_clp"]
+    return {
+        "uf_value_clp": snapshot["uf_value_clp"],
+        "effective_date": uf_source["effective_date"],
+        "snapshot_effective_date": snapshot["effective_date"],
+        "snapshot_fetched_at": snapshot["fetched_at"],
+        "source": {
+            "provider": uf_source["provider"],
+            "series": uf_source["series"],
+        },
+    }
+
+
+class PropertySearchRequest(BaseModel):
+    query: str
+    commune: Optional[str] = None
+    max_price_uf: Optional[float] = None
+    property_type: Optional[str] = None
+    limit: Optional[int] = 10
+    similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
+
+
+@app.post("/api/properties/search")
+@app.post("/properties/search")
+async def properties_search_endpoint(payload: PropertySearchRequest):
+    try:
+        return search_properties(
+            query=payload.query,
+            commune=payload.commune,
+            max_price_uf=payload.max_price_uf,
+            property_type=payload.property_type,
+            limit=payload.limit or 10,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EmbeddingError as exc:
+        logger.warning("Búsqueda de propiedades sin embedding: %s", exc)
+        raise HTTPException(status_code=503, detail="El buscador no está disponible en este momento.")
 
 class ExplainRequest(ScoreRequest):
-    # "user": solo la explicación del usuario. "all": incluye también los
-    # textos del ejecutivo (resumen y guía comercial).
+    # Narrative retry recalculates authoritative score inputs without spending AI.
     scope: str = "user"
 
     @field_validator("scope")
@@ -308,15 +441,14 @@ class ExplainRequest(ScoreRequest):
 
 @app.post("/score/explain")
 async def explain_endpoint(payload: ExplainRequest):
-    """
-    Regenera los textos de IA para una precalificación ya calculada.
-    Recalcula el scoring localmente (sin gastar llamadas de IA en el score)
-    y devuelve únicamente los textos generados. Si un texto no pudo
-    generarse, su campo llega en null: el detalle del fallo nunca se expone
-    al cliente.
-    """
-    data = payload.model_dump(exclude={"scope"})
-    base = calculate_score(data, include_ai=False)
+    """Regenerate narratives from a server-calculated, non-AI score result."""
+    try:
+        snapshot = await asyncio.to_thread(resolve_market_snapshot)
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if payload.market_snapshot_fetched_at and payload.market_snapshot_fetched_at != snapshot["fetched_at"]:
+        raise HTTPException(status_code=409, detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de generar la explicación.")
+    base = calculate_score(payload.model_dump(exclude={"scope"}), include_ai=False, market_snapshot=snapshot)
 
     response = {
         "score": base.get("score"),
@@ -327,28 +459,25 @@ async def explain_endpoint(payload: ExplainRequest):
     }
 
     response["ai_explanation"] = generate_user_explanation(
-        classification=base["classification"],
-        score=base["score"],
-        positive_indicators=base["positive_indicators"],
-        risks=base["risks"],
+        classification=base["classification"], score=base["score"],
+        positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
     )
 
     if payload.scope == "all":
         response["executive_summary"] = generate_executive_summary(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
         )
         response["commercial_guidance"] = generate_commercial_guidance(
             classification=base["classification"],
             score=base["score"],
-            positive_indicators=base["positive_indicators"],
-            risks=base["risks"],
-            recommendations=base["recommendations"],
+            positive_indicators=base.get("positive_indicators", []), risks=base.get("risks", []),
+            recommendations=base.get("recommendations", []),
         )
 
     return response
+
 
 
 # --- HU 9: interés en un proyecto ---

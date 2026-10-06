@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildAccessibleAlternatives,
   evaluateScenario,
@@ -8,6 +8,10 @@ import { formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { propertyLabels } from "../constants";
 import { submitProjectGoal } from "../lib/projectGoalAction";
+import {
+  trackGeneratedLead,
+  trackProjectCompatibilityViewed,
+} from "../lib/analytics";
 
 const statusClass = {
   Compatible: "compatible",
@@ -41,6 +45,19 @@ export default function ProjectEvaluationModal({
   const [goalPending, setGoalPending] = useState(false);
   const [goalSuccess, setGoalSuccess] = useState(false);
   const [confirmGoalChange, setConfirmGoalChange] = useState(false);
+  const viewedProjectIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!project?.id || viewedProjectIdsRef.current.has(project.id)) return;
+
+    viewedProjectIdsRef.current.add(project.id);
+    trackProjectCompatibilityViewed({
+      projectId: project.id,
+      projectType: project.tipo_vivienda,
+      projectRegion: project.region,
+      sourcePage: "projects",
+    });
+  }, [project]);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
   const evaluation = useMemo(
@@ -57,6 +74,9 @@ export default function ProjectEvaluationModal({
     ).slice(0, 3);
   }, [context, evaluation.status, onboarding, project.id, projects]);
   const isCompatible = evaluation.status === "Compatible";
+  // Los avisos del portal no están en public.proyectos: favoritos, contacto con
+  // ejecutivo y meta del plan dependen de esa tabla, así que solo se enlaza el aviso.
+  const isPortal = project.origen === "portal";
 
   const handleInterest = async (contactExecutive) => {
     setActionError("");
@@ -78,6 +98,12 @@ export default function ProjectEvaluationModal({
         body: JSON.stringify({ proyecto_id: project.id, contactar_ejecutivo: true, email: contactEmail || undefined }),
       });
       if (!response.ok) throw new Error("No se pudo registrar tu solicitud.");
+      trackGeneratedLead({
+        leadSource: "project_interest",
+        projectId: project.id,
+        projectRegion: project.region,
+        sourcePage: "projects",
+      });
       setInterestStatus("Solicitud enviada. Un ejecutivo te contactará a la brevedad.");
     } catch (cause) {
       setActionError(cause.message || "No se pudo registrar tu solicitud.");
@@ -123,7 +149,10 @@ export default function ProjectEvaluationModal({
           {item.project.nombre} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda} · {formatProjectPrice(item.project)}
         </button>)}
       </div>}
-      {goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
+      {isPortal ? <div className="project-evaluation-modal__actions">
+        <a href={project.url} target="_blank" rel="noopener noreferrer" className="primary-button">Ver publicación original ↗</a>
+        {project.inmobiliaria && <p className="project-evaluation-modal__context">Publicado por {project.inmobiliaria} en Portal Inmobiliario.</p>}
+      </div> : goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
         {isCurrentGoal ? <div className="project-current-goal-notice"><i className="ti ti-circle-check" aria-hidden="true" /><span>Este proyecto ya es tu preferencia de última evaluación.</span></div> : <button

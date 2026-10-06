@@ -7,11 +7,13 @@ import AdminPanel from "./components/AdminPanel";
 import AdminProjectCatalog from "./components/AdminProjectCatalog";
 import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
+import CommercialMetrics from "./components/CommercialMetrics";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
+import { createCoDebtorInvitation } from "./services/coDebtorService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
@@ -20,9 +22,11 @@ import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
 import ProjectsWorkspace from "./components/ProjectsWorkspace";
+import { CoDebtorInvitationPage, CoDebtorManagementPage } from "./components/PublicCoDebtorPages";
 import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
+import AdminReportHistory from "./components/AdminReportHistory";
 import Recommendations from "./components/Recommendations";
 import Subsidios from "./components/Subsidios";
 import Result from "./components/Result";
@@ -30,6 +34,7 @@ import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
+import PropertySearch from "./components/PropertySearch";
 import {
   acceptEvaluationPlan,
   applyAcceptedPlanEvent,
@@ -41,14 +46,18 @@ import {
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
+import { isAdminRole, isGlobalAdmin, isStaffRole } from "./lib/roles";
+import { canViewStaffPage, resolveStaffRoute, staffInitialPage } from "./lib/staffRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
+
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
+import { projectGoalUserMessage, setProjectGoal } from "./services/projectGoalService";
 import {
   getConsent,
   saveConsent,
@@ -59,11 +68,13 @@ import {
 } from "./services/profileService";
 import { formatScore } from "./utils/helpers";
 import { formatFormValue, plazoLabels } from "./constants";
+import { createPageViewDeduper, trackSignUp } from "./lib/analytics";
 
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
 const ANON_RESULT_KEY = "RutaHogar_anon_result";
 const ANON_INPUT_KEY = "RutaHogar_anon_input";
+const ANON_CO_DEBTOR_INVITATION_KEY = "RutaHogar_anon_co_debtor_invitation";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -154,7 +165,16 @@ const buildResultSnapshot = (scoreResult = {}) => ({
   commercial_guidance: normalizeDisplayText(scoreResult.commercial_guidance),
 });
 
-const buildFinancialInput = (input = {}) => ({
+export const buildOnboardingSnapshot = (onboarding = {}) => ({
+  objetivo_principal: onboarding?.objetivo_principal || "",
+  tipo_propiedad: onboarding?.tipo_propiedad || "",
+  comuna_interes: onboarding?.comuna_interes || "",
+  comuna_alternativa: onboarding?.comuna_alternativa || "",
+  plazo_compra: onboarding?.plazo_compra || "",
+  tiene_propiedad_vista: onboarding?.tiene_propiedad_vista === true,
+});
+
+export const buildFinancialInput = (input = {}, onboarding = null) => ({
   birth_date: input.birth_date,
   ingreso_mensual: input.ingreso_mensual,
   deuda_mensual: input.deuda_mensual,
@@ -201,8 +221,12 @@ const buildFinancialInput = (input = {}) => ({
   pie_en_cuotas_interes: input.pie_en_cuotas_interes,
   consentimiento: input.consentimiento,
   uf_value_clp: input.uf_value_clp,
+  ...(onboarding || input.onboarding_snapshot
+    ? { onboarding_snapshot: buildOnboardingSnapshot(onboarding || input.onboarding_snapshot) }
+    : {}),
+  time_to_submit: input.time_to_submit,
+  device_id_hash: input.device_id_hash,
 });
-
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`
   : "No declarado";
@@ -246,8 +270,8 @@ const mergeOnboardingData = (currentData, pendingData) => {
 
 const getInitialPageForProfile = (profile) => {
   if (!profile) return "auth";
-  if (profile.role === roles.sales) return "home";
-  if (profile.role === roles.admin) return "admin";
+  const staffPage = staffInitialPage(profile.role);
+  if (staffPage) return staffPage;
   if (profile.role !== roles.user) return "home";
   return hasCompletedOnboarding(getOnboardingData(profile)) ? "home" : "onboarding";
 };
@@ -268,6 +292,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "subsidios") return "/subsidios";
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
+  if (page === "portal") return "/portal";
   if (page === "projects") return "/proyectos";
   if (page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "register-milestone") return "/plan-mejora/progreso";
@@ -278,6 +303,8 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
   if (page === "admin-profile") return "/admin/perfil";
+  if (page === "metricas") return "/metricas";
+  if (page === "admin-reports") return "/admin/reportes";
   return "/inicio";
 };
 
@@ -288,6 +315,12 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
+  // These token-gated pages belong to the co-debtor, never to a RutaHogar
+  // account. Resolve them before any profile or session redirect.
+  if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
+  if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
+    return { page: "co-debtor-management" };
+  }
   const trackingPage = resolveTrackingRoute(path);
   const unknownRoute = ![
     "/",
@@ -300,6 +333,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/subsidios",
     "/comparar-proyectos",
     "/academia",
+    "/portal",
     ...trackingRoutePaths,
     "/perfil",
     "/historial",
@@ -309,6 +343,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/admin/perfil",
+    "/metricas",
+    "/admin/reportes",
     "/definir-password",
     "/proyectos",
   ].includes(path);
@@ -322,7 +358,9 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    // El portal es la puerta de entrada pública: un lead busca antes de tener cuenta.
+    if (path === "/portal") return { page: "anon-portal" };
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -342,6 +380,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/subsidios") return { page: "subsidios" };
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
+    if (path === "/portal") return { page: "portal" };
     if (path === "/proyectos") return { page: "projects" };
     if (trackingPage) return { page: trackingPage };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
@@ -351,27 +390,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "home", path: "/inicio" };
   }
 
-  if (profile.role === roles.sales) {
-    if (path === "/") return { page: "home", path: "/inicio" };
-    if (path === "/inicio") return { page: "home" };
-    if (path === "/proyectos") return { page: "projects" };
-    if (path === "/perfil") return { page: "sales-profile" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") {
-      return { page: "leads", path: path === "/dashboard" ? undefined : "/dashboard" };
-    }
-    return { page: "home", path: "/inicio" };
-  }
-
-  if (profile.role === roles.admin) {
-    if (path === "/") return { page: "admin", path: "/admin" };
-    if (path === "/admin") return { page: "admin" };
-    if (path === "/admin/proyectos") return { page: "admin-projects" };
-    if (path === "/admin/perfil") return { page: "admin-profile" };
-    if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
-    if (path === "/inicio") return { page: "admin", path: "/admin" };
-    return { page: "admin", path: "/admin" };
-  }
+  const staffRoute = resolveStaffRoute(path, profile.role);
+  if (staffRoute) return staffRoute;
 
   return { page: getInitialPageForProfile(profile), path: getPrivatePathForPage(getInitialPageForProfile(profile)) };
 };
@@ -379,8 +399,11 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
 const getRouteForPage = (page, profile, options = {}) => {
   if (page === "landing") return "/landing.html";
   if (page === "set-password") return "/definir-password";
+  if (page === "co-debtor-invitation") return "/co-deudor/invitacion";
+  if (page === "co-debtor-management") return "/co-deudor/gestion";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
+  if (page === "anon-portal") return "/portal";
   if (!profile) return "/login";
   return getPrivatePathForPage(page);
 };
@@ -392,9 +415,12 @@ const pagesWithoutBackButton = new Set([
   "onboarding",
   "anon-onboarding",
   "anon-evaluate",
+  "anon-portal",
   "dataconsent",
   "signup-offer",
   "set-password",
+  "co-debtor-invitation",
+  "co-debtor-management",
 ]);
 
 function AppBackButton({ onBack }) {
@@ -413,6 +439,7 @@ export default function App() {
   const initialAnonOnboarding = useMemo(() => readSessionJson(ANON_ONBOARDING_KEY), []);
   const initialAnonResult = useMemo(() => readSessionJson(ANON_RESULT_KEY), []);
   const initialAnonInput = useMemo(() => readSessionJson(ANON_INPUT_KEY), []);
+  const initialAnonCoDebtorInvitation = useMemo(() => readSessionJson(ANON_CO_DEBTOR_INVITATION_KEY), []);
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [auth, setAuth] = useState(storedAuth);
   const [page, setPage] = useState(
@@ -428,6 +455,10 @@ export default function App() {
   // Permite saber, al resolverse un guardado lento, si el resultado visible
   // sigue siendo el que originó ese guardado.
   const resultRef = useRef(null);
+  const pageViewTrackerRef = useRef(null);
+  if (!pageViewTrackerRef.current) {
+    pageViewTrackerRef.current = createPageViewDeduper();
+  }
   const navigationHistoryRef = useRef([]);
   const [dataError, setDataError] = useState("");
   const [dismissedError, setDismissedError] = useState("");
@@ -437,6 +468,7 @@ export default function App() {
   const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
+  const [portalProperty, setPortalProperty] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
     try {
@@ -449,9 +481,11 @@ export default function App() {
   const [anonOnboarding, setAnonOnboarding] = useState(initialAnonOnboarding);
   const [anonResult, setAnonResult] = useState(initialAnonResult);
   const [anonInput, setAnonInput] = useState(initialAnonInput);
+  const [anonCoDebtorInvitation, setAnonCoDebtorInvitation] = useState(initialAnonCoDebtorInvitation);
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
+  const [tenantResolved, setTenantResolved] = useState(false);
 
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
@@ -489,6 +523,23 @@ export default function App() {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const refreshEvaluationView = async () => {
+    const [nextTracking, nextEvaluations] = await Promise.all([
+      getTracking(),
+      getEvaluations(userId, profile?.role),
+    ]);
+    setTrackingState(nextTracking);
+    setEvaluations(nextEvaluations);
+    return { tracking: nextTracking, evaluations: nextEvaluations };
+  };
+  const refreshScoreAfterCoDebtorConfirmation = async () => {
+    try {
+      return await refreshEvaluationView();
+    } catch {
+      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
+    }
+  };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
     : profile
@@ -525,7 +576,12 @@ export default function App() {
     setPathname(nextPath);
   };
 
+  const [selectedAcademyArticleId, setSelectedAcademyArticleId] = useState(null);
+
   const navigateToPageForProfile = (nextPage, nextProfile = profile, options = {}) => {
+    if (nextPage === "academia" && options?.articleId) {
+      setSelectedAcademyArticleId(options.articleId);
+    }
     if (pagesWithoutBackButton.has(nextPage)) {
       navigationHistoryRef.current = [];
     } else if (!options.replace && page && page !== nextPage && !pagesWithoutBackButton.has(page)) {
@@ -573,6 +629,19 @@ export default function App() {
   }, [pathname, profile?.role, anonOnboarding]);
 
   useEffect(() => {
+    const route = resolveRouteForPath(pathname, profile, Boolean(anonOnboarding));
+    const normalizedCurrentPath = normalizePathname(pathname);
+    const finalPath = normalizePathname(route.path || pathname);
+
+    if (route.path && finalPath !== normalizedCurrentPath) return;
+    pageViewTrackerRef.current({
+      pagePath: finalPath,
+      pageLocation: window.location.href,
+      pageTitle: document.title,
+    });
+  }, [pathname, profile?.role, anonOnboarding]);
+
+  useEffect(() => {
     setDismissedError("");
   }, [currentError]);
 
@@ -609,7 +678,7 @@ export default function App() {
   // El resumen y la guía comercial quedan disponibles para la mesa de leads.
   async function handleRetryAiExplanation(evaluationToRetry = currentEvaluation) {
     const evaluation = evaluationToRetry;
-    if (!evaluation?.id || !evaluation?.input) return false;
+    if (!evaluation?.id || !evaluation?.result) return false;
 
     try {
       const response = await axios.post(
@@ -669,7 +738,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
+    if (page === "leads" && isStaffRole(profile?.role)) markLeadsSeen();
   }, [page]);
 
   useEffect(() => {
@@ -682,16 +751,25 @@ export default function App() {
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
-    if (profile?.role !== roles.sales && profile?.role !== roles.admin) {
+    setTenantResolved(false);
+    if (!isStaffRole(profile?.role)) {
       setInmobiliariaId(null);
       return;
     }
     let active = true;
     getTenantContext()
       .then((context) => { if (active) setInmobiliariaId(context.inmobiliaria_id); })
-      .catch(() => { if (active) setInmobiliariaId(null); });
+      .catch(() => { if (active) setInmobiliariaId(null); })
+      .finally(() => { if (active) setTenantResolved(true); });
     return () => { active = false; };
   }, [profile?.role, profile?.id]);
+
+  // HU 15: las métricas son por inmobiliaria; el admin global no tiene una y vuelve a su inicio.
+  useEffect(() => {
+    if (page === "metricas" && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
+      navigateToPage("admin", { replace: true });
+    }
+  }, [page, tenantResolved, inmobiliariaId, profile?.role]);
 
   useEffect(() => {
     if (page === "signup-offer" && anonResult) {
@@ -727,9 +805,11 @@ export default function App() {
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
     sessionStorage.removeItem(ANON_RESULT_KEY);
     sessionStorage.removeItem(ANON_INPUT_KEY);
+    sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
     setAnonOnboarding(null);
     setAnonResult(null);
     setAnonInput(null);
+    setAnonCoDebtorInvitation(null);
     setScoreFormDraft(null);
   };
 
@@ -751,6 +831,7 @@ export default function App() {
     const pendingOnboarding = anonOnboarding;
     const pendingResult = anonResult;
     const pendingInput = anonInput;
+    const pendingCoDebtorInvitation = anonCoDebtorInvitation;
     const nextProfile = nextAuth?.profile;
 
     if (
@@ -800,7 +881,7 @@ export default function App() {
 
     let savedEvaluation = null;
     if (pendingResult && pendingInput) {
-      const financialInput = buildFinancialInput(pendingInput);
+      const financialInput = buildFinancialInput(pendingInput, onboardingToSave);
       const existingEvaluations = nextUserId
         ? await getEvaluations(nextUserId, migratedProfile?.role)
         : [];
@@ -816,6 +897,22 @@ export default function App() {
           channel: getChannel(),
         });
       }
+    }
+
+    if (pendingCoDebtorInvitation) {
+      try {
+        await createCoDebtorInvitation(
+          pendingCoDebtorInvitation.recipientEmail,
+          pendingCoDebtorInvitation.recipientRut,
+          pendingCoDebtorInvitation.declaredComplement || {
+            ingreso_mensual_complementario: pendingInput?.ingreso_mensual_complementario,
+            deuda_mensual_complementario: pendingInput?.deuda_mensual_complementario,
+            tipo_contrato_complementario: pendingInput?.tipo_contrato_complementario,
+            continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
+            morosidad_complementario: pendingInput?.morosidad_complementario,
+          },
+        );
+      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
     }
 
     clearAnonSession();
@@ -836,7 +933,7 @@ export default function App() {
     navigateToPage("anon-evaluate");
   };
 
-  const handleAnonResult = (scoreResult, input) => {
+  const handleAnonResult = (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const anonymousFlowId =
@@ -845,27 +942,39 @@ export default function App() {
     const financialInput = buildFinancialInput({
       ...input,
       anonymous_flow_id: anonymousFlowId,
-    });
+    }, anonOnboarding);
     sessionStorage.setItem(ANON_RESULT_KEY, JSON.stringify(resultSnapshot));
     sessionStorage.setItem(ANON_INPUT_KEY, JSON.stringify(financialInput));
+    if (metadata.coDebtorInvitation) {
+      sessionStorage.setItem(ANON_CO_DEBTOR_INVITATION_KEY, JSON.stringify(metadata.coDebtorInvitation));
+    } else {
+      sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
+    }
     setAnonResult(resultSnapshot);
     setAnonInput(financialInput);
+    setAnonCoDebtorInvitation(metadata.coDebtorInvitation || null);
     setPage("signup-offer");
   };
 
-  const handleSignupFromOffer = async ({ full_name, email, phone, password, birth_date, consentData }) => {
+  const handleSignupFromOffer = async ({ nombre, apellido_paterno, apellido_materno, rut, email, phone, password, birth_date, consentData }) => {
     setSignupOfferLoading(true);
     setSignupOfferError("");
     let nextAuth = null;
     try {
+      const full_name = `${nombre} ${apellido_paterno} ${apellido_materno}`.trim();
       nextAuth = await signUp({
         email,
         password,
+        nombre,
+        apellido_paterno,
+        apellido_materno,
         full_name,
+        rut,
         phone,
         birth_date,
         role: roles.user,
       });
+      trackSignUp({ method: "signup_offer" });
 
       const newProfile = nextAuth.profile;
       const newUserId = isUUID(newProfile?.id) ? newProfile.id
@@ -904,12 +1013,29 @@ export default function App() {
     navigateToPage("auth");
   };
 
-  const startEvaluation = () => {
+  const startEvaluation = (initialData) => {
+    // Los botones pasan el evento de click; solo el CTA del portal trae valor_uf.
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
     setResult(null);
     setResultSaved(null);
-    setScoreFormDraft(null);
-    setStartingNewEvaluation(false);
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    // Quien llega desde una propiedad ya pidió evaluarla: se salta la confirmación.
+    setStartingNewEvaluation(Boolean(property));
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
+  };
+
+  const startAnonEvaluation = (initialData) => {
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    navigateToPage(anonOnboarding ? "anon-evaluate" : "anon-onboarding");
   };
 
   const handleAuth = (nextAuth) => {
@@ -1037,14 +1163,15 @@ export default function App() {
     resultRef.current = result;
   }, [result]);
 
-  const handleResult = async (scoreResult, input) => {
+  const handleResult = async (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
+    setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
-    const financialInput = buildFinancialInput(input);
+    const financialInput = buildFinancialInput(input, userOnboarding);
 
     try {
       // Se siembra la ref en el mismo tick: el efecto corre después del
-      // render y un fallo síncrono (sesión ausente) llegaría antes, con la
+      // render y un fallo síncrono (sesión ausente) llegaría anterior, con la
       // ref todavía apuntando al resultado anterior.
       resultRef.current = resultSnapshot;
       setResult(resultSnapshot);
@@ -1067,22 +1194,38 @@ export default function App() {
         channel: getChannel(),
       });
 
-      // Si el usuario ya evaluó de nuevo, este guardado quedó obsoleto y no
-      // debe tocar el resultado visible, que pertenece a otra evaluación.
-      if (resultRef.current === resultSnapshot) {
-        setResultSaved(true);
-        // El snapshot visible queda ligado a la evaluación guardada: sin esto
-        // no hay forma de saber si `result` y `currentEvaluation` son lo mismo.
-        setResult((prev) =>
-          prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
-        );
-      }
-
       setEvaluations((prev) => {
         const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
         return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
       });
       prependEvaluation(savedEvaluation);
+
+      if (metadata.coDebtorInvitation) {
+        try {
+          await createCoDebtorInvitation(
+            metadata.coDebtorInvitation.recipientEmail,
+            metadata.coDebtorInvitation.recipientRut,
+            metadata.coDebtorInvitation.declaredComplement,
+          );
+        } catch {
+          // A delivery failure must never roll back or hide the saved score.
+        }
+      }
+
+      try {
+        await refreshEvaluationView();
+        // Keep the just-calculated preview visible until both the historical
+        // evaluation and the invitation state are current. This prevents the
+        // previous confirmed co-debtor from flashing after a new evaluation.
+        if (resultRef.current === resultSnapshot) {
+          setResultSaved(true);
+          setResult((prev) =>
+            prev === resultSnapshot ? { ...prev, evaluation_id: savedEvaluation.id } : prev,
+          );
+        }
+      } catch {
+        setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
+      }
     } catch (err) {
       console.error(err);
       if (resultRef.current !== resultSnapshot) return;
@@ -1175,37 +1318,33 @@ export default function App() {
     if (!currentEvaluation) return;
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
-      const goalInput = buildProjectGoalInput(
-        currentEvaluation.input,
+      const newEval = await setProjectGoal({
+        apiBase: resolveApiBase(),
+        consentGranted,
+        currentEvaluation,
+        normalizeResult: buildResultSnapshot,
+        onboarding: userOnboarding,
+        profile,
         project,
-        currentEvaluation.input?.uf_value_clp,
-      );
-      const payload = buildFinancialInput(goalInput);
-
-      const { response: res, payload: scoreResult } = await fetchJsonWithTimeout(`${apiBase.replace(/\/$/, "")}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }, { timeoutMessage: "La evaluación del proyecto tardó demasiado. Intenta nuevamente." });
-      if (!res.ok) throw new Error(`El motor de precalificación rechazó los datos (${res.status}).`);
-
-      const newEval = await createEvaluation(profile.id, {
-        email: profile.email || "sin-email",
-        onboarding: userOnboarding || null,
-        // La metadata de la meta se persiste con la evaluación, pero no se
-        // envía a /score para mantener el contrato del motor financiero.
-        input: { ...payload, project_goal: goalInput.project_goal },
-        result: buildResultSnapshot(scoreResult),
-        channel: "project_selection",
       });
 
-       setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
-       return true;
-     } catch (err) {
-       console.error(err);
-       throw new Error("No se pudo actualizar tu preferencia de proyecto. Intenta nuevamente.");
-     }
+      setEvaluations([newEval, ...evaluations.filter((item) => item.id !== newEval.id)]);
+      sessionStorage.removeItem("scoreleads_selected_plan_type");
+      return true;
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("[project-goal] No se pudo fijar la meta", {
+          stage: err?.stage || "unknown",
+          status: err?.status || null,
+          detail: err?.detail || null,
+          cause: err?.cause || err,
+        });
+      } else {
+        console.error("No se pudo fijar el proyecto como meta", err?.stage || "unknown");
+      }
+      alert(projectGoalUserMessage(err));
+      return false;
+    }
   };
 
   const handleLogout = async () => {
@@ -1233,6 +1372,9 @@ export default function App() {
       </div>
     );
   }
+
+  if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
+  if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
@@ -1271,7 +1413,17 @@ export default function App() {
             }
             onAuth={handleAuth}
             onEvalAnon={() => navigateToPage("anon-onboarding")}
+            onPortalAnon={() => navigateToPage("anon-portal")}
           />
+        </div>
+      );
+    }
+
+    if (page === "anon-portal") {
+      return (
+        <div className="anon-shell">
+          <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
+          <PropertySearch onStartEvaluation={startAnonEvaluation} onNavigate={navigateToPage} />
         </div>
       );
     }
@@ -1331,8 +1483,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
             <ScoreForm
-              targetCommune={anonOnboarding?.comuna_interes}
+              targetCommune={portalProperty?.comuna || anonOnboarding?.comuna_interes}
               objective={anonOnboarding?.objetivo_principal}
               onboardingData={anonOnboarding}
               birthDate={anonOnboarding?.birth_date || null}
@@ -1382,6 +1542,7 @@ export default function App() {
       <Navbar
         profile={profile}
         page={page}
+        inmobiliariaId={inmobiliariaId}
         currentScore={currentScore}
         onNavigate={(nextPage) =>
           nextPage === "evaluate" ? startEvaluation() : navigateToPage(nextPage)
@@ -1397,7 +1558,7 @@ export default function App() {
             <button
               type="button"
               aria-label="Cerrar mensaje"
-            onClick={() => setDismissedError(visibleError)}
+              onClick={() => setDismissedError(visibleError)}
             >
               x
             </button>
@@ -1409,6 +1570,7 @@ export default function App() {
           count={newHighLeadsCount}
           onClick={handleNotificationClick}
           onClose={handleDismissNotification}
+          className="notification-toast--high-score"
         />
 
         {page === "onboarding" && profile.role === roles.user ? (
@@ -1435,7 +1597,7 @@ export default function App() {
             onAccept={handleDataConsent}
             onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
           />
-        ) : page === "home" && profile.role === roles.admin ? (
+        ) : page === "home" && isAdminRole(profile.role) ? (
           <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
         ) : page === "home" && profile.role === roles.sales ? (
           <ExecutiveHome
@@ -1444,7 +1606,9 @@ export default function App() {
             inmobiliariaId={inmobiliariaId}
             onNavigate={navigateToPage}
           />
-        ) : page === "admin-profile" && profile.role === roles.admin ? (
+        ) : page === "admin-reports" && canViewStaffPage(page, profile.role) ? (
+          <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
+        ) : page === "admin-profile" && canViewStaffPage(page, profile.role) ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
           <section className="evaluation-panel home-panel">
@@ -1584,8 +1748,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
             <ScoreForm
-              targetCommune={userOnboarding?.comuna_interes}
+              targetCommune={portalProperty?.comuna || userOnboarding?.comuna_interes}
               objective={userOnboarding?.objetivo_principal}
               onboardingData={userOnboarding}
               birthDate={profile?.birth_date || profile?.fecha_nacimiento}
@@ -1605,9 +1777,9 @@ export default function App() {
             profile={profile}
             onboarding={userOnboarding}
             evaluations={userEvaluations}
-          onSaveOnboarding={handleProfileOnboardingSave}
-          onProfileUpdate={handleProfileUpdate}
-          onRetryExplanation={handleRetryAiExplanation}
+            onSaveOnboarding={handleProfileOnboardingSave}
+            onProfileUpdate={handleProfileUpdate}
+            onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
@@ -1650,6 +1822,8 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
+          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
+          trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
         <Subsidios
@@ -1665,8 +1839,15 @@ export default function App() {
           initialProjectId={simulationInitialProjectId}
           onRetryExplanation={handleRetryAiExplanation}
         />
-        ) : page === "academia" && profile.role === roles.user ? (
+      ) : page === "academia" && profile.role === roles.user ? (
           <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
+        ) : page === "portal" && profile.role === roles.user ? (
+          <PropertySearch
+            evaluation={currentEvaluation}
+            onboarding={userOnboarding}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+          />
         ) : page === "projects" && profile.role === roles.user ? (
           <ProjectsCatalog
             evaluationBase={currentEvaluation}
@@ -1679,23 +1860,26 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
+      ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          role={profile.role}
         />
-      ) : page === "projects" && profile.role === roles.sales ? (
+      ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
+        <CommercialMetrics role={profile.role} onNavigate={navigateToPage} />
+      ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           isAdmin={false}
         />
-      ) : page === "sales-profile" && profile.role === roles.sales ? (
+      ) : page === "sales-profile" && canViewStaffPage(page, profile.role) ? (
         <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
-      ) : page === "admin" && profile.role === roles.admin ? (
+      ) : page === "admin" && canViewStaffPage(page, profile.role) ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
-      ) : page === "admin-projects" && profile.role === roles.admin ? (
+      ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
       ) : (
         <section className="section-block">

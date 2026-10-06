@@ -28,7 +28,7 @@ Este documento resume las HUs vigentes segun el PDF actualizado `HUs para Sprint
 | HU16 | Dashboard de Tasas de Conversion de Ventas | 5 |
 | HU17 | Reportar leads inconsistentes o fraudulentos | 5 |
 | HU18 | Simulador de escenarios hipotecarios referenciales | 5 |
-| HU19 | Ranking de proyectos por brecha minima | 5 |
+| HU19 | Portal Inmobiliario Inteligente (RAG) | 5 |
 | HU20 | Pendiente de definir | 8 |
 
 ## Sprint 3 — 46 SP visibles

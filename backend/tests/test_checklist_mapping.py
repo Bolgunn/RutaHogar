@@ -1,12 +1,23 @@
 import os
 import sys
 import asyncio
+import json
 from pathlib import Path
 
 os.environ["GROQ_API_KEY"] = ""
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import app.main as main
+import app.scoring as scoring_module
 from app.main import ScoreRequest, score_endpoint
+
+SNAPSHOT = json.loads((Path(__file__).resolve().parents[2] / "docs" / "algorithms" / "ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+main.resolve_market_snapshot = lambda: SNAPSHOT
+async def _inline_thread(callable, *args, **kwargs): return callable(*args, **kwargs)
+main.asyncio.to_thread = _inline_thread
+scoring_module.generate_user_explanation = lambda **_kwargs: None
+scoring_module.generate_executive_summary = lambda **_kwargs: None
+scoring_module.generate_commercial_guidance = lambda **_kwargs: None
 
 
 def base_payload(**overrides):

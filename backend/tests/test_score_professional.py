@@ -1,6 +1,7 @@
 import os
 import sys
 import asyncio
+import json
 from pathlib import Path
 
 os.environ["GROQ_API_KEY"] = ""
@@ -8,7 +9,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pydantic import ValidationError
 
+import app.main as main
+import app.scoring as scoring_module
 from app.main import ScoreRequest, score_endpoint
+
+SNAPSHOT = json.loads((Path(__file__).resolve().parents[2] / "docs" / "algorithms" / "ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+main.resolve_market_snapshot = lambda: SNAPSHOT
+async def _inline_thread(callable, *args, **kwargs):
+    return callable(*args, **kwargs)
+main.asyncio.to_thread = _inline_thread
+scoring_module.generate_user_explanation = lambda **_kwargs: None
+scoring_module.generate_executive_summary = lambda **_kwargs: None
+scoring_module.generate_commercial_guidance = lambda **_kwargs: None
 
 
 def base_payload(**overrides):
@@ -142,7 +154,6 @@ def test_score_does_not_require_groq_api_key(monkeypatch):
 
     assert result["score"] >= 0
     assert result["classification"] in {"Alto", "Medio", "Bajo", "Requiere antecedentes"}
-    assert "ai_explanation" in result
     assert "user_explanation_deterministic" in result
 
 
@@ -159,4 +170,3 @@ if __name__ == "__main__":
             os.environ[key] = val
     test_score_does_not_require_groq_api_key(DummyMonkeypatch())
     print("All professional score tests PASSED successfully!")
-

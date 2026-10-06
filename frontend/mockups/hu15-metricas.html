@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock HU 15 · Métricas comerciales · v3.2</title>
+<link rel="stylesheet" href="/public/brand/rutahogar/rutahogar-brand.css">
+<link rel="stylesheet" href="/src/styles.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  /* Mock-only styles for HU 15. Everything else comes from the app's styles.css. */
+  .mock-bar{position:fixed;right:16px;bottom:16px;z-index:50;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 14px;border-radius:999px;background:var(--rh-navy,#132B4A);color:#fff;font-size:.75rem;font-weight:800;box-shadow:var(--rh-shadow-md)}
+  .mock-bar button{min-height:28px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:.75rem}
+  .mock-bar button.is-active{background:var(--rh-yellow);color:var(--rh-text)}
+  .cm-page{max-width:1240px;margin:0 auto}
+  .cm-page .section-heading{max-width:none;margin:0 0 var(--rh-space-5)}
+  .cm-asof{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:4px 10px;border-radius:999px;background:rgba(19,43,74,.06);color:var(--rh-text-secondary);font-size:.78rem;font-weight:700}
+  .cm-filters{display:grid;gap:14px;margin-bottom:var(--rh-space-5)}
+  .cm-filters__row{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
+  .cm-filters__group{display:grid;gap:8px}
+  .cm-label{color:var(--rh-text-muted);font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .cm-filters select{margin-top:0}
+  .cm-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .cm-chip{min-height:32px;padding:0 12px;border:1px solid var(--rh-border);border-radius:999px;background:rgba(255,255,255,.78);color:var(--rh-text-secondary);font-size:.78rem;font-weight:800}
+  .cm-chip:hover{opacity:1;border-color:rgba(19,43,74,.3)}
+  .cm-chip.is-active{background:var(--rh-navy,#132B4A);border-color:var(--rh-navy,#132B4A);color:#fff}
+  .cm-filters__foot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:12px;border-top:1px dashed var(--rh-border)}
+  .cm-summary{color:var(--rh-text-secondary);font-size:.88rem}
+  .cm-summary strong{color:var(--rh-text)}
+  .cm-tabs{display:inline-flex;gap:4px;padding:4px;margin-bottom:var(--rh-space-5);border:1px solid var(--rh-border);border-radius:999px;background:var(--rh-surface)}
+  .cm-tab{min-height:38px;padding:0 18px;border-radius:999px;background:transparent;color:var(--rh-text-secondary);font-size:.88rem}
+  .cm-tab.is-active{background:var(--rh-navy,#132B4A);color:#fff}
+  .admin-kpi-card__value small{font-size:.45em;font-family:var(--rh-font);font-weight:700;color:var(--rh-text-secondary)}
+  .cm-rate{display:inline-block;margin-left:2px;padding:1px 8px;border-radius:999px;background:rgba(19,43,74,.06);color:var(--rh-text-secondary);font-size:.78rem;font-weight:700}
+  .cm-label-row{display:flex;align-items:center;gap:6px}
+  .cm-surface-gap{margin-bottom:var(--rh-space-5)}
+  .cm-contact{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .cm-contact__item{display:grid;gap:6px;align-content:start;padding:16px;border:1px solid var(--rh-border);border-radius:14px;background:var(--rh-surface)}
+  .cm-contact__item--alert{border-color:rgba(196,132,29,.45);background:linear-gradient(180deg,#FEF8EC,#fff)}
+  .cm-contact__value{font-family:var(--rh-font-mono);font-size:1.9rem;line-height:1.05}
+  .cm-contact__value small{font-family:var(--rh-font);font-size:.5em;font-weight:700;color:var(--rh-text-secondary)}
+  .cm-contact__hint{margin:0;font-size:.82rem;color:var(--rh-text-secondary);line-height:1.45}
+  .cm-link{justify-self:start;min-height:0;padding:0;background:none;color:var(--rh-blue);font-size:.82rem;font-weight:800}
+  .cm-link:hover{text-decoration:underline}
+  .cm-funnel-wrap{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(220px,1fr);gap:var(--rh-space-5);align-items:start}
+  .cm-funnel{display:grid;gap:10px}
+  .cm-funnel__row{display:grid;grid-template-columns:160px 1fr 120px;gap:14px;align-items:center}
+  .cm-funnel__name{font-weight:700;font-size:.9rem}
+  .cm-funnel__track{height:34px;border-radius:10px;background:var(--rh-surface-alt)}
+  .cm-funnel__bar{height:100%;border-radius:10px;background:linear-gradient(90deg,var(--rh-blue-dark),var(--rh-blue));display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-family:var(--rh-font-mono);font-size:.95rem;font-weight:700;min-width:48px}
+  .cm-funnel__row--sale .cm-funnel__bar{background:linear-gradient(90deg,#1a6b3d,#2d8a4e)}
+  .cm-funnel__conv{text-align:right;font-size:.78rem;color:var(--rh-text-muted)}
+  .cm-status{display:grid;gap:12px}
+  .cm-status__item{padding:12px 14px;border:1px solid var(--rh-border);border-radius:12px;background:var(--rh-surface)}
+  .cm-status__item strong{font-family:var(--rh-font-mono);font-size:1.5rem}
+  .cm-status__item p{margin:4px 0 0;font-size:.8rem;color:var(--rh-text-secondary)}
+  .cm-table{width:100%;border-collapse:collapse;font-size:.88rem}
+  .cm-table th{text-align:left;color:var(--rh-text-muted);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--rh-border)}
+  .cm-table td{padding:10px;border-bottom:1px solid var(--rh-border)}
+  .cm-table td.num,.cm-table th.num{text-align:right;font-family:var(--rh-font-mono)}
+  .cm-table tr:last-child td{border-bottom:0}
+  .cm-muted{color:var(--rh-text-muted)}
+  .cm-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:800}
+  .cm-pill--curso{background:var(--rh-yellow-light);color:var(--rh-yellow-dark)}
+  .cm-pill--agotado{background:var(--rh-surface-alt);color:var(--rh-text-muted)}
+  .cm-callout{display:flex;gap:10px;align-items:baseline;margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(19,43,74,.04);font-size:.88rem;color:var(--rh-text-secondary)}
+  .cm-callout strong{color:var(--rh-text);font-family:var(--rh-font-mono)}
+  .cm-hbars{display:grid;gap:10px}
+  .cm-hbar{display:grid;grid-template-columns:210px 1fr 86px;gap:12px;align-items:center;font-size:.88rem;padding:4px 6px;border-radius:8px}
+  .cm-hbar--click{cursor:pointer}
+  .cm-hbar--click:hover{background:var(--rh-surface-alt)}
+  .cm-hbar__label{display:inline-flex;align-items:center;gap:6px}
+  .cm-hbar__track{height:12px;border-radius:999px;background:var(--rh-surface-alt);overflow:hidden}
+  .cm-hbar__fill{height:100%;border-radius:999px;background:var(--rh-blue)}
+  .cm-hbar__fill--gold{background:var(--rh-yellow)}
+  .cm-hbar__fill--soft{background:rgba(19,43,74,.35)}
+  .cm-hbar__val{text-align:right;font-family:var(--rh-font-mono);font-weight:700;font-size:1rem}
+  .cm-hbar__val small{color:var(--rh-text-muted);font-weight:500;font-size:.72rem}
+  .field-tooltip-btn{min-height:0}
+  .field-tooltip-cloud--bottom::after{top:-6px;bottom:auto;transform:rotate(225deg)}
+  .cm-hint{margin:10px 0 0;font-size:.8rem;color:var(--rh-text-muted)}
+  .cm-gran{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:var(--rh-space-4)}
+  .cm-chart{width:100%;height:auto;display:block}
+  .cm-chart text{font-family:var(--rh-font);font-size:11px;fill:var(--rh-text-muted)}
+  .cm-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.8rem;color:var(--rh-text-secondary);margin-top:8px}
+  .cm-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .cm-disclaimer{margin:var(--rh-space-5) 0 0;font-size:.8rem;color:var(--rh-text-muted);text-align:center}
+  .cm-hidden{display:none !important}
+  .cm-view{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--rh-border);border-radius:999px;background:var(--rh-surface-alt);flex-shrink:0}
+  .cm-view button{min-height:30px;padding:0 12px;border-radius:999px;background:transparent;color:var(--rh-text-secondary);font-size:.78rem}
+  .cm-view button.is-active{background:var(--rh-navy,#132B4A);color:#fff}
+  .cm-scope{margin:-6px 0 14px;font-size:.8rem;font-weight:700;color:var(--rh-yellow-dark)}
+  .cm-contact--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  @media (max-width:1100px){.cm-filters__row,.cm-funnel-wrap{grid-template-columns:1fr}.admin-kpi-grid,.cm-contact,.cm-contact--3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .cm-scroll{overflow-x:auto}
+  .cm-scroll .cm-table{min-width:0}
+  @media (max-width:640px){.admin-kpi-grid{grid-template-columns:1fr}.cm-contact,.cm-contact--3{grid-template-columns:1fr}.cm-funnel__row{grid-template-columns:110px 1fr 70px}.cm-hbar{grid-template-columns:150px 1fr 70px}}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Navegación principal">
+    <a class="sidebar-brand" href="#"><span class="sidebar-brand__pill"><img class="sidebar-brand__logo" src="/public/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar"></span></a>
+    <nav class="nav-group">
+      <span class="nav-group__label" id="nav-group-label">Administración</span>
+      <button class="nav-item" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span class="sidebar__label">Inicio</span></button>
+      <button class="nav-item" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="sidebar__label">Leads</span></button>
+      <button class="nav-item" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M10 21v-5h4v5"/></svg><span class="sidebar__label">Proyectos</span></button>
+      <button class="nav-item is-active" type="button" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><span class="sidebar__label">Métricas</span></button>
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <button class="sidebar-user" type="button">
+      <span class="avatar" id="user-initials">EC</span>
+      <span class="sidebar-user__meta"><span class="sidebar-user__role" id="user-role">Admin inmobiliaria</span><strong id="user-name">Ellison Caram</strong><span id="user-mail">admin@inmobiliaria.cl</span></span>
+    </button>
+  </aside>
+
+  <main class="content"><div class="content-inner">
+  <section class="section-block cm-page">
+    <div class="section-heading">
+      <span class="eyebrow">Gestión comercial</span>
+      <h1>Métricas comerciales</h1>
+      <p id="page-subtitle">Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos.</p>
+      <span class="cm-asof">Datos al 04-10-2026, 15:00</span>
+    </div>
+
+    <article class="admin-surface cm-filters" aria-label="Filtros">
+      <div class="cm-filters__row">
+        <div class="cm-filters__group">
+          <span class="cm-label">Proyecto</span>
+          <select id="f-proyecto"></select>
+        </div>
+        <div class="cm-filters__group">
+          <span class="cm-label">Afinidad</span>
+          <div class="cm-chips" data-filter="afinidad"><button class="cm-chip" type="button">Compatible</button><button class="cm-chip" type="button">Cercano</button><button class="cm-chip" type="button">Marginal</button><button class="cm-chip" type="button">Fuera de alcance</button><button class="cm-chip" type="button">Requiere antecedentes</button></div>
+        </div>
+      </div>
+      <div class="cm-filters__row">
+        <div class="cm-filters__group">
+          <span class="cm-label">Capacidad de compra</span>
+          <div class="cm-chips" data-filter="capacidad"><button class="cm-chip" type="button">Alcanza</button><button class="cm-chip" type="button">Cerca de alcanzar</button><button class="cm-chip" type="button">Insuficiente</button><button class="cm-chip" type="button">Requiere antecedentes</button></div>
+        </div>
+        <div class="cm-filters__group">
+          <span class="cm-label">Prioridad comercial</span>
+          <div class="cm-chips" data-filter="prioridad"><button class="cm-chip" type="button">Contactar ahora</button><button class="cm-chip" type="button">Contactar con revisión</button><button class="cm-chip" type="button">Nutrir con plan de mejora</button><button class="cm-chip" type="button">Reorientar a otro proyecto</button><button class="cm-chip" type="button">Solicitar antecedentes</button><button class="cm-chip" type="button">No derivar todavía</button><button class="cm-chip" type="button">Sin prioridad</button></div>
+        </div>
+      </div>
+      <div class="cm-filters__foot">
+        <span class="cm-summary" id="f-summary"></span>
+        <button class="secondary-button compact-button" type="button" id="f-clear">Limpiar filtros</button>
+      </div>
+    </article>
+
+    <div class="cm-tabs" role="tablist">
+      <button class="cm-tab is-active" type="button" data-tab="embudo" role="tab">Embudo y seguimiento</button>
+      <button class="cm-tab" type="button" data-tab="historia" role="tab">Evolución histórica</button>
+    </div>
+
+    <!-- TAB 1 -->
+    <div id="tab-embudo">
+      <section class="admin-kpi-grid" aria-label="Indicadores" id="kpis"></section>
+
+      <article class="admin-surface cm-surface-gap">
+        <div class="admin-surface__header"><div class="admin-surface__title">
+          <h2>Seguimiento de contacto</h2>
+          <p id="contact-subtitle">Leads que esperan un primer llamado y qué tan rápido responde tu equipo.</p>
+        </div></div>
+        <div class="cm-contact" id="contact"></div>
+      </article>
+
+      <article class="admin-surface cm-surface-gap">
+        <div class="admin-surface__header"><div class="admin-surface__title">
+          <h2>Embudo comercial</h2>
+          <p class="cm-label-row" style="display:flex">Leads que alcanzaron cada etapa alguna vez. Junto a cada barra, la conversión desde la etapa anterior.<span id="funnel-help"></span></p>
+        </div>
+        <div class="cm-view" data-view="funnel"><button type="button" class="is-active" data-v="todos">Todos</button><button type="button" data-v="mejores">Mejores leads</button></div></div>
+        <p class="cm-scope cm-hidden" id="funnel-scope"></p>
+        <div class="cm-funnel-wrap">
+          <div class="cm-funnel" id="funnel"></div>
+          <div class="cm-status" id="status"></div>
+        </div>
+      </article>
+
+      <article class="admin-surface cm-surface-gap">
+        <div class="admin-surface__header"><div class="admin-surface__title">
+          <h2>Comparación por proyecto</h2>
+          <p>Cada fila cuenta solo los leads asociados a ese proyecto. Un lead interesado en dos proyectos aparece en ambos.</p>
+        </div></div>
+        <div class="cm-scroll"><table class="cm-table" id="projects-table"></table></div>
+      </article>
+
+      <article class="admin-surface cm-surface-gap">
+        <div class="admin-surface__header"><div class="admin-surface__title">
+          <h2>Tiempo en cada etapa</h2>
+          <p>Días que los leads permanecieron en cada etapa (mediana). Los que siguen en ella no entran al cálculo.</p>
+        </div>
+        <div class="cm-view" data-view="times"><button type="button" class="is-active" data-v="todos">Todos</button><button type="button" data-v="mejores">Mejores leads</button></div></div>
+        <p class="cm-scope cm-hidden" id="times-scope"></p>
+        <div class="cm-scroll"><table class="cm-table" id="times-table"></table></div>
+        <div class="cm-callout"><span class="cm-label-row">Días hasta postular<span id="postular-help"></span></span> <strong>8,0</strong> mediana · n = 44 <span class="cm-muted">(promedio 12,4)</span></div>
+      </article>
+
+      <div class="admin-grid-2">
+        <article class="admin-surface">
+          <div class="admin-surface__header"><div class="admin-surface__title">
+            <h2>Engagement por acción</h2>
+            <p>Leads que realizaron cada acción sobre tus proyectos al menos una vez.</p>
+          </div></div>
+          <div class="cm-hbars" id="engagement"></div>
+        </article>
+        <article class="admin-surface">
+          <div class="admin-surface__header"><div class="admin-surface__title">
+            <h2>Afinidad y capacidad</h2>
+            <p>Cada lead cuenta una vez, en su mejor resultado entre tus proyectos disponibles, según su precalificación más reciente.</p>
+          </div></div>
+          <span class="cm-label">Afinidad</span>
+          <div class="cm-hbars" id="afinidad" style="margin:8px 0 18px"></div>
+          <span class="cm-label">Capacidad de compra</span>
+          <div class="cm-hbars" id="capacidad" style="margin-top:8px"></div>
+          <p class="cm-hint">Haz clic en una barra para filtrar el dashboard por ese grupo.</p>
+        </article>
+      </div>
+    </div>
+
+    <!-- TAB 2 -->
+    <div id="tab-historia" class="cm-hidden">
+      <div class="cm-gran">
+        <div class="executive-home-recent-filter" style="margin:0" id="gran">
+          <button type="button" data-g="semana">Semana</button><button type="button" class="is-active" data-g="mes">Mes</button><button type="button" data-g="anio">Año</button>
+        </div>
+        <span class="cm-summary">Desde la primera precalificación (jun 2026) hasta hoy</span>
+      </div>
+
+      <article class="admin-surface cm-surface-gap">
+        <div class="admin-surface__header"><div class="admin-surface__title">
+          <h2>Cohortes: leads, postulaciones y ventas</h2>
+          <p>Leads agrupados por el período de su primera precalificación. Las cohortes recientes aún pueden avanzar.</p>
+        </div></div>
+        <svg class="cm-chart" id="chart-cohort" viewBox="0 0 900 260" role="img" aria-label="Cohortes"></svg>
+        <div class="cm-legend"><span><i style="background:rgba(19,43,74,.16)"></i>Leads nuevos</span><span><i style="background:var(--rh-blue)"></i>Postularon</span><span><i style="background:#2d8a4e"></i>Ventas</span><span><i style="background:transparent;border:2px dashed var(--rh-yellow)"></i>Período en curso</span></div>
+        <div class="cm-scroll"><table class="cm-table" style="margin-top:16px" id="cohort-table"></table></div>
+      </article>
+
+      <div class="admin-grid-2">
+        <article class="admin-surface">
+          <div class="admin-surface__header"><div class="admin-surface__title">
+            <h2>Leads activos y contactados</h2>
+            <p>Leads con alguna acción sobre tus proyectos, y primeros contactos registrados, por período.</p>
+          </div></div>
+          <svg class="cm-chart" id="chart-eng" viewBox="0 0 440 230" role="img" aria-label="Activos y contactados"></svg>
+          <div class="cm-legend"><span><i style="background:var(--rh-yellow)"></i>Activos</span><span><i style="background:var(--rh-blue)"></i>Contactados</span></div>
+        </article>
+        <article class="admin-surface">
+          <div class="admin-surface__header"><div class="admin-surface__title">
+            <h2>Ciclo de venta</h2>
+            <p>Mediana de días hasta la venta, según el período en que se cerró.</p>
+          </div></div>
+          <svg class="cm-chart" id="chart-ciclo" viewBox="0 0 440 230" role="img" aria-label="Ciclo de venta"></svg>
+        </article>
+      </div>
+    </div>
+
+    <p class="cm-disclaimer">Orientativo: estas métricas no aprueban créditos ni reemplazan una evaluación bancaria.</p>
+  </section>
+  </div></main>
+</div>
+
+<div class="mock-bar">MOCK HU 15 · v3.2 · datos ficticios · Ver como:
+  <button type="button" class="is-active" data-role="admin">Admin</button><button type="button" data-role="ejecutivo">Ejecutivo</button>
+</div>
+
+<script>
+const fmt = (x, d = 1) => x.toLocaleString("es-CL", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (a, b) => b ? `${Math.round(100 * a / b)}%` : "—";
+const tip = (text) => `<span class="field-tooltip-wrap"><button type="button" class="field-tooltip-btn" aria-label="Ayuda" data-tip="${text.replace(/"/g, "&quot;")}"><i class="ti ti-help-circle"></i></button></span>`;
+
+// Fake data per role. The ejecutivo sees only their two assigned projects.
+const DATA = {
+  admin: {
+    sidebar: { group: "Administración", initials: "EC", role: "Admin inmobiliaria", name: "Ellison Caram", mail: "admin@inmobiliaria.cl", cls: "sidebar--admin" },
+    subtitle: "Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos.",
+    contactSubtitle: "Leads que esperan un primer llamado y qué tan rápido responde tu equipo.",
+    proyectos: [["Altos de Macul", "disponible"], ["Parque Lo Espejo", "disponible"], ["Mirador Ñuñoa", "agotado"]],
+    n: 128,
+    kpi: { postularon: 44, ventasPlan: 4, conPlan: 22, activosMes: 31, cicloMed: 41.0, cicloProm: 47.3, cicloN: 9 },
+    contact: { sin: 37, sinMed: 6.0, sinMax: 41, mes: 12, porMi: null, primerMed: 1.5, primerN: 19, primerPend: 4 },
+    funnel: [128, 81, 47, 26, 14, 9], status: { abiertos: 96, ventas: 9, perdidos: 23, gestion: 15, agotado: 8 },
+    projects: [["Altos de Macul", "disponible", 62, 21, 5, 14], ["Parque Lo Espejo", "disponible", 48, 17, 3, 15], ["Mirador Ñuñoa", "agotado", 30, 9, 1, 8]],
+    times: [["Nuevo", 3.0, 91, 37], ["Contactado", 7.5, 58, 23], ["En plan de mejora", 18.0, 31, 16], ["En negociación", 10.0, 17, 9], ["Reserva", 15.0, 9, 3]],
+    eng: [52, 44, 38, 22, 17, 9], afin: [31, 42, 27, 18, 10], cap: [54, 29, 35, 10],
+    mejores: { n: 31, funnel: [31, 22, 13, 9, 6, 5], status: { abiertos: 24, ventas: 5, perdidos: 2, gestion: 1, agotado: 1 },
+      times: [["Nuevo", 1.5, 22, 9], ["Contactado", 5.0, 16, 6], ["En plan de mejora", 12.0, 9, 4], ["En negociación", 8.0, 7, 3], ["Reserva", 12.0, 5, 1]] },
+  },
+  ejecutivo: {
+    sidebar: { group: "Gestión", initials: "JP", role: "Ejecutivo comercial", name: "Javiera Pérez", mail: "jperez@inmobiliaria.cl", cls: "" },
+    subtitle: "Conversión, tiempos y seguimiento de los leads de tus proyectos asignados.",
+    contactSubtitle: "Leads que esperan un primer llamado en tus proyectos, y tus contactos.",
+    proyectos: [["Altos de Macul", "disponible"], ["Parque Lo Espejo", "disponible"]],
+    n: 94,
+    kpi: { postularon: 35, ventasPlan: 3, conPlan: 17, activosMes: 24, cicloMed: 39.0, cicloProm: 44.1, cicloN: 8 },
+    contact: { sin: 29, sinMed: 5.0, sinMax: 33, mes: 9, porMi: { total: 46, mes: 7 }, primerMed: 1.0, primerN: 15, primerPend: 3 },
+    funnel: [94, 60, 35, 20, 11, 8], status: { abiertos: 72, ventas: 8, perdidos: 14, gestion: 12, agotado: 2 },
+    projects: [["Altos de Macul", "disponible", 62, 21, 5, 14], ["Parque Lo Espejo", "disponible", 48, 17, 3, 15]],
+    times: [["Nuevo", 2.5, 65, 29], ["Contactado", 7.0, 44, 16], ["En plan de mejora", 16.0, 24, 11], ["En negociación", 9.0, 13, 7], ["Reserva", 14.0, 8, 3]],
+    eng: [41, 35, 29, 17, 13, 7], afin: [25, 32, 19, 11, 7], cap: [44, 20, 23, 7],
+    mejores: { n: 25, funnel: [25, 18, 11, 8, 5, 4], status: { abiertos: 19, ventas: 4, perdidos: 2, gestion: 1, agotado: 1 },
+      times: [["Nuevo", 1.0, 18, 7], ["Contactado", 4.5, 13, 5], ["En plan de mejora", 11.0, 8, 3], ["En negociación", 7.0, 6, 3], ["Reserva", 11.0, 4, 1]] },
+  },
+};
+const view = { funnel: "todos", times: "todos" };
+const MEJORES_HELP = "Solo leads Compatible que además alcanzan a comprar: los que tienen más probabilidad de cerrar.";
+let role = "admin";
+
+function kpi(color, label, help, value, hint) {
+  return `<article class="admin-kpi-card admin-kpi-card--${color}">
+    <span class="cm-label-row"><span class="admin-kpi-card__label">${label}</span>${tip(help)}</span>
+    <strong class="admin-kpi-card__value">${value}</strong>
+    <p class="admin-kpi-card__hint">${hint}</p></article>`;
+}
+
+function contactItem(label, help, value, hint, alert = false, extra = "") {
+  return `<div class="cm-contact__item ${alert ? "cm-contact__item--alert" : ""}">
+    <span class="cm-label-row"><span class="cm-label">${label}</span>${tip(help)}</span>
+    <span class="cm-contact__value">${value}</span>
+    <p class="cm-contact__hint">${hint}</p>${extra}</div>`;
+}
+
+function hbars(id, rows, total, cls = "", clickable = false) {
+  const max = Math.max(...rows.map((r) => r[1]));
+  document.getElementById(id).innerHTML = rows.map(([label, v, help, c]) => `
+    <div class="cm-hbar ${clickable ? "cm-hbar--click" : ""}" data-label="${label}">
+      <span class="cm-hbar__label">${label}${tip(help)}</span>
+      <span class="cm-hbar__track"><span class="cm-hbar__fill ${c || cls}" style="display:block;width:${100 * v / max}%"></span></span>
+      <span class="cm-hbar__val">${v} <small>${pct(v, total)}</small></span>
+    </div>`).join("");
+}
+
+const ETAPAS = [
+  ["Nuevo", "El lead está asociado a tus proyectos (los marcó como favoritos o busca en su comuna) y nadie lo ha contactado todavía."],
+  ["Contactado", "Un ejecutivo registró el primer contacto con el lead."],
+  ["En plan de mejora", "El lead está trabajando un plan para mejorar su perfil financiero antes de comprar. Lo registra el ejecutivo."],
+  ["En negociación", "El lead está negociando una unidad de un proyecto específico."],
+  ["Reserva", "El lead reservó una unidad del proyecto."],
+  ["Venta cerrada", "El lead firmó la promesa de compraventa. Si la venta se revierte, deja de contarse como venta."],
+];
+const ANTECEDENTES = "Su precalificación más reciente no tiene datos suficientes para estimar su capacidad de compra. Necesita volver a precalificarse; no significa que no pueda comprar.";
+
+function render() {
+  const d = DATA[role];
+  document.getElementById("sidebar").className = `sidebar ${d.sidebar.cls}`;
+  document.getElementById("nav-group-label").textContent = d.sidebar.group;
+  document.getElementById("user-initials").textContent = d.sidebar.initials;
+  document.getElementById("user-role").textContent = d.sidebar.role;
+  document.getElementById("user-name").textContent = d.sidebar.name;
+  document.getElementById("user-mail").textContent = d.sidebar.mail;
+  document.getElementById("page-subtitle").textContent = d.subtitle;
+  document.getElementById("contact-subtitle").textContent = d.contactSubtitle;
+  document.getElementById("f-proyecto").innerHTML = `<option value="">Todos ${role === "admin" ? "los proyectos" : "tus proyectos"}</option>` +
+    d.proyectos.map(([p, e]) => `<option>${p}${e === "agotado" ? " (agotado)" : ""}</option>`).join("");
+  summary();
+
+  const k = d.kpi;
+  document.getElementById("kpis").innerHTML =
+    kpi("navy", "Postularon a un proyecto", "Leads que fijaron uno de tus proyectos como su meta de compra al menos una vez.", k.postularon, `<span class="cm-rate">${pct(k.postularon, d.n)}</span> de ${d.n} leads`) +
+    kpi("success", "Ventas con plan de mejora", "Leads que aceptaron un plan de mejora orientado a uno de tus proyectos y después cerraron una venta vigente.", k.ventasPlan, `de ${k.conPlan} leads con plan <span class="cm-rate">${pct(k.ventasPlan, k.conPlan)}</span>`) +
+    kpi("gold", "Leads activos este mes", "Leads que hicieron al menos una acción sobre tus proyectos este mes: favorito, postulación, re-precalificación o avance en su plan de mejora.", k.activosMes, `<span class="cm-rate">${pct(k.activosMes, d.n)}</span> de ${d.n} leads`) +
+    kpi("soft", "Ciclo de venta", "Días desde la primera precalificación hasta la venta cerrada, considerando solo ventas vigentes. La mediana es el valor del medio: no la distorsionan las ventas muy lentas.", `${fmt(k.cicloMed)} <small>días (mediana)</small>`, `promedio ${fmt(k.cicloProm)} · n = ${k.cicloN} ventas`);
+
+  const c = d.contact;
+  document.getElementById("contact").innerHTML =
+    contactItem("Sin contactar", "Leads que nadie ha marcado todavía como contactados (y que no están perdidos). La antigüedad se cuenta desde su primera precalificación.", c.sin, `esperan ${fmt(c.sinMed)} días (mediana) · el más antiguo, ${c.sinMax} días`, true, `<button type="button" class="cm-link">Ver en Leads →</button>`) +
+    contactItem("Contactados este mes", "Leads que recibieron su primer contacto registrado durante este mes.", c.mes, role === "admin" ? "primeros contactos de tu equipo" : "primeros contactos en tus proyectos") +
+    (c.porMi ? contactItem("Contactados por ti", "Leads cuyo primer contacto registraste tú. Solo tú ves este número.", c.porMi.total, `${c.porMi.mes} este mes`) : "") +
+    contactItem("Primer contacto a los mejores leads", "Días desde la precalificación hasta el primer contacto, solo para leads Compatible y que alcanzan a comprar. Se mide cuando la etapa se registra en RutaHogar, no cuando ocurrió la llamada.", `${fmt(c.primerMed)} <small>días (mediana)</small>`, `n = ${c.primerN} leads Compatible + Alcanza · <strong>${c.primerPend}</strong> aún sin contactar`);
+  document.getElementById("contact").classList.toggle("cm-contact--3", !c.porMi);
+
+  const fd = view.funnel === "mejores" ? d.mejores : d;
+  const fScope = document.getElementById("funnel-scope");
+  fScope.classList.toggle("cm-hidden", view.funnel !== "mejores");
+  fScope.textContent = `Solo leads Compatible + Alcanza (${d.mejores.n} de ${d.n})`;
+  document.getElementById("funnel").innerHTML = fd.funnel.map((v, i) => `
+    <div class="cm-funnel__row ${i === 5 ? "cm-funnel__row--sale" : ""}">
+      <span class="cm-funnel__name cm-label-row">${ETAPAS[i][0]}${tip(ETAPAS[i][1])}</span>
+      <div class="cm-funnel__track"><div class="cm-funnel__bar" style="width:${100 * v / fd.funnel[0]}%">${v}</div></div>
+      <span class="cm-funnel__conv">${i ? `${pct(v, fd.funnel[i - 1])} desde la anterior` : (view.funnel === "mejores" ? "mejores leads" : "todos los leads")}</span>
+    </div>`).join("");
+  document.getElementById("funnel-help").innerHTML = tip("Un lead cuenta en una etapa si llegó a ella en algún momento, aunque después haya avanzado, retrocedido o se haya perdido. Si saltó etapas, cuenta también en las que se saltó. Así cada etapa siempre tiene igual o menos leads que la anterior.");
+  const s = fd.status;
+  document.getElementById("status").innerHTML = `
+    <div class="cm-status__item"><span class="cm-label-row"><span class="cm-label">Abiertos</span>${tip("Leads que hoy no tienen una venta vigente ni están perdidos: todavía se puede trabajar con ellos.")}</span><strong>${s.abiertos}</strong><p>Ni vendidos ni perdidos</p></div>
+    <div class="cm-status__item"><span class="cm-label-row"><span class="cm-label">Ventas vigentes</span>${tip("Leads con una promesa de compraventa firmada en alguno de tus proyectos que no ha sido revertida.")}</span><strong>${s.ventas}</strong><p>Promesa firmada, no revertida</p></div>
+    <div class="cm-status__item"><span class="cm-label-row"><span class="cm-label">Leads perdidos</span>${tip("Leads cuyas oportunidades en tus proyectos están todas cerradas. 'Por gestión': un ejecutivo lo marcó como perdido. 'Por proyecto agotado': se cerró solo porque el proyecto se agotó. Un lead puede reactivarse si el ejecutivo lo vuelve a trabajar.")}</span><strong>${s.perdidos}</strong><p>${s.gestion} por gestión · ${s.agotado} por proyecto agotado</p></div>`;
+
+  document.getElementById("projects-table").innerHTML = `<thead><tr><th>Proyecto</th><th class="num">Leads</th><th class="num">Postularon</th><th class="num">Ventas</th><th class="num">Sin contactar</th></tr></thead><tbody>${
+    d.projects.map(([p, e, l, po, v, sc]) => `<tr><td>${p} ${e === "agotado" ? '<span class="cm-pill cm-pill--agotado">Agotado</span>' : ""}</td><td class="num">${l}</td><td class="num">${po} <span class="cm-muted">${pct(po, l)}</span></td><td class="num">${v}</td><td class="num">${sc}</td></tr>`).join("")}</tbody>`;
+
+  const td = view.times === "mejores" ? d.mejores : d;
+  const tScope = document.getElementById("times-scope");
+  tScope.classList.toggle("cm-hidden", view.times !== "mejores");
+  tScope.textContent = `Solo leads Compatible + Alcanza (${d.mejores.n} de ${d.n})`;
+  const th = (label, help, num = true) => `<th class="${num ? "num" : ""}"><span class="cm-label-row" style="${num ? "justify-content:flex-end" : ""}">${label}${tip(help)}</span></th>`;
+  document.getElementById("times-table").innerHTML = `<thead><tr>${
+    th("Etapa", "La etapa comercial en que estuvo el lead.", false)}${
+    th("Mediana (días)", "Días que los leads permanecieron en la etapa. La mediana es el valor del medio: la mitad estuvo menos y la mitad más. Si un lead pasó dos veces por la misma etapa, se suman ambas estadías.")}${
+    th("n", "Cuántos leads ya salieron de la etapa y entran al cálculo.")}${
+    th("Siguen en la etapa", "Leads que hoy están en esa etapa. No entran al cálculo porque su tiempo todavía no termina.")}</tr></thead><tbody>${
+    td.times.map(([e, m, n, cu], i) => `<tr><td><span class="cm-label-row">${e}${tip(ETAPAS[i][1])}</span></td><td class="num">${fmt(m)}</td><td class="num">${n}</td><td class="num">${cu}</td></tr>`).join("")}</tbody>`;
+
+  document.getElementById("postular-help").innerHTML = tip("Días desde la primera precalificación del lead hasta que fijó por primera vez uno de tus proyectos como su meta.");
+  hbars("engagement", [
+    ["Favorito", d.eng[0], "El lead marcó como favorito uno de tus proyectos."],
+    ["Postulación", d.eng[1], "El lead fijó uno de tus proyectos como su meta de compra. Se cuenta la primera vez por proyecto, aunque después cambie de meta."],
+    ["Re-precalificación", d.eng[2], "El lead volvió a precalificarse teniendo uno de tus proyectos como meta. Su primera precalificación no cuenta."],
+    ["Plan aceptado", d.eng[3], "El lead aceptó un plan de mejora orientado a uno de tus proyectos."],
+    ["Actualización de progreso", d.eng[4], "El lead registró avances (datos nuevos o una nueva evaluación) en su plan de mejora orientado a uno de tus proyectos."],
+    ["Meta confirmada", d.eng[5], "El lead cumplió y confirmó una meta de su plan de mejora orientado a uno de tus proyectos."],
+  ], d.n, "cm-hbar__fill--gold");
+  hbars("afinidad", [
+    ["Compatible", d.afin[0], "Alta afinidad con al menos uno de tus proyectos disponibles: su capacidad de compra, la comuna y el tipo de vivienda que busca y su situación financiera calzan bien."],
+    ["Cercano", d.afin[1], "Afinidad media con su mejor proyecto: calza en lo principal, pero algo le resta, como poca holgura de capacidad, otra comuna u otro tipo de vivienda."],
+    ["Marginal", d.afin[2], "Podría optar a alguno de tus proyectos, pero con baja afinidad: varios factores le restan."],
+    ["Fuera de alcance", d.afin[3], "No calza con ninguno de tus proyectos disponibles: su capacidad está lejos del precio de entrada o tiene un bloqueador crítico, como morosidad vigente."],
+    ["Requiere antecedentes", d.afin[4], ANTECEDENTES, "cm-hbar__fill--soft"],
+  ], d.n, "", true);
+  hbars("capacidad", [
+    ["Alcanza", d.cap[0], "Su capacidad de compra estimada alcanza el precio de la unidad más barata de al menos uno de tus proyectos disponibles."],
+    ["Cerca de alcanzar", d.cap[1], "Todavía no alcanza la unidad más barata, pero está cerca: con algo más de ahorro o renta, o con apoyos como FOGAES, podría lograrlo."],
+    ["Insuficiente", d.cap[2], "Su capacidad de compra está lejos del precio de entrada de tus proyectos, o tiene un bloqueador crítico que impide derivarlo."],
+    ["Requiere antecedentes", d.cap[3], ANTECEDENTES, "cm-hbar__fill--soft"],
+  ], d.n, "", true);
+  document.querySelectorAll(".cm-hbar--click").forEach((b) => b.onclick = () => {
+    const group = b.closest("#afinidad") ? "afinidad" : "capacidad";
+    document.querySelectorAll(`[data-filter="${group}"] .cm-chip`).forEach((ch) => { if (ch.textContent === b.dataset.label) ch.classList.add("is-active"); });
+    summary(); window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  drawHistory(document.querySelector("#gran .is-active").dataset.g);
+}
+
+document.querySelectorAll(".cm-view").forEach((g) => {
+  g.insertAdjacentHTML("beforeend", tip(MEJORES_HELP));
+  g.querySelectorAll("button[data-v]").forEach((b) => b.onclick = () => {
+    g.querySelectorAll("button[data-v]").forEach((x) => x.classList.toggle("is-active", x === b));
+    view[g.dataset.view] = b.dataset.v;
+    render();
+  });
+});
+
+// Filters: visual only in this mock
+function summary() {
+  const n = DATA[role].n;
+  const active = [...document.querySelectorAll(".cm-chip.is-active")].map((c) => c.textContent);
+  const proj = document.getElementById("f-proyecto").value;
+  const parts = [...(proj ? [proj] : []), ...active];
+  document.getElementById("f-summary").innerHTML = parts.length
+    ? `Mostrando <strong>${Math.max(0, n - active.length * 19)} leads</strong> · ${parts.join(" · ")}`
+    : `Mostrando <strong>${n} leads</strong> · sin filtros`;
+}
+document.querySelectorAll(".cm-chip").forEach((c) => c.onclick = () => { c.classList.toggle("is-active"); summary(); });
+document.getElementById("f-proyecto").onchange = summary;
+document.getElementById("f-clear").onclick = () => { document.querySelectorAll(".cm-chip").forEach((c) => c.classList.remove("is-active")); document.getElementById("f-proyecto").value = ""; summary(); };
+
+document.querySelectorAll(".cm-tab").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".cm-tab").forEach((x) => x.classList.toggle("is-active", x === b));
+  document.getElementById("tab-embudo").classList.toggle("cm-hidden", b.dataset.tab !== "embudo");
+  document.getElementById("tab-historia").classList.toggle("cm-hidden", b.dataset.tab !== "historia");
+});
+document.querySelectorAll(".mock-bar button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".mock-bar button").forEach((x) => x.classList.toggle("is-active", x === b));
+  role = b.dataset.role;
+  document.querySelectorAll(".cm-chip").forEach((c) => c.classList.remove("is-active"));
+  render();
+});
+
+// History (counts first)
+const SERIES = {
+  mes: [
+    { k: "jun", n: 18, post: 7, venta: 3, abiertos: 6, act: 13, cont: 12, ciclo: null, cn: 0 },
+    { k: "jul", n: 27, post: 10, venta: 3, abiertos: 15, act: 21, cont: 19, ciclo: 52.0, cn: 2 },
+    { k: "ago", n: 35, post: 13, venta: 2, abiertos: 26, act: 30, cont: 24, ciclo: 44.0, cn: 3 },
+    { k: "sep", n: 33, post: 10, venta: 1, abiertos: 30, act: 35, cont: 21, ciclo: 45.0, cn: 3 },
+    { k: "oct", n: 15, post: 4, venta: 0, abiertos: 15, act: 31, cont: 12, ciclo: 41.0, cn: 1, curso: true },
+  ],
+  semana: Array.from({ length: 18 }, (_, i) => ({ k: `S${23 + i}`, n: 4 + (i * 7) % 6, post: 1 + (i % 3), venta: i % 5 === 0 ? 1 : 0, abiertos: 3 + (i % 4), act: 6 + (i * 5) % 9, cont: 3 + (i * 3) % 6, ciclo: i % 4 ? 38 + (i * 7) % 20 : null, cn: i % 4 ? 1 : 0, curso: i === 17 })),
+  anio: [{ k: "2026", n: 128, post: 44, venta: 9, abiertos: 96, act: 79, cont: 81, ciclo: 41.0, cn: 9, curso: true }],
+};
+
+function drawCohort(rows) {
+  const W = 900, H = 260, L = 34, R = 16, T = 16, B = 32;
+  const gw = (W - L - R) / rows.length, max = Math.max(...rows.map((r) => r.n));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let s = "";
+  [0, 0.5, 1].forEach((f) => { const yy = y(max * f); s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="#E8E5DF"/><text x="4" y="${yy + 4}">${Math.round(max * f)}</text>`; });
+  rows.forEach((r, i) => {
+    const x0 = L + gw * i + gw * 0.15, bw = gw * 0.7 / 3;
+    [[r.n, "rgba(19,43,74,.16)"], [r.post, "#132B4A"], [r.venta, "#2d8a4e"]].forEach(([v, col], j) => {
+      s += `<rect x="${x0 + j * bw}" y="${y(v)}" width="${bw - 3}" height="${H - B - y(v)}" rx="4" fill="${col}"/>`;
+      if (rows.length <= 8) s += `<text x="${x0 + j * bw + (bw - 3) / 2}" y="${y(v) - 5}" text-anchor="middle" style="fill:#1A2332;font-weight:700">${v}</text>`;
+    });
+    if (r.curso) s += `<rect x="${L + gw * i + 4}" y="${T}" width="${gw - 8}" height="${H - T - B}" rx="8" fill="none" stroke="#D4A843" stroke-dasharray="5 4"/>`;
+    if (rows.length <= 8 || i % 3 === 0) s += `<text x="${L + gw * i + gw / 2}" y="${H - 12}" text-anchor="middle">${r.k}</text>`;
+  });
+  document.getElementById("chart-cohort").innerHTML = s;
+  document.getElementById("cohort-table").innerHTML = `<thead><tr><th>Cohorte</th><th class="num">Leads</th><th class="num">Postularon</th><th class="num">Ventas</th><th class="num">Aún abiertos</th><th></th></tr></thead><tbody>${
+    rows.slice(-6).map((r) => `<tr><td>${r.k}</td><td class="num">${r.n}</td><td class="num">${r.post} <span class="cm-muted">${pct(r.post, r.n)}</span></td><td class="num">${r.venta}</td><td class="num">${r.abiertos} de ${r.n}</td><td>${r.curso ? '<span class="cm-pill cm-pill--curso">En curso</span>' : ""}</td></tr>`).join("")}</tbody>`;
+}
+
+function drawPairs(id, rows, keys, colors) {
+  const W = 440, H = 230, L = 30, R = 10, T = 18, B = 28;
+  const max = Math.max(...rows.flatMap((r) => keys.map((k) => r[k] || 0)), 1);
+  const gw = (W - L - R) / rows.length, bw = gw * 0.7 / keys.length;
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let s = "";
+  [0, 0.5, 1].forEach((f) => { const yy = y(max * f); s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="#E8E5DF"/><text x="2" y="${yy + 4}">${Math.round(max * f)}</text>`; });
+  rows.forEach((r, i) => {
+    keys.forEach((k, j) => {
+      const v = r[k], x = L + gw * i + gw * 0.15 + j * bw;
+      if (v == null) { s += `<text x="${x + bw / 2}" y="${H - B - 4}" text-anchor="middle">—</text>`; return; }
+      s += `<rect x="${x}" y="${y(v)}" width="${bw - 2}" height="${H - B - y(v)}" rx="4" fill="${colors[j]}" ${r.curso ? 'opacity=".6"' : ""}/>`;
+      if (rows.length <= 8) s += `<text x="${x + (bw - 2) / 2}" y="${y(v) - 5}" text-anchor="middle" style="fill:#1A2332;font-weight:700">${k === "ciclo" ? `${fmt(v, 0)} (n=${r.cn})` : v}</text>`;
+    });
+    if (rows.length <= 8 || i % 3 === 0) s += `<text x="${L + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle">${r.k}</text>`;
+  });
+  document.getElementById(id).innerHTML = s;
+}
+
+function drawHistory(g) {
+  const rows = SERIES[g];
+  drawCohort(rows);
+  drawPairs("chart-eng", rows, ["act", "cont"], ["#D4A843", "#132B4A"]);
+  drawPairs("chart-ciclo", rows, ["ciclo"], ["#132B4A"]);
+}
+document.querySelectorAll("#gran button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("#gran button").forEach((x) => x.classList.toggle("is-active", x === b));
+  drawHistory(b.dataset.g);
+});
+
+// Tooltip: same markup, size and placement rules as components/FieldTooltip.jsx
+let openTip = null;
+const closeTip = () => { if (openTip) { openTip.cloud.remove(); openTip.btn.classList.remove("is-open"); openTip = null; } };
+const placeTip = () => {
+  if (!openTip) return;
+  const W = 260, M = 12, GAP = 10, r = openTip.btn.getBoundingClientRect();
+  const below = r.top < 120 + GAP + M;
+  const left = Math.max(M, Math.min(r.left + r.width / 2 - W / 2, innerWidth - W - M));
+  const c = openTip.cloud;
+  c.className = `field-tooltip-cloud field-tooltip-cloud--${below ? "bottom" : "top"}`;
+  c.style.cssText = below ? `top:${r.bottom + GAP}px;left:${left}px` : `bottom:${innerHeight - r.top + GAP}px;left:${left}px`;
+  c.style.setProperty("--arrow-left", `${Math.max(10, Math.min(r.left + r.width / 2 - left, W - 10))}px`);
+};
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".field-tooltip-btn");
+  if (!btn) { if (!e.target.closest(".field-tooltip-cloud")) closeTip(); return; }
+  e.stopPropagation();
+  const same = openTip && openTip.btn === btn;
+  closeTip();
+  if (same) return;
+  const cloud = document.createElement("div");
+  cloud.setAttribute("role", "tooltip");
+  cloud.textContent = btn.dataset.tip;
+  document.body.appendChild(cloud);
+  btn.classList.add("is-open");
+  openTip = { btn, cloud };
+  placeTip();
+}, true);
+addEventListener("scroll", placeTip, true);
+addEventListener("resize", placeTip);
+
+render();
+</script>
+</body>
+</html>

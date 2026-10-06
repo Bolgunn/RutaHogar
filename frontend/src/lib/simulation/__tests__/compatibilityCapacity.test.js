@@ -41,6 +41,21 @@ describe("buildSimulationContext", () => {
     );
     expect(contexto.financial_indicators).toEqual(indicadoresConCapacidad);
   });
+
+  it("prefiere la UF del snapshot histórico sobre un valor antiguo del input", () => {
+    const contexto = buildSimulationContext({
+      input: { uf_value_clp: 40695 },
+      result: {
+        financial_indicators: {
+          capacidad_supuestos: {
+            market_snapshot: { uf_value_clp: 40999.93 },
+          },
+        },
+      },
+    }, {});
+
+    expect(contexto.uf_value_clp).toBe(40999.93);
+  });
 });
 
 describe("buildAccessibleAlternatives", () => {

@@ -1,0 +1,2 @@
+[functions.co-debtor-consent]
+verify_jwt = false
