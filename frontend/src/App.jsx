@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import AcademiaFinanciera from "./components/AcademiaFinanciera";
@@ -13,6 +14,12 @@ import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
 import { getTracking } from "./services/trackingService";
+import {
+  getUnseenLeadChanges,
+  markLeadChangeSeen,
+  recordQuickUpdateChange,
+  setLeadNotificationPreference,
+} from "./services/leadChangeService";
 import { createCoDebtorInvitation } from "./services/coDebtorService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
@@ -68,6 +75,7 @@ import {
 } from "./services/profileService";
 import { formatScore } from "./utils/helpers";
 import { formatFormValue, plazoLabels } from "./constants";
+import { comunasMvp } from "./constants/comunas";
 import { createPageViewDeduper, trackSignUp } from "./lib/analytics";
 
 const ONBOARDING_KEY = "RutaHogar_onboarding";
@@ -229,8 +237,454 @@ export const buildFinancialInput = (input = {}, onboarding = null) => ({
   device_id_hash: input.device_id_hash,
 });
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
-  ? `$${Number(value).toLocaleString("es-CL")}`
+  ? `$${Math.round(Number(value)).toLocaleString("es-CL")}`
   : "No declarado";
+
+const formatIntegerInput = (value) => {
+  if (value === "" || value == null) return "";
+  const digits = String(value).replace(/\D/g, "");
+  return digits ? Number(digits).toLocaleString("es-CL") : "";
+};
+
+const parseIntegerInput = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits ? Number(digits) : NaN;
+};
+
+const changeTypeLabels = {
+  project_compatible_unlocked: "Proyecto compatible",
+  score_band_improved: "Mejora de score",
+  monthly_plan_summary: "Resumen mensual",
+  uf_reachability_crossed: "Cambio de alcance",
+  quick_update_submitted: "Dato actualizado",
+};
+
+const changeTypeIcons = {
+  project_compatible_unlocked: "ti-home-check",
+  score_band_improved: "ti-trending-up",
+  monthly_plan_summary: "ti-calendar-stats",
+  uf_reachability_crossed: "ti-currency-dollar",
+  quick_update_submitted: "ti-edit-circle",
+};
+
+const quickUpdateStages = [
+  {
+    id: "finanzas",
+    label: "Finanzas",
+    fields: [
+      { id: "ingreso_mensual", label: "Ingreso mensual", type: "number" },
+      { id: "ahorro_disponible", label: "Ahorro disponible", type: "number" },
+      { id: "deuda_mensual", label: "Deuda mensual", type: "number" },
+      { id: "dividendo_estimado", label: "Dividendo estimado", type: "number" },
+    ],
+  },
+  {
+    id: "laboral",
+    label: "Laboral",
+    fields: [
+      { id: "tipo_contrato", label: "Tipo de contrato", type: "select", options: [
+        ["indefinido", "Indefinido"], ["plazo_fijo", "Plazo fijo"], ["independiente", "Independiente"], ["honorarios_variable", "Honorarios / variable"],
+      ] },
+      { id: "continuidad_laboral", label: "Continuidad laboral", type: "select", options: [
+        ["menos_6_meses", "Menos de 6 meses"], ["entre_6_y_12_meses", "Entre 6 y 12 meses"], ["entre_1_y_3_anios", "Entre 1 y 3 años"], ["mas_3_anios", "Más de 3 años"],
+      ] },
+    ],
+  },
+  {
+    id: "vivienda",
+    label: "Vivienda objetivo",
+    fields: [
+      { id: "property_value_uf", label: "Valor objetivo en UF", type: "number" },
+      { id: "plazo_credito_hipotecario", label: "Plazo crédito", type: "select", options: [[10, "10 años"], [15, "15 años"], [20, "20 años"], [25, "25 años"], [30, "30 años"]] },
+      { id: "comuna_objetivo", label: "Comuna objetivo", type: "select", options: comunasMvp.map((comuna) => [comuna, comuna]) },
+    ],
+  },
+  {
+    id: "riesgo",
+    label: "Antecedentes",
+    fields: [
+      { id: "morosidad_actual", label: "Morosidad actual", type: "select", options: [["no", "No"], ["si", "Sí"]] },
+      { id: "monto_morosidad", label: "Monto en morosidad", type: "number" },
+    ],
+  },
+];
+
+const quickUpdateFields = quickUpdateStages.flatMap((stage) => stage.fields.map((field) => ({ ...field, stage: stage.label })));
+
+const suggestedFieldByEventType = {
+  project_compatible_unlocked: "ahorro_disponible",
+  score_band_improved: "deuda_mensual",
+  monthly_plan_summary: "ahorro_disponible",
+  uf_reachability_crossed: "ahorro_disponible",
+};
+
+const formatChangeDate = (value) => {
+  if (!value) return "Fecha no disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Fecha no disponible";
+  return date.toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const formatChangeValue = (value) => {
+  if (value == null) return "Sin dato";
+  if (typeof value === "object") {
+    if (value.label) return value.label;
+    if (value.value != null) return `${value.value}${value.unit ? ` ${value.unit}` : ""}`;
+  }
+  return String(value);
+};
+
+const formatQuickUpdatePayloadValue = (fieldId, value) => {
+  const field = quickUpdateFields.find((item) => item.id === fieldId);
+  if (field?.type === "select") {
+    const option = field.options?.find(([optionValue]) => String(optionValue) === String(value));
+    if (option) return option[1];
+  }
+  if (field?.type === "number" && Number.isFinite(Number(value))) return Number(value).toLocaleString("es-CL");
+  return formatChangeValue(value);
+};
+
+const groupLeadChanges = (changes = []) => {
+  const order = [];
+  const groups = new Map();
+  for (const change of changes) {
+    const key = change.event_type || "unknown";
+    if (!groups.has(key)) {
+      order.push(key);
+      groups.set(key, { type: key, items: [] });
+    }
+    groups.get(key).items.push(change);
+  }
+  return order.map((key) => groups.get(key));
+};
+
+const leadChangeGroupSummary = {
+  project_compatible_unlocked: "Nuevas alternativas aparecen dentro de tu alcance referencial.",
+  score_band_improved: "Hay señales de que una nueva evaluación podría mejorar tu tramo referencial.",
+  monthly_plan_summary: "Tienes recordatorios de revisión mensual para mantener tu plan actualizado.",
+  uf_reachability_crossed: "Cambió tu alcance referencial frente a uno o más objetivos.",
+  quick_update_submitted: "Registramos actualizaciones de datos hechas desde Inicio.",
+};
+
+function LeadChangeDetail({ change }) {
+  const hasDelta = change.previous_value != null || change.current_value != null;
+  if (change.event_type === "score_band_improved") {
+    return (
+      <div className="home-change-card__explain">
+        <strong>Qué significa</strong>
+        <p>Con la referencia vigente, una nueva evaluación podría mostrar una mejora de tramo si tus datos siguen siendo los mismos.</p>
+        {hasDelta && (
+          <dl className="home-change-card__delta">
+            <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
+            <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+          </dl>
+        )}
+      </div>
+    );
+  }
+  if (change.event_type === "project_compatible_unlocked") {
+    const previousLabel = formatChangeValue(change.previous_value);
+    const hasPreviousProject = previousLabel && !/sin proyecto/i.test(previousLabel);
+    return (
+      <div className="home-change-card__explain">
+        <strong>Proyecto relacionado</strong>
+        <p>{change.project_name ? `${change.project_name} aparece como alternativa compatible con los datos disponibles.` : "Apareció una alternativa compatible con tu perfil."}</p>
+        {hasDelta && (
+          <dl className="home-change-card__delta">
+            {hasPreviousProject && <div><dt>Referencia previa</dt><dd>{previousLabel}</dd></div>}
+            <div><dt>Nueva opción</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+          </dl>
+        )}
+      </div>
+    );
+  }
+  if (change.event_type === "uf_reachability_crossed") {
+    return (
+      <div className="home-change-card__explain">
+        <strong>Alcance referencial</strong>
+        <p>La referencia de UF cambió tu relación con el objetivo. Esto no aprueba un crédito, solo actualiza el escenario referencial.</p>
+        {change.project_name && <span className="home-change-card__project">Objetivo: {change.project_name}</span>}
+        {hasDelta && (
+          <dl className="home-change-card__delta">
+            <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
+            <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+          </dl>
+        )}
+      </div>
+    );
+  }
+  if (change.event_type === "quick_update_submitted") {
+    const fields = Array.isArray(change.payload?.fields) ? change.payload.fields : [];
+    return (
+      <div className="home-change-card__explain">
+        <strong>Dato actualizado</strong>
+        <p>Este cambio fue reportado por ti desde Inicio y ya se usó para recalcular tu situación.</p>
+        {fields.length > 0 ? (
+          <div className="home-change-card__field-list">
+            {fields.map((field) => (
+              <div className="home-change-card__field-row" key={field.field_id}>
+                <strong>{field.field_label}</strong>
+                <span>Antes: {formatQuickUpdatePayloadValue(field.field_id, field.previous_value)}</span>
+                <span>Ahora: {formatQuickUpdatePayloadValue(field.field_id, field.current_value)}</span>
+              </div>
+            ))}
+          </div>
+        ) : hasDelta && (
+          <dl className="home-change-card__delta">
+            <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
+            <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+          </dl>
+        )}
+      </div>
+    );
+  }
+  if (change.event_type === "monthly_plan_summary") {
+    return (
+      <div className="home-change-card__explain">
+        <strong>Resumen mensual</strong>
+        <p>Revisa si tus datos financieros, laborales o de vivienda siguen actualizados para mantener tu plan vigente.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="home-change-card__explain">
+      <strong>Resumen</strong>
+      <p>{change.project_name ? `Referencia: ${change.project_name}` : "Cambio detectado en tu seguimiento."}</p>
+      {hasDelta && (
+        <dl className="home-change-card__delta">
+          <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
+          <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
+  const [detailGroup, setDetailGroup] = useState(null);
+  if (loading) {
+    return (
+      <section className="home-change-timeline is-loading" aria-live="polite">
+        <div className="home-change-timeline__head">
+          <span className="eyebrow">Cambios desde tu última visita</span>
+          <h2>Estamos revisando tus novedades</h2>
+        </div>
+      </section>
+    );
+  }
+  if (!changes.length) return null;
+  const groups = groupLeadChanges(changes);
+  return (
+    <>
+    <section className="home-change-timeline" aria-labelledby="home-change-title">
+      <div className="home-change-timeline__head">
+        <span className="eyebrow">Cambios desde tu última visita</span>
+        <h2 id="home-change-title">Hay novedades relevantes para revisar</h2>
+      </div>
+      <div className="home-change-timeline__rail">
+        {groups.map((group, groupIndex) => {
+          const highlighted = highlightedId && group.items.some((item) => String(item.id) === String(highlightedId));
+          const hasMultipleItems = group.items.length > 1;
+          const onlyChange = group.items[0];
+          const isMultiFieldQuickUpdate = group.type === "quick_update_submitted" && Array.isArray(onlyChange?.payload?.fields) && onlyChange.payload.fields.length > 1;
+          const showGroupedSummary = hasMultipleItems || isMultiFieldQuickUpdate;
+          return (
+            <section className="home-change-group" key={group.type}>
+              <div className="home-change-group__head">
+                <span className="home-change-group__icon"><i className={`ti ${changeTypeIcons[group.type] || "ti-bell"}`} aria-hidden="true" /></span>
+                <div>
+                  <h3>{changeTypeLabels[group.type] || "Cambio detectado"}</h3>
+                  <p>{group.items.length === 1 ? "1 novedad pendiente" : `${group.items.length} novedades pendientes`}</p>
+                </div>
+              </div>
+              <div className="home-change-group__items">
+                <article className={`home-change-card home-change-card--summary ${highlighted ? "is-highlighted" : ""}`}>
+                  <div className="home-change-card__body">
+                    <div className="home-change-card__meta">
+                      <time>{formatChangeDate(onlyChange?.occurred_at)}</time>
+                    </div>
+                    <h3>{showGroupedSummary ? hasMultipleItems ? `${group.items.length} novedades por revisar` : onlyChange?.title : onlyChange?.title}</h3>
+                    <p>{showGroupedSummary ? leadChangeGroupSummary[group.type] || "Hay cambios pendientes asociados a tu seguimiento." : onlyChange?.summary}</p>
+                    {!showGroupedSummary && <LeadChangeDetail change={onlyChange} />}
+                    <div className="home-change-card__actions">
+                      {showGroupedSummary && <button type="button" className="primary-button compact-button" onClick={() => setDetailGroup(group)}>Ver detalles</button>}
+                      <button
+                        type="button"
+                        className="secondary-button compact-button"
+                        onClick={() => hasMultipleItems ? Promise.all(group.items.map((item) => onMarkSeen(item.id))) : onMarkSeen(onlyChange.id)}
+                      >
+                        Entendido
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <span className="home-change-card__index">{String(groupIndex + 1).padStart(2, "0")}</span>
+            </section>
+          );
+        })}
+      </div>
+    </section>
+    {detailGroup && createPortal(
+      <div className="home-change-detail-modal" role="dialog" aria-modal="true" aria-labelledby="home-change-detail-title" onClick={() => setDetailGroup(null)}>
+        <div className="home-change-detail-modal__card" onClick={(event) => event.stopPropagation()}>
+          <div className="home-change-detail-modal__head">
+            <div>
+              <span className="eyebrow">Detalle de novedades</span>
+              <h2 id="home-change-detail-title">{changeTypeLabels[detailGroup.type] || "Cambios detectados"}</h2>
+              <p>Estas novedades se agrupan para mantener tu Inicio limpio.</p>
+            </div>
+            <button type="button" className="secondary-button compact-button" onClick={() => setDetailGroup(null)}>Cerrar</button>
+          </div>
+          <div className="home-change-detail-modal__list">
+            {detailGroup.items.map((change) => (
+              <article className="home-change-detail-modal__item" key={change.id}>
+                <time>{formatChangeDate(change.occurred_at)}</time>
+                <h3>{change.title}</h3>
+                <p>{change.summary}</p>
+                <LeadChangeDetail change={change} />
+                <div className="home-change-card__actions">
+                  <button type="button" className="secondary-button compact-button" onClick={() => onMarkSeen(change.id)}>Entendido</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )}
+    </>
+  );
+}
+
+function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
+  const suggestedId = suggestedFieldByEventType[event?.event_type];
+  const initialField = suggestedId ? quickUpdateFields.find((item) => item.id === suggestedId) : null;
+  const [selectedFieldIds, setSelectedFieldIds] = useState(() => suggestedId ? [suggestedId] : []);
+  const [draftValues, setDraftValues] = useState(() => suggestedId ? { [suggestedId]: initialField?.type === "number" ? formatIntegerInput(baseInput?.[suggestedId]) : baseInput?.[suggestedId] ?? "" } : {});
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    setDraftValues((current) => {
+      const next = { ...current };
+      for (const fieldId of selectedFieldIds) {
+        if (!(fieldId in next)) {
+          const field = quickUpdateFields.find((item) => item.id === fieldId);
+          next[fieldId] = field?.type === "number" ? formatIntegerInput(baseInput?.[fieldId]) : baseInput?.[fieldId] ?? "";
+        }
+      }
+      return next;
+    });
+  }, [selectedFieldIds, baseInput]);
+
+  const toggleField = (fieldId) => {
+    setSelectedFieldIds((current) => {
+      if (current.includes(fieldId)) return current.filter((item) => item !== fieldId);
+      return [...current, fieldId];
+    });
+  };
+
+  const selectedFields = selectedFieldIds
+    .map((fieldId) => quickUpdateFields.find((item) => item.id === fieldId))
+    .filter(Boolean);
+
+  const formatQuickUpdateValue = (field, value) => {
+    if (field?.type === "select") {
+      const option = field.options?.find(([optionValue]) => String(optionValue) === String(value));
+      if (option) return option[1];
+    }
+    if (field?.type === "number" && Number.isFinite(Number(value))) return Number(value).toLocaleString("es-CL");
+    return formatChangeValue(value);
+  };
+
+  const updateDraftValue = (field, value) => {
+    setDraftValues((current) => ({
+      ...current,
+      [field.id]: field.type === "number" ? formatIntegerInput(value) : value,
+    }));
+  };
+
+  const submit = (eventSubmit) => {
+    eventSubmit.preventDefault();
+    const changes = [];
+    for (const field of selectedFields) {
+      const rawValue = draftValues[field.id];
+      const nextValue = field.type === "number" ? parseIntegerInput(rawValue) : rawValue;
+      if (field.type === "number" && !Number.isFinite(nextValue)) return;
+      changes.push({ field, nextValue, previousValue: baseInput?.[field.id] });
+    }
+    if (!changes.length) return;
+    onSave(changes);
+  };
+
+  return (
+    <section className="home-quick-update" aria-labelledby="home-quick-update-title">
+      <div>
+        <span className="eyebrow">Actualización en un dato</span>
+        <h2 id="home-quick-update-title">Reporta tu avance sin repetir el formulario completo</h2>
+        <p>Usaremos tu última evaluación como base, cambiaremos solo este dato y recalcularemos tu situación.</p>
+      </div>
+      <div className="home-quick-update__picker">
+        {quickUpdateStages.map((stage) => (
+          <fieldset key={stage.id}>
+            <legend>{stage.label}</legend>
+            {stage.fields.map((field) => (
+              <label className="home-quick-update__choice" key={field.id}>
+                <input
+                  type="checkbox"
+                  checked={selectedFieldIds.includes(field.id)}
+                  onChange={() => toggleField(field.id)}
+                />
+                <span>{field.label}</span>
+                <small>Actual: {formatQuickUpdateValue(field, baseInput?.[field.id])}</small>
+              </label>
+            ))}
+          </fieldset>
+        ))}
+      </div>
+      <div className="home-quick-update__actions">
+        <button type="button" className="primary-button compact-button" onClick={() => setEditing(true)} disabled={!selectedFields.length}>Modificar seleccionados</button>
+        <button type="button" className="secondary-button compact-button" onClick={onCancel} disabled={saving}>Cancelar</button>
+      </div>
+      {editing && (
+        <div className="home-quick-update__overlay" role="dialog" aria-modal="true" aria-labelledby="home-quick-update-dialog-title">
+          <form onSubmit={submit} className="home-quick-update__dialog">
+            <div>
+              <span className="eyebrow">Valores seleccionados</span>
+              <h3 id="home-quick-update-dialog-title">Confirma los cambios antes de recalcular</h3>
+              <p>Estos datos actualizarán tus preferencias y crearán una nueva evaluación para refrescar tu plan.</p>
+            </div>
+            <div className="home-quick-update__fields">
+              {selectedFields.map((field) => (
+                <label key={field.id}>
+                  <span>{field.label}</span>
+                  <small>Valor anterior: {formatQuickUpdateValue(field, baseInput?.[field.id])}</small>
+                  {field.type === "select" ? (
+                    <select value={draftValues[field.id] ?? ""} onChange={(eventChange) => updateDraftValue(field, eventChange.target.value)}>
+                      <option value="">Selecciona una opción</option>
+                      {field.options.map(([optionValue, label]) => <option value={optionValue} key={optionValue}>{label}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type={field.type === "number" ? "text" : field.type}
+                      inputMode={field.type === "number" ? "numeric" : undefined}
+                      value={draftValues[field.id] ?? ""}
+                      onChange={(eventChange) => updateDraftValue(field, eventChange.target.value)}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="home-quick-update__actions">
+              <button type="submit" className="primary-button compact-button" disabled={saving}>{saving ? "Recalculando..." : "Guardar cambios y recalcular"}</button>
+              <button type="button" className="secondary-button compact-button" onClick={() => setEditing(false)} disabled={saving}>Volver</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}
 
 const normalizeMatchValue = (value) => {
   if (value === "" || value == null) return null;
@@ -494,6 +948,10 @@ export default function App() {
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
+  const [leadChanges, setLeadChanges] = useState([]);
+  const [leadChangesLoading, setLeadChangesLoading] = useState(false);
+  const [quickUpdateEvent, setQuickUpdateEvent] = useState(null);
+  const [quickUpdateSaving, setQuickUpdateSaving] = useState(false);
   const [tenantResolved, setTenantResolved] = useState(false);
 
   const profile = auth.profile;
@@ -569,6 +1027,60 @@ export default function App() {
         classification: currentEvaluation.result.classification,
       }
       : null;
+  const currentFinancialIndicators = currentEvaluation?.result?.financial_indicators || {};
+  const currentProjectGoal = currentEvaluation?.input?.project_goal || currentEvaluation?.result?.project_goal || null;
+  const homeProfileSummary = {
+    capacity: Number.isFinite(Number(currentFinancialIndicators.capacidad_compra_estimada_uf))
+      ? `${Number(currentFinancialIndicators.capacidad_compra_estimada_uf).toLocaleString("es-CL")} UF`
+      : "Sin capacidad calculada",
+    project: currentProjectGoal?.nombre
+      || (userOnboarding?.comuna_interes ? `${userOnboarding.tipo_propiedad === "departamento" ? "Departamento" : userOnboarding.tipo_propiedad === "casa" ? "Casa" : "Vivienda"} en ${userOnboarding.comuna_interes}` : "Sin proyecto definido"),
+    gap: Number.isFinite(Number(currentFinancialIndicators.brecha_pie_minimo))
+      ? Number(currentFinancialIndicators.brecha_pie_minimo) <= 0
+        ? "Sin brecha de pie detectada"
+        : `${formatEvaluationAmount(currentFinancialIndicators.brecha_pie_minimo)} de brecha de pie`
+      : currentEvaluation?.result?.improvement_plan?.[0]?.title || "Sin brecha principal calculada",
+    lastEvaluation: currentEvaluation?.created_at
+      ? new Date(currentEvaluation.created_at).toLocaleDateString("es-CL")
+      : "Sin evaluación guardada",
+  };
+  const highlightedChangeId = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("lead_change_event");
+    } catch {
+      return null;
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    let active = true;
+    setLeadChanges([]);
+    if (!userId || profile?.role !== roles.user) return () => { active = false; };
+    setLeadChangesLoading(true);
+    getUnseenLeadChanges()
+      .then((items) => { if (active) setLeadChanges(items); })
+      .catch(() => { if (active) setLeadChanges([]); })
+      .finally(() => { if (active) setLeadChangesLoading(false); });
+    return () => { active = false; };
+  }, [userId, profile?.role]);
+
+  const handleLeadChangeSeen = async (eventId) => {
+    setLeadChanges((items) => items.filter((item) => item.id !== eventId));
+    try {
+      await markLeadChangeSeen(eventId);
+    } catch {
+      setDataError("No se pudo marcar el cambio como visto.");
+      getUnseenLeadChanges().then(setLeadChanges).catch(() => {});
+    }
+  };
+  const handleDisableLeadChangeType = async (eventType) => {
+    try {
+      await setLeadNotificationPreference(eventType, false);
+      setLeadChanges((items) => items.filter((item) => item.event_type !== eventType));
+    } catch {
+      setDataError("No se pudo desactivar este tipo de aviso.");
+    }
+  };
 
   useEffect(() => {
     document.body.classList.toggle("simulation-layout-mode", page === "simulation");
@@ -1257,6 +1769,106 @@ export default function App() {
     }
   };
 
+  const handleQuickUpdateSave = async (changes) => {
+    if (!currentEvaluation?.input) {
+      setDataError("Necesitas una evaluación previa para actualizar un dato rápido.");
+      return;
+    }
+    const validChanges = Array.isArray(changes) ? changes.filter((change) => change?.field) : [];
+    if (!validChanges.length) return;
+    setQuickUpdateSaving(true);
+    try {
+      const changedInput = validChanges.reduce((next, { field, nextValue }) => ({
+        ...next,
+        [field.id]: nextValue,
+      }), {});
+      const nextInput = buildFinancialInput({
+        ...currentEvaluation.input,
+        ...changedInput,
+        consentimiento: true,
+      });
+      const response = await axios.post(`${resolveApiBase()}/score`, nextInput, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const resultSnapshot = buildResultSnapshot(response.data);
+      const nextOnboardingBase = {
+        ...(userOnboarding || {}),
+        ...(changedInput.comuna_objetivo ? { comuna_interes: changedInput.comuna_objetivo } : {}),
+        updated_at: new Date().toISOString(),
+      };
+      const savedEvaluation = await createEvaluation(isUUID(userId) ? userId : null, {
+        email: profile?.email || "sin-email",
+        onboarding: nextOnboardingBase,
+        input: nextInput,
+        result: resultSnapshot,
+        channel: "quick_update",
+      });
+      const changedFields = validChanges.map(({ field, nextValue, previousValue }) => ({
+        field_id: field.id,
+        field_label: field.label,
+        previous_value: previousValue,
+        current_value: nextValue,
+      }));
+      const nextOnboarding = {
+        ...nextOnboardingBase,
+        quick_update_preferences: {
+          ...((userOnboarding || {}).quick_update_preferences || {}),
+          updated_at: new Date().toISOString(),
+          fields: {
+            ...(((userOnboarding || {}).quick_update_preferences || {}).fields || {}),
+            ...changedInput,
+          },
+          last_evaluation_id: savedEvaluation.id,
+        },
+        updated_at: new Date().toISOString(),
+      };
+      const onboardingUserId = userId || profile?.email || "local-user";
+      const nextOnboardingStore = {
+        ...onboarding,
+        [onboardingUserId]: nextOnboarding,
+      };
+      setOnboarding(nextOnboardingStore);
+      localStorage.setItem(ONBOARDING_KEY, JSON.stringify(nextOnboardingStore));
+      if (userId) {
+        const savedProfile = await updateProfileOnboarding(userId, nextOnboarding);
+        const nextProfile = updateStoredProfile({
+          ...profile,
+          ...savedProfile,
+          email: profile?.email,
+          full_name: savedProfile?.full_name || profile?.full_name,
+          role: savedProfile?.role || profile?.role,
+          onboarding_data: nextOnboarding,
+        });
+        setAuth((prev) => ({ ...prev, profile: nextProfile }));
+      }
+      await recordQuickUpdateChange({
+        event_type: "quick_update_submitted",
+        materiality_key: `quick-update:${savedEvaluation.id}:${changedFields.map((item) => item.field_id).sort().join("-")}`,
+        project_name: homeProfileSummary.project,
+        title: validChanges.length === 1 ? `Actualizaste ${validChanges[0].field.label}` : `Actualizaste ${validChanges.length} datos de tu perfil`,
+        summary: "Recalculamos tu situación y actualizamos tus preferencias con los datos que reportaste desde Inicio.",
+        previous_value: { label: changedFields.map((item) => `${item.field_label}: ${formatChangeValue(item.previous_value)}`).join("; ") },
+        current_value: { label: changedFields.map((item) => `${item.field_label}: ${formatChangeValue(item.current_value)}`).join("; ") },
+        payload: { fields: changedFields, evaluation_id: savedEvaluation.id },
+      });
+      setEvaluations((prev) => {
+        const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
+        return [entry, ...prev.filter((item) => item.id !== entry.id)].slice(0, 25);
+      });
+      prependEvaluation(savedEvaluation);
+      setResult(resultSnapshot);
+      setResultSaved(true);
+      setQuickUpdateEvent(null);
+      setTrackingRevision((revision) => revision + 1);
+      getUnseenLeadChanges().then(setLeadChanges).catch(() => {});
+    } catch (error) {
+      console.error(error);
+      setDataError("No se pudo actualizar el dato rápido. Revisa el valor e intenta nuevamente.");
+    } finally {
+      setQuickUpdateSaving(false);
+    }
+  };
+
   const handleLogScoringEvent = (event) => {
     if (!currentEvaluation) return;
     appendScoringEvent(
@@ -1655,31 +2267,64 @@ export default function App() {
               </div>
             )}
 
-            <section className="home-profile-brief" aria-labelledby="home-profile-title">
-              <div className="home-profile-brief__status">
-                <span className="eyebrow">Tu perfil hoy</span>
-                <strong id="home-profile-title">{currentScore ? formatScore(currentScore.score, "Sin score") : "Pendiente"}</strong>
-                <span>{currentScore ? `Score orientativo · ${currentScore.classification || "Sin clasificación"}` : "Aún no has calculado tu score"}</span>
-              </div>
-              <dl className="home-profile-brief__details">
-                <div><dt>Objetivo de vivienda</dt><dd>{userOnboarding?.comuna_interes ? `${userOnboarding.tipo_propiedad === "departamento" ? "Departamento" : userOnboarding.tipo_propiedad === "casa" ? "Casa" : "Vivienda"} en ${userOnboarding.comuna_interes}` : "Sin objetivo definido"}</dd></div>
-                <div><dt>Horizonte de compra</dt><dd>{userOnboarding?.plazo_compra ? (plazoLabels[userOnboarding.plazo_compra] || userOnboarding.plazo_compra) : "Sin plazo definido"}</dd></div>
-                <div><dt>Foco actual</dt><dd>{currentEvaluation?.result?.improvement_plan?.[0]?.title || (currentScore ? "Mantener tu preparación financiera" : "Completar tu información")}</dd></div>
-              </dl>
-              {!onboardingCompleted ? <button type="button" className="primary-button" onClick={() => navigateToPage("onboarding")}>Completar perfil</button> : !currentScore ? <button type="button" className="primary-button" onClick={startEvaluation}>Calcular score</button> : null}
-            </section>
+            {currentEvaluation ? (
+              <>
+                <section className="home-profile-brief" aria-labelledby="home-profile-title">
+                  <div className="home-profile-brief__status">
+                    <span className="eyebrow">Tu perfil hoy</span>
+                    <strong id="home-profile-title">{currentScore ? formatScore(currentScore.score, "Sin score") : "Pendiente"}</strong>
+                    <span>{currentScore ? `Score orientativo · ${currentScore.classification || "Sin clasificación"}` : "Aún no has calculado tu score"}</span>
+                  </div>
+                  <dl className="home-profile-brief__details">
+                    <div><dt>Proyecto objetivo</dt><dd>{homeProfileSummary.project}</dd></div>
+                    <div><dt>Capacidad estimada</dt><dd>{homeProfileSummary.capacity}</dd></div>
+                    <div><dt>Brecha principal</dt><dd>{homeProfileSummary.gap}</dd></div>
+                    <div><dt>Última evaluación</dt><dd>{homeProfileSummary.lastEvaluation}</dd></div>
+                  </dl>
+                </section>
 
-            <section className="home-purpose" aria-labelledby="home-purpose-title">
-              <div className="home-purpose__intro">
-                <h2 id="home-purpose-title">Prepara tu compra con información clara</h2>
-                <p>RutaHogar ordena tu situación financiera para ayudarte a entender qué preparar antes de conversar con una institución financiera.</p>
-              </div>
-              <ol className="home-purpose__steps">
-                <li><span>01</span><div><strong>Conoce tu punto de partida</strong><p>Revisa un score y los factores que influyen en tu preparación.</p></div></li>
-                <li><span>02</span><div><strong>Identifica qué puedes mejorar</strong><p>Prioriza ahorro, deudas y antecedentes según tu perfil.</p></div></li>
-                <li><span>03</span><div><strong>Toma decisiones con contexto</strong><p>Explora alternativas de vivienda y beneficios habitacionales de forma referencial.</p></div></li>
-              </ol>
-            </section>
+                {!quickUpdateEvent && (
+                  <section className="home-update-entry">
+                    <div>
+                      <span className="eyebrow">Actualizar mi perfil</span>
+                      <h2>¿Cambió algo en tus datos?</h2>
+                      <p>Actualiza un solo dato financiero, laboral o de vivienda y recalcularemos tu situación sin pasar por el formulario completo.</p>
+                    </div>
+                    <button type="button" className="primary-button" onClick={() => setQuickUpdateEvent({ source: "manual" })}>Actualizar un dato</button>
+                  </section>
+                )}
+
+                {quickUpdateEvent && (
+                  <QuickUpdatePanel
+                    event={quickUpdateEvent}
+                    baseInput={currentEvaluation?.input || {}}
+                    saving={quickUpdateSaving}
+                    onCancel={() => setQuickUpdateEvent(null)}
+                    onSave={handleQuickUpdateSave}
+                  />
+                )}
+
+                <LeadChangeTimeline
+                  changes={leadChanges}
+                  loading={leadChangesLoading}
+                  highlightedId={highlightedChangeId}
+                  onMarkSeen={handleLeadChangeSeen}
+                  onDisableType={handleDisableLeadChangeType}
+                />
+              </>
+            ) : (
+              <section className="home-purpose" aria-labelledby="home-purpose-title">
+                <div className="home-purpose__intro">
+                  <h2 id="home-purpose-title">Prepara tu compra con información clara</h2>
+                  <p>RutaHogar ordena tu situación financiera para ayudarte a entender qué preparar antes de conversar con una institución financiera.</p>
+                </div>
+                <ol className="home-purpose__steps">
+                  <li><span>01</span><div><strong>Conoce tu punto de partida</strong><p>Revisa un score y los factores que influyen en tu preparación.</p></div></li>
+                  <li><span>02</span><div><strong>Identifica qué puedes mejorar</strong><p>Prioriza ahorro, deudas y antecedentes según tu perfil.</p></div></li>
+                  <li><span>03</span><div><strong>Toma decisiones con contexto</strong><p>Explora alternativas de vivienda y beneficios habitacionales de forma referencial.</p></div></li>
+                </ol>
+              </section>
+            )}
 
             <p className="hero-note">
               RutaHogar no aprueba créditos hipotecarios. Los resultados son referenciales y no reemplazan una evaluación bancaria formal.

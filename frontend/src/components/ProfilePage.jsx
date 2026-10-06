@@ -3,6 +3,7 @@ import { comunasMvp } from "../constants/comunas";
 import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
 import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
+import { getLeadNotificationPreferences, setLeadNotificationPreference } from "../services/leadChangeService";
 import { isStaffRole } from "../lib/roles";
 import AiExplanationBlock from "./AiExplanationBlock";
 import {
@@ -61,6 +62,14 @@ const componentScoreLabels = {
   complemento_renta: "Complemento de renta",
   calidad_datos: "Calidad de datos",
 };
+
+const leadChangePreferenceTypes = [
+  ["project_compatible_unlocked", "Proyecto compatible", "Avisos cuando aparece una alternativa dentro de tu alcance referencial."],
+  ["score_band_improved", "Mejora referencial", "Señales de que una nueva evaluación podría mejorar tu tramo."],
+  ["monthly_plan_summary", "Resumen mensual", "Recordatorios para revisar si tus datos o brechas cambiaron."],
+  ["uf_reachability_crossed", "Cambio de alcance", "Cambios en alcance referencial frente a objetivos o UF."],
+  ["quick_update_submitted", "Dato actualizado", "Eventos creados cuando actualizas datos desde Inicio."],
+];
 
 const normalizeOnboarding = (data) => ({
   objetivo_principal: data?.objetivo_principal || "",
@@ -414,6 +423,8 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const [contactError, setContactError] = useState("");
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactLoading, setContactLoading] = useState(false);
+  const [leadChangePreferences, setLeadChangePreferences] = useState({});
+  const [leadChangePreferenceError, setLeadChangePreferenceError] = useState("");
 
   const alternativeCommunes = form.comuna_interes
     ? comunasMvp.filter((comuna) => comuna !== form.comuna_interes)
@@ -433,6 +444,21 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   useEffect(() => {
     setForm(savedOnboarding);
   }, [savedOnboarding]);
+
+  useEffect(() => {
+    let active = true;
+    getLeadNotificationPreferences()
+      .then((items) => {
+        if (!active) return;
+        const next = {};
+        for (const item of items) next[`${item.event_type}:${item.channel}`] = item.enabled !== false;
+        setLeadChangePreferences(next);
+      })
+      .catch(() => {
+        if (active) setLeadChangePreferenceError("No se pudieron cargar las preferencias de novedades.");
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!selectedEvaluation) return undefined;
@@ -489,6 +515,25 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   const handleContactChange = (event) => {
     const { name, value } = event.target;
     setContactForm((prev) => ({ ...prev, [name]: name === "phone" ? onlyPhoneDigits(value, 8) : value }));
+  };
+
+  const preferenceEnabled = (eventType, channel) => {
+    const key = `${eventType}:${channel}`;
+    if (key in leadChangePreferences) return leadChangePreferences[key] !== false;
+    return channel !== "email";
+  };
+
+  const toggleLeadChangePreference = async (eventType, channel) => {
+    const key = `${eventType}:${channel}`;
+    const enabled = !preferenceEnabled(eventType, channel);
+    setLeadChangePreferenceError("");
+    setLeadChangePreferences((current) => ({ ...current, [key]: enabled }));
+    try {
+      await setLeadNotificationPreference(eventType, enabled, channel);
+    } catch {
+      setLeadChangePreferences((current) => ({ ...current, [key]: !enabled }));
+      setLeadChangePreferenceError("No se pudo actualizar la preferencia. Intenta nuevamente.");
+    }
   };
 
   const submit = async (event) => {
@@ -836,6 +881,51 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
               {success && <div className="success-message" style={{ marginTop: 12 }}>{success}</div>}
             </>
           )}
+        </section>
+
+        <section className="profile-card profile-card--lead-changes">
+          <div className="profile-card-header-row">
+            <div>
+              <strong>Novedades desde tu última visita</strong>
+              <p>Activa o desactiva qué tipos de cambios verás en Inicio y cuáles podrán enviarse por correo.</p>
+            </div>
+          </div>
+          <div className="lead-change-preferences">
+            <div className="lead-change-preferences__head" aria-hidden="true">
+              <span>Tipo</span>
+              <span>Inicio</span>
+              <span>Correo</span>
+            </div>
+            {leadChangePreferenceTypes.map(([eventType, label, description]) => (
+              <div className="lead-change-preference-row" key={eventType}>
+                <div>
+                  <strong>{label}</strong>
+                  <p>{description}</p>
+                </div>
+                <label className="rh-switch">
+                  <small>Inicio</small>
+                  <input
+                    type="checkbox"
+                    checked={preferenceEnabled(eventType, "in_app")}
+                    onChange={() => toggleLeadChangePreference(eventType, "in_app")}
+                    aria-label={`Mostrar ${label} en Inicio`}
+                  />
+                  <span />
+                </label>
+                <label className="rh-switch">
+                  <small>Correo</small>
+                  <input
+                    type="checkbox"
+                    checked={preferenceEnabled(eventType, "email")}
+                    onChange={() => toggleLeadChangePreference(eventType, "email")}
+                    aria-label={`Enviar ${label} por correo`}
+                  />
+                  <span />
+                </label>
+              </div>
+            ))}
+          </div>
+          {leadChangePreferenceError && <div className="error-message">{leadChangePreferenceError}</div>}
         </section>
       </div>
 
