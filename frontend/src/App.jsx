@@ -75,6 +75,7 @@ const ANON_ONBOARDING_KEY = "RutaHogar_anon_onboarding";
 const ANON_RESULT_KEY = "RutaHogar_anon_result";
 const ANON_INPUT_KEY = "RutaHogar_anon_input";
 const ANON_CO_DEBTOR_INVITATION_KEY = "RutaHogar_anon_co_debtor_invitation";
+const SIMULATION_SECTION_KEY = "RutaHogar_simulation_section";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -465,7 +466,15 @@ export default function App() {
   const [trackingState, setTrackingState] = useState(null);
   const [trackingRevision, setTrackingRevision] = useState(0);
   const [academyArticleId, setAcademyArticleId] = useState(null);
+  const [subsidyFocusId, setSubsidyFocusId] = useState(null);
   const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
+  const [simulationSection, setSimulationSection] = useState(() => {
+    try {
+      return sessionStorage.getItem(SIMULATION_SECTION_KEY) === "financing" ? "financing" : "housing";
+    } catch {
+      return "housing";
+    }
+  });
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
   const [portalProperty, setPortalProperty] = useState(null);
@@ -591,10 +600,22 @@ export default function App() {
     updateBrowserPath(getRouteForPage(nextPage, nextProfile, options), options);
   };
 
+  const updateSimulationSection = (section) => {
+    const nextSection = section === "financing" ? "financing" : "housing";
+    setSimulationSection(nextSection);
+    try {
+      sessionStorage.setItem(SIMULATION_SECTION_KEY, nextSection);
+    } catch {
+      // The selected tab still remains in memory if storage is unavailable.
+    }
+  };
+
   const navigateToPage = (nextPage, options = {}) => {
     if (options.articleId) setAcademyArticleId(options.articleId);
     else if (nextPage !== "academia") setAcademyArticleId(null);
+    setSubsidyFocusId(nextPage === "subsidios" ? options.benefitId || null : null);
     setSimulationInitialProjectId(nextPage === "simulation" ? options.projectId || null : null);
+    if (nextPage === "simulation" && options.simulationSection) updateSimulationSection(options.simulationSection);
     navigateToPageForProfile(nextPage, profile, options);
   };
 
@@ -1829,6 +1850,7 @@ export default function App() {
         <Subsidios
           evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
           onNavigate={navigateToPage}
+          focusBenefitId={subsidyFocusId}
         />
       ) : page === "simulation" && profile.role === roles.user ? (
         <SimulationPage
@@ -1837,6 +1859,8 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           initialProjectId={simulationInitialProjectId}
+          initialSimulationSection={simulationSection}
+          onSimulationSectionChange={updateSimulationSection}
           onRetryExplanation={handleRetryAiExplanation}
         />
       ) : page === "academia" && profile.role === roles.user ? (
