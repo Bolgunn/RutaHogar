@@ -1,7 +1,9 @@
 
 /* ═══ Auth Navy/Gold ═══ */
-/* Override .auth-shell so it doesn't constrain the split layout */
-.auth-shell {
+/* Override .auth-shell so it doesn't constrain the split layout.
+   Selector compuesto a propósito: con `.auth-shell` a secas el minificador
+   de producción lo fusiona con la regla de styles.css y descarta el override. */
+.app-shell.auth-shell {
   display: block !important;
   min-height: auto !important;
   place-items: unset !important;
