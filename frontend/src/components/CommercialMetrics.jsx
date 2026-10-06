@@ -171,13 +171,14 @@ function Funnel({ embudo, scopeLabel, captura = null, planMejora = null }) {
       </p>
       {planMejora && (
         <p className="cm-funnel__general cm-label-row">
-          De En plan de mejora a Venta cerrada: <strong>{planMejora.con_venta} de {planMejora.en_plan_mejora}</strong> leads que estuvieron en plan de mejora
+          Registrados en 'En plan de mejora' que cerraron venta: <strong>{planMejora.con_venta} de {planMejora.en_plan_mejora}</strong>
           <Rate rate={planMejora.tasa} n={planMejora.en_plan_mejora} />
-          <FieldTooltip text="Leads que estuvieron en la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta." />
+          <FieldTooltip text="Leads a los que se les registró la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta. No incluye a quienes saltaron la etapa, por eso puede ser menor que la barra 'En plan de mejora' del embudo." />
         </p>
       )}
       {embudo.etapas.map((etapa, index) => {
         const label = LADDER[index].label;
+        const saltaron = planMejora && etapa.etapa === "en_plan_mejora" ? etapa.alcanzaron - planMejora.en_plan_mejora : 0;
         return (
           <div key={etapa.etapa} className={`cm-funnel__row ${etapa.etapa === "venta_cerrada" ? "cm-funnel__row--sale" : ""}`}>
             <span className="cm-funnel__name cm-label-row">{label}<FieldTooltip text={ETAPA_HELP[etapa.etapa]} /></span>
@@ -186,6 +187,7 @@ function Funnel({ embudo, scopeLabel, captura = null, planMejora = null }) {
             </div>
             <span className="cm-funnel__conv">
               {index === 0 ? scopeLabel : etapa.conversion == null ? "— sin datos" : `${percent(etapa.conversion)} desde la anterior`}
+              {saltaron > 0 && <small className="cm-muted"> · incluye {saltaron} que {saltaron === 1 ? "saltó" : "saltaron"} la etapa</small>}
             </span>
           </div>
         );
@@ -226,8 +228,8 @@ function TimesTable({ enEtapa }) {
       <thead>
         <tr>
           {th("Etapa", "La etapa comercial en que estuvo el lead.", false)}
-          {th("Mediana (días)", "Días que los leads permanecieron en la etapa. La mediana es el valor del medio: la mitad estuvo menos y la mitad más. Si un lead pasó dos veces por la misma etapa, se suman ambas estadías.")}
-          {th("Promedio (días)", "Promedio de días en la etapa de los leads que ya salieron de ella. Un lead muy lento lo sube; por eso la mediana es la cifra principal.")}
+          {th("Promedio (días)", "Promedio de días en la etapa de los leads que ya salieron de ella. Si un lead pasó dos veces por la misma etapa, se suman ambas estadías.")}
+          {th("Mediana (días)", "El valor del medio: la mitad de los leads estuvo menos y la mitad más. Si es muy distinta del promedio, unos pocos leads muy lentos o muy rápidos lo están moviendo.")}
           {th("n", "Cuántos leads ya salieron de la etapa y entran al cálculo.")}
           {th("Siguen en la etapa", "Leads que hoy están en esa etapa. No entran al cálculo porque su tiempo todavía no termina.")}
         </tr>
@@ -238,8 +240,8 @@ function TimesTable({ enEtapa }) {
           return (
             <tr key={stage.value}>
               <td><span className="cm-label-row">{stage.label}<FieldTooltip text={ETAPA_HELP[stage.value]} /></span></td>
-              <td className="num">{days(stat.mediana)}</td>
               <td className="num">{days(stat.promedio)}</td>
+              <td className="num">{days(stat.mediana)}</td>
               <td className="num">{stat.n}</td>
               <td className="num">{stat.en_curso}</td>
             </tr>
@@ -591,7 +593,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
       </article>
 
       <div className="cm-tabs" role="tablist">
-        {[["embudo", "Embudo y seguimiento"], ["historia", "Evaluaciones históricas"]].map(([key, label]) => (
+        {[["embudo", "Embudo y seguimiento"], ["historia", "Evoluciones históricas"]].map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
         ))}
       </div>
@@ -608,10 +610,10 @@ export default function CommercialMetrics({ role, onNavigate }) {
             />
             <Kpi
               color="success"
-              label="De En plan de mejora a Venta cerrada"
-              help="Leads que estuvieron en la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta."
+              label="Registrados en plan de mejora que cerraron venta"
+              help="Leads a los que se les registró la etapa 'En plan de mejora' y después cerraron una venta vigente. Cuenta solo si la etapa se registró antes de la venta; no incluye a quienes la saltaron."
               value={m.plan_mejora_a_venta.con_venta}
-              hint={<>de {m.plan_mejora_a_venta.en_plan_mejora} leads que estuvieron en plan de mejora <Rate rate={m.plan_mejora_a_venta.tasa} n={m.plan_mejora_a_venta.en_plan_mejora} /></>}
+              hint={<>de {m.plan_mejora_a_venta.en_plan_mejora} registrados en plan de mejora <Rate rate={m.plan_mejora_a_venta.tasa} n={m.plan_mejora_a_venta.en_plan_mejora} /></>}
             />
             <Kpi
               color="success"
@@ -742,7 +744,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
             <div className="admin-surface__header">
               <div className="admin-surface__title">
                 <h2>Tiempo en cada etapa</h2>
-                <p>Días que los leads permanecieron en cada etapa (mediana). Los que siguen en ella no entran al cálculo. Los tiempos se miden desde que la etapa se registra en RutaHogar.</p>
+                <p>Días que los leads permanecieron en cada etapa (promedio y mediana). Los que siguen en ella no entran al cálculo. Los tiempos se miden desde que la etapa se registra en RutaHogar.</p>
               </div>
               {mejores && <ViewSwitch value={view.times} onChange={(value) => setView((current) => ({ ...current, times: value }))} />}
             </div>
