@@ -40,6 +40,27 @@ export function catalogProjectsToSimulation(projects = []) {
   return (projects || []).map(catalogProjectToSimulation).filter(Boolean);
 }
 
+// Aviso de Portal Inmobiliario (HU 19) -> mismo shape de tarjeta que el
+// catálogo. Trae un solo precio: `precio_desde` dice si es el piso de un
+// proyecto ("Desde UF ...") o el precio fijo de una unidad.
+export function portalProjectToCatalogCard(row) {
+  const valorUf = Number(row.valor_uf) || 0;
+  return {
+    id: `portal-${row.id}`,
+    nombre: row.nombre,
+    comuna: row.comuna,
+    tipo_vivienda: row.tipo_vivienda,
+    valor_uf: valorUf,
+    precio_min_uf: valorUf,
+    precio_max_uf: valorUf,
+    precio_desde: Boolean(row.precio_desde),
+    estado: row.estado,
+    inmobiliaria: row.inmobiliaria || "",
+    url: row.url || "",
+    origen: "portal",
+  };
+}
+
 function formatUf(value) {
   return `${Math.round(Number(value) || 0).toLocaleString("es-CL")} UF`;
 }
@@ -52,7 +73,7 @@ export function formatProjectPrice(project) {
   const precioMin = Number(project?.precio_min_uf) || Number(project?.valor_uf) || 0;
   const precioMax = Number(project?.precio_max_uf) || precioMin;
 
-  if (precioMax > precioMin) return `desde ${formatUf(precioMin)}`;
+  if (precioMax > precioMin || project?.precio_desde) return `desde ${formatUf(precioMin)}`;
   return formatUf(precioMin);
 }
 

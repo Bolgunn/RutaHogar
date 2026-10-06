@@ -10,6 +10,8 @@ Soporta parámetros CLI:
 - raw_apify_dump_casas.json o --file=raw_apify_dump_casas.json : Ingesta solo ese archivo
 - --no-truncate o --append : Conserva las propiedades existentes en Supabase (evita el TRUNCATE)
 - --dry-run : Muestra la normalización del primer elemento sin insertar en Supabase
+- --backfill : Completa inmobiliaria, precio_desde y estado de las filas ya cargadas (por url),
+  sin regenerar embeddings ni borrar el catálogo
 """
 
 import os
@@ -17,6 +19,7 @@ import sys
 import json
 import re
 import html
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -256,6 +259,25 @@ def _parse_location(item: dict) -> Tuple[str, str]:
     return comuna, direccion
 
 
+# "Venta en verde" (obra gruesa) y "Venta en blanco" (sin construir) son unidades
+# que aún no se entregan; el catálogo de proyectos las llama en_construccion.
+ESTADOS_EN_CONSTRUCCION = ("venta en verde", "venta en blanco")
+
+
+def catalog_fields(raw_item: dict) -> dict:
+    """Campos que la sección Proyectos muestra igual que en el catálogo propio."""
+    price_text = str(raw_item.get("price_text") or "").strip().lower()
+    possession = str(raw_item.get("possession_date") or "").strip().lower()
+    # Sin seller el aviso queda sin inmobiliaria: deducirla del título atribuiría
+    # a una empresa avisos que no son suyos.
+    seller = html.unescape(str(raw_item.get("seller") or "")).strip()
+    return {
+        "inmobiliaria": seller or None,
+        "precio_desde": price_text.startswith("desde"),
+        "estado": "en_construccion" if possession in ESTADOS_EN_CONSTRUCCION else "disponible",
+    }
+
+
 def normalize_property_item(raw_item: dict) -> dict:
     """Normaliza un elemento crudo del actor e ingesta hacia la tabla public.proyectos_rag."""
     raw_nombre = raw_item.get("title") or raw_item.get("title_text") or raw_item.get("nombre") or "Proyecto Portal Inmobiliario"
@@ -303,7 +325,7 @@ def normalize_property_item(raw_item: dict) -> dict:
         "url": url,
         "imagen_url": imagen_url,
         "fuente": "Portal Inmobiliario (Apify)",
-        "estado": "disponible",
+        **catalog_fields(raw_item),
     }
 
 
@@ -397,6 +419,44 @@ def upsert_proyectos_to_supabase(proyectos_list: list) -> int:
         return 0
 
 
+def backfill_catalog_fields(raw_items: list) -> int:
+    """Actualiza por url las filas ya cargadas, sin tocar sus embeddings."""
+    supabase_url = get_supabase_url()
+    supabase_key = get_supabase_key()
+    if not supabase_url or not supabase_key:
+        print("⚠️ SUPABASE_URL y/o SUPABASE_KEY no configurados en app.config.")
+        return 0
+
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Prefer": "return=minimal",
+    }
+    updated = 0
+    for raw_item in raw_items:
+        url = raw_item.get("url")
+        if not url:
+            continue
+        endpoint = f"{supabase_url.rstrip('/')}/rest/v1/proyectos_rag?url=eq.{urllib.parse.quote(url, safe='')}"
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(catalog_fields(raw_item)).encode("utf-8"),
+            headers=headers,
+            method="PATCH",
+        )
+        try:
+            with urllib.request.urlopen(req) as resp:
+                if resp.getcode() in (200, 204):
+                    updated += 1
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="ignore")
+            print(f"❌ Error HTTP Supabase ({e.code}) en {url}: {body}")
+            return updated
+    print(f"✅ {updated} avisos actualizados con inmobiliaria, precio_desde y estado.")
+    return updated
+
+
 def load_raw_apify_dump(target_file: Path) -> list:
     """Lee el archivo estático JSON especificado."""
     if target_file.exists():
@@ -433,6 +493,13 @@ def main():
         target_paths = [target_path]
     else:
         target_paths = DEFAULT_DUMP_FILES
+
+    if "--backfill" in sys.argv:
+        raw_items = []
+        for target_path in target_paths:
+            raw_items.extend(load_raw_apify_dump(target_path))
+        backfill_catalog_fields(raw_items)
+        return
 
     normalized_list = []
     for target_path in target_paths:

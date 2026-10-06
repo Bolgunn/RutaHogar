@@ -2112,7 +2112,8 @@ revoke all on function public.commercial_stage_backfill() from public, anon, aut
 -- HU19 — Portal Inmobiliario (RAG) sobre public.proyectos_rag
 -- =============================================================
 -- Espejo de migrations/20260920000000_hu19_proyectos_rag.sql con
--- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql ya aplicada.
+-- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql y
+-- migrations/20261006090000_hu19_proyectos_rag_campos_catalogo.sql ya aplicadas.
 
 create extension if not exists vector;
 
@@ -2132,6 +2133,8 @@ create table if not exists public.proyectos_rag (
     imagen_url text,
     fuente text,
     estado text default 'disponible',
+    inmobiliaria text,
+    precio_desde boolean not null default false,
     embedding vector(384),
     created_at timestamptz default now()
 );
