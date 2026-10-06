@@ -3,12 +3,17 @@
 Script de transformación e ingesta de propiedades hacia Supabase con pgvector.
 Desacoplado de la extracción de red de Apify.
 
-Sin argumentos ingesta raw_apify_dump.json (departamentos) y raw_apify_dump_casas.json (casas),
-vectorizando con multilingual-e5-small (Hugging Face API) de app.properties_search.
+Sin argumentos ingesta todos los volcados backend/raw_apify_*.json (Santiago y las demás comunas
+que trae dump_apify.py --location=...), vectorizando con multilingual-e5-small.
+
+Los embeddings se calculan en local con sentence-transformers (sin gastar cuota de Hugging Face);
+--hf-embeddings usa la Inference API como antes. El modelo local solo vive en este script: el
+backend desplegado sigue vectorizando las consultas con la API, y ambos producen el mismo vector.
 
 Soporta parámetros CLI:
 - raw_apify_dump_casas.json o --file=raw_apify_dump_casas.json : Ingesta solo ese archivo
 - --no-truncate o --append : Conserva las propiedades existentes en Supabase (evita el TRUNCATE)
+- --hf-embeddings : Vectoriza con la Hugging Face Inference API en vez del modelo local
 - --dry-run : Muestra la normalización del primer elemento sin insertar en Supabase
 - --backfill : Completa inmobiliaria, precio_desde y estado de las filas ya cargadas (por url),
   sin regenerar embeddings ni borrar el catálogo
@@ -22,6 +27,7 @@ import html
 import urllib.parse
 import urllib.request
 import urllib.error
+from collections import Counter
 from pathlib import Path
 from typing import Any, Tuple, List, Dict
 
@@ -32,13 +38,10 @@ from app.config import (
     get_supabase_url,
     get_supabase_key,
 )
-from app.properties_search import EMBEDDING_MODEL_NAME, generate_text_embeddings
+from app.properties_search import EMBEDDING_MODEL_NAME, _normalize_terms, generate_text_embeddings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DUMP_FILES = [
-    BACKEND_DIR / "raw_apify_dump.json",
-    BACKEND_DIR / "raw_apify_dump_casas.json",
-]
+DEFAULT_DUMP_FILES = sorted(BACKEND_DIR.glob("raw_apify_*.json"))
 
 KNOWN_RM_COMMUNES: Dict[str, str] = {
     "santiago": "Santiago",
@@ -333,9 +336,19 @@ def embedding_text(proyecto: dict) -> str:
     return f"{proyecto['nombre']} {proyecto['descripcion']} {proyecto['comuna']} {proyecto['tipo_vivienda']} {proyecto['dormitorios']} dormitorios"
 
 
-def attach_embeddings(proyectos: list) -> None:
+def generate_local_embeddings(texts: List[str]) -> List[List[float]]:
+    """Mismo modelo, prefijo y normalización que generate_text_embeddings, sin red."""
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    inputs = [f"passage: {_normalize_terms(text)}" for text in texts]
+    return model.encode(inputs, normalize_embeddings=True, batch_size=32).tolist()
+
+
+def attach_embeddings(proyectos: list, local: bool = True) -> None:
+    texts = [embedding_text(p) for p in proyectos]
     # En lotes: una petición por fila agotaría la cuota gratuita de Hugging Face.
-    vectors = generate_text_embeddings([embedding_text(p) for p in proyectos])
+    vectors = generate_local_embeddings(texts) if local else generate_text_embeddings(texts)
     for proyecto, vector in zip(proyectos, vectors):
         proyecto["embedding"] = vector
 
@@ -509,7 +522,12 @@ def main():
         print("⚠️ No se obtuvieron elementos para ingestar.")
         sys.exit(1)
 
-    attach_embeddings(normalized_list)
+    por_comuna = Counter((p["comuna"], p["tipo_vivienda"]) for p in normalized_list)
+    print("🗺️  Distribución por comuna y tipo:")
+    for (comuna, tipo), total in sorted(por_comuna.items()):
+        print(f"   {comuna:<20} {tipo:<13} {total}")
+
+    attach_embeddings(normalized_list, local="--hf-embeddings" not in sys.argv)
     nombres = ", ".join(path.name for path in target_paths)
     print(f"📦 Procesados {len(normalized_list)} proyectos desde {nombres} con {EMBEDDING_MODEL_NAME} (384 dimensiones).")
 
