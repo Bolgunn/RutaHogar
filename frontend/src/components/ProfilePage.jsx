@@ -516,7 +516,11 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
     setContactForm((prev) => ({ ...prev, [name]: name === "phone" ? onlyPhoneDigits(value, 8) : value }));
   };
 
-  const preferenceEnabled = (eventType, channel) => leadChangePreferences[`${eventType}:${channel}`] !== false;
+  const preferenceEnabled = (eventType, channel) => {
+    const key = `${eventType}:${channel}`;
+    if (key in leadChangePreferences) return leadChangePreferences[key] !== false;
+    return channel !== "email";
+  };
 
   const toggleLeadChangePreference = async (eventType, channel) => {
     const key = `${eventType}:${channel}`;

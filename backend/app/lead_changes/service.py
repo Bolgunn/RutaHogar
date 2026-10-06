@@ -24,16 +24,21 @@ class LeadChangeService:
         result = {"checked": len(leads), "events": 0, "emails_sent": 0, "emails_skipped": 0, "errors": []}
         for lead in leads:
             try:
+                saved_events = []
                 for event in self._detect_events(lead, projects):
                     result["events"] += 1
                     if dry_run:
                         continue
                     saved = self.repository.record_event(event)
-                    notification = self._maybe_send_email(lead, saved)
-                    if notification.get("status") == "sent":
-                        result["emails_sent"] += 1
-                    else:
-                        result["emails_skipped"] += 1
+                    saved_events.append(saved)
+                if dry_run:
+                    continue
+                unseen_events = self.repository.unseen_events(lead["user_id"])
+                if not unseen_events:
+                    continue
+                email_result = self._maybe_send_weekly_digest(lead, unseen_events)
+                result["emails_sent"] += email_result["sent"]
+                result["emails_skipped"] += email_result["skipped"]
             except LeadChangeError as error:
                 result["errors"].append({"user_id": lead.get("user_id"), "code": error.code})
         return result
@@ -201,31 +206,57 @@ class LeadChangeService:
             "source": "job",
         }
 
-    def _maybe_send_email(self, lead, event):
-        event_type = event["event_type"]
-        if event.get("tone") == "warning":
-            return self._record_notification(event, lead, "skipped", error_code="negative_event_no_email")
+    def _maybe_send_weekly_digest(self, lead, events):
+        result = {"sent": 0, "skipped": 0}
         if os.environ.get("LEAD_CHANGES_EMAIL_ENABLED", "false").strip().lower() not in {"1", "true", "yes"}:
-            return self._record_notification(event, lead, "skipped", error_code="email_disabled")
-        if self.repository.event_email_sent(event["id"]):
-            return self._record_notification(event, lead, "skipped", error_code="already_sent")
-        if not self.repository.preference_enabled(lead["user_id"], event_type):
-            return self._record_notification(event, lead, "skipped", error_code="opt_out")
+            for event in events:
+                self._record_notification(event, lead, "skipped", error_code="email_disabled")
+                result["skipped"] += 1
+            return result
         last_email_at = parse_time(lead.get("last_lead_change_email_at"))
         if last_email_at and self.clock() - last_email_at < timedelta(days=EMAIL_COOLDOWN_DAYS):
-            return self._record_notification(event, lead, "skipped", error_code="frequency_cap")
+            for event in events:
+                self._record_notification(event, lead, "skipped", error_code="frequency_cap")
+                result["skipped"] += 1
+            return result
+
+        eligible_events = []
+        for event in events:
+            event_type = event["event_type"]
+            if event_type == "quick_update_submitted":
+                self._record_notification(event, lead, "skipped", error_code="manual_update_no_email")
+                result["skipped"] += 1
+                continue
+            if self.repository.event_email_sent(event["id"]):
+                self._record_notification(event, lead, "skipped", error_code="already_sent")
+                result["skipped"] += 1
+                continue
+            if not self.repository.preference_enabled(lead["user_id"], event_type):
+                self._record_notification(event, lead, "skipped", error_code="opt_out")
+                result["skipped"] += 1
+                continue
+            eligible_events.append(event)
+
+        if not eligible_events:
+            return result
         try:
-            sent = self.email_client.send_change_email(lead, event)
+            sent = self.email_client.send_digest_email(lead, eligible_events)
         except LeadChangeError as error:
-            return self._record_notification(event, lead, "failed", error_code=error.code)
-        return self._record_notification(
-            event, lead, "sent",
-            provider="resend",
-            provider_message_id=sent.get("provider_message_id"),
-            recipient=sent.get("recipient"),
-            subject=sent.get("subject"),
-            payload={"provider_payload": sent.get("payload")},
-        )
+            for event in eligible_events:
+                self._record_notification(event, lead, "failed", error_code=error.code)
+                result["skipped"] += 1
+            return result
+        for event in eligible_events:
+            self._record_notification(
+                event, lead, "sent",
+                provider="resend",
+                provider_message_id=sent.get("provider_message_id"),
+                recipient=sent.get("recipient"),
+                subject=sent.get("subject"),
+                payload={"provider_payload": sent.get("payload"), "digest_event_count": len(eligible_events)},
+            )
+        result["sent"] += 1
+        return result
 
     def _record_notification(self, event, lead, status, **extra):
         return self.repository.record_notification({

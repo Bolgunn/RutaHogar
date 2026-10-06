@@ -216,6 +216,17 @@ const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Math.round(Number(value)).toLocaleString("es-CL")}`
   : "No declarado";
 
+const formatIntegerInput = (value) => {
+  if (value === "" || value == null) return "";
+  const digits = String(value).replace(/\D/g, "");
+  return digits ? Number(digits).toLocaleString("es-CL") : "";
+};
+
+const parseIntegerInput = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits ? Number(digits) : NaN;
+};
+
 const changeTypeLabels = {
   project_compatible_unlocked: "Proyecto compatible",
   score_band_improved: "Mejora de score",
@@ -299,6 +310,16 @@ const formatChangeValue = (value) => {
   return String(value);
 };
 
+const formatQuickUpdatePayloadValue = (fieldId, value) => {
+  const field = quickUpdateFields.find((item) => item.id === fieldId);
+  if (field?.type === "select") {
+    const option = field.options?.find(([optionValue]) => String(optionValue) === String(value));
+    if (option) return option[1];
+  }
+  if (field?.type === "number" && Number.isFinite(Number(value))) return Number(value).toLocaleString("es-CL");
+  return formatChangeValue(value);
+};
+
 const groupLeadChanges = (changes = []) => {
   const order = [];
   const groups = new Map();
@@ -369,11 +390,22 @@ function LeadChangeDetail({ change }) {
     );
   }
   if (change.event_type === "quick_update_submitted") {
+    const fields = Array.isArray(change.payload?.fields) ? change.payload.fields : [];
     return (
       <div className="home-change-card__explain">
         <strong>Dato actualizado</strong>
         <p>Este cambio fue reportado por ti desde Inicio y ya se usó para recalcular tu situación.</p>
-        {hasDelta && (
+        {fields.length > 0 ? (
+          <div className="home-change-card__field-list">
+            {fields.map((field) => (
+              <div className="home-change-card__field-row" key={field.field_id}>
+                <strong>{field.field_label}</strong>
+                <span>Antes: {formatQuickUpdatePayloadValue(field.field_id, field.previous_value)}</span>
+                <span>Ahora: {formatQuickUpdatePayloadValue(field.field_id, field.current_value)}</span>
+              </div>
+            ))}
+          </div>
+        ) : hasDelta && (
           <dl className="home-change-card__delta">
             <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
             <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
@@ -382,12 +414,12 @@ function LeadChangeDetail({ change }) {
       </div>
     );
   }
-  if (change.event_type === "monthly_plan_summary" && hasDelta) {
+  if (change.event_type === "monthly_plan_summary") {
     return (
-      <dl className="home-change-card__delta is-inline">
-        <div><dt>Antes</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
-        <div><dt>Ahora</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
-      </dl>
+      <div className="home-change-card__explain">
+        <strong>Resumen mensual</strong>
+        <p>Revisa si tus datos financieros, laborales o de vivienda siguen actualizados para mantener tu plan vigente.</p>
+      </div>
     );
   }
   return (
@@ -424,13 +456,14 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
       <div className="home-change-timeline__head">
         <span className="eyebrow">Cambios desde tu última visita</span>
         <h2 id="home-change-title">Hay novedades relevantes para revisar</h2>
-        <p>No son recordatorios genéricos: cada punto resume qué cambió y qué significa para tu objetivo.</p>
       </div>
       <div className="home-change-timeline__rail">
         {groups.map((group, groupIndex) => {
           const highlighted = highlightedId && group.items.some((item) => String(item.id) === String(highlightedId));
           const hasMultipleItems = group.items.length > 1;
           const onlyChange = group.items[0];
+          const isMultiFieldQuickUpdate = group.type === "quick_update_submitted" && Array.isArray(onlyChange?.payload?.fields) && onlyChange.payload.fields.length > 1;
+          const showGroupedSummary = hasMultipleItems || isMultiFieldQuickUpdate;
           return (
             <section className="home-change-group" key={group.type}>
               <div className="home-change-group__head">
@@ -446,11 +479,11 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
                     <div className="home-change-card__meta">
                       <time>{formatChangeDate(onlyChange?.occurred_at)}</time>
                     </div>
-                    <h3>{hasMultipleItems ? `${group.items.length} novedades por revisar` : onlyChange?.title}</h3>
-                    <p>{hasMultipleItems ? leadChangeGroupSummary[group.type] || "Hay cambios pendientes asociados a tu seguimiento." : onlyChange?.summary}</p>
-                    {!hasMultipleItems && <LeadChangeDetail change={onlyChange} />}
+                    <h3>{showGroupedSummary ? hasMultipleItems ? `${group.items.length} novedades por revisar` : onlyChange?.title : onlyChange?.title}</h3>
+                    <p>{showGroupedSummary ? leadChangeGroupSummary[group.type] || "Hay cambios pendientes asociados a tu seguimiento." : onlyChange?.summary}</p>
+                    {!showGroupedSummary && <LeadChangeDetail change={onlyChange} />}
                     <div className="home-change-card__actions">
-                      {hasMultipleItems && <button type="button" className="primary-button compact-button" onClick={() => setDetailGroup(group)}>Ver detalles</button>}
+                      {showGroupedSummary && <button type="button" className="primary-button compact-button" onClick={() => setDetailGroup(group)}>Ver detalles</button>}
                       <button
                         type="button"
                         className="secondary-button compact-button"
@@ -502,15 +535,19 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
 
 function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
   const suggestedId = suggestedFieldByEventType[event?.event_type];
+  const initialField = suggestedId ? quickUpdateFields.find((item) => item.id === suggestedId) : null;
   const [selectedFieldIds, setSelectedFieldIds] = useState(() => suggestedId ? [suggestedId] : []);
-  const [draftValues, setDraftValues] = useState(() => suggestedId ? { [suggestedId]: baseInput?.[suggestedId] ?? "" } : {});
+  const [draftValues, setDraftValues] = useState(() => suggestedId ? { [suggestedId]: initialField?.type === "number" ? formatIntegerInput(baseInput?.[suggestedId]) : baseInput?.[suggestedId] ?? "" } : {});
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     setDraftValues((current) => {
       const next = { ...current };
       for (const fieldId of selectedFieldIds) {
-        if (!(fieldId in next)) next[fieldId] = baseInput?.[fieldId] ?? "";
+        if (!(fieldId in next)) {
+          const field = quickUpdateFields.find((item) => item.id === fieldId);
+          next[fieldId] = field?.type === "number" ? formatIntegerInput(baseInput?.[fieldId]) : baseInput?.[fieldId] ?? "";
+        }
       }
       return next;
     });
@@ -532,7 +569,15 @@ function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
       const option = field.options?.find(([optionValue]) => String(optionValue) === String(value));
       if (option) return option[1];
     }
+    if (field?.type === "number" && Number.isFinite(Number(value))) return Number(value).toLocaleString("es-CL");
     return formatChangeValue(value);
+  };
+
+  const updateDraftValue = (field, value) => {
+    setDraftValues((current) => ({
+      ...current,
+      [field.id]: field.type === "number" ? formatIntegerInput(value) : value,
+    }));
   };
 
   const submit = (eventSubmit) => {
@@ -540,7 +585,7 @@ function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
     const changes = [];
     for (const field of selectedFields) {
       const rawValue = draftValues[field.id];
-      const nextValue = field.type === "number" ? Number(rawValue) : rawValue;
+      const nextValue = field.type === "number" ? parseIntegerInput(rawValue) : rawValue;
       if (field.type === "number" && !Number.isFinite(nextValue)) return;
       changes.push({ field, nextValue, previousValue: baseInput?.[field.id] });
     }
@@ -591,12 +636,17 @@ function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
                   <span>{field.label}</span>
                   <small>Valor anterior: {formatQuickUpdateValue(field, baseInput?.[field.id])}</small>
                   {field.type === "select" ? (
-                    <select value={draftValues[field.id] ?? ""} onChange={(eventChange) => setDraftValues((current) => ({ ...current, [field.id]: eventChange.target.value }))}>
+                    <select value={draftValues[field.id] ?? ""} onChange={(eventChange) => updateDraftValue(field, eventChange.target.value)}>
                       <option value="">Selecciona una opción</option>
                       {field.options.map(([optionValue, label]) => <option value={optionValue} key={optionValue}>{label}</option>)}
                     </select>
                   ) : (
-                    <input type={field.type} value={draftValues[field.id] ?? ""} onChange={(eventChange) => setDraftValues((current) => ({ ...current, [field.id]: eventChange.target.value }))} />
+                    <input
+                      type={field.type === "number" ? "text" : field.type}
+                      inputMode={field.type === "number" ? "numeric" : undefined}
+                      value={draftValues[field.id] ?? ""}
+                      onChange={(eventChange) => updateDraftValue(field, eventChange.target.value)}
+                    />
                   )}
                 </label>
               ))}

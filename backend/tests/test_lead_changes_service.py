@@ -31,6 +31,9 @@ class FakeRepo:
         self.notifications.append(saved)
         return saved
 
+    def unseen_events(self, user_id, limit=50):
+        return [event for event in self.events if event.get("user_id") == user_id][:limit]
+
     def preference_enabled(self, user_id, event_type, channel="email"):
         return self.preference
 
@@ -50,6 +53,17 @@ class FakeEmail:
         return {
             "provider_message_id": "msg-1",
             "subject": "Algo cambio",
+            "recipient": lead.get("email"),
+            "payload": {"ok": True},
+        }
+
+    def send_digest_email(self, lead, events):
+        if self.fail:
+            raise LeadChangeError("email_provider_unavailable")
+        self.sent.append((lead, events))
+        return {
+            "provider_message_id": "msg-1",
+            "subject": "Tienes novedades",
             "recipient": lead.get("email"),
             "payload": {"ok": True},
         }

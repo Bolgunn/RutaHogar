@@ -39,6 +39,15 @@ class LeadChangeRepository:
             "POST", "/rest/v1/rpc/lead_changes_record_notification", payload={"p_notification": notification}
         )
 
+    def unseen_events(self, user_id, limit=50):
+        return self.request("GET", "/rest/v1/lead_change_events", params={
+            "select": "id,user_id,event_type,occurred_at,project_name,tone,title,summary,previous_value,current_value,payload",
+            "user_id": f"eq.{user_id}",
+            "seen_at": "is.null",
+            "order": "occurred_at.desc,id.desc",
+            "limit": str(limit),
+        }) or []
+
     def preference_enabled(self, user_id, event_type, channel="email"):
         rows = self.request("GET", "/rest/v1/lead_notification_preferences", params={
             "select": "enabled",
@@ -47,7 +56,9 @@ class LeadChangeRepository:
             "channel": f"eq.{channel}",
             "limit": "1",
         }) or []
-        return True if not rows else bool(rows[0].get("enabled"))
+        if rows:
+            return bool(rows[0].get("enabled"))
+        return channel != "email"
 
     def event_email_sent(self, event_id):
         rows = self.request("GET", "/rest/v1/lead_change_notifications", params={
