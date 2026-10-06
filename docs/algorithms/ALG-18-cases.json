@@ -167,8 +167,8 @@
       }
     },
     {
-      "name": "captura_con_filtro_de_proyecto_no_reduce_universo",
-      "por_que": "R0, R2, D3. With A selected, postula means applied to A, but the universe stays all three leads.",
+      "name": "captura_con_filtro_de_proyecto_acota_universo",
+      "por_que": "R0, R2, R8, G33. With A selected, the universe is A's leads (L1, L3): L2 belongs only to B and leaves it. Postula means applied to A, so capture is 1 of 2 and matches A's comparison row, the only one listed.",
       "input": {
         "proyectos": ["A", "B"],
         "filtros": { "proyecto_id": "A" },
@@ -181,9 +181,11 @@
         ]
       },
       "expect": {
-        "n": 3,
-        "captura": { "n": 3, "postulan": 1, "tasa": 0.3333333333333333 },
-        "tiempos": { "dias_hasta_postular": { "n": 1, "promedio": 3, "mediana": 3 } }
+        "n": 2,
+        "captura": { "n": 2, "postulan": 1, "tasa": 0.5 },
+        "embudo": { "n": 2 },
+        "tiempos": { "dias_hasta_postular": { "n": 1, "promedio": 3, "mediana": 3 } },
+        "por_proyecto": [{ "proyecto_id": "A", "leads": 2, "postulan": 1, "ventas": 0, "sin_contactar": 2 }]
       }
     },
     {

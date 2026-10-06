@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/funnelMetrics.js` (pure: no Supabase, no fetch, no `Date.now()` — `now` is an input), except R3's overall stage and cause of a loss (O1–O5, G8), which are `frontend/src/lib/commercial/overallStage.js` (asserted by `overallStage.test.js`), called at each replay step |
 | **Cases** | `docs/algorithms/ALG-18-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/funnelMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 10 open — see the log below |
-| **Last changed** | 2026-10-05 · HU 15 · G32: the plan is the accepted plan (`plan_accepted`), not the HU 13 tracking baseline |
+| **Last changed** | 2026-10-06 · HU 15 · G33: a selected project narrows the universe to its leads |
 
 > **Status: draft.** Written from the HU 15 grill (D1–D12) and revised with the second grill
 > (G1–G18, 2026-10-04), which resolved every open question of the first draft. The author owns every
@@ -108,7 +108,7 @@ ISO-8601 instants (UTC offsets allowed). Arrays may be empty, never absent.
 | `first_evaluation_at` | instant | min `evaluations.created_at` | The preevaluación. Cohort key (R7) and start of every lead timeline |
 | `evaluaciones` | `[{ at, project_goal_id }]` | every evaluation, ascending by `created_at` | Includes the first. `project_goal_id` = `financial_data → input → project_goal → id` **when that project is in scope**, else `null` — the RPC never reveals a project of another inmobiliaria. Every evaluation after the first is a re-prequalification (R6) |
 | `evaluacion_actual` | `{ input, onboarding, result }` | latest evaluation | Exactly what `matchLeadToProjects` reads (`ALG-10` Inputs). Also carries `result.commercial_priority_detail` |
-| `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) **or** a stage record (G28) | In-scope projects the lead belongs to **or** has a project stage record on (any `commercial_stage_events` row of the lead in the tenant with that `proyecto_id`). Non-empty by D2 and G28. Only R10 narrows by it; no other rule does (G16) |
+| `proyectos` | string[] | `lead_belongs_to_proyecto` (D2) **or** a stage record (G28) | In-scope projects the lead belongs to **or** has a project stage record on (any `commercial_stage_events` row of the lead in the tenant with that `proyecto_id`). Non-empty by D2 and G28. R8 narrows by it when a project is selected (G33), and R10/R14 build their project rows from it; bands never read it (G16) |
 | `postulaciones` | `[{ proyecto_id, first_at }]` | project-goal evaluations | **First** time the lead set each project as its meta (D3), even if later changed. One entry per project |
 | `stage_events` | `[{ proyecto_id, stage_after, occurred_at, por_sistema, por_mi }]` | `commercial_stage_events` | `proyecto_id: null` = lead-level move (D9). `por_sistema` = `actor_role = 'sistema'` (G8). `por_mi` = `actor_id = auth.uid()`, computed in the database (G23). Sorted by `(occurred_at, id)` by the RPC. Never `reason`, `actor_id`, `user_id` |
 | `plan` | `{ baseline_at, target_proyecto_id }` or `null` | the lead's **earliest plan acceptance**: an `evaluation_events` row of kind `plan_accepted` (its `effective_at`), or the legacy `evaluations.plan_accepted_at` | `null` when the lead never accepted a plan (G32). `baseline_at` is the acceptance instant; `target_proyecto_id` is the `financial_data → input → project_goal → id` of the evaluation the plan was accepted on, `null` when it has none **or** it is out of scope (same rule as `project_goal_id`) |
@@ -215,9 +215,10 @@ and `occurred_at <= now`, in input order. Events on any other project are ignore
 late stage on a project outside an ejecutivo's scope, or outside the selected project, stops
 counting (D9).
 
-**The project filter is a lens, not a lead filter.** It does not remove leads from the universe
-(D3: "the universe does **not** narrow to that project"). It re-targets capture, bands, stage
-records, plan → venta and engagement to that project (G15, G19, G20).
+**The project filter narrows the universe and re-targets the metrics (G33).** It keeps only the
+leads with that project in `proyectos` (R8), and re-targets capture, bands, stage records,
+plan → venta and engagement to that project (G15, G19, G20). Without a project filter, `S` is every
+in-scope project and no lead is removed.
 
 ### R1 — Affinity and capacity buckets (D8, G10, G11, G16)
 
@@ -302,8 +303,8 @@ A lead **postula** when it has at least one `postulaciones` entry with `proyecto
 | `captura.postulan` | leads that postula |
 | `captura.tasa` | `postulan ÷ n`, `null` when `n = 0` |
 
-With a project filter, `S` is that one project, so *postula* means "applied to that project" — but
-`captura.n` is still every lead after filters.
+With a project filter, `S` is that one project, so *postula* means "applied to that project", and
+`captura.n` is that project's leads (R8, G33).
 
 ### R3 — Stage records, overall stage and the funnel (D4, D9, G1, G4, G5, G8, G9)
 
@@ -485,9 +486,9 @@ n = leads.length
 
 - **Multi-value within a filter (OR), AND across filters.**
 - The filtered set is computed **once**; R1–R7, totals and every period, run on it.
-- The project filter does not appear above: it acts through `S` (R0) and through the band catalog
-  (R1), so with a project selected the affinity and capacity filters test the bands **against that
-  project**.
+- The project filter keeps the leads with `filtros.proyecto_id ∈ lead.proyectos` (G33), the same
+  set as that project's R10 row, and also acts through `S` (R0) and the band catalog (R1): with a
+  project selected the affinity and capacity filters test the bands **against that project**.
 - Bands and priority come from the current evaluation only.
 - With an empty band catalog the band filters are ignored (G11); the UI disables them.
 - Every output carries its `n`; `n = 0` is an explicit empty result (rates `null`, `Stat` with
@@ -534,8 +535,7 @@ In a `Periodo`, `contacto.contactados` counts leads whose first contact falls in
 ### R10 — Per-project comparison (G24)
 
 One row per in-scope project `p`, in `proyectos` order, computed on the leads after filters (R8)
-**that belong to `p`** (`p ∈ lead.proyectos`) — unlike the rest of the page, where the project filter
-is a lens and does not narrow the universe. Each row is evaluated with `S = {p}` (R0):
+**that belong to `p`** (`p ∈ lead.proyectos`). Each row is evaluated with `S = {p}` (R0):
 
 | Field | Value |
 | :---- | :---- |
@@ -545,8 +545,9 @@ is a lens and does not narrow the universe. Each row is evaluated with `S = {p}`
 | `sin_contactar` | of those, leads with no first contact (R9) with `S = {p}`, not `perdido` |
 
 A lead belonging to two projects appears in both rows, so the rows do **not** sum to `n` — the table
-compares projects, it does not partition leads. With a project filter the table still lists every
-in-scope project, so the selected one can be read against the others.
+compares projects, it does not partition leads. With a project filter the table lists only the
+selected project (G33), and its row equals the page's `n`, `captura.postulan` and standing sales;
+clearing the filter brings the comparison back.
 
 ### R11 — The best leads' funnel and stage times (G25)
 
@@ -625,7 +626,7 @@ Every rate is `null` when `leads = 0`.
 
 | Dimension | One row per | `L` | `S'` |
 | :-------- | :---------- | :-- | :--- |
-| `proyecto` | in-scope project `p`, in `proyectos` order | leads after filters with `p ∈ proyectos` (as R10) | `{p}` |
+| `proyecto` | in-scope project `p`, in `proyectos` order (only the selected one with a project filter, G33) | leads after filters with `p ∈ proyectos` (as R10) | `{p}` |
 | `afinidad` | every affinity key of R1, in output order | leads after filters in that bucket | `S` |
 | `capacidad` | every capacity key of R1, in output order | leads after filters in that bucket | `S` |
 | `prioridad` | the six action keys, then `sin_prioridad` | leads after filters with that priority (R1b) | `S` |
@@ -770,6 +771,7 @@ OQ1–OQ11. G1–G7 are also requirements on other work (below).
 | G31 | Add R14, the breakdown of engagement and conversion by project, affinity, capacity and priority. Filters stay | AC wording review: E3 asks to "desglosar", not only to filter |
 | G28 | A lead is in the universe, and `p` is in its `proyectos`, when it belongs to `p` today **or** has a stage record on `p` | Build review (Bolgunn, 2026-10-05), open question from PR #112: project records stay writable after the lead stops belonging to the project, so a standing sale on `p` would otherwise vanish from the dashboard. Rejected: belonging today only |
 | G27 | `now` is the database's time, returned by the RPC with the facts, not the browser's clock | Build review (Bolgunn, 2026-10-05): a browser clock behind the server would make a fresh lead's first evaluation later than `now` (negative waiting time, cohort outside the series). Rejected: a rule dropping such leads |
+| G33 | A selected project narrows the universe to the leads with that project in `proyectos` (the R10 row's set), and the R10/R14 project rows show only that project. Supersedes D3's "the universe does not narrow to that project" | PR #115 AC review (Bolgunn, 2026-10-06): with A selected, the KPIs and the funnel counted every lead of the inmobiliaria, including leads that never touched A, while A's row in the breakdown counted only A's leads, so the page showed two capture and sales rates for the same project. Rejected: keeping every project row with a project filter (the other rows would be read through A's bands) |
 | — | Counts as headline, rates secondary with `n`; no minimum-n cutoff | Persona review; a cutoff would be an invented number (D6) |
 
 ## Requirements on other work
@@ -845,6 +847,7 @@ plan step 12). The text, as applied:
 | 2026-10-04 | UI review (G19–G20): every engagement action and plan → venta tied to the caller's projects. Fact row: `evaluation_ats` → `evaluaciones` with `project_goal_id`; `plan_baseline_at` → `plan` with `target_proyecto_id`. |
 | 2026-10-04 | Persona review (G21–G24): `engagement.mes_actual`, contact follow-up (R9) with `por_mi`, per-project comparison (R10); counts as headline in the UI obligations; A10. |
 | 2026-10-04 | UI review (G25): `mejores` (R11), the best leads' funnel and stage times; A10 definition confirmed. |
+| 2026-10-06 | PR #115 AC review (G33): a selected project narrows the universe (R0, R8) and the project rows (R10, R14). Case `captura_con_filtro_de_proyecto_no_reduce_universo` → `captura_con_filtro_de_proyecto_acota_universo`. |
 | 2026-10-05 | G32: `plan` comes from the recorded plan acceptance, not from `tracking_plans` (HU 13 creates one per lead). RPC redefined by migration `20261005160000`; SQL test cases updated. |
 | 2026-10-05 | AC wording review (G29–G31): `embudo.conversion_general`, R12 en plan de mejora → venta, R13 time between stages, R14 breakdown; invariants 18–21; cases `conversion_general_y_plan_mejora_a_venta`, `tiempo_entre_etapas`, `desglose_por_dimension`. |
 | 2026-10-05 | Build review (G28): leads with a stage record on an in-scope project stay in the universe and in that project's R10 row (`proyectos` input). Enforced by the RPC; asserted by its SQL test. |

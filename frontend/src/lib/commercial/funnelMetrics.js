@@ -322,8 +322,9 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
     : proyectos.filter((proyecto) => proyecto.estado !== "agotado");
   const sinCatalogo = catalogo.length === 0;
 
-  // R1b, R8
+  // R1b, R8 — con un proyecto elegido, el universo son sus leads (G33).
   const leads = facts
+    .filter((lead) => !filtros.proyecto_id || lead.proyectos.includes(filtros.proyecto_id))
     .map((lead) => ({
       lead,
       bandas: sinCatalogo ? null : bandsOf(match(lead.evaluacion_actual, catalogo)),
@@ -351,14 +352,15 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
       capacidad: Object.fromEntries(CAPACIDADES.map((band) => [band, count(items, ({ bandas: b }) => b.capacidad === band)])),
     };
 
-  // R10, R14 (filas por proyecto)
-  const ownByProject = proyectos.map((proyecto) => {
+  // R10, R14 (filas por proyecto) — con un proyecto elegido, solo su fila (G33).
+  const comparados = filtros.proyecto_id ? proyectos.filter((proyecto) => proyecto.id === filtros.proyecto_id) : proyectos;
+  const ownByProject = comparados.map((proyecto) => {
     const Sp = new Set([proyecto.id]);
     return items
       .filter(({ lead }) => lead.proyectos.includes(proyecto.id))
       .map(({ lead }) => analyze(lead, Sp, nowMs));
   });
-  const porProyecto = proyectos.map((proyecto, index) => {
+  const porProyecto = comparados.map((proyecto, index) => {
     const own = ownByProject[index];
     return {
       proyecto_id: proyecto.id,
@@ -371,7 +373,7 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
   const byKey = (keys, keyOf) => keys.map((key) =>
     desgloseRow(key, items.filter((item) => keyOf(item) === key).map(({ a }) => a), month));
   const desglose = {
-    proyecto: proyectos.map((proyecto, index) => desgloseRow(proyecto.id, ownByProject[index], month)),
+    proyecto: comparados.map((proyecto, index) => desgloseRow(proyecto.id, ownByProject[index], month)),
     afinidad: sinCatalogo ? null : byKey(AFINIDADES, ({ bandas: b }) => b.afinidad),
     capacidad: sinCatalogo ? null : byKey(CAPACIDADES, ({ bandas: b }) => b.capacidad),
     prioridad: byKey(PRIORIDADES, ({ prioridad }) => prioridad.key),

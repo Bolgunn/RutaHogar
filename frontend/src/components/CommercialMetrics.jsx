@@ -713,7 +713,9 @@ export default function CommercialMetrics({ role, onNavigate }) {
           <article className="admin-surface cm-surface-gap">
             <div className="admin-surface__header"><div className="admin-surface__title">
               <h2>Comparación por proyecto</h2>
-              <p>Cada fila cuenta solo los leads asociados a ese proyecto. Un lead interesado en dos proyectos aparece en ambos.</p>
+              <p>{filtros.proyecto_id
+                ? "Filtrado por un proyecto: quita el filtro de proyecto para compararlo con los demás."
+                : "Cada fila cuenta solo los leads asociados a ese proyecto. Un lead interesado en dos proyectos aparece en ambos."}</p>
             </div></div>
             <div className="cm-scroll">
               <table className="cm-table">
