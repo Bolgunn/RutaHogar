@@ -982,6 +982,10 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                     <dd>{text(selectedEvaluation.onboarding?.plazo_compra, plazoLabels)}</dd>
                   </div>
                   <div>
+                    <dt>Propiedad o proyecto visto</dt>
+                    <dd>{booleanText(selectedEvaluation.onboarding?.tiene_propiedad_vista)}</dd>
+                  </div>
+                  <div>
                     <dt>Monto vivienda</dt>
                     <dd>{selectedEvaluation.input?.property_value_uf ? uf(selectedEvaluation.input.property_value_uf) : money(selectedEvaluation.input?.property_value_clp)}</dd>
                   </div>

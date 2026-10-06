@@ -42,6 +42,38 @@ describe("HU13 immutable evaluation views", () => {
     expect(evaluation.result.classification).toBe("Requiere antecedentes");
   });
 
+  it("reads preliminary questions from the immutable evaluation snapshot", () => {
+    const row = {
+      id: "evaluation-onboarding", user_id: "owner",
+      financial_data: {
+        input: {
+          comuna_objetivo: "La Pintana",
+          onboarding_snapshot: {
+            objetivo_principal: "comprar_ahora",
+            tipo_propiedad: "casa",
+            comuna_interes: "La Pintana",
+            comuna_alternativa: "La Reina",
+            plazo_compra: "6_12_meses",
+            tiene_propiedad_vista: true,
+          },
+        },
+        result: { score: 74, classification: "Medio" },
+      },
+    };
+    const original = structuredClone(row);
+    const evaluation = normalizeEvaluation(row);
+
+    const currentProfileOnboarding = {
+      objetivo_principal: "prepararme", tipo_propiedad: "departamento", comuna_interes: "Providencia",
+    };
+    expect(evaluation.onboarding).toEqual({
+      objetivo_principal: "comprar_ahora", tipo_propiedad: "casa", comuna_interes: "La Pintana",
+      comuna_alternativa: "La Reina", plazo_compra: "6_12_meses", tiene_propiedad_vista: true,
+    });
+    expect(evaluation.onboarding).not.toEqual(expect.objectContaining(currentProfileOnboarding));
+    expect(row).toEqual(original);
+  });
+
   it("rejects the retired physical-delete path", async () => {
     await expect(deleteEvaluation("evaluation-1", "owner")).rejects.toThrow("historial es inmutable");
   });

@@ -40,6 +40,7 @@ help:
 	@echo "  make run-backend       - start FastAPI backend on port 8000"
 	@echo "  make run-frontend      - start Vite frontend on port 5173"
 	@echo "  make run               - install dependencies and start both servers"
+	@echo "  make test-fraude       - run automated bot detection tests"
 	@echo ""
 	@echo "En Windows 'make run' necesita el bash de Git. Si no esta instalado,"
 	@echo "usa 'make run-backend' y 'make run-frontend' en dos terminales."
@@ -72,3 +73,6 @@ run-frontend:
 run: install-backend install-frontend
 	@echo "Starting backend in the background..."
 	(cd $(BACKEND_DIR) && $(VENV_BIN)/uvicorn app.main:app --reload --port 8000 >/dev/null 2>&1 &) ; cd $(FRONTEND_DIR) && npm run dev -- --host 0.0.0.0
+
+test-fraude:
+	cd $(BACKEND_DIR) && $(VENV_BIN)/python test_fraude.py

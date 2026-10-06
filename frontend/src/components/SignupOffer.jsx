@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import DataConsent from "./DataConsent";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
+import { formatRut, validateRut } from "../utils/rut";
 
 function getPasswordStrength(password) {
   const checks = [
@@ -25,7 +26,7 @@ const scoreCopy = {
 };
 
 export default function SignupOffer({ result, anonBirthDate, onSignup, onContinueWithout, loading, error }) {
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", password: "" });
+  const [form, setForm] = useState({ nombre: "", apellido_paterno: "", apellido_materno: "", rut: "", email: "", phone: "", password: "" });
   const [consentData, setConsentData] = useState(null);
   const [showConsent, setShowConsent] = useState(false);
   const [formError, setFormError] = useState("");
@@ -33,13 +34,26 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: name === "phone" ? onlyPhoneDigits(value, 8) : value }));
+    // Fix for comment 9: Format RUT on change
+    setForm((prev) => ({ 
+      ...prev, 
+      [name]: name === "phone" ? onlyPhoneDigits(value, 8) : 
+              name === "rut" ? formatRut(value) : 
+              value 
+    }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setFormError("");
-    if (!form.full_name.trim()) { setFormError("Ingresa tu nombre para continuar."); return; }
+    if (!form.nombre.trim()) { setFormError("Ingresa tu nombre para continuar."); return; }
+    if (!form.apellido_paterno.trim()) { setFormError("Ingresa tu apellido paterno para continuar."); return; }
+    if (!form.apellido_materno.trim()) { setFormError("Ingresa tu apellido materno para continuar."); return; }
+    
+    // Fix for comment 9: Validate RUT
+    if (!form.rut.trim()) { setFormError("Ingresa tu RUT para continuar."); return; }
+    if (!validateRut(form.rut)) { setFormError("El RUT ingresado no es válido."); return; }
+
     if (!form.email) { setFormError("Ingresa tu correo electrónico."); return; }
     const normalizedPhone = normalizePhone(form.phone);
     if (!form.phone.trim()) {
@@ -59,7 +73,10 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
       return;
     }
     onSignup({
-      full_name: form.full_name.trim(),
+      nombre: form.nombre.trim(),
+      apellido_paterno: form.apellido_paterno.trim(),
+      apellido_materno: form.apellido_materno.trim(),
+      rut: form.rut.trim(),
       email: form.email,
       phone: normalizedPhone,
       password: form.password,
@@ -128,11 +145,46 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
           Nombre
           <input
             type="text"
-            name="full_name"
-            value={form.full_name}
+            name="nombre"
+            value={form.nombre}
             onChange={handleChange}
-            placeholder="Ej: María González"
-            autoComplete="name"
+            placeholder="Ej: María"
+            autoComplete="given-name"
+          />
+        </label>
+
+        <label>
+          Apellido Paterno
+          <input
+            type="text"
+            name="apellido_paterno"
+            value={form.apellido_paterno}
+            onChange={handleChange}
+            placeholder="Ej: González"
+            autoComplete="family-name"
+          />
+        </label>
+
+        <label>
+          Apellido Materno
+          <input
+            type="text"
+            name="apellido_materno"
+            value={form.apellido_materno}
+            onChange={handleChange}
+            placeholder="Ej: Pérez"
+            autoComplete="family-name"
+          />
+        </label>
+
+        <label>
+          RUT
+          <input
+            type="text"
+            name="rut"
+            value={form.rut}
+            onChange={handleChange}
+            placeholder="Ej: 12.345.678-9"
           />
         </label>
 

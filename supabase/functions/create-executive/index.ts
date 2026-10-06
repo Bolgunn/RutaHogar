@@ -186,7 +186,7 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo validar el administrador." }, 500);
     }
 
-    if (callerProfile?.role !== "admin") {
+    if (callerProfile?.role !== "admin" && callerProfile?.role !== "admin_inmobiliario") {
       return jsonResponse({ error: "Solo un administrador puede crear ejecutivos." }, 403);
     }
 

@@ -1,6 +1,6 @@
 # HU 18 - Participación y consentimiento del co-deudor
 
-> **🗓 Planificada - Sprint 2.** Hoy el lead digita a mano la renta, la deuda y la morosidad de otra persona, y esa persona nunca aceptó nada. Esta historia le da al co-deudor una vía para aportar sus propios datos y otorgar su propio consentimiento.
+> **✅ Implementada - Sprint 2.** El lead puede invitar a su co-deudor para aportar sus propios datos y otorgar su propio consentimiento.
 
 ---
 
@@ -12,7 +12,7 @@
 | **Puntos de Historia** | 3 |
 | **Actor** | Lead · **Co-deudor** *(actor nuevo)* |
 | **Sprint** | Sprint 2 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ✅ Implementada |
 
 ---
 
@@ -34,13 +34,15 @@
 
 ### E3 - Declarado frente a confirmado
 
-**Dado** que el co-deudor no ha respondido, **cuando** el lead solicite su evaluación, **entonces** debe recibir su resultado con los datos declarados por el lead y marcados como no confirmados; y **cuando** el co-deudor confirme valores distintos, **entonces** deben prevalecer los suyos y la evaluación debe recalcularse.
+**Dado** que el co-deudor no ha respondido, **cuando** el lead solicite su evaluación, **entonces** debe recibir su resultado con los datos declarados por el lead y marcados como no confirmados; y **cuando** el co-deudor confirme valores distintos, **entonces** deben prevalecer los suyos en una actualización de score solicitada explícitamente por el lead. La confirmación por sí sola no recalcula la evaluación.
 
 ### E4 - Revocación
 
 **Dado** que el co-deudor otorgó su consentimiento, **cuando** decida revocarlo, **entonces** sus datos deben dejar de usarse en evaluaciones posteriores y dejar de mostrarse al ejecutivo.
 
 ## Notas
+
+- **Captura de contacto.** El lead declara RUT y correo del co-deudor dentro de la precalificación, junto con el complemento de renta. El RUT se normaliza y valida por formato/dígito verificador, pero no se verifica externamente ni participa en scoring. Tras persistir el score se envía la invitación; Recommendations queda para estado, reintento, reemplazo y actualización explícita del score.
 
 - **El problema, verificado.** `ScoreRequest` captura `ingreso_mensual_complementario`,
   `deuda_mensual_complementario`, `tipo_contrato_complementario`,
@@ -64,8 +66,9 @@
   autenticación, pero la línea es fina: **resolverlo en el grill antes de planificar.** Si la
   solución elegida termina siendo una cuenta para el co-deudor, la historia cambia de tamaño y
   necesita encargo explícito del equipo.
-- **Sin credenciales ni documentos.** El co-deudor declara los mismos seis campos que hoy declara el
-  lead por él. Nada de documentos, nada de datos bancarios — salvaguardas S8 y el alcance de
+- **Sin credenciales ni documentos.** El co-deudor declara exactamente cinco campos propios
+  (ingreso, deuda, contrato, continuidad y morosidad); `relacion_complementario` sigue siendo
+  declarada por el lead. Nada de documentos, nada de datos bancarios — salvaguardas S8 y el alcance de
   [[HU24-carga-documentos|HU 24]] siguen intactos.
 - **Fuera de alcance:** más de un co-deudor, verificación de los datos contra fuentes externas
   (CMF, Dicom, bancos — explícitamente fuera del alcance del proyecto), y cualquier notificación al
@@ -97,11 +100,12 @@
 
 ## Estado frente al código
 
-Historia propuesta, sin implementación.
+Implementada con invitación por email, confirmación tokenizada, resolución ALG-17 y proyecciones
+server-side para staff.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
-| `E1` | ❌ | No existe invitación ni caducidad; `ScoreForm.jsx:1451` es el único punto de captura. |
-| `E2` | ❌ | Sin superficie para el co-deudor; `backend/app/main.py:111` tiene un único `consentimiento: bool`. |
-| `E3` | ⚠️ | Evaluar con datos declarados es el comportamiento actual, pero no existe la noción de confirmado, ni precedencia, ni recálculo. |
-| `E4` | ❌ | Sin registro de consentimiento revocable. |
+| `E1` | ✅ | `co-debtor-consent` crea invitaciones de un solo uso por email, con digest y caducidad centralizada de siete días. |
+| `E2` | ✅ | La página pública tokenizada captura sólo los cinco campos propios y consentimiento de tratamiento separado. |
+| `E3` | ✅ | ALG-17 preserva `lead_declared`/`not_confirmed` hasta confirmar; la acción explícita crea una evaluación histórica con razón `confirmacion_codeudor`. |
+| `E4` | ✅ | El management token permite revocación idempotente; futuras evaluaciones y proyecciones staff excluyen los datos revocados. |

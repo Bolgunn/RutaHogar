@@ -28,10 +28,22 @@ alter table public.profiles
 add column if not exists onboarding_data jsonb,
 add column if not exists last_lead_seen_at timestamptz,
 add column if not exists phone text,
+add column if not exists rut text,
 add column if not exists birth_date date;
 
 alter table public.profiles
-add column if not exists consent_data jsonb;
+add column if not exists consent_data jsonb,
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado', 'silenciado'));
+
+create table if not exists public.lead_status_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  changed_by uuid references auth.users(id) on delete set null,
+  old_status text,
+  new_status text not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.evaluations (
   id uuid primary key default gen_random_uuid(),
@@ -47,6 +59,8 @@ create table if not exists public.evaluations (
   explanation text,
   recommendations jsonb not null default '[]'::jsonb,
   plan_accepted_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb,
   created_at timestamptz not null default now(),
   constraint evaluations_score_check check (score between 0 and 100),
   constraint evaluations_classification_check check (classification in ('Alto', 'Medio', 'Bajo'))
@@ -74,7 +88,9 @@ add column if not exists target_commune text,
 add column if not exists alternative_commune text,
 add column if not exists purchase_timeline text,
 add column if not exists financial_data jsonb,
-add column if not exists plan_accepted_at timestamptz;
+add column if not exists plan_accepted_at timestamptz,
+add column if not exists fraud_score_probability numeric,
+add column if not exists shap_top_factors jsonb;
 
 create table if not exists public.improvement_goals (
   id uuid primary key default gen_random_uuid(),
@@ -260,26 +276,132 @@ with check (auth.uid() = user_id::uuid);
 
 -- Entrega solo contacto de leads a ejecutivos y administradores. La función
 -- evita abrir lectura directa de todos los perfiles personales al staff.
+drop function if exists public.list_lead_contacts(uuid[]);
 create or replace function public.list_lead_contacts(p_user_ids uuid[])
 returns table (
   id uuid,
   full_name text,
-  phone text
+  phone text,
+  reliability_status text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
-    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text]);
+    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
 $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
 grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
+-- Permite actualizar de forma segura el estado de confiabilidad de un lead
+create or replace function public.update_lead_reliability(
+  p_lead_id uuid,
+  p_reporter_id uuid default null,
+  p_new_status text default 'silenciado',
+  p_reason text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_status text;
+  v_changed_by uuid;
+  v_role text;
+begin
+  v_changed_by := auth.uid();
+  v_role := public.get_my_role();
+
+  if v_role not in ('ejecutivo', 'admin', 'admin_inmobiliario') then
+    raise exception 'Unauthorized';
+  end if;
+
+  select reliability_status into v_old_status from public.profiles where id = p_lead_id;
+  
+  update public.profiles 
+  set reliability_status = p_new_status, updated_at = now()
+  where id = p_lead_id;
+
+  insert into public.lead_status_history (profile_id, changed_by, old_status, new_status, reason)
+  values (p_lead_id, v_changed_by, v_old_status, p_new_status, coalesce(p_reason, 'Cambio de estado'));
+end;
+$$;
+
+revoke all on function public.update_lead_reliability(uuid, uuid, text, text) from public;
+grant execute on function public.update_lead_reliability(uuid, uuid, text, text) to authenticated;
+
+alter table public.lead_status_history enable row level security;
+drop policy if exists "Staff select lead_status_history" on public.lead_status_history;
+create policy "Staff select lead_status_history"
+on public.lead_status_history for select
+using (public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario'));
+
+-- Entrega a administradores globales y de inmobiliaria los leads en revisión y silenciados
+create or replace function public.get_reported_leads_for_admin()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  created_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct on (p.id)
+    p.id,
+    u.email::text as email,
+    p.full_name,
+    p.phone,
+    p.rut,
+    p.reliability_status,
+    e.created_at,
+    e.fraud_score_probability,
+    e.shap_top_factors
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  join public.evaluations e on e.user_id = p.id
+  where p.reliability_status in ('en_revision', 'silenciado', 'descartado', 'sospechoso')
+    and (
+      public.get_my_role() = 'admin'
+      or (
+        public.get_my_role() = 'admin_inmobiliario'
+        and (
+          exists (
+            select 1 from public.proyectos pr
+            where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+            and (
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+              or pr.comuna = p.onboarding_data->>'comuna_interes'
+              or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+            )
+          )
+          or exists (
+            select 1 from public.lead_status_history lsh
+            join public.profiles exec_p on exec_p.id = lsh.changed_by
+            where lsh.profile_id = p.id
+            and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+          )
+        )
+      )
+    )
+  order by p.id, e.created_at desc;
+$$;
+
+revoke all on function public.get_reported_leads_for_admin() from public;
+grant execute on function public.get_reported_leads_for_admin() to authenticated;
 
 drop policy if exists "Evaluations delete own" on public.evaluations;
 create policy "Evaluations delete own"
@@ -470,7 +592,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.get_my_role() = 'admin'
+  select public.get_my_role() in ('admin', 'admin_inmobiliario')
     and (
       public.get_my_inmobiliaria() is null
       or public.get_my_inmobiliaria() = p_inmobiliaria_id
@@ -592,7 +714,7 @@ begin
   end if;
 
   update public.profiles
-  set role = 'admin',
+  set role = 'admin_inmobiliario',
       inmobiliaria_id = p_inmobiliaria_id
   where id = v_target;
 
@@ -706,7 +828,7 @@ create policy "Proyectos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = inmobiliaria_id
@@ -756,7 +878,7 @@ create policy "Proyecto ejecutivos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
@@ -2281,3 +2403,643 @@ $$;
 
 revoke all on function public.commercial_funnel_facts() from public, anon, authenticated;
 grant execute on function public.commercial_funnel_facts() to authenticated;
+-- HU18 — Participación y consentimiento del co-deudor
+-- Espejo acumulado de las migraciones HU18 de consentimiento.
+-- =============================================================
+
+create table if not exists public.co_debtor_invitations (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.profiles(id) on delete restrict,
+  recipient_email text not null check (length(trim(recipient_email)) > 0),
+  recipient_rut text
+    check (recipient_rut is null or recipient_rut ~ '^[0-9]{7,8}-[0-9K]$'),
+  ingreso_mensual_complementario numeric,
+  deuda_mensual_complementario numeric,
+  tipo_contrato_complementario text,
+  continuidad_laboral_complementario text,
+  morosidad_complementario text,
+  token_digest text not null unique check (length(trim(token_digest)) > 0),
+  management_token_digest text
+    check (management_token_digest is null or length(trim(management_token_digest)) > 0),
+  status text not null default 'pending'
+    check (status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  replaced_at timestamptz,
+  replacement_of_invitation_id uuid
+    references public.co_debtor_invitations(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint co_debtor_invitations_expiry_check check (expires_at > created_at),
+  constraint co_debtor_invitations_replacement_check check (
+    replacement_of_invitation_id is distinct from id
+  ),
+  constraint co_debtor_invitations_declared_complement_check check (
+    num_nonnulls(
+      ingreso_mensual_complementario,
+      deuda_mensual_complementario,
+      tipo_contrato_complementario,
+      continuidad_laboral_complementario,
+      morosidad_complementario
+    ) = 0
+    or (
+      num_nonnulls(
+        ingreso_mensual_complementario,
+        deuda_mensual_complementario,
+        tipo_contrato_complementario,
+        continuidad_laboral_complementario,
+        morosidad_complementario
+      ) = 5
+      and ingreso_mensual_complementario >= 0
+      and deuda_mensual_complementario >= 0
+      and tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')
+      and continuidad_laboral_complementario in ('menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios')
+      and morosidad_complementario in ('si', 'no')
+    )
+  )
+);
+
+create unique index if not exists co_debtor_invitations_one_pending_per_lead_idx
+  on public.co_debtor_invitations (lead_id)
+  where status = 'pending';
+create unique index if not exists co_debtor_invitations_management_token_digest_idx
+  on public.co_debtor_invitations (management_token_digest)
+  where management_token_digest is not null;
+create index if not exists co_debtor_invitations_lead_created_idx
+  on public.co_debtor_invitations (lead_id, created_at desc);
+create index if not exists co_debtor_invitations_expiry_idx
+  on public.co_debtor_invitations (expires_at)
+  where status = 'pending';
+
+create table if not exists public.co_debtor_confirmations (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null unique
+    references public.co_debtor_invitations(id) on delete restrict,
+  ingreso_mensual_complementario numeric not null
+    check (ingreso_mensual_complementario >= 0),
+  deuda_mensual_complementario numeric not null
+    check (deuda_mensual_complementario >= 0),
+  tipo_contrato_complementario text not null
+    check (tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')),
+  continuidad_laboral_complementario text not null
+    check (continuidad_laboral_complementario in (
+      'menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios'
+    )),
+  morosidad_complementario text not null
+    check (morosidad_complementario in ('si', 'no')),
+  treatment_consent_version text not null
+    check (length(trim(treatment_consent_version)) > 0),
+  treatment_consented_at timestamptz not null,
+  confirmed_at timestamptz not null default now()
+);
+
+create index if not exists co_debtor_confirmations_confirmed_idx
+  on public.co_debtor_confirmations (confirmed_at desc);
+
+create table if not exists public.co_debtor_consent_events (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null
+    references public.co_debtor_invitations(id) on delete restrict,
+  event_type text not null
+    check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked')),
+  actor_type text not null
+    check (actor_type in ('lead', 'co_debtor', 'system')),
+  invitation_status text not null
+    check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  occurred_at timestamptz not null default clock_timestamp()
+);
+
+create index if not exists co_debtor_consent_events_invitation_occurred_idx
+  on public.co_debtor_consent_events (invitation_id, occurred_at, id);
+
+create or replace function public.hu18_reject_consent_event_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'co_debtor_consent_events_are_append_only' using errcode = '23514';
+end;
+$$;
+
+drop trigger if exists co_debtor_consent_events_append_only on public.co_debtor_consent_events;
+create trigger co_debtor_consent_events_append_only
+  before update or delete on public.co_debtor_consent_events
+  for each row execute function public.hu18_reject_consent_event_mutation();
+
+alter table public.co_debtor_invitations enable row level security;
+alter table public.co_debtor_confirmations enable row level security;
+alter table public.co_debtor_consent_events enable row level security;
+
+drop policy if exists "Co-debtor invitations select own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations select own lead"
+  on public.co_debtor_invitations
+  for select to authenticated
+  using (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor invitations insert own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations insert own lead"
+  on public.co_debtor_invitations
+  for insert to authenticated
+  with check (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor confirmations select own lead" on public.co_debtor_confirmations;
+create policy "Co-debtor confirmations select own lead"
+  on public.co_debtor_confirmations
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Co-debtor consent events select own lead" on public.co_debtor_consent_events;
+create policy "Co-debtor consent events select own lead"
+  on public.co_debtor_consent_events
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+revoke all on table public.co_debtor_invitations,
+  public.co_debtor_confirmations,
+  public.co_debtor_consent_events from anon, authenticated;
+grant select, insert on table public.co_debtor_invitations to authenticated;
+grant select on table public.co_debtor_confirmations,
+  public.co_debtor_consent_events to authenticated;
+grant select, insert, update, delete on table public.co_debtor_invitations,
+  public.co_debtor_confirmations to service_role;
+grant select, insert on table public.co_debtor_consent_events to service_role;
+
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid, p_recipient_email text, p_token_digest text, p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare existing_invitation public.co_debtor_invitations%rowtype; created_id uuid;
+begin
+  perform 1 from public.profiles where id = p_lead_id for update;
+  if not found then raise exception 'hu18_lead_not_found' using errcode = 'P0001'; end if;
+  select * into existing_invitation from public.co_debtor_invitations
+    where lead_id = p_lead_id and status = 'pending' for update;
+  if found and existing_invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'expired', 'system', 'expired');
+    existing_invitation := null;
+  elsif found then
+    update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+      where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'replaced', 'lead', 'replaced');
+  end if;
+  insert into public.co_debtor_invitations
+    (lead_id, recipient_email, token_digest, expires_at, replacement_of_invitation_id)
+    values (p_lead_id, lower(trim(p_recipient_email)), p_token_digest, p_expires_at,
+      case when existing_invitation.id is null then null else existing_invitation.id end)
+    returning id into created_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (created_id, 'invited', 'lead', 'pending');
+  return query select created_id, existing_invitation.id;
+end;
+$$;
+
+-- Declared-complement overload used by the authenticated Edge Function. Its
+-- values stay on the invitation until the co-debtor confirms their own data.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz,
+  p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric,
+  p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text,
+  p_morosidad_complementario text
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_recipient_rut, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set ingreso_mensual_complementario = p_ingreso_mensual_complementario,
+        deuda_mensual_complementario = p_deuda_mensual_complementario,
+        tipo_contrato_complementario = p_tipo_contrato_complementario,
+        continuidad_laboral_complementario = p_continuidad_laboral_complementario,
+        morosidad_complementario = p_morosidad_complementario
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+-- RUT-aware overload used only by the authenticated Edge Function. The
+-- original four-argument operation remains for existing hosted callers.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  if p_recipient_rut !~ '^[0-9]{7,8}-[0-9K]$' then
+    raise exception 'hu18_invalid_recipient_rut' using errcode = 'P0001';
+  end if;
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set recipient_rut = p_recipient_rut
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+create or replace function public.hu18_revert_invitation_after_delivery_failure(
+  p_invitation_id uuid, p_previous_invitation_id uuid default null
+)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations
+    where id = p_invitation_id for update;
+  if current_status is distinct from 'pending' then return false; end if;
+  update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+    where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'replaced', 'system', 'replaced');
+  if p_previous_invitation_id is not null then
+    update public.co_debtor_invitations set status = 'pending', replaced_at = null
+      where id = p_previous_invitation_id and status = 'replaced';
+  end if;
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitation(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found or invitation.status <> 'pending' or invitation.expires_at > clock_timestamp() then return false; end if;
+  update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'expired', 'system', 'expired');
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitations()
+returns table (invitation_id uuid, recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  for invitation in select * from public.co_debtor_invitations
+    where status = 'pending' and expires_at <= clock_timestamp() for update skip locked
+  loop
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    invitation_id := invitation.id; recipient_email := invitation.recipient_email; lead_id := invitation.lead_id;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public.hu18_confirm_invitation(
+  p_invitation_id uuid, p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric, p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text, p_morosidad_complementario text,
+  p_treatment_consent_version text, p_management_token_digest text
+)
+returns table (recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if invitation.status = 'pending' and invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    return;
+  end if;
+  if invitation.status <> 'pending' then raise exception 'hu18_invitation_not_pending' using errcode = 'P0001'; end if;
+  if length(trim(p_management_token_digest)) = 0 then
+    raise exception 'hu18_management_token_missing' using errcode = 'P0001';
+  end if;
+  insert into public.co_debtor_confirmations (
+    invitation_id, ingreso_mensual_complementario, deuda_mensual_complementario,
+    tipo_contrato_complementario, continuidad_laboral_complementario, morosidad_complementario,
+    treatment_consent_version, treatment_consented_at
+  ) values (
+    invitation.id, p_ingreso_mensual_complementario, p_deuda_mensual_complementario,
+    p_tipo_contrato_complementario, p_continuidad_laboral_complementario, p_morosidad_complementario,
+    p_treatment_consent_version, clock_timestamp()
+  );
+  update public.co_debtor_invitations set status = 'confirmed', consumed_at = clock_timestamp(),
+    management_token_digest = p_management_token_digest where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'consent_granted', 'co_debtor', 'confirmed'),
+      (invitation.id, 'confirmed', 'co_debtor', 'confirmed');
+  return query select invitation.recipient_email, invitation.lead_id;
+end;
+$$;
+
+create or replace function public.hu18_revoke_consent(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if current_status = 'revoked' then return false; end if;
+  if current_status <> 'confirmed' then raise exception 'hu18_consent_not_confirmed' using errcode = 'P0001'; end if;
+  update public.co_debtor_invitations set status = 'revoked' where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'revoked', 'co_debtor', 'revoked');
+  return true;
+end;
+$$;
+
+revoke all on function public.hu18_create_invitation(uuid, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revert_invitation_after_delivery_failure(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitation(uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitations() from public, anon, authenticated;
+revoke all on function public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revoke_consent(uuid) from public, anon, authenticated;
+grant execute on function public.hu18_create_invitation(uuid, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text),
+  public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
+  public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
+  public.hu18_revoke_consent(uuid) to service_role;
+
+-- HU18 Step 8: staff never reads raw evaluation/history snapshots directly.
+-- The backend applies consent-state redaction and the existing commercial
+-- tenant scope before returning an executive projection.
+drop policy if exists "Evaluations select own" on public.evaluations;
+create policy "Evaluations select own"
+  on public.evaluations
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Evaluations select sales" on public.evaluations;
+
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
+-- ScoreLeads — HU16: Historial de estados de leads para admins
+-- =============================================================
+
+create or replace function public.get_lead_status_history_for_admin()
+returns table (
+  history_id uuid,
+  profile_id uuid,
+  lead_name text,
+  lead_email text,
+  changed_by_name text,
+  changed_by_email text,
+  old_status text,
+  new_status text,
+  reason text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select 
+    h.id as history_id,
+    p.id as profile_id,
+    p.full_name as lead_name,
+    u_lead.email::text as lead_email,
+    p_changer.full_name as changed_by_name,
+    u_changer.email::text as changed_by_email,
+    h.old_status,
+    h.new_status,
+    h.reason,
+    h.created_at
+  from public.lead_status_history h
+  join public.profiles p on p.id = h.profile_id
+  join auth.users u_lead on u_lead.id = p.id
+  left join public.profiles p_changer on p_changer.id = h.changed_by
+  left join auth.users u_changer on u_changer.id = h.changed_by
+  where (
+    public.get_my_role() = 'admin'
+    or (
+      public.get_my_role() = 'admin_inmobiliario'
+      and (
+        exists (
+          select 1 from public.evaluations e
+          join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
+          where e.user_id = p.id
+          and (
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+            or pr.comuna = p.onboarding_data->>'comuna_interes'
+            or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+          )
+        )
+        or exists (
+          select 1 from public.lead_status_history lsh
+          join public.profiles exec_p on exec_p.id = lsh.changed_by
+          where lsh.profile_id = p.id
+          and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        )
+      )
+    )
+  )
+  order by h.created_at desc;
+$$;
+
+grant execute on function public.get_lead_status_history_for_admin() to authenticated;
+
+-- Migración para controlar avances irreales en el plan de mejora (HU16)
+
+CREATE OR REPLACE FUNCTION public.check_housing_plan_progress()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_new_progress jsonb;
+  v_old_progress jsonb;
+  v_new_total numeric := 0;
+  v_old_total numeric := 0;
+  v_income numeric := 0;
+  v_month jsonb;
+  v_profile RECORD;
+  v_days_active numeric;
+  v_months_active numeric;
+  v_max_logical_savings numeric;
+  v_fraud_reason jsonb := NULL;
+BEGIN
+  -- Extraer el array de meses registrados en el plan de ahorro
+  v_new_progress := NEW.housing_plan->'progress'->'months';
+  v_old_progress := OLD.housing_plan->'progress'->'months';
+
+  -- Si no hay progreso nuevo, no hacemos nada
+  IF v_new_progress IS NULL OR v_new_progress = v_old_progress THEN
+    RETURN NEW;
+  END IF;
+
+  -- Sumar total ahorrado en el nuevo snapshot
+  IF jsonb_typeof(v_new_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_new_progress) LOOP
+      v_new_total := v_new_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Sumar total ahorrado en el viejo snapshot
+  IF jsonb_typeof(v_old_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_old_progress) LOOP
+      v_old_total := v_old_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Verificar el comportamiento de ahorro
+  IF v_new_total > v_old_total THEN
+    -- Obtenemos el ingreso mensual del snapshot inicial
+    v_income := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+    
+    IF v_income > 0 THEN
+      -- Calculamos la velocidad del tiempo
+      v_days_active := EXTRACT(EPOCH FROM (now() - NEW.created_at)) / 86400;
+      v_months_active := GREATEST(0, v_days_active / 30.0);
+      
+      -- Techo máximo de la realidad: 3 sueldos iniciales + 1 sueldo entero por cada mes que ha pasado
+      v_max_logical_savings := (v_income * 3) + (v_income * v_months_active);
+
+      -- REGLA 1: Salto gigante en una sola petición (Regla original)
+      IF (v_new_total - v_old_total) > (v_income * 3) THEN
+        v_fraud_reason := '"Avance irreal vs renta mensual en Plan de Mejora"'::jsonb;
+        
+      -- REGLA 2: Velocidad de ahorro imposible / Smurfing (Micro-transacciones para evadir regla 1)
+      ELSIF v_new_total > v_max_logical_savings THEN
+        v_fraud_reason := '"Velocidad de ahorro matemáticamente imposible (Smurfing detectado)"'::jsonb;
+      END IF;
+
+      -- Si se violó alguna regla, castigamos
+      IF v_fraud_reason IS NOT NULL THEN
+        -- Obtenemos el estado actual del lead
+        SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+        
+        -- Si el lead está normal o reactivado, lo marcamos para revisión
+        IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+          UPDATE public.profiles 
+          SET reliability_status = 'en_revision', updated_at = now() 
+          WHERE id = NEW.user_id;
+        END IF;
+        
+        -- Inyectamos el flag en la evaluación
+        NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || v_fraud_reason;
+        NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recrear el trigger en la tabla evaluations
+DROP TRIGGER IF EXISTS trg_check_housing_plan_progress ON public.evaluations;
+CREATE TRIGGER trg_check_housing_plan_progress
+BEFORE UPDATE ON public.evaluations
+FOR EACH ROW
+WHEN (OLD.housing_plan IS DISTINCT FROM NEW.housing_plan)
+EXECUTE FUNCTION public.check_housing_plan_progress();
+
+-- Trigger para marcar fraude desde el ML o reglas SQL en el momento del INSERT
+CREATE OR REPLACE FUNCTION public.check_ml_fraud_on_insert()
+RETURNS trigger AS $$
+DECLARE
+  v_profile RECORD;
+  v_device_hash text;
+  v_intentos integer;
+  v_ahorro_previo numeric;
+  v_ahorro_actual numeric;
+  v_renta numeric;
+  v_time_to_submit numeric;
+BEGIN
+  v_device_hash := NEW.financial_data->'input'->>'device_id_hash';
+  v_time_to_submit := COALESCE((NEW.financial_data->'input'->>'time_to_submit')::numeric, 999);
+
+  -- 1. Evaluamos reglas duras en la BD (Fallback robusto y bypass de RLS por SECURITY DEFINER)
+  IF v_device_hash IS NOT NULL THEN
+    
+    -- Tanteo: más de 3 intentos en 15 minutos
+    SELECT count(*) INTO v_intentos 
+    FROM public.evaluations 
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '15 minutes';
+    
+    IF v_intentos >= 3 THEN 
+       NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+       NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tanteo detectado: demasiadas evaluaciones en corto tiempo"'::jsonb;
+    END IF;
+    
+    -- Avance irreal: salto ilógico en 24 horas
+    SELECT (financial_data->'input'->>'ahorro_disponible')::numeric INTO v_ahorro_previo
+    FROM public.evaluations
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '24 hours'
+    ORDER BY created_at ASC
+    LIMIT 1;
+    
+    IF v_ahorro_previo IS NOT NULL THEN
+       v_ahorro_actual := COALESCE((NEW.financial_data->'input'->>'ahorro_disponible')::numeric, 0);
+       v_renta := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+       IF v_ahorro_actual > (v_ahorro_previo + (v_renta * 3)) THEN
+          NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+          NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Avance de ahorro irreal detectado en 24h"'::jsonb;
+       END IF;
+    END IF;
+  END IF;
+
+  -- Script automatizado
+  IF v_time_to_submit < 5 THEN
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 95.0);
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tiempo de llenado anormalmente bajo (<5s)"'::jsonb;
+  END IF;
+
+  -- 2. Si cualquier regla (o el ML mismo) arrojó fraude, marcamos el perfil
+  IF NEW.fraud_score_probability >= 90 THEN
+    SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+    
+    IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+      UPDATE public.profiles 
+      SET reliability_status = 'sospechoso', updated_at = now() 
+      WHERE id = NEW.user_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_ml_fraud_on_insert ON public.evaluations;
+CREATE TRIGGER trg_check_ml_fraud_on_insert
+BEFORE INSERT ON public.evaluations
+FOR EACH ROW
+EXECUTE FUNCTION public.check_ml_fraud_on_insert();
