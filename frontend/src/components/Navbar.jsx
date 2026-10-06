@@ -1,6 +1,6 @@
 import React from "react";
 import { roleLabels, roles } from "../services/auth";
-import { isAdminRole } from "../lib/roles";
+import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 
 const navByRole = {
   [roles.user]: [
@@ -23,6 +23,7 @@ const navByRole = {
         { id: "home", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg> },
         { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
         { id: "projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-5h4v5" /></svg> },
+        { id: "metricas", label: "Métricas", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> },
       ]
     },
   ],
@@ -34,6 +35,7 @@ const navByRole = {
         { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-5h4v5" /></svg> },
         { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
         { id: "admin-reports", label: "Reportes", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg> },
+        { id: "metricas", label: "Métricas", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> },
       ]
     },
   ],
@@ -44,6 +46,7 @@ const navByRole = {
         { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-5h4v5" /></svg> },
         { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
         { id: "admin-reports", label: "Reportes", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg> },
+        { id: "metricas", label: "Métricas", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> },
       ]
     },
   ],
@@ -76,11 +79,14 @@ const sidebarSupportByRole = {
   },
 };
 
-export default function Navbar({ profile, page, currentScore, onNavigate, onLogout }) {
+export default function Navbar({ profile, page, inmobiliariaId, currentScore, onNavigate, onLogout }) {
   const role = profile?.role || roles.user;
   const isAdmin = isAdminRole(role);
   const fallbackRole = isAdmin ? roles.admin : roles.user;
-  const groups = navByRole[role] || navByRole[fallbackRole];
+  // HU 15: las métricas son por inmobiliaria; el admin global no tiene una.
+  const hidden = isGlobalAdmin(role, inmobiliariaId) ? new Set(["metricas"]) : new Set();
+  const groups = (navByRole[role] || navByRole[fallbackRole])
+    .map((group) => ({ ...group, items: group.items.filter((item) => !hidden.has(item.id)) }));
   const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[fallbackRole];
   const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Usuario";
   const initials = displayName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();

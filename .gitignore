@@ -55,3 +55,4 @@ Makefile
 
 # Antigravity artifacts
 install.cmd
+.seed_hu15_demo/

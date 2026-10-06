@@ -7,6 +7,7 @@ import AdminPanel from "./components/AdminPanel";
 import AdminProjectCatalog from "./components/AdminProjectCatalog";
 import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
+import CommercialMetrics from "./components/CommercialMetrics";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
@@ -44,7 +45,7 @@ import {
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
-import { isAdminRole, isStaffRole } from "./lib/roles";
+import { isAdminRole, isGlobalAdmin, isStaffRole } from "./lib/roles";
 import { canViewStaffPage, resolveStaffRoute, staffInitialPage } from "./lib/staffRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
@@ -299,6 +300,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
   if (page === "admin-profile") return "/admin/perfil";
+  if (page === "metricas") return "/metricas";
   if (page === "admin-reports") return "/admin/reportes";
   return "/inicio";
 };
@@ -337,6 +339,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/admin/perfil",
+    "/metricas",
     "/admin/reportes",
     "/definir-password",
     "/proyectos",
@@ -351,7 +354,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -472,6 +475,7 @@ export default function App() {
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
+  const [tenantResolved, setTenantResolved] = useState(false);
 
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
@@ -732,6 +736,7 @@ export default function App() {
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
+    setTenantResolved(false);
     if (!isStaffRole(profile?.role)) {
       setInmobiliariaId(null);
       return;
@@ -739,9 +744,17 @@ export default function App() {
     let active = true;
     getTenantContext()
       .then((context) => { if (active) setInmobiliariaId(context.inmobiliaria_id); })
-      .catch(() => { if (active) setInmobiliariaId(null); });
+      .catch(() => { if (active) setInmobiliariaId(null); })
+      .finally(() => { if (active) setTenantResolved(true); });
     return () => { active = false; };
   }, [profile?.role, profile?.id]);
+
+  // HU 15: las métricas son por inmobiliaria; el admin global no tiene una y vuelve a su inicio.
+  useEffect(() => {
+    if (page === "metricas" && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
+      navigateToPage("admin", { replace: true });
+    }
+  }, [page, tenantResolved, inmobiliariaId, profile?.role]);
 
   useEffect(() => {
     if (page === "signup-offer" && anonResult) {
@@ -1478,6 +1491,7 @@ export default function App() {
       <Navbar
         profile={profile}
         page={page}
+        inmobiliariaId={inmobiliariaId}
         currentScore={currentScore}
         onNavigate={(nextPage) =>
           nextPage === "evaluate" ? startEvaluation() : navigateToPage(nextPage)
@@ -1787,6 +1801,8 @@ export default function App() {
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           role={profile.role}
         />
+      ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
+        <CommercialMetrics role={profile.role} onNavigate={navigateToPage} />
       ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
