@@ -64,6 +64,8 @@ boundary for every real evaluation and its related tracking records.
 | Authenticate the user in FastAPI, derive `subject_user_id` from the bearer token, and use a server-only Supabase credential for the transactional RPC | Direct clients cannot forge scores or write history. RLS still restricts reads to the owner, and authenticated roles receive no direct UPDATE/DELETE permission on tracking history. |
 | Treat a correction that changes the latest effective state as one command that appends the correction and a new current evaluation in the same transaction | Historical evaluations are not recalculated. The new evaluation is explicitly recorded at correction time and carries current versions/provenance. |
 | Compute goal status and projections on read; do not persist their current derived result | Regression can reopen a goal, corrections can alter the active line, and projection versions can change. Persisting these views would create another mutable source of truth. |
+| Explain each active chart point from its own immutable snapshot | A hover/focus tooltip may compare consecutive active snapshots, but never fills absent historical score, classification, capacity, or projection data from the current evaluation. |
+| Draw expected chart progress only from frozen numeric goals | A secondary dashed baseline-to-target reference uses a goal's stored initial value, target value, baseline date, and `target_at`; it is omitted when that contract is incomplete or ambiguous and is never presented as a forecast. |
 | Project only explicitly eligible numeric fields and hold every other field constant | This follows ALG-13 and prevents category, morosidad, employment, market data, or arbitrary numeric-looking fields from being assumed to improve. |
 | Add a pure rule-boundary adapter over the current engines | ALG-13 requires a complete finite milestone set. The adapter exposes existing transition points/predicates without copying their values or changing scoring behavior. |
 | Select the current user state from reconstructed lineage, never from `evaluations[0]` | `useLeads` currently prioritizes classification over recency. Commercial ranking may keep its own ordering, but it cannot choose the user's current evaluation. |
@@ -408,6 +410,103 @@ or tenant-model redesign.
       causes; correction UI refreshes both active and audit views.
     - Done when: the UI cannot mistake audit rows or projected milestones for real observations and
       every server state has a clear accessible presentation.
+
+### E4 chart-context amendment (2026-10-05)
+
+`Mi evolución` keeps its current compact layout. The real active line remains primary, while every
+real point is hoverable and keyboard-focusable. Its compact tooltip shows the point date, displayed
+variable, available delta from the immediately preceding active snapshot, score delta, changed
+classification, and capacity delta only when both stored evaluation results contain comparable
+historical capacity. It does not reconstruct historical ALG-13 projection output because that output
+is derived and is intentionally not persisted.
+
+For savings, debt, or another represented variable with exactly one matching frozen numeric goal,
+the chart may also show a dashed `Progreso esperado` segment from the stored baseline value/date to
+the stored target value/`target_at`. This visual reference is omitted for missing, invalid, or
+ambiguous goal contracts; it is not a forecast, financial projection, or persisted observation.
+
+- Files: `frontend/src/lib/tracking/evolution.js`, focused Vitest tests, and the existing progress
+  components/styles.
+- Tests: first snapshot has no invented delta; subsequent values, score/classification, and
+  historically persisted capacity are compared correctly; incomplete historical results never use
+  current values; expected segments start/end/interpolate correctly and are absent without a valid
+  frozen contract; a single real observation still renders safely and remains focusable.
+
+### E4 tooltip and expected-line refinement (2026-10-06)
+
+Historical-point context is rendered as an absolutely positioned overlay inside the existing chart
+container, not as a flow element below its SVG. It stays anchored above the active point whenever
+there is room, shifts horizontally at chart edges, and flips below only for points near the chart
+top. Hover, keyboard focus, `Escape`, and the point-to-tooltip accessibility relationship remain
+unchanged. Therefore opening the tooltip cannot change the chart or card height.
+
+`Progreso esperado` remains a visual reference, never a forecast. The existing source mapping is
+generic for every represented chart metric: it draws only when exactly one immutable numeric goal
+with matching `source`, finite initial/target values, a valid baseline, and a later frozen
+`target_at` exists. A decreasing target remains decreasing. Score receives no line without a real,
+explicit frozen score goal; no target is derived from classification, project fit, capacity, or a
+different financial goal.
+
+The tooltip labels persisted capacity as `Capacidad de compra`. A historical compatibility change
+may be shown only when both adjacent immutable evaluations have `project_fit.classification` and
+each event snapshot's `project_goal.id` matches the frozen target project ID. It is otherwise
+omitted; compatibility dates are neither persisted nor reconstructed.
+
+- Files: `frontend/src/features/tracking/ProgressPage.jsx`, `tracking.css`,
+  `frontend/src/lib/tracking/evolution.js`, and their existing focused tests.
+- Non-goals: no changes to scoring, ALG-11/12/13, persistence, endpoints, snapshots, migrations,
+  or historical evaluation calculations.
+- Tests: overlay placements at centre/edges/top, preserved tooltip content/accessibility,
+  comparable historic capacity/compatibility only, income/debt/savings sources, absent score goal,
+  descending targets, invalid deadlines, input immutability, and existing period/single-point
+  resilience.
+
+### E4 recorded-history presentation amendment (2026-10-06)
+
+`Ver y corregir historial` presents each audit record as a compact, lead-focused view of its own
+immutable `recorded_complete_snapshot`. It displays only income, debt, available savings,
+delinquency, contract type, employment continuity, the historically stored project goal, and the
+purchase horizon when each value exists. The project goal is formatted from that snapshot as a
+human-readable name and stored UF price; the UI never resolves a current catalog project or prints
+the raw object.
+
+The expandable record also presents only that row's stored evaluation score, classification, and
+available historic estimated capacity. `Actualizado` is shown exclusively for a visible field
+present in that row's own `patch`, never for a baseline record. Missing historical data stays
+absent and never falls back to the current evaluation or latest snapshot. Identifiers, transport
+metadata, score inputs, raw objects, and technical inspection controls remain hidden.
+
+- Files: `frontend/src/features/tracking/ProgressPage.jsx`, its focused Vitest suite, and
+  `frontend/src/features/tracking/tracking.css`.
+- Layout: date, reason, status, and the compact correction action share the record header; details
+  expand downward into a four-column desktop grid, two-column tablet grid, and one-column mobile
+  grid without fixed-width overflow.
+- Non-goals: no persistence, endpoint, scoring, migration, RLS, snapshot, lineage, or correction
+  behavior changes.
+- Tests: human-friendly financial/work/project values; no raw JSON or technical fields; patch-only
+  markers and baseline exclusion; incomplete snapshot/evaluation isolation; absent historic
+  capacity; and retained correction access.
+
+### Goal-card presentation amendment (2026-10-06)
+
+`Mis metas` keeps every frozen `source_action_type`, metric, unit, baseline, target, remaining
+value, percentage, action status, temporal status, schedule, and verification result unchanged.
+The frontend provides compact contextual copy solely for the real action types produced by the
+existing improvement-plan contract. In particular, `adjust_property_goal` is presented as
+`Reducir dividendo estimado` so the persisted `dividendo_estimado` values are unambiguous; it does
+not alter the action type or its target.
+
+Each value is formatted from the frozen `definition.unit`: `CLP`, `CLP/month`, `years`, and any
+available UF/percentage values use human-readable notation. Unknown future action types preserve
+their persisted title/description, and unknown units retain their value plus unit. No unit is
+inferred from a title.
+
+- Files: a pure frontend tracking presentation formatter, the existing progress component/tests,
+  and this plan.
+- Non-goals: no changes to improvement-plan generation, goal contracts, scoring, formulas,
+  ALG-11/12/13, persistence, endpoints, migrations, or progress/status calculation.
+- Tests: dividend copy/monthly notation; CLP savings; monthly debt; credit years; action-type
+  descriptions; unknown fallbacks; and unchanged rendered percentages/status labels.
 
 11. **Add the 30-day visual update indicator.**
     - Files: `frontend/src/lib/tracking/updateDue.js`, its Vitest file, and the progress summary/CTA
