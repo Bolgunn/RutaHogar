@@ -19764,6 +19764,11 @@ section-heading {
 }
 
 .portal-qualify-btn { width: 100%; font-size: 0.88rem; padding: 10px 14px; }
+/* El badge de estado usa fondos translúcidos pensados para superficies claras; sobre el
+   botón oscuro su texto quedaba bajo 4.5:1. Fondo opaco claro, mismos colores de texto. */
+.portal-qualify-btn .simulation-status { background-color: #fff; margin-right: 6px; }
+/* --rh-gold-dark no está definida: sin esto "Cercano" heredaría el blanco del botón. */
+.portal-qualify-btn .simulation-status.near { color: var(--rh-soft-warning-text); }
 
 .portal-external-link {
   display: inline-flex;
