@@ -33,7 +33,7 @@ add column if not exists birth_date date;
 
 alter table public.profiles
 add column if not exists consent_data jsonb,
-add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado'));
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado', 'silenciado'));
 
 create table if not exists public.lead_status_history (
   id uuid primary key default gen_random_uuid(),
@@ -59,6 +59,8 @@ create table if not exists public.evaluations (
   explanation text,
   recommendations jsonb not null default '[]'::jsonb,
   plan_accepted_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb,
   created_at timestamptz not null default now(),
   constraint evaluations_score_check check (score between 0 and 100),
   constraint evaluations_classification_check check (classification in ('Alto', 'Medio', 'Bajo'))
@@ -86,7 +88,9 @@ add column if not exists target_commune text,
 add column if not exists alternative_commune text,
 add column if not exists purchase_timeline text,
 add column if not exists financial_data jsonb,
-add column if not exists plan_accepted_at timestamptz;
+add column if not exists plan_accepted_at timestamptz,
+add column if not exists fraud_score_probability numeric,
+add column if not exists shap_top_factors jsonb;
 
 create table if not exists public.improvement_goals (
   id uuid primary key default gen_random_uuid(),
@@ -272,18 +276,20 @@ with check (auth.uid() = user_id::uuid);
 
 -- Entrega solo contacto de leads a ejecutivos y administradores. La función
 -- evita abrir lectura directa de todos los perfiles personales al staff.
+drop function if exists public.list_lead_contacts(uuid[]);
 create or replace function public.list_lead_contacts(p_user_ids uuid[])
 returns table (
   id uuid,
   full_name text,
-  phone text
+  phone text,
+  reliability_status text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
@@ -292,6 +298,110 @@ $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
 grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
+-- Permite actualizar de forma segura el estado de confiabilidad de un lead
+create or replace function public.update_lead_reliability(
+  p_lead_id uuid,
+  p_reporter_id uuid default null,
+  p_new_status text default 'silenciado',
+  p_reason text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_status text;
+  v_changed_by uuid;
+  v_role text;
+begin
+  v_changed_by := auth.uid();
+  v_role := public.get_my_role();
+
+  if v_role not in ('ejecutivo', 'admin', 'admin_inmobiliario') then
+    raise exception 'Unauthorized';
+  end if;
+
+  select reliability_status into v_old_status from public.profiles where id = p_lead_id;
+  
+  update public.profiles 
+  set reliability_status = p_new_status, updated_at = now()
+  where id = p_lead_id;
+
+  insert into public.lead_status_history (profile_id, changed_by, old_status, new_status, reason)
+  values (p_lead_id, v_changed_by, v_old_status, p_new_status, coalesce(p_reason, 'Cambio de estado'));
+end;
+$$;
+
+revoke all on function public.update_lead_reliability(uuid, uuid, text, text) from public;
+grant execute on function public.update_lead_reliability(uuid, uuid, text, text) to authenticated;
+
+alter table public.lead_status_history enable row level security;
+drop policy if exists "Staff select lead_status_history" on public.lead_status_history;
+create policy "Staff select lead_status_history"
+on public.lead_status_history for select
+using (public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario'));
+
+-- Entrega a administradores globales y de inmobiliaria los leads en revisión y silenciados
+create or replace function public.get_reported_leads_for_admin()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  created_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct on (p.id)
+    p.id,
+    u.email::text as email,
+    p.full_name,
+    p.phone,
+    p.rut,
+    p.reliability_status,
+    e.created_at,
+    e.fraud_score_probability,
+    e.shap_top_factors
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  join public.evaluations e on e.user_id = p.id
+  where p.reliability_status in ('en_revision', 'silenciado', 'descartado', 'sospechoso')
+    and (
+      public.get_my_role() = 'admin'
+      or (
+        public.get_my_role() = 'admin_inmobiliario'
+        and (
+          exists (
+            select 1 from public.proyectos pr
+            where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+            and (
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+              or pr.comuna = p.onboarding_data->>'comuna_interes'
+              or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+            )
+          )
+          or exists (
+            select 1 from public.lead_status_history lsh
+            join public.profiles exec_p on exec_p.id = lsh.changed_by
+            where lsh.profile_id = p.id
+            and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+          )
+        )
+      )
+    )
+  order by p.id, e.created_at desc;
+$$;
+
+revoke all on function public.get_reported_leads_for_admin() from public;
+grant execute on function public.get_reported_leads_for_admin() to authenticated;
 
 drop policy if exists "Evaluations delete own" on public.evaluations;
 create policy "Evaluations delete own"
@@ -2118,3 +2228,237 @@ end;
 $$;
 
 revoke all on function public.commercial_stage_backfill() from public, anon, authenticated;
+
+-- =============================================================
+-- ScoreLeads — HU16: Historial de estados de leads para admins
+-- =============================================================
+
+create or replace function public.get_lead_status_history_for_admin()
+returns table (
+  history_id uuid,
+  profile_id uuid,
+  lead_name text,
+  lead_email text,
+  changed_by_name text,
+  changed_by_email text,
+  old_status text,
+  new_status text,
+  reason text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select 
+    h.id as history_id,
+    p.id as profile_id,
+    p.full_name as lead_name,
+    u_lead.email::text as lead_email,
+    p_changer.full_name as changed_by_name,
+    u_changer.email::text as changed_by_email,
+    h.old_status,
+    h.new_status,
+    h.reason,
+    h.created_at
+  from public.lead_status_history h
+  join public.profiles p on p.id = h.profile_id
+  join auth.users u_lead on u_lead.id = p.id
+  left join public.profiles p_changer on p_changer.id = h.changed_by
+  left join auth.users u_changer on u_changer.id = h.changed_by
+  where (
+    public.get_my_role() = 'admin'
+    or (
+      public.get_my_role() = 'admin_inmobiliario'
+      and (
+        exists (
+          select 1 from public.evaluations e
+          join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
+          where e.user_id = p.id
+          and (
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+            or pr.comuna = p.onboarding_data->>'comuna_interes'
+            or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+          )
+        )
+        or exists (
+          select 1 from public.lead_status_history lsh
+          join public.profiles exec_p on exec_p.id = lsh.changed_by
+          where lsh.profile_id = p.id
+          and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        )
+      )
+    )
+  )
+  order by h.created_at desc;
+$$;
+
+grant execute on function public.get_lead_status_history_for_admin() to authenticated;
+
+-- Migración para controlar avances irreales en el plan de mejora (HU16)
+
+CREATE OR REPLACE FUNCTION public.check_housing_plan_progress()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_new_progress jsonb;
+  v_old_progress jsonb;
+  v_new_total numeric := 0;
+  v_old_total numeric := 0;
+  v_income numeric := 0;
+  v_month jsonb;
+  v_profile RECORD;
+  v_days_active numeric;
+  v_months_active numeric;
+  v_max_logical_savings numeric;
+  v_fraud_reason jsonb := NULL;
+BEGIN
+  -- Extraer el array de meses registrados en el plan de ahorro
+  v_new_progress := NEW.housing_plan->'progress'->'months';
+  v_old_progress := OLD.housing_plan->'progress'->'months';
+
+  -- Si no hay progreso nuevo, no hacemos nada
+  IF v_new_progress IS NULL OR v_new_progress = v_old_progress THEN
+    RETURN NEW;
+  END IF;
+
+  -- Sumar total ahorrado en el nuevo snapshot
+  IF jsonb_typeof(v_new_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_new_progress) LOOP
+      v_new_total := v_new_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Sumar total ahorrado en el viejo snapshot
+  IF jsonb_typeof(v_old_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_old_progress) LOOP
+      v_old_total := v_old_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Verificar el comportamiento de ahorro
+  IF v_new_total > v_old_total THEN
+    -- Obtenemos el ingreso mensual del snapshot inicial
+    v_income := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+    
+    IF v_income > 0 THEN
+      -- Calculamos la velocidad del tiempo
+      v_days_active := EXTRACT(EPOCH FROM (now() - NEW.created_at)) / 86400;
+      v_months_active := GREATEST(0, v_days_active / 30.0);
+      
+      -- Techo máximo de la realidad: 3 sueldos iniciales + 1 sueldo entero por cada mes que ha pasado
+      v_max_logical_savings := (v_income * 3) + (v_income * v_months_active);
+
+      -- REGLA 1: Salto gigante en una sola petición (Regla original)
+      IF (v_new_total - v_old_total) > (v_income * 3) THEN
+        v_fraud_reason := '"Avance irreal vs renta mensual en Plan de Mejora"'::jsonb;
+        
+      -- REGLA 2: Velocidad de ahorro imposible / Smurfing (Micro-transacciones para evadir regla 1)
+      ELSIF v_new_total > v_max_logical_savings THEN
+        v_fraud_reason := '"Velocidad de ahorro matemáticamente imposible (Smurfing detectado)"'::jsonb;
+      END IF;
+
+      -- Si se violó alguna regla, castigamos
+      IF v_fraud_reason IS NOT NULL THEN
+        -- Obtenemos el estado actual del lead
+        SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+        
+        -- Si el lead está normal o reactivado, lo marcamos para revisión
+        IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+          UPDATE public.profiles 
+          SET reliability_status = 'en_revision', updated_at = now() 
+          WHERE id = NEW.user_id;
+        END IF;
+        
+        -- Inyectamos el flag en la evaluación
+        NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || v_fraud_reason;
+        NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recrear el trigger en la tabla evaluations
+DROP TRIGGER IF EXISTS trg_check_housing_plan_progress ON public.evaluations;
+CREATE TRIGGER trg_check_housing_plan_progress
+BEFORE UPDATE ON public.evaluations
+FOR EACH ROW
+WHEN (OLD.housing_plan IS DISTINCT FROM NEW.housing_plan)
+EXECUTE FUNCTION public.check_housing_plan_progress();
+
+-- Trigger para marcar fraude desde el ML o reglas SQL en el momento del INSERT
+CREATE OR REPLACE FUNCTION public.check_ml_fraud_on_insert()
+RETURNS trigger AS $$
+DECLARE
+  v_profile RECORD;
+  v_device_hash text;
+  v_intentos integer;
+  v_ahorro_previo numeric;
+  v_ahorro_actual numeric;
+  v_renta numeric;
+  v_time_to_submit numeric;
+BEGIN
+  v_device_hash := NEW.financial_data->'input'->>'device_id_hash';
+  v_time_to_submit := COALESCE((NEW.financial_data->'input'->>'time_to_submit')::numeric, 999);
+
+  -- 1. Evaluamos reglas duras en la BD (Fallback robusto y bypass de RLS por SECURITY DEFINER)
+  IF v_device_hash IS NOT NULL THEN
+    
+    -- Tanteo: más de 3 intentos en 15 minutos
+    SELECT count(*) INTO v_intentos 
+    FROM public.evaluations 
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '15 minutes';
+    
+    IF v_intentos >= 3 THEN 
+       NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+       NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tanteo detectado: demasiadas evaluaciones en corto tiempo"'::jsonb;
+    END IF;
+    
+    -- Avance irreal: salto ilógico en 24 horas
+    SELECT (financial_data->'input'->>'ahorro_disponible')::numeric INTO v_ahorro_previo
+    FROM public.evaluations
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '24 hours'
+    ORDER BY created_at ASC
+    LIMIT 1;
+    
+    IF v_ahorro_previo IS NOT NULL THEN
+       v_ahorro_actual := COALESCE((NEW.financial_data->'input'->>'ahorro_disponible')::numeric, 0);
+       v_renta := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+       IF v_ahorro_actual > (v_ahorro_previo + (v_renta * 3)) THEN
+          NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+          NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Avance de ahorro irreal detectado en 24h"'::jsonb;
+       END IF;
+    END IF;
+  END IF;
+
+  -- Script automatizado
+  IF v_time_to_submit < 5 THEN
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 95.0);
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tiempo de llenado anormalmente bajo (<5s)"'::jsonb;
+  END IF;
+
+  -- 2. Si cualquier regla (o el ML mismo) arrojó fraude, marcamos el perfil
+  IF NEW.fraud_score_probability >= 90 THEN
+    SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+    
+    IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+      UPDATE public.profiles 
+      SET reliability_status = 'sospechoso', updated_at = now() 
+      WHERE id = NEW.user_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_ml_fraud_on_insert ON public.evaluations;
+CREATE TRIGGER trg_check_ml_fraud_on_insert
+BEFORE INSERT ON public.evaluations
+FOR EACH ROW
+EXECUTE FUNCTION public.check_ml_fraud_on_insert();

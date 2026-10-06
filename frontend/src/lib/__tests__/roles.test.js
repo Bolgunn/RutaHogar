@@ -25,8 +25,9 @@ describe("admin_inmobiliario role", () => {
     expect(resolveStaffRoute("/admin", roles.admin_inmo)).toEqual({ page: "admin" });
     expect(resolveStaffRoute("/admin/proyectos", roles.admin_inmo)).toEqual({ page: "admin-projects" });
     expect(resolveStaffRoute("/admin/perfil", roles.admin_inmo)).toEqual({ page: "admin-profile" });
+    expect(resolveStaffRoute("/admin/reportes", roles.admin_inmo)).toEqual({ page: "admin-reports" });
     expect(resolveStaffRoute("/dashboard", roles.admin_inmo)).toEqual({ page: "leads", path: "/dashboard" });
-    for (const page of ["admin", "admin-projects", "admin-profile", "leads"]) {
+    for (const page of ["admin", "admin-projects", "admin-profile", "admin-reports", "leads"]) {
       expect(canViewStaffPage(page, roles.admin_inmo)).toBe(true);
     }
   });

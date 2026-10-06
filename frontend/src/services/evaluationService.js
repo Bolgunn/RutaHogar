@@ -86,11 +86,83 @@ export function normalizeEvaluation(row, contactsMap = {}) {
 }
 
 
+
+
+
 const pendingCommands = new WeakMap();
 
 function requireConnection() {
   if (!supabase) throw new Error("La persistencia de evaluaciones no está disponible.");
 }
+function normalizeLocalEvaluation(entry) {
+  if (!entry) return null;
+  const result = entry.result || {};
+
+  return {
+    ...entry,
+    result: {
+      ...result,
+      risks: normalizeDisplayList(result.risks),
+      recommendations: normalizeDisplayList(result.recommendations),
+      ai_explanation: sanitizeAiText(normalizeDisplayText(result.ai_explanation || "")),
+      improvement_plan: normalizeImprovementPlan(result.improvement_plan),
+      positive_indicators: normalizeDisplayList(result.positive_indicators),
+      executive_summary: sanitizeAiText(result.executive_summary),
+      commercial_guidance: sanitizeAiText(result.commercial_guidance),
+    },
+    plan_type: entry.plan_type || entry.housing_plan?.plan_type || null,
+  };
+}
+
+function buildRow(userId, evaluationPayload) {
+  const result = evaluationPayload.result || {};
+  const onboarding = evaluationPayload.onboarding || {};
+
+  return {
+    user_id: userId,
+    email: evaluationPayload.email || null,
+    score: normalizeScoreForSupabase(result.score),
+    classification: normalizeClassificationForSupabase(result),
+    created_at: new Date().toISOString(),
+    objective: onboarding.objetivo_principal || null,
+    property_type: onboarding.tipo_propiedad || null,
+    target_commune: onboarding.comuna_interes || evaluationPayload.input?.comuna_objetivo || null,
+    alternative_commune: onboarding.comuna_alternativa || null,
+    purchase_timeline: onboarding.plazo_compra || null,
+    financial_data: buildFinancialDataSnapshot(evaluationPayload),
+    explanation: sanitizeAiText(result.ai_explanation),
+    recommendations: {
+      items: result.recommendations || [],
+      risks: result.risks || [],
+      improvement_plan: result.improvement_plan || [],
+      positive_indicators: result.positive_indicators || [],
+    },
+    executive_summary: result.executive_summary || null,
+    commercial_guidance: result.commercial_guidance || null,
+    fraud_score_probability: result.fraud_score_probability ?? null,
+    shap_top_factors: result.shap_top_factors ?? null,
+  };
+}
+
+const evaluationSelectColumns = [
+  "id",
+  "user_id",
+  "email",
+  "score",
+  "classification",
+  "objective",
+  "property_type",
+  "target_commune",
+  "alternative_commune",
+  "purchase_timeline",
+  "financial_data",
+  "explanation",
+  "recommendations",
+  "executive_summary",
+  "commercial_guidance",
+  "housing_plan",
+  "created_at",
+].join(", ");
 
 export async function createEvaluation(userId, evaluationPayload) {
   requireConnection();
@@ -119,17 +191,21 @@ export function applyEvaluationAnnotations(row, annotations) {
     const payload = event.payload || {};
     if (event.kind === "plan_accepted") {
       view.plan_accepted_at = event.effective_at;
-      view.housing_plan = { ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
-        ...(payload.plan_type ? { plan_type: payload.plan_type } : {}) };
+      view.housing_plan = {
+        ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
+        ...(payload.plan_type ? { plan_type: payload.plan_type } : {})
+      };
     } else if (event.kind === "housing_plan") {
       view.housing_plan = payload.housing_plan;
     } else if (event.kind === "narrative") {
       // Overlay for display only; the immutable stored result remains untouched.
-      view.financial_data = { ...(view.financial_data || {}), result: {
-        ...(view.financial_data?.result || {}),
-        ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
-          .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
-      } };
+      view.financial_data = {
+        ...(view.financial_data || {}), result: {
+          ...(view.financial_data?.result || {}),
+          ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
+            .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
+        }
+      };
     }
   }
   return view;

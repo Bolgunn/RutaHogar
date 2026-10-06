@@ -24,6 +24,7 @@ export function resolveStaffRoute(path, role) {
     if (path === "/admin") return { page: "admin" };
     if (path === "/admin/proyectos") return { page: "admin-projects" };
     if (path === "/admin/perfil") return { page: "admin-profile" };
+    if (path === "/admin/reportes") return { page: "admin-reports" };
     if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
@@ -40,6 +41,7 @@ const staffPageGuards = {
   admin: isAdminRole,
   "admin-projects": isAdminRole,
   "admin-profile": isAdminRole,
+  "admin-reports": isAdminRole,
 };
 
 export function canViewStaffPage(page, role) {
