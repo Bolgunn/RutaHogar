@@ -3,6 +3,11 @@
 -- =============================================================
 -- Diseno funcional documentado en la historia correspondiente.
 -- Base aditiva: no toca scoring, tracking HU13 ni contrato de catalogo.
+-- Antes era 20261003120000, version que comparte con lead_status_history_read y
+-- hu18_co_debtor_consent; produccion la registra como lead_status_history_read y
+-- db push habria saltado este archivo. Estos objetos ya estaban aplicados a mano
+-- en produccion el 2026-10-06: registrar con `migration repair --status applied`,
+-- no ejecutar.
 begin;
 
 create table if not exists public.lead_change_events (

@@ -2270,7 +2270,7 @@ revoke all on function public.commercial_stage_backfill() from public, anon, aut
 
 -- =============================================================
 -- Cambios relevantes desde la ultima visita
--- Espejo de supabase/migrations/20261003120000_lead_change_events.sql
+-- Espejo de supabase/migrations/20261006120000_lead_change_events.sql
 -- =============================================================
 
 create table if not exists public.lead_change_events (
