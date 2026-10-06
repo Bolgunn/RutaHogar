@@ -36,7 +36,10 @@ def payload(**extra):
 
 
 def test_server_snapshot_wins_and_no_client_market_value_overrides(monkeypatch):
+    import app.market_data.bcch as bcch
+
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
+    monkeypatch.setattr(bcch.BCChClient, "fetch_snapshot", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("/score must not call BCCh")))
     result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload(uf_value_clp=1))))
     assert result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"] == snapshot()
     assert result["financial_indicators"]["uf_value_clp"] == snapshot()["uf_value_clp"]
@@ -96,16 +99,50 @@ def test_market_reference_returns_503_when_storage_has_no_valid_snapshot(monkeyp
     assert error.value.status_code == 503
 
 
-def test_score_endpoint_resolves_the_persisted_dev_snapshot_when_explicitly_enabled(monkeypatch):
-    class Repository:
-        def list_candidates(self):
-            return [{"id": "dev-fixture", "snapshot": snapshot(), "effective_date": snapshot()["effective_date"], "fetched_at": snapshot()["fetched_at"]}]
+def test_local_fixture_serves_market_reference_and_score_without_supabase(monkeypatch):
+    import app.market_data.bcch as bcch
+    from app.market_data.service import resolve_market_snapshot_from_environment
 
-    monkeypatch.setattr(main, "repository_from_environment", lambda: Repository())
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("MARKET_SNAPSHOT_ALLOW_FIXTURE", "true")
-    result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
-    assert result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"] == snapshot()
+    monkeypatch.setattr(main, "resolve_market_snapshot", resolve_market_snapshot_from_environment)
+    monkeypatch.setattr(bcch.BCChClient, "fetch_snapshot", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("endpoints must not call BCCh")))
 
+    reference = asyncio.run(main.market_reference_endpoint())
+    result = asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
+    used = result["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]
+
+    assert reference["uf_value_clp"] == used["uf_value_clp"]
+    assert reference["snapshot_fetched_at"] == used["fetched_at"]
+    assert reference["effective_date"] == used["source"]["uf_value_clp"]["effective_date"]
+    assert reference["source"] == {
+        "provider": used["source"]["uf_value_clp"]["provider"],
+        "series": used["source"]["uf_value_clp"]["series"],
+    }
+    assert used["fixture_only"] is True
+
+
+def test_endpoints_fail_controlled_without_supabase_or_fixture_opt_in(monkeypatch):
+    from app.market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
+
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "MARKET_SNAPSHOT_ALLOW_FIXTURE"):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(MarketSnapshotUnavailable):
+        resolve_market_snapshot_from_environment()
+
+    def unavailable():
+        raise main.MarketSnapshotUnavailable("sin snapshot")
+
+    monkeypatch.setattr(main, "resolve_market_snapshot", unavailable)
+
+    with pytest.raises(HTTPException) as market_error:
+        asyncio.run(main.market_reference_endpoint())
+    with pytest.raises(HTTPException) as score_error:
+        asyncio.run(main.score_endpoint(main.ScoreRequest(**payload())))
+
+    assert market_error.value.status_code == score_error.value.status_code == 503
 
 def test_omitted_term_is_accepted_and_uses_snapshot_fallback(monkeypatch):
     monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
@@ -122,11 +159,24 @@ def test_empty_store_returns_503_without_scoring(monkeypatch):
     assert error.value.status_code == 503
 
 
-def test_explain_copies_saved_numbers_without_market_or_calculation(monkeypatch):
-    monkeypatch.setattr(main, "calculate_score", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not score")))
-    response = asyncio.run(main.explain_endpoint(main.ExplainRequest(result_context={"score": 77.5, "classification": "Alto", "positive_indicators": [], "risks": []}, consentimiento=True)))
-    assert response["score"] == 77.5 and response["classification"] == "Alto"
+def test_explain_recalculates_authoritatively_without_ai_scoring(monkeypatch):
+    authoritative = {"score": 42.0, "classification": "Bajo", "positive_indicators": [], "risks": [], "recommendations": []}
+    monkeypatch.setattr(main, "resolve_market_snapshot", lambda: snapshot())
+    monkeypatch.setattr(main, "calculate_score", lambda *_args, **kwargs: (
+        authoritative if kwargs.get("include_ai") is False and kwargs.get("market_snapshot") == snapshot()
+        else (_ for _ in ()).throw(AssertionError("explain must use the server snapshot and include_ai=False"))
+    ))
 
+    response = asyncio.run(main.explain_endpoint(main.ExplainRequest(**payload())))
+
+    assert response["score"] == 42.0 and response["classification"] == "Bajo"
+
+
+def test_explain_rejects_result_context_without_authoritative_score_inputs():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        main.ExplainRequest(result_context={"score": 100, "classification": "Alto"}, consentimiento=True)
 
 def test_initial_score_is_independent_of_comunas_and_declared_property_price():
     baseline = calculate_score(payload(), include_ai=False, market_snapshot=snapshot())

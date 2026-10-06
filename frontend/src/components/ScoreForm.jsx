@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 
 import { calculateAge } from "../utils/helpers";
+import { formatChileanRutInput, normalizeChileanRut } from "../utils/chileanRut";
+import { formatMoneyInput as formatInteger, stripMoneyInput as stripFormat } from "../services/moneyFormat";
 import { formatFormValue } from "../constants";
 import {
   calculateMortgageDividend,
@@ -11,6 +13,10 @@ import {
 import FieldTooltip from "./FieldTooltip";
 import DataConsent from "./DataConsent";
 import { getMarketReference } from "../services/marketReferenceService";
+import {
+  trackPrequalificationCompleted,
+  trackPrequalificationStarted,
+} from "../lib/analytics";
 
 const DEBUG_SCORE_REQUESTS =
   import.meta.env.DEV && import.meta.env.VITE_DEBUG_SCORE === "true";
@@ -99,54 +105,6 @@ const buyerObjectives = new Set([
   "prepararme",
   "evaluar_capacidad",
 ]);
-const referencePropertyValuesUf = {
-  Buin: 2800,
-  "Calera de Tango": 4300,
-  Cerrillos: 3000,
-  "Cerro Navia": 2400,
-  Colina: 3800,
-  Conchalí: 2800,
-  "El Bosque": 2300,
-  "Estación Central": 3100,
-  Huechuraba: 4700,
-  Independencia: 3300,
-  "La Cisterna": 3200,
-  "La Florida": 3900,
-  "La Granja": 2500,
-  "La Pintana": 2200,
-  "La Reina": 7200,
-  Lampa: 3000,
-  "Las Condes": 9200,
-  "Lo Barnechea": 10500,
-  "Lo Espejo": 2200,
-  "Lo Prado": 2700,
-  Macul: 4100,
-  Maipú: 3600,
-  Melipilla: 2400,
-  Ñuñoa: 6200,
-  "Padre Hurtado": 3000,
-  Paine: 2700,
-  "Pedro Aguirre Cerda": 2600,
-  Peñaflor: 2900,
-  Peñalolén: 4700,
-  Pirque: 4300,
-  Providencia: 7600,
-  Pudahuel: 2900,
-  "Puente Alto": 3100,
-  Quilicura: 3200,
-  "Quinta Normal": 3300,
-  Recoleta: 3400,
-  Renca: 2600,
-  "San Bernardo": 2800,
-  "San Joaquín": 3500,
-  "San José de Maipo": 3300,
-  "San Miguel": 4500,
-  "San Ramón": 2400,
-  Santiago: 3800,
-  Talagante: 3100,
-  Vitacura: 12000,
-};
-const DEFAULT_REFERENCE_PROPERTY_VALUE_UF = 3500;
 const weakComplementRelations = new Set(["amigo", "otro"]);
 const continuityMinimumYears = {
   menos_6_meses: 0,
@@ -220,38 +178,8 @@ function buildPropertyValues(value, unit, ufValueClp) {
   };
 }
 
-function buildReferencePropertyValues(commune, ufValueClp) {
-  const referenceUf =
-    referencePropertyValuesUf[commune] || DEFAULT_REFERENCE_PROPERTY_VALUE_UF;
-  return {
-    property_value: referenceUf,
-    property_value_unit: "uf",
-    property_value_uf: referenceUf,
-    property_value_clp:
-      Number.isFinite(ufValueClp) && ufValueClp > 0
-        ? Math.round(referenceUf * ufValueClp)
-        : undefined,
-    property_value_source: referencePropertyValuesUf[commune]
-      ? "referencia_comuna"
-      : "referencia_general",
-  };
-}
-
 // Formatea un string de dígitos a formato es-CL (puntos de miles)
-function formatInteger(raw) {
-  if (raw === "" || raw == null) return "";
-  const digits = String(raw).replace(/\D/g, "");
-  if (digits === "") return "";
-  return Number(digits).toLocaleString("es-CL");
-}
-
 // Quita los puntos de miles para obtener el valor numérico raw
-function stripFormat(value) {
-  return String(value)
-    .replace(/\./g, "")
-    .replace(/[^0-9]/g, "");
-}
-
 function isContinuityIncompatibleWithAge(continuity, age) {
   if (!continuity || !Number.isFinite(age)) return false;
   const minimumYears = continuityMinimumYears[continuity];
@@ -303,6 +231,7 @@ export default function ScoreForm({
   initialDraft,
   onDraftChange,
 }) {
+  const mountTimeRef = useRef(Date.now());
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
   const storedBirthDate = normalizeBirthDate(
@@ -338,6 +267,8 @@ export default function ScoreForm({
     continuidad_laboral_complementario: "",
     morosidad_complementario: "",
     relacion_complementario: "",
+    rut_codeudor: "",
+    correo_codeudor: "",
     consentimiento: false,
     declara_patrimonio: false,
     valor_vehiculos: "",
@@ -361,6 +292,7 @@ export default function ScoreForm({
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState(null);
   const [incomeTipVisible, setIncomeTipVisible] = useState(true);
+  const prequalificationStartedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState(() => {
     const draftStep = Number(initialDraft?.currentStep);
     if (Number.isFinite(draftStep) && draftStep >= 1 && draftStep <= 4) return draftStep;
@@ -374,6 +306,16 @@ export default function ScoreForm({
       day: "numeric",
     })
     : null;
+
+  const trackPrequalificationStart = (step) => {
+    if (prequalificationStartedRef.current) return;
+    prequalificationStartedRef.current = true;
+    trackPrequalificationStarted({
+      flowType: isAnon ? "anonymous" : "authenticated",
+      entryPoint: isAnon ? "anonymous_prequalification" : "prequalification",
+      formStep: `step_${step}`,
+    });
+  };
 
   useEffect(() => {
     onDraftChange?.({
@@ -400,7 +342,6 @@ export default function ScoreForm({
   const showComplementRelationWarning = weakComplementRelations.has(
     form.relacion_complementario,
   );
-  const showComplementMorosityWarning = form.morosidad_complementario === "si";
   const complementRequiredFields = [
     form.ingreso_mensual_complementario,
     form.deuda_mensual_complementario,
@@ -412,6 +353,9 @@ export default function ScoreForm({
   const complementFieldsIncomplete = complementRequiredFields.some(
     (value) => value === "" || value == null,
   );
+  const normalizedCoDebtorRut = normalizeChileanRut(form.rut_codeudor);
+  const normalizedCoDebtorEmail = String(form.correo_codeudor || "").trim().toLowerCase();
+  const coDebtorEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedCoDebtorEmail);
   const patrimonioValues = [form.valor_vehiculos, form.valor_inmuebles];
   const patrimonioFieldsIncomplete = patrimonioValues.every(
     (value) => value === "" || value == null,
@@ -431,10 +375,8 @@ export default function ScoreForm({
 
   const propertyValuesForDividend = useMemo(
     () =>
-      asksPropertyValue
-        ? buildPropertyValues(form.property_value, form.property_value_unit, ufValueClp)
-        : buildReferencePropertyValues(targetCommune, ufValueClp),
-    [asksPropertyValue, form.property_value, form.property_value_unit, targetCommune, ufValueClp],
+      buildPropertyValues(form.property_value, form.property_value_unit, ufValueClp),
+    [form.property_value, form.property_value_unit, ufValueClp],
   );
   const mortgageEstimate = useMemo(
     () =>
@@ -555,10 +497,12 @@ export default function ScoreForm({
   const handleBirthFieldChange = (e) => {
     const { name, value } = e.target;
     const maxLen = name === "birth_year" ? 4 : 2;
+    trackPrequalificationStart(currentStep);
     setBirthFields((prev) => ({ ...prev, [name]: onlyDigits(value, maxLen) }));
   };
 
   const handleBirthFieldSelect = (name, value) => {
+    trackPrequalificationStart(currentStep);
     setBirthFields((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -573,6 +517,7 @@ export default function ScoreForm({
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    trackPrequalificationStart(currentStep);
 
     // Campos de montos enteros: autoformatear con puntos de miles
     if (integerFormattedFields.has(name)) {
@@ -717,6 +662,16 @@ export default function ScoreForm({
       setError(
         "Completa los datos del complementario antes de calcular tu precalificación.",
       );
+      return false;
+    }
+
+    if (form.complemento_renta && !normalizedCoDebtorRut) {
+      setError("Ingresa un RUT válido para el co-deudor.");
+      return false;
+    }
+
+    if (form.complemento_renta && !coDebtorEmailIsValid) {
+      setError("Ingresa un correo válido para el co-deudor.");
       return false;
     }
 
@@ -874,6 +829,13 @@ export default function ScoreForm({
           ? "manual"
           : "calculado_referencial";
 
+      const timeToSubmitSeconds = (Date.now() - mountTimeRef.current) / 1000;
+      let deviceIdHash = localStorage.getItem("rutahogar_device_id_hash");
+      if (!deviceIdHash) {
+        deviceIdHash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem("rutahogar_device_id_hash", deviceIdHash);
+      }
+
       const payload = {
         birth_date: effectiveBirthDate || undefined,
         ingreso_mensual: parseFloat(form.ingreso_mensual),
@@ -937,6 +899,8 @@ export default function ScoreForm({
         market_snapshot_fetched_at: marketReference.snapshot_fetched_at,
         plazo_compra: normalizePurchaseTermForScore(onboardingData?.plazo_compra),
         tiene_propiedad_vista: onboardingData?.tiene_propiedad_vista === true,
+        time_to_submit: Math.floor(timeToSubmitSeconds),
+        device_id_hash: deviceIdHash,
       };
       scorePayload = payload;
 
@@ -988,7 +952,24 @@ export default function ScoreForm({
         timeout: 60000,
       });
 
-      onResult(res.data, payload);
+      trackPrequalificationCompleted({
+        flowType: isAnon ? "anonymous" : "authenticated",
+        entryPoint: isAnon ? "anonymous_prequalification" : "prequalification",
+        hasComplementaryIncome: Boolean(form.complemento_renta),
+      });
+      onResult(res.data, payload, form.complemento_renta ? {
+        coDebtorInvitation: {
+          recipientEmail: normalizedCoDebtorEmail,
+          recipientRut: normalizedCoDebtorRut,
+          declaredComplement: {
+            ingreso_mensual_complementario: payload.ingreso_mensual_complementario,
+            deuda_mensual_complementario: payload.deuda_mensual_complementario,
+            tipo_contrato_complementario: payload.tipo_contrato_complementario,
+            continuidad_laboral_complementario: payload.continuidad_laboral_complementario,
+            morosidad_complementario: payload.morosidad_complementario,
+          },
+        },
+      } : undefined);
     } catch (err) {
       const calledUrl = scoreUrl || `${resolveApiBase()}/score`;
       const errorLog = {
@@ -1056,6 +1037,7 @@ export default function ScoreForm({
 
   const goNext = () => {
     if (currentStep < totalSteps) {
+      trackPrequalificationStart(currentStep);
       setError(null);
       setCurrentStep((s) => s + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1170,7 +1152,7 @@ export default function ScoreForm({
             <div />
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!effectiveBirthDate}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1188,7 +1170,7 @@ export default function ScoreForm({
           </div>
 
           {incomeTipVisible && <div className="tip" style={{ marginBottom: '1.25rem' }}>
-            <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
+            <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg></div>
             <div className="tip__text">
               <strong>Consejo:</strong> Usa tu ingreso líquido real. No incluyas propinas o bonos variables.
             </div>
@@ -1372,13 +1354,13 @@ export default function ScoreForm({
           <div className="pre-wizard-nav">
             {showFinancialBackButton ? (
               <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 Volver
               </button>
             ) : <div />}
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1480,6 +1462,43 @@ export default function ScoreForm({
               <div className="pre-wizard-grid-2">
                 <div className="pre-wizard-field">
                   <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="rut_codeudor">RUT del co-deudor</label>
+                    <FieldTooltip text="RUT declarado por ti para enviar la invitación. No verifica la identidad de esta persona." />
+                  </div>
+                  <input
+                    type="text"
+                    id="rut_codeudor"
+                    name="rut_codeudor"
+                    value={form.rut_codeudor}
+                    onChange={(event) => {
+                      trackPrequalificationStart(currentStep);
+                      setForm((prev) => ({ ...prev, rut_codeudor: formatChileanRutInput(event.target.value) }));
+                    }}
+                    onBlur={() => setForm((prev) => ({ ...prev, rut_codeudor: formatChileanRutInput(normalizeChileanRut(prev.rut_codeudor) || prev.rut_codeudor) }))}
+                    placeholder="Ej: 12.345.678-5"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
+                    <label className="pre-wizard-field-label" htmlFor="correo_codeudor">Correo del co-deudor</label>
+                    <FieldTooltip text="Usaremos este correo para enviar la invitación a completar y autorizar sus propios antecedentes." />
+                  </div>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    id="correo_codeudor"
+                    name="correo_codeudor"
+                    value={form.correo_codeudor}
+                    onChange={handleChange}
+                    placeholder="nombre@correo.cl"
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+              <div className="pre-wizard-grid-2">
+                <div className="pre-wizard-field">
+                  <div className="pre-wizard-field-label-row">
                     <label className="pre-wizard-field-label" htmlFor="ingreso_mensual_complementario">Ingreso mensual complementario</label>
                     <FieldTooltip text="Sueldo líquido o renta promedio de la persona que complementa tu renta." />
                   </div>
@@ -1557,11 +1576,6 @@ export default function ScoreForm({
                   )}
                 </div>
               </div>
-              {showComplementMorosityWarning && (
-                <div className="pre-wizard-warning">
-                  Si la persona complementaria declara morosidad, no se considerará válida para mejorar el score orientativo.
-                </div>
-              )}
             </div>
           )}
 
@@ -1606,12 +1620,12 @@ export default function ScoreForm({
 
           <div className="pre-wizard-nav">
             <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Volver
             </button>
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1693,7 +1707,7 @@ export default function ScoreForm({
 
           <div className="pre-wizard-nav">
             <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Volver
             </button>
             <button
@@ -1709,7 +1723,7 @@ export default function ScoreForm({
               ) : (
                 <>
                   Calcular mi precalificación
-                  <svg viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <svg viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </>
               )}
             </button>

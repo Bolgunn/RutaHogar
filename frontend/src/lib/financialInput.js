@@ -45,5 +45,6 @@ export function buildFinancialInput(input = {}) {
     pie_en_cuotas_interes: input.pie_en_cuotas_interes,
     consentimiento: input.consentimiento,
     uf_value_clp: input.uf_value_clp,
+    onboarding_snapshot: input.onboarding_snapshot,
   };
 }

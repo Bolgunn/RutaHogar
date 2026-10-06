@@ -1,0 +1,225 @@
+{
+  "algorithm": "ALG-13",
+  "version": "hu13-observed-projection-v1",
+  "note": "Contract fixtures for the future pure HU13 projection implementation. Dependency outcomes represent calls to the real scoring, ALG-9 and project-fit adapters; they are supplied so these cases never duplicate their rules or thresholds.",
+  "cases": [
+    {
+      "name": "cero_observaciones",
+      "why": "No numeric trend can be inferred without observations.",
+      "input": { "as_of": "2026-03-01T00:00:00Z", "target_project": { "id": "p1" }, "active_line": [], "variables": ["ahorro_disponible"] },
+      "expect": { "status": "not_projectable", "cause": "insufficient_data", "variable_status": { "ahorro_disponible": "not_projectable" }, "variable_cause": { "ahorro_disponible": "insufficient_data" }, "target_compatible_at": null }
+    },
+    {
+      "name": "una_observacion",
+      "why": "One value contains no observed rate.",
+      "input": {
+        "as_of": "2026-03-01T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "active_line": [ { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } } ],
+        "variables": ["ahorro_disponible"]
+      },
+      "expect": { "status": "not_projectable", "cause": "insufficient_data", "distinct_dates": 1, "slope_per_day": null }
+    },
+    {
+      "name": "dos_fechas_validas_permiten_regresion",
+      "why": "Two distinct dates are the closed minimum sufficiency rule.",
+      "input": {
+        "as_of": "2026-01-31T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-31T00:00:00Z", "snapshot": { "ahorro_disponible": 2000000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near", "first_compatible_at": "2026-03-02T00:00:00Z" }
+      },
+      "expect": { "status": "projected", "observation_ids": ["e1", "e2"], "distinct_dates": 2, "slope_per_day_approx": 33333.333333, "target_compatible_at": "2026-03-02T00:00:00Z" }
+    },
+    {
+      "name": "misma_fecha_repetida_no_es_suficiente",
+      "why": "Several submissions at one instant do not create elapsed-time information.",
+      "input": {
+        "as_of": "2026-01-01T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 2000000 } }
+        ]
+      },
+      "expect": { "status": "not_projectable", "cause": "insufficient_data", "distinct_dates": 1, "observation_ids": ["e1", "e2"] }
+    },
+    {
+      "name": "pendiente_cero_no_inventa_fecha",
+      "why": "A flat observed series is held at its latest value.",
+      "input": {
+        "as_of": "2026-01-31T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-31T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near" }
+      },
+      "expect": { "status": "not_projectable", "cause": "no_favorable_trend", "variable_cause": "zero_slope", "future_ahorro_disponible": 1000000, "target_compatible_at": null }
+    },
+    {
+      "name": "tendencia_contraria_al_objetivo",
+      "why": "A savings decline is observed honestly but is not reversed into an improvement forecast.",
+      "input": {
+        "as_of": "2026-01-31T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 2000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-31T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near" }
+      },
+      "expect": { "status": "not_projectable", "cause": "no_favorable_trend", "variable_cause": "adverse_direction", "fitted_slope_per_day_approx": -33333.333333, "future_ahorro_disponible": 1000000 }
+    },
+    {
+      "name": "ahorro_creciente_se_proyecta",
+      "why": "Savings is projected only from its observed active history and the final date comes from real project-fit execution.",
+      "input": {
+        "as_of": "2026-01-31T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-31T00:00:00Z", "snapshot": { "ahorro_disponible": 2500000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near", "first_compatible_at": "2026-04-01T00:00:00Z", "score_at_compatible": 76, "classification_at_compatible": "Alto" }
+      },
+      "expect": { "status": "projected", "slope_per_day": 50000, "target_compatible_at": "2026-04-01T00:00:00Z", "score_source": "scoring_runner", "project_fit_status_at_target": "compatible" }
+    },
+    {
+      "name": "deuda_decreciente_se_proyecta_hasta_dominio",
+      "why": "A favorable debt slope is valid and the existing non-negative field domain prevents impossible negative debt.",
+      "input": {
+        "as_of": "2026-01-31T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "deuda_mensual": "reduce" },
+        "field_domains": { "deuda_mensual": { "min": 0 } },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "deuda_mensual": 500000 } },
+          { "event_id": "e2", "effective_at": "2026-01-31T00:00:00Z", "snapshot": { "deuda_mensual": 400000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near", "first_compatible_at": "2026-05-01T00:00:00Z" }
+      },
+      "expect": { "status": "projected", "slope_per_day_approx": -3333.333333, "minimum_projected_debt": 0, "target_compatible_at": "2026-05-01T00:00:00Z" }
+    },
+    {
+      "name": "serie_no_monotona_usa_todas_las_observaciones",
+      "why": "OLS does not discard a valid dip or use only the first and last points.",
+      "input": {
+        "as_of": "2026-01-21T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-01-11T00:00:00Z", "snapshot": { "ahorro_disponible": 2000000 } },
+          { "event_id": "e3", "effective_at": "2026-01-21T00:00:00Z", "snapshot": { "ahorro_disponible": 1500000 } }
+        ],
+        "dependency_outcomes": { "current_project_fit": "near", "all_material_states": "not_compatible" }
+      },
+      "expect": { "observation_ids": ["e1", "e2", "e3"], "slope_per_day": 25000, "status": "not_projectable", "cause": "objective_unreachable" }
+    },
+    {
+      "name": "correccion_excluye_outlier_y_cambia_tendencia",
+      "why": "The annulled outlier remains auditable but only the replacement contributes to OLS.",
+      "input": {
+        "as_of": "2026-01-21T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "c2", "effective_at": "2026-01-11T00:00:00Z", "snapshot": { "ahorro_disponible": 2000000 } },
+          { "event_id": "e3", "effective_at": "2026-01-21T00:00:00Z", "snapshot": { "ahorro_disponible": 3000000 } }
+        ],
+        "audit_only": [ { "event_id": "e2", "effective_at": "2026-01-11T00:00:00Z", "snapshot": { "ahorro_disponible": 10000000 }, "annulled_by": "c2" } ],
+        "dependency_outcomes": { "current_project_fit": "near", "first_compatible_at": "2026-02-10T00:00:00Z" }
+      },
+      "expect": { "observation_ids": ["e1", "c2", "e3"], "excluded_observation_ids": ["e2"], "slope_per_day": 100000, "target_compatible_at": "2026-02-10T00:00:00Z" }
+    },
+    {
+      "name": "objetivo_ya_compatible_hoy",
+      "why": "Current compatibility is returned immediately and does not require a trend.",
+      "input": { "as_of": "2026-03-01T00:00:00Z", "target_project": { "id": "p1" }, "active_line": [], "dependency_outcomes": { "current_project_fit": "compatible" } },
+      "expect": { "status": "already_compatible", "cause": null, "target_compatible_at": "2026-03-01T00:00:00Z" }
+    },
+    {
+      "name": "proyecto_objetivo_ausente",
+      "why": "There is no normative compatibility predicate without the user's housing objective.",
+      "input": { "as_of": "2026-03-01T00:00:00Z", "target_project": null, "active_line_fixture": "two_valid_savings_dates" },
+      "expect": { "status": "not_projectable", "cause": "missing_project_goal", "target_compatible_at": null }
+    },
+    {
+      "name": "datos_incompletos_impiden_ejecutar_reglas",
+      "why": "Regression cannot compensate for a state that the real scoring/project-fit path cannot evaluate.",
+      "input": { "as_of": "2026-03-01T00:00:00Z", "target_project": { "id": "p1" }, "active_line_fixture": "missing_required_income", "dependency_outcomes": { "current_project_fit": "requires_info" } },
+      "expect": { "status": "not_projectable", "cause": "incomplete_state", "target_compatible_at": null }
+    },
+    {
+      "name": "cruce_de_threshold_recalcula_score_real",
+      "why": "A future classification change is accepted only because the scoring runner returns it for that projected state.",
+      "input": {
+        "as_of": "2026-03-01T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "active_line_fixture": "two_valid_favorable_dates",
+        "dependency_outcomes": {
+          "milestones": [
+            { "at": "2026-03-01T00:00:00Z", "score": 74, "classification": "Medio", "project_fit": "near" },
+            { "at": "2026-04-01T00:00:00Z", "score": 76, "classification": "Alto", "project_fit": "compatible" }
+          ]
+        }
+      },
+      "expect": { "status": "projected", "target_compatible_at": "2026-04-01T00:00:00Z", "score_regression_used": false, "scoring_runner_calls_include": ["2026-03-01T00:00:00Z", "2026-04-01T00:00:00Z"] }
+    },
+    {
+      "name": "capacidad_suficiente_no_basta_si_project_fit_no_compatible",
+      "why": "Capacity is evidence, not the final objective predicate.",
+      "input": {
+        "as_of": "2026-03-01T00:00:00Z",
+        "target_project": { "id": "p1", "precio_uf": 3000 },
+        "active_line_fixture": "two_valid_favorable_dates",
+        "dependency_outcomes": { "final_capacity_uf": 3200, "final_project_fit": "near", "all_material_states": "not_compatible" }
+      },
+      "expect": { "status": "not_projectable", "cause": "objective_unreachable", "target_compatible_at": null }
+    },
+    {
+      "name": "bloqueador_no_proyectable_impide_compatibilidad",
+      "why": "Age and contractual term are held at their latest declaration; the algorithm must not predict that their blocker disappears.",
+      "input": {
+        "as_of": "2026-03-01T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "active_line_fixture": "two_valid_savings_dates_with_edad_plazo_riesgoso",
+        "held_fields": { "edad": 68, "plazo_credito_hipotecario": 30 },
+        "dependency_outcomes": { "blocking_condition": "edad_plazo_riesgoso", "project_fit_without_blocker": "compatible", "project_fit_with_blocker": "near" }
+      },
+      "expect": { "status": "not_projectable", "cause": "non_projectable_blocker", "held_edad": 68, "held_plazo_credito_hipotecario": 30, "target_compatible_at": null }
+    },
+    {
+      "name": "versiones_historicas_distintas_no_recalculan_historia",
+      "why": "Numeric observations remain usable while future derived states are evaluated under the explicit cutoff version.",
+      "input": {
+        "as_of": "2026-03-01T00:00:00Z",
+        "target_project": { "id": "p1" },
+        "goal_directions": { "ahorro_disponible": "increase" },
+        "active_line": [
+          { "event_id": "e1", "effective_at": "2026-01-01T00:00:00Z", "scoring_version": "1.0.1", "snapshot": { "ahorro_disponible": 1000000 } },
+          { "event_id": "e2", "effective_at": "2026-02-01T00:00:00Z", "scoring_version": "1.1.0", "snapshot": { "ahorro_disponible": 2000000 } }
+        ],
+        "projection_scoring_version": "1.1.0",
+        "dependency_outcomes": { "current_project_fit": "near", "first_compatible_at": "2026-05-01T00:00:00Z" }
+      },
+      "expect": {
+        "status": "projected",
+        "source_scoring_versions": ["1.0.1", "1.1.0"],
+        "projection_scoring_version": "1.1.0",
+        "historical_evaluations_recomputed": false,
+        "target_compatible_at": "2026-05-01T00:00:00Z"
+      }
+    }
+  ]
+}

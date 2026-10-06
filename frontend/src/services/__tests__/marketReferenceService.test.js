@@ -68,5 +68,7 @@ describe("marketReferenceService", () => {
     expect(scoreForm).not.toContain("mindicador.cl");
     expect(scoreForm).not.toContain("FALLBACK_UF_VALUE_CLP");
     expect(scoreForm).not.toContain("respaldo interno");
+    expect(scoreForm).not.toContain("referencePropertyValuesUf");
+    expect(scoreForm).not.toContain("buildReferencePropertyValues");
   });
 });

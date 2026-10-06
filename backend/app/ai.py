@@ -9,6 +9,8 @@ except ImportError:
     Groq = None
  
 
+from .config import get_groq_api_key
+
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 if _env_path.exists():
     with open(_env_path) as f:
@@ -17,7 +19,7 @@ if _env_path.exists():
             if line and not line.startswith("#") and "=" in line:
                 key, _, value = line.partition("=")
                 os.environ.setdefault(key.strip(), value.strip())
- 
+
 # Groq retiró los modelos Llama 3.x el 16/08/2026. El reemplazo oficial
 # recomendado para llama-3.1-8b-instant es openai/gpt-oss-20b.
 # Se puede cambiar sin tocar código con la variable GROQ_MODEL en backend/.env.
@@ -29,11 +31,12 @@ def _ask_groq(prompt: str, max_tokens: int = 300) -> str | None:
     Devuelve el texto generado o None si la IA no está disponible o falló;
     los textos de estado/error jamás se exponen como contenido.
     """
+
     if Groq is None:
         print("[ai] Librería de Groq no instalada; IA deshabilitada.", flush=True)
         return None
 
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = get_groq_api_key()
     if not api_key:
         print("[ai] GROQ_API_KEY no configurada; IA deshabilitada.", flush=True)
         return None

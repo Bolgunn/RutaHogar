@@ -1,26 +1,11 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
-import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
-import { buildScoringHistoryRow, readLocalScoringHistory, writeLocalScoringHistory } from "./getScoringHistory";
-
-const EVALUATIONS_KEY = "RutaHogar_evaluations";
-const SUPABASE_CLASSIFICATIONS = new Set(["Alto", "Medio", "Bajo"]);
-
-function readLocalEvaluations() {
-  try {
-    return (JSON.parse(localStorage.getItem(EVALUATIONS_KEY)) || []).map(normalizeLocalEvaluation);
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalEvaluations(evaluations) {
-  localStorage.setItem(EVALUATIONS_KEY, JSON.stringify(evaluations));
-}
+import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
+import { isStaffRole } from "../lib/roles";
+import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
   if (value === undefined || value === null) return fallback;
-
   try {
     return JSON.parse(JSON.stringify(value));
   } catch {
@@ -28,34 +13,18 @@ function cloneJson(value, fallback) {
   }
 }
 
-function normalizeScoreForSupabase(score) {
-  const numericScore = Number(score);
-  if (!Number.isFinite(numericScore)) return 0;
-  return Math.max(0, Math.min(100, Math.round(numericScore)));
-}
-
-function normalizeClassificationForSupabase(result = {}) {
-  if (SUPABASE_CLASSIFICATIONS.has(result.classification)) return result.classification;
-  if (SUPABASE_CLASSIFICATIONS.has(result.original_classification)) return result.original_classification;
-  return "Bajo";
-}
-
-function resolveCalculationReason(evaluationPayload) {
-  return evaluationPayload.calculation_reason || evaluationPayload.calculationReason || evaluationPayload.reason || "new_evaluation";
-}
-
+// HU13 events remain the persistence authority; the helper preserves the
+// exact server-resolved market bundle in an immutable evaluation payload.
 export function buildFinancialDataSnapshot(evaluationPayload) {
   const input = cloneJson(evaluationPayload.input, {});
   const result = cloneJson(evaluationPayload.result, {});
-  const calculationReason = resolveCalculationReason(evaluationPayload);
-
   return {
     ...input,
     input,
     input_snapshot: input,
     result,
     result_snapshot: result,
-    calculation_reason: calculationReason,
+    calculation_reason: evaluationPayload.calculation_reason || evaluationPayload.calculationReason || evaluationPayload.reason || "new_evaluation",
     calculated_at: new Date().toISOString(),
   };
 }
@@ -69,14 +38,20 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     : recommendationData.items || [];
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
-  const contact = contactsMap[row.user_id] || {};
+  const contact = contactsMap[row.user_id] || row;
+  const input = financialData.input || financialData.input_snapshot || financialData;
+  const onboardingSnapshot = input?.onboarding_snapshot;
+  const hasSnapshotField = (field) => Object.prototype.hasOwnProperty.call(onboardingSnapshot || {}, field);
 
   const onboarding = {
-    objetivo_principal: row.objective || "",
-    tipo_propiedad: row.property_type || "",
-    comuna_interes: row.target_commune || "",
-    comuna_alternativa: row.alternative_commune || "",
-    plazo_compra: row.purchase_timeline || "",
+    objetivo_principal: hasSnapshotField("objetivo_principal") ? onboardingSnapshot.objetivo_principal : row.objective || "",
+    tipo_propiedad: hasSnapshotField("tipo_propiedad") ? onboardingSnapshot.tipo_propiedad : row.property_type || "",
+    comuna_interes: hasSnapshotField("comuna_interes") ? onboardingSnapshot.comuna_interes : input?.comuna_objetivo || row.target_commune || "",
+    comuna_alternativa: hasSnapshotField("comuna_alternativa") ? onboardingSnapshot.comuna_alternativa : input?.comuna_alternativa || row.alternative_commune || "",
+    plazo_compra: hasSnapshotField("plazo_compra") ? onboardingSnapshot.plazo_compra : input?.plazo_compra || row.purchase_timeline || "",
+    tiene_propiedad_vista: hasSnapshotField("tiene_propiedad_vista")
+      ? onboardingSnapshot.tiene_propiedad_vista === true
+      : input?.tiene_propiedad_vista,
   };
 
   return {
@@ -87,9 +62,17 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
     phone: contact.phone || null,
+    reliability_status: contact.reliability_status || "normal",
+    profile: {
+      nombre: contact.nombre || null,
+      apellido_paterno: contact.apellido_paterno || null,
+      apellido_materno: contact.apellido_materno || null,
+      rut: contact.rut || null,
+      phone: contact.phone || null,
+    },
     user_id: row.user_id,
     onboarding,
-    input: financialData.input || financialData.input_snapshot || financialData,
+    input,
     result: {
       ...storedResult,
       score: storedResult.score ?? row.score,
@@ -108,6 +91,15 @@ export function normalizeEvaluation(row, contactsMap = {}) {
   };
 }
 
+
+
+
+
+const pendingCommands = new WeakMap();
+
+function requireConnection() {
+  if (!supabase) throw new Error("La persistencia de evaluaciones no está disponible.");
+}
 function normalizeLocalEvaluation(entry) {
   if (!entry) return null;
   const result = entry.result || {};
@@ -153,6 +145,8 @@ function buildRow(userId, evaluationPayload) {
     },
     executive_summary: result.executive_summary || null,
     commercial_guidance: result.commercial_guidance || null,
+    fraud_score_probability: result.fraud_score_probability ?? null,
+    shap_top_factors: result.shap_top_factors ?? null,
   };
 }
 
@@ -177,276 +171,157 @@ const evaluationSelectColumns = [
 ].join(", ");
 
 export async function createEvaluation(userId, evaluationPayload) {
-  if (!isSupabaseDataConfigured) {
-    const entry = {
-      id: window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Date.now()),
-      created_at: new Date().toISOString(),
-      email: evaluationPayload.email,
-      full_name: evaluationPayload.full_name || null,
-      user_id: userId,
-      onboarding: evaluationPayload.onboarding || null,
-      input: evaluationPayload.input || {},
-      result: evaluationPayload.result,
-    };
-    const next = [entry, ...readLocalEvaluations()].slice(0, 25);
-    writeLocalEvaluations(next);
-
-    const historyEntry = {
-      ...buildScoringHistoryRow(userId, entry.id, evaluationPayload),
-      id: window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Date.now()),
-      created_at: new Date().toISOString(),
-    };
-    const historyNext = [historyEntry, ...readLocalScoringHistory()];
-    writeLocalScoringHistory(historyNext);
-
-    return normalizeLocalEvaluation(entry);
-  }
-
+  requireConnection();
   const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para guardar la precalificación.");
+  if (!user?.id || (userId && userId !== user.id)) throw new Error("No hay una sesión válida para guardar.");
   await ensureUserProfile(user);
+  let command = pendingCommands.get(evaluationPayload);
+  if (!command) {
+    const tracking = await getTracking();
+    command = newTrackingCommand(evaluationPayload.input || {}, tracking.latest_event_id, "evaluation");
+    pendingCommands.set(evaluationPayload, command);
+  }
+  // Client score is a preview only. The authenticated backend calculates the saved result.
+  const saved = await appendTrackingEvent(command);
+  const evaluation = saved.evaluation;
+  return normalizeEvaluation({
+    id: evaluation.id, user_id: user.id, created_at: command.effective_at,
+    financial_data: { input: evaluation.snapshot, result: evaluation.result, provenance: evaluation.provenance },
+  });
+}
 
-  let { data, error } = await supabase
-    .from("evaluations")
-    .insert(buildRow(user.id, evaluationPayload))
-    .select(evaluationSelectColumns)
-    .single();
-
-  if (error) { logSupabaseError(error); throw error; }
-
-  const historyRow = buildScoringHistoryRow(user.id, data.id, evaluationPayload);
-  const { error: historyError } = await supabase
-    .from("scoring_history")
-    .insert(historyRow);
-
-  if (historyError) {
-    logSupabaseError(historyError);
-    const traceabilityData = {
-      ...(data.financial_data || {}),
-      score_traceability: {
-        scoring_history_insert_failed: true,
-        failed_at: new Date().toISOString(),
-        code: historyError.code || null,
-        message: historyError.message || "No se pudo insertar scoring_history.",
-      },
-    };
-    const { data: updatedEvaluation, error: traceabilityError } = await supabase
-      .from("evaluations")
-      .update({ financial_data: traceabilityData })
-      .eq("id", data.id)
-      .select(evaluationSelectColumns)
-      .maybeSingle();
-
-    if (traceabilityError) {
-      logSupabaseError(traceabilityError);
-    } else if (updatedEvaluation) {
-      data = updatedEvaluation;
+export function applyEvaluationAnnotations(row, annotations) {
+  const view = { ...row };
+  for (const event of [...annotations].sort((a, b) =>
+    a.recorded_at.localeCompare(b.recorded_at) || a.event_id.localeCompare(b.event_id))) {
+    const payload = event.payload || {};
+    if (event.kind === "plan_accepted") {
+      view.plan_accepted_at = event.effective_at;
+      view.housing_plan = {
+        ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
+        ...(payload.plan_type ? { plan_type: payload.plan_type } : {})
+      };
+    } else if (event.kind === "housing_plan") {
+      view.housing_plan = payload.housing_plan;
+    } else if (event.kind === "narrative") {
+      // Overlay for display only; the immutable stored result remains untouched.
+      view.financial_data = {
+        ...(view.financial_data || {}), result: {
+          ...(view.financial_data?.result || {}),
+          ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
+            .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
+        }
+      };
     }
   }
+  return view;
+}
 
-  return normalizeEvaluation(data);
+export function evaluationAnnotationOwner(role, userId) {
+  return isStaffRole(role) ? null : userId;
 }
 
 export async function getEvaluations(userId, role) {
-  if (!isSupabaseDataConfigured) {
-    const isSales = role === "ejecutivo" || role === "admin";
-    if (isSales) return readLocalEvaluations();
-    return readLocalEvaluations().filter((item) => item.user_id === userId || item.email === userId);
-  }
-
+  requireConnection();
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
-
-  const isSales = role === "ejecutivo" || role === "admin";
-
-  let query = supabase
-    .from("evaluations")
-    .select(evaluationSelectColumns)
-    .order("created_at", { ascending: false });
-
-  if (!isSales) {
-    query = query.eq("user_id", user.id);
+  const isSales = isStaffRole(role);
+  if (isSales) {
+    // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
+    const projection = await getStaffEvaluations();
+    const rows = projection.items || [];
+    const contactsMap = await listLeadContacts(rows);
+    return rows.map((row) => normalizeEvaluation(row, contactsMap));
   }
+  const { data, error } = await supabase.from("evaluations").select("*")
+    .eq("user_id", user.id).order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!data?.length) return [];
+  let annotationQuery = supabase.from("evaluation_events").select("*")
+    .in("evaluation_id", data.map((row) => row.id));
+  const annotationOwner = evaluationAnnotationOwner(role, user.id);
+  if (annotationOwner) annotationQuery = annotationQuery.eq("user_id", annotationOwner);
+  const { data: annotations, error: annotationError } = await annotationQuery
+    .order("recorded_at", { ascending: true });
+  if (annotationError) throw annotationError;
+  return data.map((row) => normalizeEvaluation(
+    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), {}));
+}
 
-  const { data, error } = await query;
-  if (error) { logSupabaseError(error); throw error; }
-
-  // El contacto de un lead se obtiene mediante una RPC limitada al staff, sin
-  // ampliar el acceso directo a perfiles personales.
-  let contactsMap = {};
-  if (isSales && data?.length) {
-    const userIds = [...new Set(data.map((r) => r.user_id).filter(Boolean))];
-    const { data: contactsData, error: contactsError } = await supabase
-      .rpc("list_lead_contacts", { p_user_ids: userIds });
-
-    if (contactsError) {
-      logSupabaseError(contactsError);
-    } else if (contactsData) {
-      contactsMap = Object.fromEntries(contactsData.map((contact) => [contact.id, contact]));
-    }
+// OVERLAP: HU12/HU16 leen nombre, RUT y reliability_status de list_lead_contacts; HU18 trae solo
+// nombre y teléfono en la proyección. Se mantienen ambos hasta unificar la proyección staff.
+async function listLeadContacts(rows) {
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  if (!userIds.length) return {};
+  const { data: contactsData, error: contactsError } = await supabase
+    .rpc("list_lead_contacts", { p_user_ids: userIds });
+  if (contactsError) {
+    logSupabaseError(contactsError);
+    return {};
   }
-
-  return (data || []).map((row) => normalizeEvaluation(row, contactsMap));
+  return Object.fromEntries((contactsData || []).map((contact) => [
+    contact.id,
+    { ...contact, reliability_status: contact.reliability_status || "normal" },
+  ]));
 }
 
 export async function getLatestEvaluation(userId) {
-  if (!isSupabaseDataConfigured) {
-    return (await getEvaluations(userId))[0] || null;
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para cargar la calificación actual.");
-
-  const { data, error } = await supabase
-    .from("evaluations")
-    .select(evaluationSelectColumns)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return normalizeEvaluation(data);
+  const tracking = await getTracking();
+  if (!tracking.current_evaluation_id) return null;
+  return (await getEvaluations(userId)).find((row) => row.id === tracking.current_evaluation_id) || null;
 }
 
-export async function deleteEvaluation(evaluationId, userId) {
-  if (!isSupabaseDataConfigured) {
-    writeLocalEvaluations(readLocalEvaluations().filter((item) => item.id !== evaluationId));
-    return;
+export async function deleteEvaluation() {
+  throw new Error("El historial es inmutable. Usa una corrección o anulación desde Mi progreso.");
+}
+
+async function annotateAndRead(evaluationId, userId, kind, payload, { tolerateReadFailure = false } = {}) {
+  const event = await annotateEvaluation(evaluationId, kind, payload);
+  try {
+    const evaluation = (await getEvaluations(userId)).find((row) => row.id === evaluationId) || null;
+    if (!tolerateReadFailure) return evaluation;
+    return {
+      event,
+      evaluation,
+      refreshError: evaluation ? null : new Error("No se encontró la evaluación después de persistir la anotación."),
+    };
+  } catch (refreshError) {
+    if (!tolerateReadFailure) throw refreshError;
+    return { event, evaluation: null, refreshError };
   }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para eliminar calificaciones.");
-
-  const { error } = await supabase
-    .from("evaluations")
-    .delete()
-    .eq("id", evaluationId)
-    .eq("user_id", user.id);
-
-  if (error) { logSupabaseError(error); throw error; }
 }
 
 export async function acceptEvaluationPlan(evaluationId, userId, updates = {}) {
-  const acceptedAt = new Date().toISOString();
-  
-  // Construir objeto de actualización base
-  const payload = {
-    plan_accepted_at: acceptedAt,
+  // La anotación ya quedó confirmada antes de leer nuevamente. Una falla de
+  // refresco no puede convertir esa escritura persistida en un falso error.
+  return annotateAndRead(evaluationId, userId, "plan_accepted", updates, {
+    tolerateReadFailure: true,
+  });
+}
+
+export function applyAcceptedPlanEvent(evaluation, event) {
+  if (!evaluation || !event) return evaluation;
+  const payload = event.payload || {};
+  const housingPlan = {
+    ...(evaluation.housing_plan || {}),
+    ...(payload.housing_plan || {}),
+    ...(payload.plan_type ? { plan_type: payload.plan_type } : {}),
   };
 
-  // El tipo de plan se guarda dentro del JSONB housing_plan para evitar errores de schema si no existe como columna.
-  // Se parcha sobre el housing_plan existente: reemplazarlo entero borraba el progreso ya guardado.
-  const planPatch = {};
-  if (updates.plan_type) planPatch.plan_type = updates.plan_type;
-  if (updates.housing_plan) {
-    Object.assign(planPatch, { status: "en_curso", accepted_at: acceptedAt }, updates.housing_plan);
-  }
-  const hasPlanPatch = Object.keys(planPatch).length > 0;
-
-  if (!isSupabaseDataConfigured) {
-    const next = readLocalEvaluations().map((item) =>
-      item.id === evaluationId
-        ? {
-            ...item,
-            ...payload,
-            ...(hasPlanPatch ? { housing_plan: { ...(item.housing_plan || {}), ...planPatch } } : {}),
-          }
-        : item,
-    );
-    writeLocalEvaluations(next);
-    return normalizeLocalEvaluation(next.find((item) => item.id === evaluationId) || null);
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para aceptar el plan.");
-
-  if (hasPlanPatch) {
-    const { data: current } = await supabase
-      .from("evaluations")
-      .select("housing_plan")
-      .eq("id", evaluationId)
-      .eq("user_id", user.id)
-      .single();
-    payload.housing_plan = { ...(current?.housing_plan || {}), ...planPatch };
-  }
-
-  const { data, error } = await supabase
-    .from("evaluations")
-    .update(payload)
-    .eq("id", evaluationId)
-    .eq("user_id", user.id)
-    .select(evaluationSelectColumns)
-    .single();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return normalizeEvaluation(data);
+  return {
+    ...evaluation,
+    plan_accepted_at: event.effective_at || evaluation.plan_accepted_at || null,
+    housing_plan: housingPlan,
+    plan_type: payload.plan_type || housingPlan.plan_type || evaluation.plan_type || null,
+  };
 }
 
 export async function saveHousingPlanProgress(evaluationId, userId, housingPlan) {
-  if (!isSupabaseDataConfigured) {
-    const next = readLocalEvaluations().map((item) =>
-      item.id === evaluationId ? { ...item, housing_plan: housingPlan } : item,
-    );
-    writeLocalEvaluations(next);
-    return normalizeLocalEvaluation(next.find((item) => item.id === evaluationId) || null);
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para guardar el progreso del plan.");
-
-  const { data, error } = await supabase
-    .from("evaluations")
-    .update({ housing_plan: housingPlan })
-    .eq("id", evaluationId)
-    .eq("user_id", user.id)
-    .select(evaluationSelectColumns)
-    .single();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return normalizeEvaluation(data);
+  return annotateAndRead(evaluationId, userId, "housing_plan", { housing_plan: housingPlan });
 }
 
-// Persiste los textos de IA regenerados para una evaluación existente.
-// Devuelve la evaluación normalizada actualizada, o null si no se encontró.
-export async function updateEvaluationAiContent(
-  evaluationId,
-  { ai_explanation, executive_summary, commercial_guidance } = {},
-) {
-  const updates = {};
-  if (ai_explanation !== undefined) updates.explanation = sanitizeAiText(ai_explanation);
-  if (executive_summary !== undefined) updates.executive_summary = sanitizeAiText(executive_summary);
-  if (commercial_guidance !== undefined) updates.commercial_guidance = sanitizeAiText(commercial_guidance);
-
-  if (!Object.keys(updates).length || !evaluationId) return null;
-
-  if (!isSupabaseDataConfigured) {
-    let updated = null;
-    const next = readLocalEvaluations().map((item) => {
-      if (item.id !== evaluationId) return item;
-      updated = normalizeLocalEvaluation({
-        ...item,
-        result: { ...(item.result || {}), ...updates },
-      });
-      return updated;
-    });
-    writeLocalEvaluations(next);
-    return updated;
-  }
-
-  const user = await getAuthenticatedUser();
-  if (!user?.id) throw new Error("No hay usuario autenticado para actualizar la precalificación.");
-  await ensureUserProfile(user);
-
-  const { data, error } = await supabase
-    .from("evaluations")
-    .update(updates)
-    .eq("id", evaluationId)
-    .eq("user_id", user.id)
-    .select(evaluationSelectColumns)
-    .maybeSingle();
-
-  if (error) { logSupabaseError(error); throw error; }
-  return data ? normalizeEvaluation(data) : null;
+export async function updateEvaluationAiContent(evaluationId, updates = {}) {
+  if (!evaluationId || !Object.keys(updates).length) return null;
+  return annotateAndRead(evaluationId, null, "narrative", updates);
 }

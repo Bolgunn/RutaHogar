@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import cases from "../../../../../docs/algorithms/ALG-11-cases.json";
+import cases from "../../../../../docs/algorithms/ALG-11-financing-cases.json";
 import { calculateScenarioResult, classifyFinancialScenario } from "../scenarioResult";
 import { applyRangeReferenceAmount, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
 import { BENEFIT_ESTIMATION_BASELINE } from "../benefitEstimationBaseline";

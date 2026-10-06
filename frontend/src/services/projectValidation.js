@@ -142,11 +142,3 @@ export function validateExecutive(input = {}) {
 
   return { ok: Object.keys(errors).length === 0, errors };
 }
-
-// Espejo exacto de testPasswordFromEmail en supabase/functions/create-executive.
-// Modo de prueba: la contraseña es el texto antes del @, rellenado a 6
-// caracteres porque Supabase exige ese mínimo.
-export function derivedTestPassword(email) {
-  const local = String(email || "").split("@")[0] || "";
-  return local.length >= 6 ? local : local.padEnd(6, "0");
-}

@@ -4,7 +4,7 @@
 | :---- | :---- |
 | **Version** | `hu17-v2` |
 | **Runs on / implemented in** | Frontend pure layer · `frontend/src/lib/financing/` |
-| **Cases** | `docs/algorithms/ALG-11-cases.json` · asserted by Vitest |
+| **Cases** | `docs/algorithms/ALG-11-financing-cases.json` · asserted by Vitest |
 | **Open assumptions** | 0 — closed in the HU17 Grill |
 | **Last changed** | 2026-09-27 · HU17 design baseline |
 

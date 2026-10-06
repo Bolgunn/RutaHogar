@@ -38,23 +38,10 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-// MODO DE PRUEBA: contraseña = texto antes del @ del correo.
-// "testejecutivocomercial@email.com" -> "testejecutivocomercial"
-// Supabase exige 6 caracteres mínimo, así que se rellena de forma
-// determinista para que siga siendo predecible.
-export function testPasswordFromEmail(email: string) {
-  const local = String(email || "").split("@")[0] || "";
-  return local.length >= 6 ? local : local.padEnd(6, "0");
-}
-
 function randomPassword() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return btoa(String.fromCharCode(...bytes)).replace(/[^a-zA-Z0-9]/g, "").slice(0, 24) + "aA1!";
-}
-
-function isTestPasswordMode() {
-  return Deno.env.get("EJECUTIVO_TEST_PASSWORD_MODE") === "true";
 }
 
 function buildInviteEmail(fullName: string, inmobiliariaNombre: string, actionLink: string) {
@@ -186,7 +173,7 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo validar el administrador." }, 500);
     }
 
-    if (callerProfile?.role !== "admin") {
+    if (callerProfile?.role !== "admin" && callerProfile?.role !== "admin_inmobiliario") {
       return jsonResponse({ error: "Solo un administrador puede crear ejecutivos." }, 403);
     }
 
@@ -271,8 +258,9 @@ serve(async (req) => {
     }
 
     // --- Cuenta nueva ---
-    const testMode = isTestPasswordMode();
-    const password = testMode ? testPasswordFromEmail(email) : randomPassword();
+    // La contraseña inicial no se expone ni puede derivarse de datos públicos.
+    // El ejecutivo la define mediante el enlace de recuperación de un solo uso.
+    const password = randomPassword();
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
@@ -283,7 +271,7 @@ serve(async (req) => {
 
     if (createError || !created?.user) {
       console.error("Error creando la cuenta:", createError);
-      return jsonResponse({ error: createError?.message || "No se pudo crear la cuenta." }, 500);
+      return jsonResponse({ error: "No se pudo crear la cuenta." }, 500);
     }
 
     const { error: insertProfileError } = await adminClient.from("profiles").upsert({
@@ -327,11 +315,9 @@ serve(async (req) => {
       created: true,
       ejecutivo: { id: created.user.id, email, full_name: fullName },
       email_enviado: emailSent,
-      // Solo en modo de prueba: permite entrar sin depender del correo.
-      password_temporal: testMode ? password : undefined,
     });
   } catch (error) {
     console.error("create-executive falló:", error);
-    return jsonResponse({ error: (error as Error).message || "Error inesperado." }, 500);
+    return jsonResponse({ error: "Error inesperado." }, 500);
   }
 });
