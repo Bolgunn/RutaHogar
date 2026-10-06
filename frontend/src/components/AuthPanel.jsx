@@ -264,17 +264,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       }
     }
 
-    if (mode === "signup") {
-      if (!form.rut_number || !form.rut_dv) {
-        setError("Ingresa tu RUT para crear la cuenta.");
-        return;
-      }
-      if (!validateRut(form.rut_number, form.rut_dv)) {
-        setError("El RUT ingresado no es válido.");
-        return;
-      }
-    }
-
     const normalizedPhone = normalizePhone(form.phone);
     const birthDate = buildBirthDateIso(form);
 
@@ -430,30 +419,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <div className="auth-field">
                     <label className="auth-field-label">Apellido Materno</label>
                     <input id="auth-apellido-materno" type="text" name="apellido_materno" value={form.apellido_materno} onChange={handleChange} placeholder="Ej: Pérez" autoComplete="family-name" />
-                  </div>
-
-                  <div className="auth-field">
-                    <label className="auth-field-label">RUT</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '8px' }}>
-                      <input
-                        type="text"
-                        name="rut_number"
-                        value={form.rut_number}
-                        onChange={handleChange}
-                        placeholder="12345678"
-                        maxLength="8"
-                        inputMode="numeric"
-                      />
-                      <input
-                        type="text"
-                        name="rut_dv"
-                        value={form.rut_dv}
-                        onChange={handleChange}
-                        placeholder="K"
-                        maxLength="1"
-                        style={{ textAlign: 'center' }}
-                      />
-                    </div>
                   </div>
 
                   <div className="auth-field">
