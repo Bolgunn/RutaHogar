@@ -274,7 +274,7 @@ export default function AdminPanel({ evaluations, profile }) {
       )}
 
       <div className="admin-section-gap">
-        <AdminReportedLeads profile={profile} />
+        <AdminReportedLeads profile={profile} evaluations={evaluations} />
       </div>
     </section>
   );
