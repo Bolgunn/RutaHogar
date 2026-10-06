@@ -25,8 +25,9 @@ describe("admin_inmobiliario role", () => {
     expect(resolveStaffRoute("/admin", roles.admin_inmo)).toEqual({ page: "admin" });
     expect(resolveStaffRoute("/admin/proyectos", roles.admin_inmo)).toEqual({ page: "admin-projects" });
     expect(resolveStaffRoute("/admin/perfil", roles.admin_inmo)).toEqual({ page: "admin-profile" });
+    expect(resolveStaffRoute("/admin/reportes", roles.admin_inmo)).toEqual({ page: "admin-reports" });
     expect(resolveStaffRoute("/dashboard", roles.admin_inmo)).toEqual({ page: "leads", path: "/dashboard" });
-    for (const page of ["admin", "admin-projects", "admin-profile", "leads"]) {
+    for (const page of ["admin", "admin-projects", "admin-profile", "admin-reports", "leads"]) {
       expect(canViewStaffPage(page, roles.admin_inmo)).toBe(true);
     }
   });
@@ -64,5 +65,14 @@ describe("existing roles keep their routes", () => {
     expect(resolveStaffRoute("/ejecutivo/leads", roles.sales)).toEqual({ page: "leads", path: "/dashboard" });
     expect(canViewStaffPage("admin", roles.sales)).toBe(false);
     expect(canViewStaffPage("leads", roles.sales)).toBe(true);
+  });
+
+  it("opens the HU 15 metrics page for ejecutivos and admins only", () => {
+    for (const role of [roles.sales, roles.admin, roles.admin_inmo]) {
+      expect(resolveStaffRoute("/metricas", role)).toEqual({ page: "metricas" });
+      expect(canViewStaffPage("metricas", role)).toBe(true);
+    }
+    expect(resolveStaffRoute("/metricas", roles.user)).toBe(null);
+    expect(canViewStaffPage("metricas", roles.user)).toBe(false);
   });
 });

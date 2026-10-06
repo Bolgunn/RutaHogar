@@ -1,8 +1,8 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
-import { ensureUserProfile, getAuthenticatedUser } from "./profileService";
+import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
 import { isStaffRole } from "../lib/roles";
-import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
+import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
   if (value === undefined || value === null) return fallback;
@@ -38,14 +38,20 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     : recommendationData.items || [];
   const financialData = row.financial_data || {};
   const storedResult = financialData.result || financialData.result_snapshot || {};
-  const contact = contactsMap[row.user_id] || {};
+  const contact = contactsMap[row.user_id] || row;
+  const input = financialData.input || financialData.input_snapshot || financialData;
+  const onboardingSnapshot = input?.onboarding_snapshot;
+  const hasSnapshotField = (field) => Object.prototype.hasOwnProperty.call(onboardingSnapshot || {}, field);
 
   const onboarding = {
-    objetivo_principal: row.objective || "",
-    tipo_propiedad: row.property_type || "",
-    comuna_interes: row.target_commune || "",
-    comuna_alternativa: row.alternative_commune || "",
-    plazo_compra: row.purchase_timeline || "",
+    objetivo_principal: hasSnapshotField("objetivo_principal") ? onboardingSnapshot.objetivo_principal : row.objective || "",
+    tipo_propiedad: hasSnapshotField("tipo_propiedad") ? onboardingSnapshot.tipo_propiedad : row.property_type || "",
+    comuna_interes: hasSnapshotField("comuna_interes") ? onboardingSnapshot.comuna_interes : input?.comuna_objetivo || row.target_commune || "",
+    comuna_alternativa: hasSnapshotField("comuna_alternativa") ? onboardingSnapshot.comuna_alternativa : input?.comuna_alternativa || row.alternative_commune || "",
+    plazo_compra: hasSnapshotField("plazo_compra") ? onboardingSnapshot.plazo_compra : input?.plazo_compra || row.purchase_timeline || "",
+    tiene_propiedad_vista: hasSnapshotField("tiene_propiedad_vista")
+      ? onboardingSnapshot.tiene_propiedad_vista === true
+      : input?.tiene_propiedad_vista,
   };
 
   return {
@@ -56,9 +62,17 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
     phone: contact.phone || null,
+    reliability_status: contact.reliability_status || "normal",
+    profile: {
+      nombre: contact.nombre || null,
+      apellido_paterno: contact.apellido_paterno || null,
+      apellido_materno: contact.apellido_materno || null,
+      rut: contact.rut || null,
+      phone: contact.phone || null,
+    },
     user_id: row.user_id,
     onboarding,
-    input: financialData.input || financialData.input_snapshot || financialData,
+    input,
     result: {
       ...storedResult,
       score: storedResult.score ?? row.score,
@@ -78,11 +92,83 @@ export function normalizeEvaluation(row, contactsMap = {}) {
 }
 
 
+
+
+
 const pendingCommands = new WeakMap();
 
 function requireConnection() {
   if (!supabase) throw new Error("La persistencia de evaluaciones no está disponible.");
 }
+function normalizeLocalEvaluation(entry) {
+  if (!entry) return null;
+  const result = entry.result || {};
+
+  return {
+    ...entry,
+    result: {
+      ...result,
+      risks: normalizeDisplayList(result.risks),
+      recommendations: normalizeDisplayList(result.recommendations),
+      ai_explanation: sanitizeAiText(normalizeDisplayText(result.ai_explanation || "")),
+      improvement_plan: normalizeImprovementPlan(result.improvement_plan),
+      positive_indicators: normalizeDisplayList(result.positive_indicators),
+      executive_summary: sanitizeAiText(result.executive_summary),
+      commercial_guidance: sanitizeAiText(result.commercial_guidance),
+    },
+    plan_type: entry.plan_type || entry.housing_plan?.plan_type || null,
+  };
+}
+
+function buildRow(userId, evaluationPayload) {
+  const result = evaluationPayload.result || {};
+  const onboarding = evaluationPayload.onboarding || {};
+
+  return {
+    user_id: userId,
+    email: evaluationPayload.email || null,
+    score: normalizeScoreForSupabase(result.score),
+    classification: normalizeClassificationForSupabase(result),
+    created_at: new Date().toISOString(),
+    objective: onboarding.objetivo_principal || null,
+    property_type: onboarding.tipo_propiedad || null,
+    target_commune: onboarding.comuna_interes || evaluationPayload.input?.comuna_objetivo || null,
+    alternative_commune: onboarding.comuna_alternativa || null,
+    purchase_timeline: onboarding.plazo_compra || null,
+    financial_data: buildFinancialDataSnapshot(evaluationPayload),
+    explanation: sanitizeAiText(result.ai_explanation),
+    recommendations: {
+      items: result.recommendations || [],
+      risks: result.risks || [],
+      improvement_plan: result.improvement_plan || [],
+      positive_indicators: result.positive_indicators || [],
+    },
+    executive_summary: result.executive_summary || null,
+    commercial_guidance: result.commercial_guidance || null,
+    fraud_score_probability: result.fraud_score_probability ?? null,
+    shap_top_factors: result.shap_top_factors ?? null,
+  };
+}
+
+const evaluationSelectColumns = [
+  "id",
+  "user_id",
+  "email",
+  "score",
+  "classification",
+  "objective",
+  "property_type",
+  "target_commune",
+  "alternative_commune",
+  "purchase_timeline",
+  "financial_data",
+  "explanation",
+  "recommendations",
+  "executive_summary",
+  "commercial_guidance",
+  "housing_plan",
+  "created_at",
+].join(", ");
 
 export async function createEvaluation(userId, evaluationPayload) {
   requireConnection();
@@ -111,17 +197,21 @@ export function applyEvaluationAnnotations(row, annotations) {
     const payload = event.payload || {};
     if (event.kind === "plan_accepted") {
       view.plan_accepted_at = event.effective_at;
-      view.housing_plan = { ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
-        ...(payload.plan_type ? { plan_type: payload.plan_type } : {}) };
+      view.housing_plan = {
+        ...(view.housing_plan || {}), ...(payload.housing_plan || {}),
+        ...(payload.plan_type ? { plan_type: payload.plan_type } : {})
+      };
     } else if (event.kind === "housing_plan") {
       view.housing_plan = payload.housing_plan;
     } else if (event.kind === "narrative") {
       // Overlay for display only; the immutable stored result remains untouched.
-      view.financial_data = { ...(view.financial_data || {}), result: {
-        ...(view.financial_data?.result || {}),
-        ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
-          .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
-      } };
+      view.financial_data = {
+        ...(view.financial_data || {}), result: {
+          ...(view.financial_data?.result || {}),
+          ...Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
+            .filter((key) => payload[key] !== undefined).map((key) => [key, sanitizeAiText(payload[key])])),
+        }
+      };
     }
   }
   return view;
@@ -137,17 +227,16 @@ export async function getEvaluations(userId, role) {
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
   const isSales = isStaffRole(role);
-  let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
-  if (!isSales) query = query.eq("user_id", user.id);
-  const { data, error } = await query;
-  if (error) throw error;
-  let contactsMap = {};
-  if (isSales && data?.length) {
-    const { data: contacts } = await supabase.rpc("list_lead_contacts", {
-      p_user_ids: [...new Set(data.map((row) => row.user_id))],
-    });
-    contactsMap = Object.fromEntries((contacts || []).map((contact) => [contact.id, contact]));
+  if (isSales) {
+    // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
+    const projection = await getStaffEvaluations();
+    const rows = projection.items || [];
+    const contactsMap = await listLeadContacts(rows);
+    return rows.map((row) => normalizeEvaluation(row, contactsMap));
   }
+  const { data, error } = await supabase.from("evaluations").select("*")
+    .eq("user_id", user.id).order("created_at", { ascending: false });
+  if (error) throw error;
   if (!data?.length) return [];
   let annotationQuery = supabase.from("evaluation_events").select("*")
     .in("evaluation_id", data.map((row) => row.id));
@@ -156,8 +245,25 @@ export async function getEvaluations(userId, role) {
   const { data: annotations, error: annotationError } = await annotationQuery
     .order("recorded_at", { ascending: true });
   if (annotationError) throw annotationError;
-  return (data || []).map((row) => normalizeEvaluation(
-    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), contactsMap));
+  return data.map((row) => normalizeEvaluation(
+    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), {}));
+}
+
+// OVERLAP: HU12/HU16 leen nombre, RUT y reliability_status de list_lead_contacts; HU18 trae solo
+// nombre y teléfono en la proyección. Se mantienen ambos hasta unificar la proyección staff.
+async function listLeadContacts(rows) {
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  if (!userIds.length) return {};
+  const { data: contactsData, error: contactsError } = await supabase
+    .rpc("list_lead_contacts", { p_user_ids: userIds });
+  if (contactsError) {
+    logSupabaseError(contactsError);
+    return {};
+  }
+  return Object.fromEntries((contactsData || []).map((contact) => [
+    contact.id,
+    { ...contact, reliability_status: contact.reliability_status || "normal" },
+  ]));
 }
 
 export async function getLatestEvaluation(userId) {

@@ -29,9 +29,13 @@ class MemoryRepository:
     def __init__(self):
         self.bundle = {"plan": None, "events": [], "goals": [], "goal_events": [], "evaluations": [], "revision": None}
         self.commits = 0
+        self.co_debtor_consent = None
 
     def load(self, user_id):
         return deepcopy(self.bundle)
+
+    def load_co_debtor_consent(self, user_id):
+        return deepcopy(self.co_debtor_consent)
 
     def commit(self, user_id, command, revision, records):
         if revision != self.bundle["revision"]:
@@ -98,6 +102,27 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
     assert app.read("u1", "2026-03-03T00:00:00Z")["update_due"]
     with pytest.raises(TrackingError, match="idempotency_conflict"):
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
+
+
+def test_evaluations_keep_their_own_preliminary_question_snapshot():
+    repo, app = service()
+    original_onboarding = {
+        "objetivo_principal": "comprar_ahora",
+        "tipo_propiedad": "casa",
+        "comuna_interes": "La Pintana",
+        "comuna_alternativa": "La Reina",
+        "plazo_compra": "6_12_meses",
+        "tiene_propiedad_vista": True,
+    }
+    first = app.execute("u1", command({**valid_snapshot(), "onboarding_snapshot": original_onboarding}))
+    later_onboarding = {**original_onboarding, "tipo_propiedad": "departamento", "comuna_interes": "Providencia"}
+    app.execute("u1", command({"onboarding_snapshot": later_onboarding}, first["event_id"], "2026-02-01T00:00:00Z"))
+
+    first_snapshot = repo.bundle["evaluations"][0]["financial_data"]["input"]["onboarding_snapshot"]
+    later_snapshot = repo.bundle["evaluations"][1]["financial_data"]["input"]["onboarding_snapshot"]
+    assert first_snapshot == original_onboarding
+    assert later_snapshot == later_onboarding
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["onboarding_snapshot"] == original_onboarding
 
 
 def test_first_later_project_goal_freezes_target_and_enables_projection():
@@ -319,6 +344,58 @@ def test_score_failure_writes_nothing():
     with pytest.raises(RuntimeError):
         TrackingService(repo, scorer=fail, market_snapshot_resolver=market_snapshot).execute("u1", command(valid_snapshot()))
     assert repo.commits == 0
+
+
+def test_hu18_resolution_uses_confirmed_values_only_in_new_evaluations():
+    repo, app = service()
+    declared = {
+        **valid_snapshot(),
+        "complemento_renta": True,
+        "ingreso_mensual_complementario": 800_000,
+        "deuda_mensual_complementario": 50_000,
+        "tipo_contrato_complementario": "plazo_fijo",
+        "continuidad_laboral_complementario": "entre_6_y_12_meses",
+        "morosidad_complementario": "no",
+        "relacion_complementario": "pareja_conviviente",
+    }
+    repo.co_debtor_consent = {
+        "invitation_status": "pending",
+        "created_at": "2026-02-20T00:00:00Z",
+        "expires_at": "2026-02-27T00:00:00Z",
+    }
+    first = app.execute("u1", command(declared))
+    historical = deepcopy(repo.bundle["evaluations"][0])
+
+    # Confirmation alone does not create or alter an evaluation.
+    repo.co_debtor_consent = {
+        "invitation_status": "confirmed",
+        "co_debtor_confirmed": {
+            "ingreso_mensual_complementario": 1_500_000,
+            "deuda_mensual_complementario": 300_000,
+            "tipo_contrato_complementario": "indefinido",
+            "continuidad_laboral_complementario": "mas_3_anios",
+            "morosidad_complementario": "no",
+        },
+    }
+    assert repo.bundle["evaluations"] == [historical]
+
+    app.execute("u1", command({"ahorro_disponible": 1_100_000}, first["event_id"], "2026-02-02T00:00:00Z"))
+    latest = repo.bundle["evaluations"][-1]["financial_data"]["input"]
+    assert latest["ingreso_mensual_complementario"] == 1_500_000
+    assert latest["deuda_mensual_complementario"] == 300_000
+    assert latest["relacion_complementario"] == "pareja_conviviente"
+    assert repo.bundle["evaluations"][0] == historical
+
+    # A later explicit evaluation after revocation is clean; old snapshots stay
+    # immutable and still document the values used at their own creation time.
+    repo.co_debtor_consent = {"invitation_status": "revoked"}
+    latest_event_id = app.read("u1")["latest_event_id"]
+    app.execute("u1", command({"ahorro_disponible": 1_200_000}, latest_event_id, "2026-02-03T00:00:00Z"))
+    revoked = repo.bundle["evaluations"][-1]["financial_data"]["input"]
+    assert revoked["complemento_renta"] is False
+    assert revoked["ingreso_mensual_complementario"] is None
+    assert revoked["deuda_mensual_complementario"] is None
+    assert repo.bundle["evaluations"][0] == historical
 
 
 def test_goal_regression_preserves_completion_evidence():

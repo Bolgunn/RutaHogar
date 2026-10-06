@@ -1,0 +1,1744 @@
+{
+  "algorithm": "ALG-18",
+  "version": "hu15-commercial-funnel-v1",
+  "nota": "DRAFT for Bolgunn to review. Asserted by frontend/src/lib/commercial/__tests__/funnelMetrics.test.js (vitest). Each case calls computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad }) and deep-partially matches `expect` against the output; `serie_por_clave` indexes serie.periodos by clave, and `serie_claves` is the exact list of claves in order. Instants are compared as instants (Date.parse). Fact-row shorthand: omitted arrays are [], omitted plan is null, omitted evaluaciones is [{ at: first_evaluation_at, project_goal_id: null }], omitted stage-event por_sistema and por_mi are false, omitted filtros fields are [] / null, omitted granularidad is 'mes', omitted now is 2026-10-04T15:00:00Z. `alg10` gives, per project id, the ALG-10 row that lead's current evaluation produces ({ clasificacion, motivo_exclusion, alcanza_precio_min }); the test supplies those rows in place of matchLeadToProjects (PLAN decides the seam), so these cases pin ALG-18's rollup and never ALG-10's numbers. A lead with no `alg10` gets ALG-10 G0 for every project. `prioridad_label` sets evaluacion_actual.result.commercial_priority_detail.action (the stored Spanish label, G18) and `prioridad_key` sets commercial_priority_detail.action_key (future field); neither means no priority detail. Invariants 1-21 of the document are asserted on every case's output in addition to `expect`.",
+  "proyectos_comunes": {
+    "A": { "id": "A", "nombre": "Proyecto A", "estado": "disponible" },
+    "B": { "id": "B", "nombre": "Proyecto B", "estado": "disponible" },
+    "C": { "id": "C", "nombre": "Proyecto C", "estado": "agotado" }
+  },
+  "cases": [
+    {
+      "name": "rollup_mejor_banda_cuenta_una_vez",
+      "por_que": "R1, D8. L1 is Compatible on A and Cercano on B: counted once, as Compatible. L2 is excluded on A and a near-miss Marginal on B: Marginal and cercano_por_capacidad. Buckets sum to n (invariant 1).",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "B"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true },
+                       "B": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "capacidad_insuficiente", "alcanza_precio_min": false },
+                       "B": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } } }
+        ]
+      },
+      "expect": {
+        "n": 2,
+        "bandas": {
+          "n": 2,
+          "sin_catalogo": false,
+          "afinidad": { "Compatible": 1, "Cercano": 0, "Marginal": 1, "fuera_de_alcance": 0, "requiere_antecedentes": 0 },
+          "capacidad": { "alcanza": 1, "cercano_por_capacidad": 1, "insuficiente": 0, "requiere_antecedentes": 0 }
+        }
+      }
+    },
+    {
+      "name": "bandas_en_todo_el_alcance_no_solo_proyectos_del_lead",
+      "por_que": "R1, G16. L1 belongs only to A (its declared comuna) but is Compatible with B, which it never named. Bands use every in-scope project, so L1 is Compatible.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false },
+                       "B": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "bandas": { "afinidad": { "Compatible": 1, "Marginal": 0 }, "capacidad": { "alcanza": 1 } }
+      }
+    },
+    {
+      "name": "agotado_fuera_del_rollup_por_defecto",
+      "por_que": "R1, D8, A4. L1's only Compatible project is agotado. Without a project filter C is not passed to ALG-10, so L1 is excluded from every remaining project.",
+      "input": {
+        "proyectos": ["A", "C"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "C"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "capacidad_insuficiente", "alcanza_precio_min": false },
+                       "C": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "bandas": {
+          "sin_catalogo": false,
+          "afinidad": { "Compatible": 0, "fuera_de_alcance": 1 },
+          "capacidad": { "alcanza": 0, "insuficiente": 1 }
+        }
+      }
+    },
+    {
+      "name": "agotado_cuenta_con_filtro_de_proyecto",
+      "por_que": "R1, D8. Same lead with project C selected: the bands are computed against C alone, agotado allowed.",
+      "input": {
+        "proyectos": ["A", "C"],
+        "filtros": { "proyecto_id": "C" },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "C"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "capacidad_insuficiente", "alcanza_precio_min": false },
+                       "C": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "n": 1,
+        "bandas": {
+          "afinidad": { "Compatible": 1, "fuera_de_alcance": 0 },
+          "capacidad": { "alcanza": 1, "insuficiente": 0 }
+        }
+      }
+    },
+    {
+      "name": "catalogo_vacio_sin_buckets",
+      "por_que": "R1, R8, G11. The only in-scope project is agotado and no project is selected: the band catalog is empty, so there are no buckets and the affinity filter is ignored (both leads stay in n). Saying '100 % fuera de alcance' would claim nobody can buy when there is nothing to sell.",
+      "input": {
+        "proyectos": ["C"],
+        "filtros": { "afinidad": ["Marginal"] },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["C"],
+            "alg10": { "C": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["C"] }
+        ]
+      },
+      "expect": {
+        "n": 2,
+        "bandas": { "n": 2, "sin_catalogo": true, "afinidad": null, "capacidad": null },
+        "contacto": { "tiempo_primer_contacto": null },
+        "mejores": null,
+        "embudo": { "n": 2 }
+      }
+    },
+    {
+      "name": "requiere_antecedentes_es_bucket_propio",
+      "por_que": "R1 A0/C0, ALG-10 G0. L1 has no capacity: requiere_antecedentes in both dimensions, never the worst band. L2 is a near-miss Marginal.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "capacidad_requiere_antecedentes", "alcanza_precio_min": false },
+                       "B": { "clasificacion": null, "motivo_exclusion": "capacidad_requiere_antecedentes", "alcanza_precio_min": false } } },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false },
+                       "B": { "clasificacion": null, "motivo_exclusion": "capacidad_insuficiente", "alcanza_precio_min": false } } }
+        ]
+      },
+      "expect": {
+        "bandas": {
+          "n": 2,
+          "afinidad": { "Compatible": 0, "Cercano": 0, "Marginal": 1, "fuera_de_alcance": 0, "requiere_antecedentes": 1 },
+          "capacidad": { "alcanza": 0, "cercano_por_capacidad": 1, "insuficiente": 0, "requiere_antecedentes": 1 }
+        }
+      }
+    },
+    {
+      "name": "bloqueador_critico_nunca_cercano_por_capacidad",
+      "por_que": "R1, G10. Both leads have a critical blocker, so ALG-10 excludes them from every project before the capacity test. L1 still reaches A's precio_min (alcanza); L2 does not and is insuficiente, never cercano_por_capacidad. Both are fuera_de_alcance.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "bloqueador_critico", "alcanza_precio_min": true } } },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": null, "motivo_exclusion": "bloqueador_critico", "alcanza_precio_min": false } } }
+        ]
+      },
+      "expect": {
+        "bandas": {
+          "afinidad": { "fuera_de_alcance": 2 },
+          "capacidad": { "alcanza": 1, "cercano_por_capacidad": 0, "insuficiente": 1 }
+        }
+      }
+    },
+    {
+      "name": "captura_sin_filtro",
+      "por_que": "R2, D3, R5. Two of three leads postulan to some in-scope project. Days to apply: L1 3 days, L2 10 days.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-04T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "postulaciones": [{ "proyecto_id": "B", "first_at": "2026-09-11T12:00:00Z" }] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "n": 3,
+        "captura": { "n": 3, "postulan": 2, "tasa": 0.6666666666666666 },
+        "tiempos": { "dias_hasta_postular": { "n": 2, "promedio": 6.5, "mediana": 6.5 } }
+      }
+    },
+    {
+      "name": "captura_con_filtro_de_proyecto_acota_universo",
+      "por_que": "R0, R2, R8, G33. With A selected, the universe is A's leads (L1, L3): L2 belongs only to B and leaves it. Postula means applied to A, so capture is 1 of 2 and matches A's comparison row, the only one listed.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "filtros": { "proyecto_id": "A" },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-04T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "postulaciones": [{ "proyecto_id": "B", "first_at": "2026-09-11T12:00:00Z" }] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "n": 2,
+        "captura": { "n": 2, "postulan": 1, "tasa": 0.5 },
+        "embudo": { "n": 2 },
+        "tiempos": { "dias_hasta_postular": { "n": 1, "promedio": 3, "mediana": 3 } },
+        "por_proyecto": [{ "proyecto_id": "A", "leads": 2, "postulan": 1, "ventas": 0, "sin_contactar": 2 }]
+      }
+    },
+    {
+      "name": "embudo_ever_reached_con_perdido_y_lead_sin_etapas",
+      "por_que": "R3, D4, G1. L1 reached en_negociacion on A, skipping en_plan_mejora, and was then lost on A by an executive: it still counts up to en_negociacion, and since A is its only project record and the lead-level move is older, it is overall perdido (O4), por_gestion. L2 has no stage events and counts as nuevo. Conversion into venta_cerrada is null because nobody reached reserva.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-03T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-10T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-20T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-05T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "n": 3,
+          "etapas": [
+            { "etapa": "nuevo", "alcanzaron": 3, "conversion": null },
+            { "etapa": "contactado", "alcanzaron": 2, "conversion": 0.6666666666666666 },
+            { "etapa": "en_plan_mejora", "alcanzaron": 1, "conversion": 0.5 },
+            { "etapa": "en_negociacion", "alcanzaron": 1, "conversion": 1 },
+            { "etapa": "reserva", "alcanzaron": 0, "conversion": 0 },
+            { "etapa": "venta_cerrada", "alcanzaron": 0, "conversion": null }
+          ],
+          "abiertos": 2,
+          "perdido_actual": { "total": 1, "por_agotamiento": 0, "por_gestion": 1 }
+        }
+      }
+    },
+    {
+      "name": "etapas_saltadas_cuentan_como_alcanzadas",
+      "por_que": "R3, invariant 3. nuevo -> reserva directly: every rank below reserva counts as reached, but the skipped stages get no spell and therefore no time.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "reserva", "occurred_at": "2026-09-02T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "etapas": [
+            { "etapa": "nuevo", "alcanzaron": 1 },
+            { "etapa": "contactado", "alcanzaron": 1 },
+            { "etapa": "en_plan_mejora", "alcanzaron": 1 },
+            { "etapa": "en_negociacion", "alcanzaron": 1 },
+            { "etapa": "reserva", "alcanzaron": 1 },
+            { "etapa": "venta_cerrada", "alcanzaron": 0 }
+          ],
+          "abiertos": 1
+        },
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": { "n": 1, "promedio": 1, "mediana": 1, "en_curso": 0 },
+            "contactado": { "n": 0, "promedio": null, "mediana": null, "en_curso": 0 },
+            "reserva": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "retroceso_y_visita_repetida_suman",
+      "por_que": "R5, D6. contactado is visited twice (5 days, then 4 days after a backward move from en_plan_mejora): the time is summed to 9. The lead is still in en_negociacion, so that stage has n 0 and en_curso 1. The span crosses the 2026-09-06 DST change and the durations are unaffected (elapsed time).",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-03T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "en_plan_mejora", "occurred_at": "2026-09-08T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-10T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-14T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": { "n": 1, "promedio": 2, "mediana": 2, "en_curso": 0 },
+            "contactado": { "n": 1, "promedio": 9, "mediana": 9, "en_curso": 0 },
+            "en_plan_mejora": { "n": 1, "promedio": 2, "mediana": 2, "en_curso": 0 },
+            "en_negociacion": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "lead_aun_en_etapa_fuera_del_promedio",
+      "por_que": "R5, D6. L2 is still in contactado: excluded from its average and counted in en_curso. Both leads have closed nuevo spells (3 and 1 days).",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-04T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "en_plan_mejora", "occurred_at": "2026-09-10T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": { "n": 2, "promedio": 2, "mediana": 2, "en_curso": 0 },
+            "contactado": { "n": 1, "promedio": 6, "mediana": 6, "en_curso": 1 },
+            "en_plan_mejora": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "venta_revertida_no_es_venta",
+      "por_que": "R3, R5, G9. L1's sale on A was undone by an admin: it is not a sale anywhere (not in the funnel's top step, not in ciclo_venta) but still reached reserva and below. A was its only project record, so L1 is overall perdido, por_gestion. L2 sold on B 20 days after its first evaluation; that cycle belongs to the period of its end (2026-08).",
+      "input": {
+        "proyectos": ["A", "B"],
+        "granularidad": "mes",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-08-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-08-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-08-10T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "reserva", "occurred_at": "2026-08-20T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-08-31T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-05T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-08-01T12:00:00Z", "proyectos": ["B"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-08-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "B", "stage_after": "venta_cerrada", "occurred_at": "2026-08-21T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "tiempos": { "ciclo_venta": { "n": 1, "promedio": 20, "mediana": 20 } },
+        "embudo": {
+          "etapas": [
+            { "etapa": "nuevo", "alcanzaron": 2, "conversion": null },
+            { "etapa": "contactado", "alcanzaron": 2, "conversion": 1 },
+            { "etapa": "en_plan_mejora", "alcanzaron": 2, "conversion": 1 },
+            { "etapa": "en_negociacion", "alcanzaron": 2, "conversion": 1 },
+            { "etapa": "reserva", "alcanzaron": 2, "conversion": 1 },
+            { "etapa": "venta_cerrada", "alcanzaron": 1, "conversion": 0.5 }
+          ],
+          "abiertos": 0,
+          "perdido_actual": { "total": 1, "por_agotamiento": 0, "por_gestion": 1 }
+        },
+        "serie_claves": ["2026-08", "2026-09", "2026-10"],
+        "serie_por_clave": {
+          "2026-08": { "embudo": { "n": 2, "abiertos": 0 }, "tiempos": { "ciclo_venta": { "n": 1 } } },
+          "2026-09": { "tiempos": { "ciclo_venta": { "n": 0, "promedio": null } } }
+        }
+      }
+    },
+    {
+      "name": "plan_a_venta_baseline_antes_y_despues",
+      "por_que": "R4, D5, G9, G20. L1 accepted a plan aimed at A before selling: counts. L2 accepted after selling: in con_plan only. L3 has a plan and no sale. L4 sold without a plan and is outside the denominator. L5 accepted before a sale that was later undone: in con_plan only. L6 sold on A after a plan with no target in scope (no target, or another inmobiliaria's project; the RPC sends null for both): outside both numbers. L7 aimed its plan at B and bought on A: counts, the sale may be on any in-scope project. None needed the en_plan_mejora stage.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "A" },
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["B"],
+            "plan": { "baseline_at": "2026-09-10T12:00:00Z", "target_proyecto_id": "B" },
+            "stage_events": [{ "proyecto_id": "B", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-08-01T12:00:00Z", "target_proyecto_id": "A" } },
+          { "lead_id": "L4", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
+          { "lead_id": "L5", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "A" },
+            "stage_events": [
+              { "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-05T12:00:00Z" }
+            ] },
+          { "lead_id": "L6", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": null },
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] },
+          { "lead_id": "L7", "first_evaluation_at": "2026-07-20T12:00:00Z", "proyectos": ["A", "B"],
+            "plan": { "baseline_at": "2026-08-05T12:00:00Z", "target_proyecto_id": "B" },
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-01T12:00:00Z" }] }
+        ]
+      },
+      "expect": {
+        "plan_a_venta": { "con_plan": 5, "con_plan_y_venta": 2, "tasa": 0.4 }
+      }
+    },
+    {
+      "name": "perdido_por_agotamiento_vs_gestion",
+      "por_que": "R3, G6, G8. L1 was lost on A only by the sell-out job: por_agotamiento (its system backfill nuevo does not matter, only losses are classified). L2 was lost on B by an executive: por_gestion. L3 was lost on A by the sell-out and on B by an executive: por_gestion, because not every loss holding it is a system one. L4 was closed on A by the sell-out but is still open on B: not perdido.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z", "por_sistema": true }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "B", "stage_after": "en_negociacion", "occurred_at": "2026-09-03T12:00:00Z" },
+              { "proyecto_id": "B", "stage_after": "perdido", "occurred_at": "2026-09-12T12:00:00Z" }
+            ] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "B"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "B", "stage_after": "contactado", "occurred_at": "2026-09-03T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "B", "stage_after": "perdido", "occurred_at": "2026-09-11T12:00:00Z" }
+            ] },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "B"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "B", "stage_after": "en_negociacion", "occurred_at": "2026-09-04T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z", "por_sistema": true }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "abiertos": 1,
+          "perdido_actual": { "total": 3, "por_agotamiento": 1, "por_gestion": 2 }
+        }
+      }
+    },
+    {
+      "name": "reapertura_tras_reposicion_suma_visitas",
+      "por_que": "R3, R5, G7. A sold out on 09-10 (system closure) and was restocked on 09-14 (system reopening to en_negociacion). The 4-day gap is a closed perdido spell; en_negociacion is visited twice and the lead is back in it, so it is excluded from that stage's average. The lead is open again.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-03T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-14T12:00:00Z", "por_sistema": true }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "abiertos": 1,
+          "perdido_actual": { "total": 0, "por_agotamiento": 0, "por_gestion": 0 }
+        },
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": { "n": 1, "promedio": 2, "mediana": 2, "en_curso": 0 },
+            "en_negociacion": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 },
+            "perdido": { "n": 1, "promedio": 4, "mediana": 4, "en_curso": 0 }
+          }
+        }
+      }
+    },
+    {
+      "name": "revivir_con_evento_de_lead",
+      "por_que": "R3 O3/O4, G4. All three leads lost their only project A on 09-10. L1 is revived by a later lead-level move back to contactado (a same-stage move, allowed by G4): its 5-day perdido spell closes and it is open again. L2's later lead-level event is itself perdido, which cannot revive. L3's lead-level move is at the same instant as the loss, not strictly later: not revived.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-05T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-15T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "perdido", "occurred_at": "2026-09-15T12:00:00Z" }
+            ] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-10T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-10T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "abiertos": 1,
+          "perdido_actual": { "total": 2, "por_agotamiento": 0, "por_gestion": 2 }
+        },
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": { "n": 3, "promedio": 1, "mediana": 1, "en_curso": 0 },
+            "contactado": { "n": 2, "promedio": 8, "mediana": 8, "en_curso": 1 },
+            "en_negociacion": { "n": 1, "promedio": 5, "mediana": 5, "en_curso": 0 },
+            "perdido": { "n": 1, "promedio": 5, "mediana": 5, "en_curso": 2 }
+          }
+        }
+      }
+    },
+    {
+      "name": "engagement_solo_acciones_sobre_tus_proyectos",
+      "por_que": "R6, G19. Proyecto A is the caller's only project. L1 re-prequalified with A as goal: counts as reprecalificacion (and as postulacion, its first application to A). L2 re-prequalified with no goal in scope and works a plan not aimed at A (target null): none of it counts, L2 is not activo. L3's plan is aimed at A: acceptance, progress update and confirmed goal all count.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "evaluaciones": [
+              { "at": "2026-09-01T12:00:00Z", "project_goal_id": null },
+              { "at": "2026-09-10T12:00:00Z", "project_goal_id": "A" }
+            ],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-10T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "evaluaciones": [
+              { "at": "2026-09-01T12:00:00Z", "project_goal_id": null },
+              { "at": "2026-09-12T12:00:00Z", "project_goal_id": null }
+            ],
+            "plan": { "baseline_at": "2026-09-12T12:00:00Z", "target_proyecto_id": null },
+            "progress_update_ats": ["2026-09-20T12:00:00Z"],
+            "confirmed_goal_ats": ["2026-09-25T12:00:00Z"] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-09-05T12:00:00Z", "target_proyecto_id": "A" },
+            "progress_update_ats": ["2026-09-15T12:00:00Z", "2026-09-22T12:00:00Z"],
+            "confirmed_goal_ats": ["2026-09-28T12:00:00Z"] }
+        ]
+      },
+      "expect": {
+        "engagement": {
+          "n": 3, "activos": 2, "tasa": 0.6666666666666666,
+          "por_accion": {
+            "favorito": { "leads": 0, "eventos": 0 },
+            "reprecalificacion": { "leads": 1, "eventos": 1 },
+            "postulacion": { "leads": 1, "eventos": 1 },
+            "plan_aceptado": { "leads": 1, "eventos": 1 },
+            "actualizacion_progreso": { "leads": 1, "eventos": 2 },
+            "meta_confirmada": { "leads": 1, "eventos": 1 }
+          }
+        },
+        "plan_a_venta": { "con_plan": 1, "con_plan_y_venta": 0, "tasa": 0 }
+      }
+    },
+    {
+      "name": "engagement_borde_de_mes_y_denominador_por_periodo",
+      "por_que": "R6, R7, G12. L1's favorite at 2026-09-01T03:30Z is 31 August 23:30 in Santiago (UTC-4 before the September DST change): August. L2's plan (aimed at A) and its confirmed goal at 2026-09-01T04:00Z are exactly 1 September 00:00 local: September (periods are half-open, start inclusive). L3 first evaluates on 09-20, so it is not in August's denominator but is in September's and October's. October has no activity: tasa 0, not null.",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "mes",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-08-15T12:00:00Z", "proyectos": ["A"],
+            "favoritos": [{ "proyecto_id": "A", "created_at": "2026-09-01T03:30:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-08-15T12:00:00Z", "proyectos": ["A"],
+            "plan": { "baseline_at": "2026-09-01T04:00:00Z", "target_proyecto_id": "A" },
+            "confirmed_goal_ats": ["2026-09-01T04:00:00Z"] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-20T12:00:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "engagement": { "n": 3, "activos": 2, "tasa": 0.6666666666666666, "mes_actual": { "n": 3, "activos": 0, "tasa": 0 } },
+        "serie_claves": ["2026-08", "2026-09", "2026-10"],
+        "serie_por_clave": {
+          "2026-08": { "engagement": { "n": 2, "activos": 1, "tasa": 0.5,
+                         "por_accion": { "favorito": { "leads": 1, "eventos": 1 }, "meta_confirmada": { "leads": 0, "eventos": 0 } } } },
+          "2026-09": { "desde": "2026-09-01T04:00:00Z", "hasta": "2026-10-01T03:00:00Z",
+                       "engagement": { "n": 3, "activos": 1, "tasa": 0.3333333333333333,
+                         "por_accion": { "favorito": { "leads": 0, "eventos": 0 }, "plan_aceptado": { "leads": 1, "eventos": 1 }, "meta_confirmada": { "leads": 1, "eventos": 1 } } } },
+          "2026-10": { "en_curso": true, "engagement": { "n": 3, "activos": 0, "tasa": 0 } }
+        }
+      }
+    },
+    {
+      "name": "seguimiento_de_contacto",
+      "por_que": "R9, G22, G23. L1 (Compatible, alcanza) was contacted by the caller after 3 days. L2 (Compatible, alcanza) has waited 10 days uncontacted: sin_contactar and en_curso of the time to first contact. L3 (Cercano) was contacted by the caller this month but is outside the time to first contact. L4 (Compatible, alcanza) went straight to en_negociacion after 5 days, by a colleague: that move is its first contact. L5 was lost before any contact: neither contacted nor uncontacted. L6 has waited 3 days.",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "mes",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-20T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-20T15:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-23T15:00:00Z", "por_mi": true }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-24T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-20T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-10-02T15:00:00Z", "por_mi": true }
+            ] },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-14T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": "A", "stage_after": "en_negociacion", "occurred_at": "2026-09-19T15:00:00Z" }
+            ] },
+          { "lead_id": "L5", "first_evaluation_at": "2026-09-10T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } },
+            "stage_events": [
+              { "proyecto_id": "A", "stage_after": "perdido", "occurred_at": "2026-09-12T15:00:00Z" }
+            ] },
+          { "lead_id": "L6", "first_evaluation_at": "2026-10-01T15:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } } }
+        ]
+      },
+      "expect": {
+        "contacto": {
+          "sin_contactar": { "n": 2, "antiguedad_mediana": 6.5, "antiguedad_maxima": 10 },
+          "contactados_mes_actual": 1,
+          "contactados_por_mi": { "total": 2, "mes_actual": 1 },
+          "tiempo_primer_contacto": { "n": 2, "promedio": 4, "mediana": 4, "en_curso": 1 }
+        },
+        "embudo": { "abiertos": 5, "perdido_actual": { "total": 1, "por_agotamiento": 0, "por_gestion": 1 } },
+        "serie_claves": ["2026-09", "2026-10"],
+        "serie_por_clave": {
+          "2026-09": { "contacto": { "contactados": 2, "tiempo_primer_contacto": { "n": 2, "mediana": 4, "en_curso": 0 } } },
+          "2026-10": { "contacto": { "contactados": 1, "tiempo_primer_contacto": { "n": 0, "mediana": null, "en_curso": 0 } } }
+        }
+      }
+    },
+    {
+      "name": "mejores_leads_embudo_y_tiempos",
+      "por_que": "R11, G25. Only L1 and L3 are Compatible + alcanza. L1 was contacted after 3 days; L3 is still nuevo. L2 (Cercano) was contacted too but is outside the best-leads view: the full funnel shows 2 contacted, the best-leads funnel 1.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z", "por_sistema": true },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-04T12:00:00Z" }
+            ] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } },
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" }
+            ] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "embudo": { "etapas": [ { "etapa": "nuevo", "alcanzaron": 3 }, { "etapa": "contactado", "alcanzaron": 2 }, {}, {}, {}, {} ] },
+        "mejores": {
+          "n": 2,
+          "embudo": {
+            "n": 2,
+            "etapas": [
+              { "etapa": "nuevo", "alcanzaron": 2, "conversion": null },
+              { "etapa": "contactado", "alcanzaron": 1, "conversion": 0.5 },
+              { "etapa": "en_plan_mejora", "alcanzaron": 0, "conversion": 0 },
+              { "etapa": "en_negociacion", "alcanzaron": 0, "conversion": null },
+              { "etapa": "reserva", "alcanzaron": 0, "conversion": null },
+              { "etapa": "venta_cerrada", "alcanzaron": 0, "conversion": null }
+            ],
+            "abiertos": 2,
+            "perdido_actual": { "total": 0, "por_agotamiento": 0, "por_gestion": 0 }
+          },
+          "en_etapa": {
+            "nuevo": { "n": 1, "promedio": 3, "mediana": 3, "en_curso": 1 },
+            "contactado": { "n": 0, "promedio": null, "mediana": null, "en_curso": 1 }
+          }
+        }
+      }
+    },
+    {
+      "name": "comparacion_por_proyecto",
+      "por_que": "R10, G24. Each row counts only the leads that belong to that project, so L2 (belonging to A and B) appears in both rows and the rows do not sum to n. L1 counts as contacted on A because its sale on A is a first contact; L3's lead-level contact counts on B.",
+      "input": {
+        "proyectos": ["A", "B"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "postulaciones": [{ "proyecto_id": "A", "first_at": "2026-09-05T12:00:00Z" }],
+            "stage_events": [{ "proyecto_id": "A", "stage_after": "venta_cerrada", "occurred_at": "2026-09-20T12:00:00Z" }] },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A", "B"],
+            "postulaciones": [{ "proyecto_id": "B", "first_at": "2026-09-06T12:00:00Z" }] },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["B"],
+            "stage_events": [{ "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-03T12:00:00Z" }] }
+        ]
+      },
+      "expect": {
+        "n": 3,
+        "por_proyecto": [
+          { "proyecto_id": "A", "leads": 2, "postulan": 1, "ventas": 1, "sin_contactar": 1 },
+          { "proyecto_id": "B", "leads": 2, "postulan": 1, "ventas": 0, "sin_contactar": 1 }
+        ]
+      }
+    },
+    {
+      "name": "semana_iso_domingo_2330_santiago",
+      "por_que": "R7. 2026-10-05T02:30Z is Monday in UTC but Sunday 4 October 23:30 in Santiago (UTC-3): the cohort is 2026-W40, with its one lead still open. W41 contains now, is en_curso, and has an empty cohort (captura.tasa null).",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "semana",
+        "now": "2026-10-06T15:00:00Z",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-10-05T02:30:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "serie_claves": ["2026-W40", "2026-W41"],
+        "serie_por_clave": {
+          "2026-W40": { "desde": "2026-09-28T03:00:00Z", "hasta": "2026-10-05T03:00:00Z", "en_curso": false,
+                        "embudo": { "n": 1, "abiertos": 1 }, "captura": { "n": 1, "postulan": 0, "tasa": 0 } },
+          "2026-W41": { "en_curso": true, "embudo": { "n": 0, "abiertos": 0 }, "captura": { "n": 0, "postulan": 0, "tasa": null } }
+        }
+      }
+    },
+    {
+      "name": "semana_iso_cruza_el_anio",
+      "por_que": "R7. Friday 2027-01-01 belongs to ISO week 2026-W53 (2026 has 53 ISO weeks because it starts on a Thursday).",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "semana",
+        "now": "2027-01-05T12:00:00Z",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2027-01-01T12:00:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "serie_claves": ["2026-W53", "2027-W01"],
+        "serie_por_clave": { "2026-W53": { "embudo": { "n": 1 } }, "2027-W01": { "embudo": { "n": 0 } } }
+      }
+    },
+    {
+      "name": "anio_calendario_no_es_anio_iso",
+      "por_que": "R7. The same instant is in calendar year 2027 for 'año', although its ISO week belongs to 2026.",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "año",
+        "now": "2027-01-05T12:00:00Z",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2027-01-01T12:00:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "serie_claves": ["2027"],
+        "serie_por_clave": { "2027": { "en_curso": true, "embudo": { "n": 1 } } }
+      }
+    },
+    {
+      "name": "offset_estacional_no_fijo",
+      "por_que": "R7, DST. 2026-07-01T03:30Z is 30 June 23:30 in Santiago winter time (UTC-4). A fixed UTC-3 offset would wrongly put this cohort in July.",
+      "input": {
+        "proyectos": ["A"],
+        "granularidad": "mes",
+        "now": "2026-07-15T12:00:00Z",
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-07-01T03:30:00Z", "proyectos": ["A"] }
+        ]
+      },
+      "expect": {
+        "serie_claves": ["2026-06", "2026-07"],
+        "serie_por_clave": { "2026-06": { "embudo": { "n": 1 } }, "2026-07": { "embudo": { "n": 0 } } }
+      }
+    },
+    {
+      "name": "duracion_cruza_cambio_horario_es_tiempo_transcurrido",
+      "por_que": "R5, G17. Saturday 5 Sept 12:00 (UTC-4) to Sunday 6 Sept 12:00 (UTC-3) local is 23 elapsed hours across the DST change: 23/24 days, not 1. The UI shows it rounded as 1,0.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-05T16:00:00Z", "proyectos": ["A"],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-05T16:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-06T15:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "tiempos": { "en_etapa": { "nuevo": { "n": 1, "promedio": 0.9583333333333334, "mediana": 0.9583333333333334 } } }
+      }
+    },
+    {
+      "name": "ejecutivo_etapa_tardia_en_proyecto_fuera_de_alcance",
+      "por_que": "R0, D9, G15. An ejecutivo assigned only A. The RPC row also carries B events; the negotiation and reserva on B, the application to B and the favorite on B are all ignored. Only the lead-level contactado counts, and the lead is still in it.",
+      "input": {
+        "proyectos": ["A"],
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "postulaciones": [{ "proyecto_id": "B", "first_at": "2026-09-04T12:00:00Z" }],
+            "favoritos": [{ "proyecto_id": "B", "created_at": "2026-09-03T12:00:00Z" }],
+            "stage_events": [
+              { "proyecto_id": null, "stage_after": "nuevo", "occurred_at": "2026-09-01T12:00:00Z" },
+              { "proyecto_id": null, "stage_after": "contactado", "occurred_at": "2026-09-02T12:00:00Z" },
+              { "proyecto_id": "B", "stage_after": "en_negociacion", "occurred_at": "2026-09-05T12:00:00Z" },
+              { "proyecto_id": "B", "stage_after": "reserva", "occurred_at": "2026-09-10T12:00:00Z" }
+            ] }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "etapas": [
+            { "etapa": "nuevo", "alcanzaron": 1 },
+            { "etapa": "contactado", "alcanzaron": 1 },
+            { "etapa": "en_plan_mejora", "alcanzaron": 0 },
+            { "etapa": "en_negociacion", "alcanzaron": 0 },
+            { "etapa": "reserva", "alcanzaron": 0 },
+            { "etapa": "venta_cerrada", "alcanzaron": 0 }
+          ],
+          "abiertos": 1
+        },
+        "captura": { "postulan": 0 },
+        "engagement": { "activos": 0, "por_accion": { "favorito": { "leads": 0 }, "postulacion": { "leads": 0 } } },
+        "tiempos": { "en_etapa": { "contactado": { "n": 0, "en_curso": 1 }, "en_negociacion": { "n": 0, "en_curso": 0 } } }
+      }
+    },
+    {
+      "name": "filtros_and_entre_dimensiones_or_dentro",
+      "por_que": "R8, D11. afinidad in {Compatible, Cercano} AND prioridad in {contact_now, sin_prioridad}: L1 (Compatible, Contactar ahora) and L4 (Cercano, no priority) pass; L2 fails priority, L3 fails affinity.",
+      "input": {
+        "proyectos": ["A"],
+        "filtros": { "afinidad": ["Compatible", "Cercano"], "prioridad": ["contact_now", "sin_prioridad"] },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar ahora",
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Nutrir con plan de mejora",
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } } },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar ahora",
+            "alg10": { "A": { "clasificacion": "Marginal", "motivo_exclusion": null, "alcanza_precio_min": false } } },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Cercano", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "n": 2,
+        "bandas": {
+          "n": 2,
+          "afinidad": { "Compatible": 1, "Cercano": 1, "Marginal": 0 },
+          "capacidad": { "alcanza": 2, "cercano_por_capacidad": 0 }
+        },
+        "embudo": { "n": 2 }
+      }
+    },
+    {
+      "name": "prioridad_sin_prioridad_y_etiqueta_no_reconocida",
+      "por_que": "R1b, G18. The stored priority is the Spanish label. L2's label matches none of the six (e.g. an old wording): sin_prioridad and counted in prioridad_no_reconocida. L3 has no priority detail: sin_prioridad, not counted. Filtering by sin_prioridad keeps exactly those two.",
+      "input": {
+        "proyectos": ["A"],
+        "filtros": { "prioridad": ["sin_prioridad"] },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar ahora" },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar de inmediato" },
+          { "lead_id": "L3", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"] },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_key": "nurture", "prioridad_label": "Nutrir con plan de mejora" }
+        ]
+      },
+      "expect": { "n": 2, "prioridad_no_reconocida": 1 }
+    },
+    {
+      "name": "prioridad_por_clave_o_etiqueta",
+      "por_que": "R1b P1/P2, G18. L1 is matched by its label, L4 by its action_key (preferred when present), L5 by label only. L2's unrecognised label is filtered out, so prioridad_no_reconocida counts 0 within n.",
+      "input": {
+        "proyectos": ["A"],
+        "filtros": { "prioridad": ["contact_now", "nurture"] },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar ahora" },
+          { "lead_id": "L2", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Contactar de inmediato" },
+          { "lead_id": "L4", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_key": "nurture", "prioridad_label": "Nutrir con plan de mejora" },
+          { "lead_id": "L5", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"], "prioridad_label": "Nutrir con plan de mejora" }
+        ]
+      },
+      "expect": { "n": 3, "prioridad_no_reconocida": 0 }
+    },
+    {
+      "name": "n_cero_es_resultado_vacio_explicito",
+      "por_que": "R8, invariant 2. The filter matches no lead: every rate is null (never 0 %), every Stat is empty, every count 0, and there are no periods. The band catalog is not empty, so the buckets exist and are all 0.",
+      "input": {
+        "proyectos": ["A"],
+        "filtros": { "afinidad": ["Marginal"] },
+        "facts": [
+          { "lead_id": "L1", "first_evaluation_at": "2026-09-01T12:00:00Z", "proyectos": ["A"],
+            "alg10": { "A": { "clasificacion": "Compatible", "motivo_exclusion": null, "alcanza_precio_min": true } } }
+        ]
+      },
+      "expect": {
+        "n": 0,
+        "prioridad_no_reconocida": 0,
+        "captura": { "n": 0, "postulan": 0, "tasa": null },
+        "embudo": {
+          "n": 0,
+          "etapas": [
+            { "etapa": "nuevo", "alcanzaron": 0, "conversion": null },
+            { "etapa": "contactado", "alcanzaron": 0, "conversion": null },
+            { "etapa": "en_plan_mejora", "alcanzaron": 0, "conversion": null },
+            { "etapa": "en_negociacion", "alcanzaron": 0, "conversion": null },
+            { "etapa": "reserva", "alcanzaron": 0, "conversion": null },
+            { "etapa": "venta_cerrada", "alcanzaron": 0, "conversion": null }
+          ],
+          "abiertos": 0,
+          "perdido_actual": { "total": 0, "por_agotamiento": 0, "por_gestion": 0 }
+        },
+        "plan_a_venta": { "con_plan": 0, "con_plan_y_venta": 0, "tasa": null },
+        "tiempos": {
+          "ciclo_venta": { "n": 0, "promedio": null, "mediana": null },
+          "dias_hasta_postular": { "n": 0, "promedio": null, "mediana": null }
+        },
+        "engagement": { "n": 0, "activos": 0, "tasa": null },
+        "bandas": {
+          "n": 0,
+          "sin_catalogo": false,
+          "afinidad": { "Compatible": 0, "Cercano": 0, "Marginal": 0, "fuera_de_alcance": 0, "requiere_antecedentes": 0 },
+          "capacidad": { "alcanza": 0, "cercano_por_capacidad": 0, "insuficiente": 0, "requiere_antecedentes": 0 }
+        },
+        "contacto": {
+          "sin_contactar": { "n": 0, "antiguedad_mediana": null, "antiguedad_maxima": null },
+          "contactados_mes_actual": 0,
+          "contactados_por_mi": { "total": 0, "mes_actual": 0 },
+          "tiempo_primer_contacto": { "n": 0, "promedio": null, "mediana": null, "en_curso": 0 }
+        },
+        "por_proyecto": [{ "proyecto_id": "A", "leads": 0, "postulan": 0, "ventas": 0, "sin_contactar": 0 }],
+        "serie_claves": []
+      }
+    },
+    {
+      "name": "en_curso_en_el_periodo_actual",
+      "por_que": "R7, G26. Stage times go to the period where the spell ends; leads still in a stage go to the period containing now. L1 is still in contactado (since 09-03): October counts it in en_curso, September does not. L2 left contactado on 09-10 after 8 days (September) and is still in en_plan_mejora: October's en_curso. Both nuevo spells closed in September (2 and 1 days).",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "granularidad": "mes",
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-02T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "en_etapa": {
+            "nuevo": {
+              "n": 2,
+              "promedio": 1.5,
+              "mediana": 1.5,
+              "en_curso": 0
+            },
+            "contactado": {
+              "n": 1,
+              "promedio": 8,
+              "mediana": 8,
+              "en_curso": 1
+            },
+            "en_plan_mejora": {
+              "n": 0,
+              "promedio": null,
+              "mediana": null,
+              "en_curso": 1
+            }
+          }
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "en_curso": false,
+            "tiempos": {
+              "en_etapa": {
+                "nuevo": {
+                  "n": 2,
+                  "promedio": 1.5,
+                  "en_curso": 0
+                },
+                "contactado": {
+                  "n": 1,
+                  "promedio": 8,
+                  "en_curso": 0
+                },
+                "en_plan_mejora": {
+                  "n": 0,
+                  "promedio": null,
+                  "en_curso": 0
+                }
+              }
+            }
+          },
+          "2026-10": {
+            "en_curso": true,
+            "tiempos": {
+              "en_etapa": {
+                "nuevo": {
+                  "n": 0,
+                  "en_curso": 0
+                },
+                "contactado": {
+                  "n": 0,
+                  "promedio": null,
+                  "en_curso": 1
+                },
+                "en_plan_mejora": {
+                  "n": 0,
+                  "en_curso": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "conversion_general_y_plan_mejora_a_venta",
+      "por_que": "R3 conversion_general, R12, G29. Three of five leads hold a sale (L1, L2, L5): overall conversion 0.6. Four recorded en_plan_mejora (L1-L4); only L1 sold after it. L2's en_plan_mejora was recorded after its sale, L3's sale was undone (G9), L4 never sold; L5 sold without the stage and is outside the denominator.",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z",
+                "por_sistema": true
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-05T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-15T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "perdido",
+                "occurred_at": "2026-09-12T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L4",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-04T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L5",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-08T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "embudo": {
+          "n": 5,
+          "conversion_general": 0.6
+        },
+        "plan_mejora_a_venta": {
+          "en_plan_mejora": 4,
+          "con_venta": 1,
+          "tasa": 0.25
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "embudo": {
+              "conversion_general": 0.6
+            },
+            "plan_mejora_a_venta": {
+              "en_plan_mejora": 4,
+              "con_venta": 1,
+              "tasa": 0.25
+            }
+          },
+          "2026-10": {
+            "embudo": {
+              "n": 0,
+              "conversion_general": null
+            },
+            "plan_mejora_a_venta": {
+              "en_plan_mejora": 0,
+              "con_venta": 0,
+              "tasa": null
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "tiempo_entre_etapas",
+      "por_que": "R13, G30. L1 walks the whole ladder (2, 5, 2, 5, 5 days). L2 goes from nuevo straight to reserva: it skipped en_negociacion, so it counts in that pair's saltaron, and it waits in reserva (en_curso of reserva -> venta). L3 goes nuevo -> contactado (3 days), back to nuevo and to contactado again: only its first nuevo and the first contactado after it count, and it waits in contactado. Arrivals are in September; what is still in progress goes to October, the running period (G26).",
+      "input": {
+        "proyectos": [
+          "A"
+        ],
+        "granularidad": "mes",
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-03T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "en_plan_mejora",
+                "occurred_at": "2026-09-08T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "en_negociacion",
+                "occurred_at": "2026-09-10T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "reserva",
+                "occurred_at": "2026-09-15T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": "A",
+                "stage_after": "reserva",
+                "occurred_at": "2026-09-05T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-01T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-04T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "nuevo",
+                "occurred_at": "2026-09-06T12:00:00Z"
+              },
+              {
+                "proyecto_id": null,
+                "stage_after": "contactado",
+                "occurred_at": "2026-09-07T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "tiempos": {
+          "entre_etapas": [
+            {
+              "desde": "nuevo",
+              "hasta": "contactado",
+              "n": 2,
+              "promedio": 2.5,
+              "mediana": 2.5,
+              "saltaron": 0,
+              "en_curso": 0
+            },
+            {
+              "desde": "contactado",
+              "hasta": "en_plan_mejora",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 0,
+              "en_curso": 1
+            },
+            {
+              "desde": "en_plan_mejora",
+              "hasta": "en_negociacion",
+              "n": 1,
+              "promedio": 2,
+              "mediana": 2,
+              "saltaron": 0,
+              "en_curso": 0
+            },
+            {
+              "desde": "en_negociacion",
+              "hasta": "reserva",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 1,
+              "en_curso": 0
+            },
+            {
+              "desde": "reserva",
+              "hasta": "venta_cerrada",
+              "n": 1,
+              "promedio": 5,
+              "mediana": 5,
+              "saltaron": 0,
+              "en_curso": 1
+            }
+          ]
+        },
+        "serie_claves": [
+          "2026-09",
+          "2026-10"
+        ],
+        "serie_por_clave": {
+          "2026-09": {
+            "tiempos": {
+              "entre_etapas": [
+                {
+                  "n": 2,
+                  "en_curso": 0
+                },
+                {
+                  "n": 1,
+                  "en_curso": 0
+                },
+                {
+                  "n": 1
+                },
+                {
+                  "n": 1,
+                  "saltaron": 1
+                },
+                {
+                  "n": 1,
+                  "en_curso": 0
+                }
+              ]
+            }
+          },
+          "2026-10": {
+            "tiempos": {
+              "entre_etapas": [
+                {
+                  "n": 0,
+                  "promedio": null
+                },
+                {
+                  "n": 0,
+                  "en_curso": 1
+                },
+                {
+                  "n": 0
+                },
+                {
+                  "n": 0,
+                  "saltaron": 0
+                },
+                {
+                  "n": 0,
+                  "en_curso": 1
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "desglose_por_dimension",
+      "por_que": "R14, G31. L1 (Compatible, alcanza, Contactar ahora) applied to A, favorited A this month and bought on A. L2 (Cercano, alcanza, Nutrir) did nothing. L3 (Compatible, alcanza, no priority) applied to B in September. Band and priority rows partition the three leads; project rows count the leads of each project (L2 is in both) evaluated against that project only.",
+      "input": {
+        "proyectos": [
+          "A",
+          "B"
+        ],
+        "facts": [
+          {
+            "lead_id": "L1",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A"
+            ],
+            "prioridad_label": "Contactar ahora",
+            "alg10": {
+              "A": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            },
+            "postulaciones": [
+              {
+                "proyecto_id": "A",
+                "first_at": "2026-09-05T12:00:00Z"
+              }
+            ],
+            "favoritos": [
+              {
+                "proyecto_id": "A",
+                "created_at": "2026-10-02T12:00:00Z"
+              }
+            ],
+            "stage_events": [
+              {
+                "proyecto_id": "A",
+                "stage_after": "venta_cerrada",
+                "occurred_at": "2026-09-20T12:00:00Z"
+              }
+            ]
+          },
+          {
+            "lead_id": "L2",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "A",
+              "B"
+            ],
+            "prioridad_label": "Nutrir con plan de mejora",
+            "alg10": {
+              "A": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Cercano",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            }
+          },
+          {
+            "lead_id": "L3",
+            "first_evaluation_at": "2026-09-01T12:00:00Z",
+            "proyectos": [
+              "B"
+            ],
+            "alg10": {
+              "A": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              },
+              "B": {
+                "clasificacion": "Compatible",
+                "motivo_exclusion": null,
+                "alcanza_precio_min": true
+              }
+            },
+            "postulaciones": [
+              {
+                "proyecto_id": "B",
+                "first_at": "2026-09-06T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "n": 3,
+        "desglose": {
+          "proyecto": [
+            {
+              "clave": "A",
+              "leads": 2,
+              "postulan": 1,
+              "tasa_postulacion": 0.5,
+              "activos": 1,
+              "tasa_activos": 0.5,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.5,
+              "ventas": 1,
+              "tasa_venta": 0.5
+            },
+            {
+              "clave": "B",
+              "leads": 2,
+              "postulan": 1,
+              "tasa_postulacion": 0.5,
+              "activos": 1,
+              "tasa_activos": 0.5,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            }
+          ],
+          "afinidad": [
+            {
+              "clave": "Compatible",
+              "leads": 2,
+              "postulan": 2,
+              "tasa_postulacion": 1.0,
+              "activos": 2,
+              "tasa_activos": 1.0,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.5,
+              "ventas": 1,
+              "tasa_venta": 0.5
+            },
+            {
+              "clave": "Cercano",
+              "leads": 1,
+              "postulan": 0,
+              "tasa_postulacion": 0.0,
+              "activos": 0,
+              "tasa_activos": 0.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            },
+            {
+              "clave": "Marginal",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "fuera_de_alcance",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "requiere_antecedentes",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            }
+          ],
+          "capacidad": [
+            {
+              "clave": "alcanza",
+              "leads": 3,
+              "postulan": 2,
+              "tasa_postulacion": 0.6666666666666666,
+              "activos": 2,
+              "tasa_activos": 0.6666666666666666,
+              "activos_mes": 1,
+              "tasa_activos_mes": 0.3333333333333333,
+              "ventas": 1,
+              "tasa_venta": 0.3333333333333333
+            },
+            {
+              "clave": "cercano_por_capacidad",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "insuficiente",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "requiere_antecedentes",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            }
+          ],
+          "prioridad": [
+            {
+              "clave": "contact_now",
+              "leads": 1,
+              "postulan": 1,
+              "tasa_postulacion": 1.0,
+              "activos": 1,
+              "tasa_activos": 1.0,
+              "activos_mes": 1,
+              "tasa_activos_mes": 1.0,
+              "ventas": 1,
+              "tasa_venta": 1.0
+            },
+            {
+              "clave": "contact_with_review",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "nurture",
+              "leads": 1,
+              "postulan": 0,
+              "tasa_postulacion": 0.0,
+              "activos": 0,
+              "tasa_activos": 0.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            },
+            {
+              "clave": "reorient",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "request_info",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "do_not_route",
+              "leads": 0,
+              "postulan": 0,
+              "tasa_postulacion": null,
+              "activos": 0,
+              "tasa_activos": null,
+              "activos_mes": 0,
+              "tasa_activos_mes": null,
+              "ventas": 0,
+              "tasa_venta": null
+            },
+            {
+              "clave": "sin_prioridad",
+              "leads": 1,
+              "postulan": 1,
+              "tasa_postulacion": 1.0,
+              "activos": 1,
+              "tasa_activos": 1.0,
+              "activos_mes": 0,
+              "tasa_activos_mes": 0.0,
+              "ventas": 0,
+              "tasa_venta": 0.0
+            }
+          ]
+        },
+        "por_proyecto": [
+          {
+            "proyecto_id": "A",
+            "leads": 2,
+            "postulan": 1,
+            "ventas": 1
+          },
+          {
+            "proyecto_id": "B",
+            "leads": 2,
+            "postulan": 1,
+            "ventas": 0
+          }
+        ]
+      }
+    }
+  ]
+}
