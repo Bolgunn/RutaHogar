@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import cases from "../../../../../docs/algorithms/ALG-11-cases.json";
 import { calculateScenarioResult, classifyFinancialScenario } from "../scenarioResult";
-import { applyRangeReferenceAmount, displayStatus, evaluateBenefit } from "../benefitScenario";
+import { applyRangeReferenceAmount, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
 import { BENEFIT_ESTIMATION_BASELINE } from "../benefitEstimationBaseline";
 import { projectUf } from "../ufProjection";
 import { closeComposition, allowedTerms } from "../scenarioDraft";
@@ -15,6 +15,14 @@ import ScenarioStatus from "../../../components/financing/ScenarioStatus";
 import SuggestedConfiguration from "../../../components/financing/SuggestedConfiguration";
 import FinancingOverview, { FinancingAdjustments } from "../../../components/financing/FinancingOverview";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
+import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+
+const findElementByType = (node, type) => {
+  if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
+  if (!React.isValidElement(node)) return null;
+  if (node.type === type) return node;
+  return findElementByType(React.Children.toArray(node.props.children), type);
+};
 
 describe("ALG-11", () => {
   it.each(cases.cases.filter((item) => item.input?.precio_clp))("asserts $name", ({ input, expect: expected }) => {
@@ -61,6 +69,37 @@ describe("ALG-11", () => {
     const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [100, 200] };
     expect(applyRangeReferenceAmount(rangeBenefit, 200)).toMatchObject({ amount_kind: "range_selected", amount_clp: 200, range_reference_clp: [100, 200] });
     expect(applyRangeReferenceAmount(rangeBenefit, 201)).toBe(rangeBenefit);
+  });
+  it("builds minimum, middle and maximum simulation references from a normalized range", () => {
+    expect(rangeSimulationOptions([250, 550])).toEqual([
+      { kind: "minimum", label: "Mínimo", amount: 250 },
+      { kind: "middle", label: "Intermedio", amount: 400 },
+      { kind: "maximum", label: "Máximo", amount: 550 },
+    ]);
+    expect(rangeSimulationOptions([550, 250])).toEqual(rangeSimulationOptions([250, 550]));
+  });
+  it("keeps equal and invalid ranges safe without duplicate or invented options", () => {
+    expect(rangeSimulationOptions([250, 250])).toEqual([{ kind: "single", label: "Monto disponible", amount: 250 }]);
+    expect(rangeSimulationOptions([250])).toEqual([]);
+    expect(rangeSimulationOptions([250, "sin dato"])).toEqual([]);
+  });
+  it("does not apply a range amount until the user explicitly selects one", () => {
+    const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] };
+    expect(applyRangeReferenceAmount(rangeBenefit, null)).toBe(rangeBenefit);
+  });
+  it("reuses the selected range amount to close the composition and recalculate the dividend", () => {
+    const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] };
+    const draft = { precio_uf: 1000, pie_clp: 100, composition_mode: "pie", plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, deuda_mensual_clp: 0 };
+    const results = rangeSimulationOptions(rangeBenefit.estimated_range_clp).map((option) => {
+      const benefit = applyRangeReferenceAmount(rangeBenefit, option.amount);
+      return calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    });
+
+    expect(results.map((result) => result.subsidio_principal_clp)).toEqual([250, 400, 550]);
+    expect(results.map((result) => result.credito_clp)).toEqual([650, 500, 350]);
+    expect(results.every((result) => result.pie_clp + result.subsidio_principal_clp + result.credito_clp === result.precio_clp)).toBe(true);
+    expect(results[1].dividendo_clp).toBeLessThan(results[0].dividendo_clp);
+    expect(results[2].dividendo_clp).toBeLessThan(results[1].dividendo_clp);
   });
   it("keeps a compatible scenario free of alternatives", () => {
     expect(referenceAlternatives({ pie_clp: 10 }, { financial_status: "Compatible" })).toEqual([]);
@@ -124,6 +163,94 @@ describe("ALG-11", () => {
     expect(adjustments).toContain("Renta considerada");
     expect(adjustments).toContain("2.200");
     expect(adjustments).toContain("Aplicar cambios");
+  });
+  it("renders the explicit range choices without selecting a subsidy by default", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const benefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] };
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: false, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
+
+    expect(markup).toContain("Monto del subsidio a simular");
+    expect(markup).toContain("Selecciona un monto");
+    expect(markup).toContain("Mínimo · 250 UF");
+    expect(markup).toContain("Intermedio · 400 UF");
+    expect(markup).toContain("Máximo · 550 UF");
+    expect(markup).toContain("No constituye una asignación oficial");
+  });
+  it("scrolls to and highlights the range amount selector while it still starts unselected", () => {
+    const scrollIntoView = vi.fn();
+    scrollToRangeAmountSelector({ scrollIntoView });
+    expect(scrollIntoView).toHaveBeenCalledWith(RANGE_AMOUNT_SCROLL_OPTIONS);
+
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] } });
+    const props = { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, isRangeAmountHighlighted: true, onRangeAmountInteraction: () => {}, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} };
+    const adjustments = FinancingAdjustments(props);
+    const markup = renderToStaticMarkup(React.createElement(FinancingAdjustments, props));
+
+    expect(markup).toContain("financing-adjustments__range-field is-highlighted");
+    expect(markup).toContain("Selecciona el monto que quieres usar en esta simulación.");
+    expect(findElementByType(adjustments, "select").props.value).toBe("");
+    expect(markup).toContain("Aplicar cambios");
+  });
+  it("clears the guide through the selector interaction without replacing the apply flow", () => {
+    const onRangeAmountInteraction = vi.fn();
+    const onRangeAmountChange = vi.fn();
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] } });
+    const adjustments = FinancingAdjustments({ draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, isRangeAmountHighlighted: true, onRangeAmountInteraction, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange, onUpdate: () => {} });
+    const selector = findElementByType(adjustments, "select");
+
+    selector.props.onFocus();
+    selector.props.onChange({ target: { value: "400" } });
+
+    expect(onRangeAmountInteraction).toHaveBeenCalledTimes(2);
+    expect(onRangeAmountChange).toHaveBeenCalledWith(400);
+  });
+  it("removes the temporary highlight when the user starts interacting with the selector", () => {
+    const timeoutRef = { current: setTimeout(() => {}, 10) };
+    const setHighlighted = vi.fn();
+
+    clearRangeAmountGuide(timeoutRef, setHighlighted);
+
+    expect(setHighlighted).toHaveBeenCalledWith(false);
+    expect(timeoutRef.current).toBeNull();
+  });
+  it("keeps a historic in-range amount selectable even when it is not one of the three new references", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 725, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [100, 200] };
+    const benefit = applyRangeReferenceAmount(rangeBenefit, 175);
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: false, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
+
+    expect(markup).toContain("Monto seleccionado · 175 UF");
+  });
+  it("keeps the numeric range amount frozen when a saved scenario is loaded", () => {
+    const historicDraft = synchronizeScenario({ selected_benefit: "DS1", selected_benefit_range_amount_clp: 175 });
+    const benefit = applyRangeReferenceAmount({ amount_kind: "range", amount_clp: 0, estimated_range_clp: [100, 200] }, historicDraft.selected_benefit_range_amount_clp);
+
+    expect(historicDraft.selected_benefit_range_amount_clp).toBe(175);
+    expect(benefit).toMatchObject({ amount_kind: "range_selected", amount_clp: 175 });
+  });
+  it("labels an applied range amount as simulated and keeps the official-assignment disclaimer", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 500, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const benefit = applyRangeReferenceAmount({ amount_kind: "range", amount_clp: 0, estimated_range_clp: [250, 550] }, 400);
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, ufReference: { uf_value_clp: 1 } }));
+
+    expect(markup).toContain("Monto simulado");
+    expect(markup).toContain("Subsidio simulado: 400 UF");
+    expect(markup).toContain("No constituye una asignación oficial");
+  });
+  it("keeps fixed and informational benefits free of the range selector", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const buildMarkup = (benefit) => {
+      const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+      return renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: false, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
+    };
+
+    expect(buildMarkup({ amount_kind: "official", amount_clp: 250 })).not.toContain("Monto del subsidio a simular");
+    expect(buildMarkup({ amount_kind: "information", amount_clp: 0 })).not.toContain("Monto del subsidio a simular");
   });
   it("renders a concrete explanation without the removed UF projection accordion", () => {
     const result = { financial_status: "Compatible", precio_clp: 1000, pie_clp: 250, credito_clp: 750, dividendo_clp: 100, renta_total_clp: 1000, reasons: [] };

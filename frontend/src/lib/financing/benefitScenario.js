@@ -4,6 +4,27 @@ const PRIMARY = new Set(["DS1", "DS49"]);
 const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const normalize = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+function normalizedRange(range) {
+  if (!Array.isArray(range) || range.length !== 2) return null;
+  const values = range.map(Number);
+  if (!values.every(Number.isFinite) || values.some((value) => value < 0)) return null;
+  return values.sort((left, right) => left - right);
+}
+
+// The middle option is only a deterministic reference for this simulation.
+// It is derived from the reviewed range and never becomes catalogue data.
+export function rangeSimulationOptions(range) {
+  const bounds = normalizedRange(range);
+  if (!bounds) return [];
+  const [minimum, maximum] = bounds;
+  if (minimum === maximum) return [{ kind: "single", label: "Monto disponible", amount: minimum }];
+  return [
+    { kind: "minimum", label: "Mínimo", amount: minimum },
+    { kind: "middle", label: "Intermedio", amount: (minimum + maximum) / 2 },
+    { kind: "maximum", label: "Máximo", amount: maximum },
+  ];
+}
+
 function conditions(entry, evaluation = {}, project = {}) {
   const rules = entry?.eligibility || {};
   const input = evaluation?.input || evaluation || {};
@@ -66,7 +87,9 @@ export function evaluateBenefit(entry, evaluation, project, ufValue) {
 
 export function applyRangeReferenceAmount(benefit, selectedAmount) {
   if (benefit?.amount_kind !== "range" || !Array.isArray(benefit.estimated_range_clp)) return benefit;
-  const [minimum, maximum] = benefit.estimated_range_clp.map(Number).sort((left, right) => left - right);
+  const bounds = normalizedRange(benefit.estimated_range_clp);
+  if (!bounds) return benefit;
+  const [minimum, maximum] = bounds;
   const amount = Number(selectedAmount);
   if (!Number.isFinite(amount) || amount < minimum || amount > maximum) return benefit;
   return {
@@ -75,7 +98,7 @@ export function applyRangeReferenceAmount(benefit, selectedAmount) {
     amount_kind: "range_selected",
     selected_range_amount_clp: amount,
     range_reference_clp: [minimum, maximum],
-    note: "Monto de referencia elegido dentro del rango. No constituye una asignación oficial.",
+    note: "Monto de referencia elegido dentro del rango.",
   };
 }
 

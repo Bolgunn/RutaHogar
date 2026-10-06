@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./financing.css";
 import { createScenarioDraft, allowedTerms, closeComposition } from "../../lib/financing/scenarioDraft";
 import { currentUfReference } from "../../lib/financing/ufProjection";
@@ -26,6 +26,21 @@ const apiBase = () => String(import.meta.env.VITE_API_URL || import.meta.env.VIT
 const snapshot = (project) => ({ id: project?.id || null, nombre: project?.nombre || "Vivienda manual", comuna: project?.comuna || "", tipo_vivienda: project?.tipo_vivienda || "", precio_uf: Number(project?.precio_uf || project?.precio_min_uf || project?.valor_uf) || 0, vivienda_nueva: project?.estado === "en_construccion" });
 const savedStatusTone = (status) => status === "Compatible" ? "compatible" : status === "Cercano" ? "near" : "adjustment";
 
+export const RANGE_AMOUNT_GUIDE_DELAY_MS = 4500;
+export const RANGE_AMOUNT_SCROLL_OPTIONS = Object.freeze({ behavior: "smooth", block: "center" });
+
+export function scrollToRangeAmountSelector(element) {
+  element?.scrollIntoView?.(RANGE_AMOUNT_SCROLL_OPTIONS);
+}
+
+export function clearRangeAmountGuide(timeoutRef, setHighlighted) {
+  setHighlighted(false);
+  if (timeoutRef.current !== null) {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }
+}
+
 export default function FinancingSimulatorPanel({ evaluation, projects = [], onNavigate, initialProjectId }) {
   const market = evaluation?.result?.financial_indicators?.capacidad_supuestos?.market_snapshot || {};
   const goal = getCurrentProjectGoal(evaluation);
@@ -45,6 +60,10 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const [startedFromSuggested, setStartedFromSuggested] = useState(false);
   const [comparisonIds, setComparisonIds] = useState([]);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const [rangeAmountGuideVersion, setRangeAmountGuideVersion] = useState(0);
+  const [isRangeAmountHighlighted, setIsRangeAmountHighlighted] = useState(false);
+  const rangeAmountSelectorRef = useRef(null);
+  const rangeAmountGuideTimeoutRef = useRef(null);
   const project = useMemo(() => selectedId === "__project_goal__" ? goal || projects[0] || null : projects.find((item) => String(item.id) === String(selectedId)) || goal || projects[0] || null, [selectedId, goal, projects]);
   const current = currentUfReference(market);
   const ufReference = current;
@@ -83,9 +102,23 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     setStartedFromSuggested(false);
   }, [initialProjectId, projects, current?.uf_value_clp, evaluation]);
   useEffect(() => { let active = true; getHousingBenefitCatalog({ apiBase: apiBase() }).then((value) => { if (active) setCatalogue(value); }).catch(() => { if (active) setCatalogue(null); }); return () => { active = false; }; }, []);
+  useEffect(() => () => {
+    if (rangeAmountGuideTimeoutRef.current !== null) clearTimeout(rangeAmountGuideTimeoutRef.current);
+  }, []);
+  useEffect(() => {
+    if (!rangeAmountGuideVersion || !rangeAmountSelectorRef.current) return;
+    scrollToRangeAmountSelector(rangeAmountSelectorRef.current);
+    setIsRangeAmountHighlighted(true);
+    if (rangeAmountGuideTimeoutRef.current !== null) clearTimeout(rangeAmountGuideTimeoutRef.current);
+    rangeAmountGuideTimeoutRef.current = setTimeout(() => {
+      setIsRangeAmountHighlighted(false);
+      rangeAmountGuideTimeoutRef.current = null;
+    }, RANGE_AMOUNT_GUIDE_DELAY_MS);
+  }, [rangeAmountGuideVersion]);
   const refresh = async () => { try { setSaved(await listMortgageScenarios(evaluation.id)); } catch { setNotice("No pudimos cargar los escenarios guardados. Reintenta después de aplicar la migración de HU17."); } };
   useEffect(() => { if (consented) refresh(); }, [evaluation?.id, consented]);
   if (!consented) return null;
+  const dismissRangeAmountGuide = () => clearRangeAmountGuide(rangeAmountGuideTimeoutRef, setIsRangeAmountHighlighted);
   const update = (field, value) => { setHasUnsavedChanges(true); setDraft((old) => ({ ...old, [field]: value })); };
   const updatePie = (value) => { setHasUnsavedChanges(true); setDraft((old) => closeComposition(old, "pie_clp", value, draftBenefit.amount_clp, draftResult?.precio_clp)); };
   const updateCredit = (value) => { setHasUnsavedChanges(true); setDraft((old) => closeComposition(old, "credito_clp", value, draftBenefit.amount_clp, draftResult?.precio_clp)); };
@@ -196,11 +229,16 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
         benefitStates={benefitStates}
         selectedBenefit={draft.selected_benefit}
         selectedVariant={draft.selected_benefit_variant}
-        onSelectBenefit={(identifier, variant) => { setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: identifier, selected_benefit_variant: variant, selected_benefit_range_amount_clp: null })); }}
-        onClearBenefit={() => { setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: null, selected_benefit_variant: null, selected_benefit_range_amount_clp: null })); }}
+        onSelectBenefit={(identifier, variant) => {
+          setHasUnsavedChanges(true);
+          setDraft((old) => ({ ...old, selected_benefit: identifier, selected_benefit_variant: variant, selected_benefit_range_amount_clp: null }));
+          if (benefitStates[identifier]?.amount_kind === "range") setRangeAmountGuideVersion((version) => version + 1);
+          else dismissRangeAmountGuide();
+        }}
+        onClearBenefit={() => { dismissRangeAmountGuide(); setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: null, selected_benefit_variant: null, selected_benefit_range_amount_clp: null })); }}
       />
       <SuggestedConfiguration draft={activeDraft} result={activeResult} suggestedDraft={suggestedDraft} suggestedResult={suggestedResult} benefit={activeBenefit} onUse={requestSuggestedDraft} />
-      <FinancingAdjustments draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} onApply={applyDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
+      <FinancingAdjustments draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} rangeAmountControlRef={rangeAmountSelectorRef} isRangeAmountHighlighted={isRangeAmountHighlighted} onRangeAmountInteraction={dismissRangeAmountGuide} onApply={applyDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
       <ScenarioStatus result={activeResult} ufReference={ufReference} />
       <SuggestedAlternatives alternatives={alternatives} onTry={applySuggestedDraft} />
       <section className="financing-save"><div><strong>Guardar esta configuración</strong><p>{hasUnsavedChanges ? "Tienes cambios por aplicar. Guardará la configuración actualmente aplicada." : "Se creará una nueva instancia de financiamiento con la configuración aplicada."}</p></div><input value={name} maxLength="120" placeholder="Nombre opcional" onChange={(event) => setName(event.target.value)} /><button type="button" className="primary-button compact-button" onClick={() => save()} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar escenario"}</button>{notice ? <span>{notice}</span> : null}</section>
