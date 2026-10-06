@@ -98,6 +98,34 @@ def resolve_market_snapshot_from_environment() -> dict:
     raise unavailable
 
 
+def read_persisted_uf_history(repository: MarketSnapshotRepository, allow_fixture: bool | None = None) -> list[dict]:
+    """Return one deterministic dated UF observation from stored snapshots only."""
+    if allow_fixture is None:
+        allow_fixture = _fixture_snapshots_allowed()
+    try:
+        rows = repository.list_uf_history()
+    except MarketRepositoryError as exc:
+        raise MarketSnapshotUnavailable("No fue posible leer el historial de referencia de mercado.") from exc
+    by_date: dict[str, dict] = {}
+    for row in rows:
+        candidate = row.get("snapshot") if isinstance(row, dict) else None
+        if isinstance(candidate, dict) and candidate.get("fixture_only") is True and not allow_fixture:
+            continue
+        try:
+            snapshot = validate_snapshot(candidate)
+        except SnapshotValidationError:
+            continue
+        source = snapshot["source"]["uf_value_clp"]
+        by_date[source["effective_date"]] = {
+            "effective_date": source["effective_date"],
+            "uf_value_clp": snapshot["uf_value_clp"],
+            "snapshot_effective_date": snapshot["effective_date"],
+            "snapshot_fetched_at": snapshot["fetched_at"],
+            "source": {"provider": source["provider"], "series": source["series"]},
+        }
+    return [by_date[key] for key in sorted(by_date)]
+
+
 def refresh_market_snapshot(repository: MarketSnapshotRepository, client: BCChClient, as_of: date) -> dict:
     # Fetch/validate completely before the single append-only persistence operation.
     snapshot = client.fetch_snapshot(as_of)

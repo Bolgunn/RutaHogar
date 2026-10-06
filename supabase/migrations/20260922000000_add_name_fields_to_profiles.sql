@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS nombre text, ADD COLUMN IF NOT EXISTS apellido_paterno text, ADD COLUMN IF NOT EXISTS apellido_materno text;

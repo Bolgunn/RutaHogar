@@ -53,3 +53,24 @@ describe("project evaluation modal copy", () => {
     expect(html).not.toContain(PROJECT_SIMULATION_DISCLAIMER);
   });
 });
+
+describe("project evaluation modal for portal listings", () => {
+  it("shows compatibility but only links the original listing", () => {
+    const html = renderToStaticMarkup(<ProjectEvaluationModal
+      project={{ ...project, id: "portal-r-1", origen: "portal", inmobiliaria: "Euro Inmobiliaria", url: "https://www.portalinmobiliario.com/MLC-1" }}
+      projects={[]}
+      context={baseContext}
+      ufValueClp={DEFAULT_UF_CLP}
+      onboarding={{}}
+      onClose={vi.fn()}
+    />);
+
+    expect(html).toContain("Valor desde");
+    expect(html).toContain("Ver publicación original");
+    expect(html).toContain("https://www.portalinmobiliario.com/MLC-1");
+    expect(html).toContain("Euro Inmobiliaria");
+    expect(html).not.toContain("Solicitar contacto");
+    expect(html).not.toContain("Guardar en favoritos");
+    expect(html).not.toContain("Usar como meta de mi plan");
+  });
+});

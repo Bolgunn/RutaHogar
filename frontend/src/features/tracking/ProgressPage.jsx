@@ -3,9 +3,14 @@ import {
   appendTrackingEvent, confirmTrackingGoal, correctTrackingEvent, getProjection, getTracking,
 } from "../../services/trackingService";
 import {
-  activeSeries, belongsToSlot, displayValue, filterSeriesByPeriod,
+  belongsToSlot, displayValue, filterSeriesByPeriod,
   projectName, projectionCauses, trackingProjectContext,
 } from "../../lib/tracking/display";
+import {
+  evolutionSeries, expectedProgressLine, sourceForChartField,
+} from "../../lib/tracking/evolution";
+import { formatGoalValue, goalPresentation } from "../../lib/tracking/goalPresentation";
+import { formatFormValue } from "../../constants";
 import UpdateFinancialDataForm from "./UpdateFinancialDataForm";
 import "./tracking.css";
 
@@ -23,13 +28,6 @@ const statusLabels = {
   compatible: "Compatible", cercano: "Cercano", no_compatible: "Aún no compatible",
 };
 const statusLabel = (value) => statusLabels[value] || value?.replaceAll("_", " ") || "Sin datos suficientes";
-const snapshotLabels = {
-  ingreso_mensual: "Ingreso mensual", deuda_mensual: "Deuda mensual", ahorro_disponible: "Ahorro disponible",
-  dividendo_estimado: "Dividendo estimado", monto_morosidad: "Monto de morosidad",
-  morosidad_actual: "Morosidad actual", tipo_contrato: "Tipo de contrato",
-  continuidad_laboral: "Continuidad laboral", edad: "Edad",
-  plazo_credito_hipotecario: "Plazo del crédito", project_goal: "Proyecto objetivo",
-};
 const evolutionPeriods = [
   ["3m", "3 meses"], ["6m", "6 meses"], ["12m", "12 meses"], ["all", "Todo"],
 ];
@@ -57,6 +55,178 @@ function Trend({ series, field, label }) {
   </figure>;
 }
 
+function chartValue(value, field) {
+  if (value == null) return "Sin datos";
+  if (field === "score" || field === "capacity") return displayValue(value);
+  return `$${displayValue(value)}`;
+}
+
+function signedDelta(value, field) {
+  if (value == null) return null;
+  return `${value > 0 ? "+" : ""}${chartValue(value, field)}`;
+}
+
+export function tooltipPlacement({ x, y }) {
+  const horizontal = x < 72 ? "start" : x > 228 ? "end" : "center";
+  const vertical = y < 38 ? "below" : "above";
+  return {
+    horizontal,
+    vertical,
+    style: {
+      top: `${y}%`,
+      ...(horizontal === "start" ? { left: "6px" }
+        : horizontal === "end" ? { right: "6px" }
+          : { left: `${x / 3}%` }),
+    },
+  };
+}
+
+export function PointTooltip({ point, field, label, placement, tooltipId }) {
+  const valueDelta = point.deltas?.[field];
+  return <div className={`progress-trend-tooltip progress-trend-tooltip--${placement.horizontal} progress-trend-tooltip--${placement.vertical}`}
+    id={tooltipId} style={placement.style} role="tooltip">
+    <strong>{dateOnly(point.at)}</strong>
+    <span><b>{label}:</b> {chartValue(point[field], field)}
+      {valueDelta != null && <> <em>({signedDelta(valueDelta, field)})</em></>}
+    </span>
+    {field !== "score" && point.score != null && <span><b>Score:</b> {displayValue(point.score)}
+      {point.deltas?.score != null && <> <em>({signedDelta(point.deltas.score, "score")})</em></>}
+    </span>}
+    {point.classificationChange && <span><b>Clasificación:</b> {point.classificationChange.from} → {point.classificationChange.to}</span>}
+    {point.capacity != null && point.deltas?.capacity != null && <span><b>Capacidad de compra:</b> {displayValue(point.capacity)} UF
+      <em> ({signedDelta(point.deltas.capacity, "capacity")} UF)</em>
+    </span>}
+    {point.compatibilityChange && <span><b>Compatibilidad:</b> {point.compatibilityChange.from} → {point.compatibilityChange.to}</span>}
+  </div>;
+}
+
+function EvolutionTrend({ series, field, label, expected = [] }) {
+  const [activePoint, setActivePoint] = useState(null);
+  const points = series.filter((row) => Number.isFinite(row[field]) && Number.isFinite(new Date(row.at).getTime()));
+  if (!points.length) return <figure className="progress-trend progress-trend--empty">
+    <figcaption>{label}</figcaption><p>Sin datos en este período.</p>
+  </figure>;
+  const expectedPoints = expected.filter((point) => Number.isFinite(point?.value) && Number.isFinite(new Date(point.at).getTime()));
+  const values = [...points.map((row) => row[field]), ...expectedPoints.map((point) => point.value)];
+  const dates = [...points.map((row) => new Date(row.at).getTime()), ...expectedPoints.map((point) => new Date(point.at).getTime())];
+  const low = Math.min(...values), high = Math.max(...values);
+  const start = Math.min(...dates), end = Math.max(...dates);
+  const position = (at, value) => ({
+    x: end === start ? 150 : 10 + 280 * (new Date(at).getTime() - start) / (end - start),
+    y: high === low ? 50 : 90 - 80 * (value - low) / (high - low),
+  });
+  const path = points.map((row) => {
+    const { x, y } = position(row.at, row[field]);
+    return `${x},${y}`;
+  }).join(" ");
+  const expectedPath = expectedPoints.map((point) => {
+    const { x, y } = position(point.at, point.value);
+    return `${x},${y}`;
+  }).join(" ");
+  const focused = activePoint && points.find((point) => point.id === activePoint.id);
+  const focusedPosition = focused ? position(focused.at, focused[field]) : null;
+
+  return <figure className="progress-trend">
+    <figcaption><span>{label}</span><strong>{chartValue(points[0][field], field)} → {chartValue(points.at(-1)[field], field)}</strong></figcaption>
+    <div className="progress-trend__chart">
+      <svg viewBox="0 0 300 100" role="group" aria-label={`Evolución de ${label}`}>
+        {expectedPath && <polyline className="progress-trend__expected" points={expectedPath} fill="none" strokeWidth="2" vectorEffect="non-scaling-stroke">
+          <title>Progreso esperado</title>
+        </polyline>}
+        {points.length > 1 && <polyline points={path} fill="none" stroke="currentColor" strokeWidth="3" vectorEffect="non-scaling-stroke" />}
+        {points.map((point) => {
+          const { x, y } = position(point.at, point[field]);
+          const isActive = focused?.id === point.id;
+          return <circle key={point.id} className="progress-trend__point" cx={x} cy={y} r="4.5" tabIndex="0"
+            role="img" aria-label={`${dateOnly(point.at)}. ${label}: ${chartValue(point[field], field)}.`}
+            aria-describedby={isActive ? `trend-tooltip-${field}` : undefined}
+            onMouseEnter={() => setActivePoint({ id: point.id, mode: "pointer" })}
+            onMouseLeave={() => setActivePoint((active) => active?.mode === "pointer" ? null : active)}
+            onFocus={() => setActivePoint({ id: point.id, mode: "focus" })}
+            onBlur={() => setActivePoint((active) => active?.mode === "focus" ? null : active)}
+            onKeyDown={(event) => { if (event.key === "Escape") { setActivePoint(null); event.currentTarget.blur(); } }} />;
+        })}
+      </svg>
+      {focused && <PointTooltip point={focused} field={field} label={label} placement={tooltipPlacement(focusedPosition)}
+        tooltipId={`trend-tooltip-${field}`} />}
+    </div>
+    {expectedPath && <span className="progress-trend__legend"><i aria-hidden="true" /> Progreso esperado</span>}
+  </figure>;
+}
+
+const historyFieldDefinitions = Object.freeze([
+  { field: "ingreso_mensual", label: "Ingreso mensual", format: "clp" },
+  { field: "deuda_mensual", label: "Deuda mensual", format: "clp" },
+  { field: "ahorro_disponible", label: "Ahorro disponible", format: "clp" },
+  { field: "morosidad_actual", label: "Morosidad actual" },
+  { field: "tipo_contrato", label: "Tipo de contrato" },
+  { field: "continuidad_laboral", label: "Continuidad laboral" },
+  { field: "project_goal", label: "Proyecto objetivo", format: "project" },
+  { field: "plazo_compra", label: "Plazo de compra" },
+]);
+
+const hasHistoricalValue = (value) => value !== undefined && value !== null && value !== "";
+
+export function formatHistoricalProjectGoal(projectGoal) {
+  if (!projectGoal || typeof projectGoal !== "object" || Array.isArray(projectGoal)) return null;
+  const name = typeof projectGoal.nombre === "string" ? projectGoal.nombre.trim() : "";
+  const price = [projectGoal.precio_min_uf, projectGoal.precio_max_uf]
+    .find((value) => typeof value === "number" && Number.isFinite(value) && value > 0);
+  const priceText = price == null ? "" : `${displayValue(price)} UF`;
+  return [name, priceText].filter(Boolean).join(" · ") || null;
+}
+
+export function formatTrackingSnapshotValue(field, value, format) {
+  if (format === "project") return formatHistoricalProjectGoal(value);
+  if (format === "clp") return `$${displayValue(value)}`;
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  return formatFormValue(value, "Sin datos");
+}
+
+export function historySnapshotFields(snapshot) {
+  const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+  return historyFieldDefinitions.map((definition) => {
+    const value = source[definition.field];
+    if (!hasHistoricalValue(value)) return null;
+    const formattedValue = formatTrackingSnapshotValue(definition.field, value, definition.format);
+    return formattedValue ? { ...definition, value: formattedValue } : null;
+  }).filter(Boolean);
+}
+
+export function isUpdatedField(row, field) {
+  return row?.event_kind !== "baseline"
+    && Object.prototype.hasOwnProperty.call(row?.patch || {}, field);
+}
+
+export function historicalEvaluationSummary(row) {
+  const evaluation = row?.evaluation;
+  if (!evaluation || typeof evaluation !== "object") return [];
+  const summary = [];
+  if (hasHistoricalValue(evaluation.score)) summary.push({ label: "Score", value: displayValue(evaluation.score) });
+  if (hasHistoricalValue(evaluation.classification)) summary.push({ label: "Clasificación", value: evaluation.classification });
+  const capacity = evaluation.financial_indicators?.capacidad_compra_estimada_uf;
+  if (typeof capacity === "number" && Number.isFinite(capacity)) {
+    summary.push({ label: "Capacidad", value: `${displayValue(capacity)} UF` });
+  }
+  return summary;
+}
+
+function HistoricalRecordDetails({ row }) {
+  const fields = historySnapshotFields(row.recorded_complete_snapshot || row.snapshot);
+  const summary = historicalEvaluationSummary(row);
+  return <>
+    {fields.length > 0 && <dl className="progress-data-list">{fields.map(({ field, label, value }) => <div key={field}>
+      <dt>{label}</dt><dd>{value}</dd>
+      {isUpdatedField(row, field) && <small>Actualizado</small>}
+    </div>)}</dl>}
+    {summary.length > 0 && <p className="progress-recorded-result"><strong>Resultado de esta evaluación</strong>
+      <span>{summary.map((item, index) => <React.Fragment key={item.label}>
+        {index > 0 && " · "}<b>{item.label}</b> {item.value}
+      </React.Fragment>)}</span>
+    </p>}
+  </>;
+}
+
 function SectionHeading({ id, eyebrow, title, description }) {
   return <div className="progress-section-heading">
     {eyebrow && <span className="eyebrow">{eyebrow}</span>}
@@ -66,7 +236,7 @@ function SectionHeading({ id, eyebrow, title, description }) {
 }
 
 export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHistory, busy = false }) {
-  const series = activeSeries(data.active_line);
+  const series = evolutionSeries(data.active_line, data.baseline.target_project_snapshot);
   const baseline = data.audit_line.find((row) => row.event_id === data.baseline.root_event_id);
   const initialScore = baseline?.evaluation?.score;
   const current = data.current_evaluation;
@@ -135,9 +305,11 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
       <SectionHeading id="progress-goals" eyebrow="Plan original" title="Mis metas"
         description="Las metas fijadas al iniciar el plan se conservan para que puedas medir avances comparables." />
       {!data.goals.length && <div className="empty-state"><strong>Este plan no contiene metas.</strong></div>}
-      <div className="progress-goals">{data.goals.map((goal) => <article className="progress-goal-card" key={goal.goal_id}>
+      <div className="progress-goals">{data.goals.map((goal) => {
+        const presentation = goalPresentation(goal.definition);
+        return <article className="progress-goal-card" key={goal.goal_id}>
         <div className="progress-goal-card__head"><div>
-          <h3>{goal.definition.title}</h3>
+          <h3>{presentation.title}</h3>
           <div className="progress-goal-card__statuses">
             <span className={`progress-status progress-status--${goal.action_status}`}>{statusLabel(goal.action_status)}</span>
             {goal.temporal_status && <span className="progress-temporal-status">
@@ -149,11 +321,12 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
             <strong>{displayValue(goal.progress.percentage)}%</strong><span>completado</span>
           </div>}
         </div>
-        {goal.progress.percentage != null && <progress max="100" value={goal.progress.percentage} aria-label={goal.definition.title} />}
+        <p className="progress-goal-card__description">{presentation.description}</p>
+        {goal.progress.percentage != null && <progress max="100" value={goal.progress.percentage} aria-label={presentation.title} />}
         <dl className="progress-goal-values">
-          <div><dt>Actual</dt><dd>{displayValue(goal.progress.current_value)}</dd></div>
-          <div><dt>Objetivo</dt><dd>{displayValue(goal.progress.target_value)}</dd></div>
-          <div><dt>Restante</dt><dd>{displayValue(goal.progress.remaining_value)}</dd></div>
+          <div><dt>Actual</dt><dd>{formatGoalValue(goal.progress.current_value, goal.definition.unit)}</dd></div>
+          <div><dt>Objetivo</dt><dd>{formatGoalValue(goal.progress.target_value, goal.definition.unit)}</dd></div>
+          <div><dt>Restante</dt><dd>{formatGoalValue(goal.progress.remaining_value, goal.definition.unit)}</dd></div>
         </dl>
         {(goal.schedule.expected_percentage != null || goal.definition.target_at) && <p className="progress-goal-card__schedule">
           {goal.schedule.expected_percentage != null && `Esperado hoy: ${displayValue(goal.schedule.expected_percentage)}%`}
@@ -166,7 +339,8 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
           onClick={() => perform(() => onConfirm(goal))}>
           {goal.action_status === "cumplida" ? "Revocar confirmación" : "Confirmar cumplimiento"}
         </button>}
-      </article>)}</div>
+      </article>;
+      })}</div>
       {actionError && <p role="alert" className="warning-note">{actionError}</p>}
     </section>
 
@@ -185,7 +359,8 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
         </fieldset>
       </div>
       <div className="progress-trends">{[["score", "Score"], ["income", "Ingreso"], ["debt", "Deuda"], ["savings", "Ahorro"]]
-        .map(([field, label]) => <Trend key={field} series={visibleSeries} field={field} label={label} />)}</div>
+        .map(([field, label]) => <EvolutionTrend key={field} series={visibleSeries} field={field} label={label}
+          expected={expectedProgressLine(data.goals, sourceForChartField(field), data.baseline.baseline_at)} />)}</div>
       <details className="progress-history"><summary>Ver historial financiero</summary>
         <div className="tracking-table"><table><caption>Datos del período seleccionado</caption>
           <thead><tr><th>Fecha</th><th>Score</th><th>Clasificación</th><th>Ingreso</th><th>Deuda</th><th>Ahorro</th></tr></thead>
@@ -218,16 +393,17 @@ export function TrackingHistoryView({ data, onCorrect, busy = false }) {
     <SectionHeading id="progress-audit" eyebrow="Historial" title="Historial de cambios"
       description="Revisa los datos registrados y corrige un registro sin borrar su historia." />
     <ol className="progress-audit-list">{data.audit_line.map((row) => <li key={row.event_id}>
-      <div><strong>{dateTime(row.effective_at)}</strong><p>{row.reason}</p>
-        <span>{data.excluded_from_metrics.includes(row.event_id) ? "Versión anterior" : "Registro vigente"}</span></div>
+      <div className="progress-audit-record__head">
+        <div className="progress-audit-record__meta"><strong>{dateTime(row.effective_at)}</strong><p>{row.reason}</p>
+          <span>{data.excluded_from_metrics.includes(row.event_id) ? "Versión anterior" : "Registro vigente"}</span></div>
+        <button type="button" className="secondary-button progress-audit-record__correct" disabled={busy}
+          onClick={() => { setTarget(row); setAnnulReason(""); setAnnulCommand(null); }}>
+          Corregir registro
+        </button>
+      </div>
       <details className="progress-recorded-data"><summary>Ver datos registrados</summary>
-        <dl className="progress-data-list">{Object.entries(row.recorded_complete_snapshot || row.snapshot || {}).map(([field, value]) =>
-          <div key={field}><dt>{snapshotLabels[field] || field.replaceAll("_", " ")}</dt><dd>{displayValue(value)}</dd></div>)}</dl>
+        <HistoricalRecordDetails row={row} />
       </details>
-      <button type="button" className="secondary-button" disabled={busy}
-        onClick={() => { setTarget(row); setAnnulReason(""); setAnnulCommand(null); }}>
-        Corregir registro
-      </button>
     </li>)}</ol>
     {target && <div className="progress-correction">
       <h3>Corregir registro del {dateOnly(target.effective_at)}</h3>

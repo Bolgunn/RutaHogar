@@ -133,6 +133,7 @@ Las funciones que se despliegan a mano usan ademas:
 EJECUTIVO_FROM_EMAIL
 APP_URL
 ARCO_NOTIFICATION_EMAIL
+ARCO_FROM_EMAIL
 ```
 
 Notas de configuracion:
@@ -155,14 +156,10 @@ Notas de configuracion:
   (redirige a `/definir-password`). Por defecto
   `https://score-leads-one.vercel.app`; en local, `http://localhost:5173`.
 - `ARCO_NOTIFICATION_EMAIL`: destinatario de las notificaciones de solicitudes
-  ARCO que envia `notify-admin-arco`. **Si no se define, la funcion usa un
-  correo personal hardcodeado en el codigo**, asi que conviene fijarlo siempre
-  en produccion.
-- `EJECUTIVO_TEST_PASSWORD_MODE` (opcional, solo pruebas): con el valor exacto
-  `"true"`, `create-executive` devuelve `password_temporal` para poder entrar
-  sin depender del correo. **Si no esta en `"true"` no hay contrasena de
-  respaldo**: si falla el envio, el ejecutivo queda sin acceso hasta que se
-  arregle el correo. Dejarlo sin definir en produccion.
+  ARCO que envia `notify-admin-arco`. Es obligatorio: la funcion falla cerrada
+  si no esta configurado.
+- `ARCO_FROM_EMAIL`: remitente de las notificaciones ARCO. Usa una identidad o
+  dominio verificado en Resend para produccion.
 
 > **Ojo:** el workflow solo despliega `submit-feedback`. Las funciones
 > `create-executive` y `notify-admin-arco` se despliegan a mano, y sus secrets

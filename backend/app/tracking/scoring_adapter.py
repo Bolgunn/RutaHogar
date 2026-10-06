@@ -7,7 +7,7 @@ from typing import get_args
 
 from .contracts import TrackingError
 
-METADATA_FIELDS = {"project_goal", "property_value_source", "comuna_alternativa", "birth_date"}
+METADATA_FIELDS = {"project_goal", "property_value_source", "comuna_alternativa", "birth_date", "onboarding_snapshot"}
 
 
 def financial_field_contract():
@@ -32,6 +32,8 @@ def complete_snapshot(state):
     if any(isinstance(value, float) and not isfinite(value) for value in state.values()):
         raise TrackingError("invalid_patch")
     if state.get("project_goal") is not None and not isinstance(state["project_goal"], dict):
+        raise TrackingError("invalid_patch")
+    if state.get("onboarding_snapshot") is not None and not isinstance(state["onboarding_snapshot"], dict):
         raise TrackingError("invalid_patch")
     try:
         result = ScoreRequest.model_validate(state).model_dump(mode="json")

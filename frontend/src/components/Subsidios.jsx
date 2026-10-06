@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { buildRecommendations } from "../services/recommendationService";
 import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 
@@ -67,11 +67,11 @@ function getBenefitNotes(benefit) {
   return duplicatedCount >= Math.min(2, normalizedPending.length) ? "" : notes;
 }
 
-export default function Subsidios({ evaluation, onNavigate }) {
+export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
   const hasProjectGoal = evaluation?.input?.property_value_source === "project_selection";
   const data = useMemo(
-    () => buildRecommendations(hasProjectGoal ? evaluation : null),
-    [evaluation, hasProjectGoal],
+    () => buildRecommendations(hasProjectGoal || focusBenefitId ? evaluation : null),
+    [evaluation, hasProjectGoal, focusBenefitId],
   );
   const openBenefitCapsule = (academyModule) => {
     const articleId = ACADEMY_BENEFIT_CAPSULES[academyModule];
@@ -86,6 +86,11 @@ export default function Subsidios({ evaluation, onNavigate }) {
   const disclaimer = data?.housing_benefits?.disclaimer || "";
   const summary = data?.housing_benefits?.summary || "";
   const eligibleCount = benefits.filter((b) => b.eligible).length;
+
+  useEffect(() => {
+    if (!focusBenefitId) return;
+    document.getElementById(`benefit-${normalizeBenefitText(focusBenefitId)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusBenefitId, benefits.length]);
 
   if (!evaluation) {
     return (
@@ -103,7 +108,7 @@ export default function Subsidios({ evaluation, onNavigate }) {
     );
   }
 
-  if (!hasProjectGoal) {
+  if (!hasProjectGoal && !focusBenefitId) {
     return (
       <section className="section-block simulation-panel subsidios-page">
         <div className="section-heading">
@@ -156,6 +161,7 @@ export default function Subsidios({ evaluation, onNavigate }) {
             return (
           <article
             key={benefit.type}
+            id={`benefit-${normalizeBenefitText(benefit.type)}`}
             className={`benefit-card ${benefit.eligible ? "benefit-card--eligible" : ""}`}
           >
             <div className="benefit-card-header">
