@@ -6,15 +6,18 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   getAuthenticatedUser: vi.fn(),
   getStaffEvaluations: vi.fn(),
+  logSupabaseError: vi.fn(),
+  rpc: vi.fn(),
 }));
 
 vi.mock("../../utils/supabase", () => ({
-  supabase: { from: mocks.from },
+  supabase: { from: mocks.from, rpc: mocks.rpc },
 }));
 
 vi.mock("../profileService", () => ({
   ensureUserProfile: mocks.ensureUserProfile,
   getAuthenticatedUser: mocks.getAuthenticatedUser,
+  logSupabaseError: mocks.logSupabaseError,
 }));
 
 vi.mock("../trackingService", () => ({
@@ -134,14 +137,20 @@ describe("HU13 — aceptación del plan", () => {
     mocks.getStaffEvaluations.mockResolvedValue({
       items: [{ ...evaluation, full_name: "Lead en scope", phone: "+56912345678" }],
     });
+    mocks.rpc.mockResolvedValue({
+      data: [{ id: "user-1", full_name: "Lead en scope", phone: "+56912345678", reliability_status: "en_revision" }],
+      error: null,
+    });
 
     const evaluations = await getEvaluations("executive-1", "ejecutivo");
 
     expect(evaluations[0]).toEqual(expect.objectContaining({
       full_name: "Lead en scope",
       phone: "+56912345678",
+      reliability_status: "en_revision",
     }));
     expect(mocks.getStaffEvaluations).toHaveBeenCalledOnce();
+    expect(mocks.rpc).toHaveBeenCalledWith("list_lead_contacts", { p_user_ids: ["user-1"] });
     expect(mocks.from).not.toHaveBeenCalled();
   });
 });

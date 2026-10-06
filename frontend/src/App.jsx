@@ -25,6 +25,7 @@ import { CoDebtorInvitationPage, CoDebtorManagementPage } from "./components/Pub
 import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
+import AdminReportHistory from "./components/AdminReportHistory";
 import Recommendations from "./components/Recommendations";
 import Subsidios from "./components/Subsidios";
 import Result from "./components/Result";
@@ -43,6 +44,8 @@ import {
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
+import { isAdminRole, isStaffRole } from "./lib/roles";
+import { canViewStaffPage, resolveStaffRoute, staffInitialPage } from "./lib/staffRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
 import { useLeads } from "./hooks/useLeads";
@@ -218,6 +221,8 @@ export const buildFinancialInput = (input = {}, onboarding = null) => ({
   ...(onboarding || input.onboarding_snapshot
     ? { onboarding_snapshot: buildOnboardingSnapshot(onboarding || input.onboarding_snapshot) }
     : {}),
+  time_to_submit: input.time_to_submit,
+  device_id_hash: input.device_id_hash,
 });
 const formatEvaluationAmount = (value) => Number.isFinite(Number(value))
   ? `$${Number(value).toLocaleString("es-CL")}`
@@ -262,8 +267,8 @@ const mergeOnboardingData = (currentData, pendingData) => {
 
 const getInitialPageForProfile = (profile) => {
   if (!profile) return "auth";
-  if (profile.role === roles.sales) return "home";
-  if (profile.role === roles.admin) return "admin";
+  const staffPage = staffInitialPage(profile.role);
+  if (staffPage) return staffPage;
   if (profile.role !== roles.user) return "home";
   return hasCompletedOnboarding(getOnboardingData(profile)) ? "home" : "onboarding";
 };
@@ -294,6 +299,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin") return "/admin";
   if (page === "admin-projects") return "/admin/proyectos";
   if (page === "admin-profile") return "/admin/perfil";
+  if (page === "admin-reports") return "/admin/reportes";
   return "/inicio";
 };
 
@@ -331,6 +337,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin",
     "/admin/proyectos",
     "/admin/perfil",
+    "/admin/reportes",
     "/definir-password",
     "/proyectos",
   ].includes(path);
@@ -344,7 +351,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -373,27 +380,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "home", path: "/inicio" };
   }
 
-  if (profile.role === roles.sales) {
-    if (path === "/") return { page: "home", path: "/inicio" };
-    if (path === "/inicio") return { page: "home" };
-    if (path === "/proyectos") return { page: "projects" };
-    if (path === "/perfil") return { page: "sales-profile" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") {
-      return { page: "leads", path: path === "/dashboard" ? undefined : "/dashboard" };
-    }
-    return { page: "home", path: "/inicio" };
-  }
-
-  if (profile.role === roles.admin) {
-    if (path === "/") return { page: "admin", path: "/admin" };
-    if (path === "/admin") return { page: "admin" };
-    if (path === "/admin/proyectos") return { page: "admin-projects" };
-    if (path === "/admin/perfil") return { page: "admin-profile" };
-    if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
-    if (path === "/inicio") return { page: "admin", path: "/admin" };
-    return { page: "admin", path: "/admin" };
-  }
+  const staffRoute = resolveStaffRoute(path, profile.role);
+  if (staffRoute) return staffRoute;
 
   return { page: getInitialPageForProfile(profile), path: getPrivatePathForPage(getInitialPageForProfile(profile)) };
 };
@@ -731,7 +719,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
+    if (page === "leads" && isStaffRole(profile?.role)) markLeadsSeen();
   }, [page]);
 
   useEffect(() => {
@@ -744,7 +732,7 @@ export default function App() {
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
-    if (profile?.role !== roles.sales && profile?.role !== roles.admin) {
+    if (!isStaffRole(profile?.role)) {
       setInmobiliariaId(null);
       return;
     }
@@ -940,15 +928,20 @@ export default function App() {
     setPage("signup-offer");
   };
 
-  const handleSignupFromOffer = async ({ full_name, email, phone, password, birth_date, consentData }) => {
+  const handleSignupFromOffer = async ({ nombre, apellido_paterno, apellido_materno, rut, email, phone, password, birth_date, consentData }) => {
     setSignupOfferLoading(true);
     setSignupOfferError("");
     let nextAuth = null;
     try {
+      const full_name = `${nombre} ${apellido_paterno} ${apellido_materno}`.trim();
       nextAuth = await signUp({
         email,
         password,
+        nombre,
+        apellido_paterno,
+        apellido_materno,
         full_name,
+        rut,
         phone,
         birth_date,
         role: roles.user,
@@ -1132,7 +1125,7 @@ export default function App() {
 
     try {
       // Se siembra la ref en el mismo tick: el efecto corre después del
-      // render y un fallo síncrono (sesión ausente) llegaría antes, con la
+      // render y un fallo síncrono (sesión ausente) llegaría anterior, con la
       // ref todavía apuntando al resultado anterior.
       resultRef.current = resultSnapshot;
       setResult(resultSnapshot);
@@ -1500,7 +1493,7 @@ export default function App() {
             <button
               type="button"
               aria-label="Cerrar mensaje"
-            onClick={() => setDismissedError(visibleError)}
+              onClick={() => setDismissedError(visibleError)}
             >
               x
             </button>
@@ -1539,7 +1532,7 @@ export default function App() {
             onAccept={handleDataConsent}
             onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
           />
-        ) : page === "home" && profile.role === roles.admin ? (
+        ) : page === "home" && isAdminRole(profile.role) ? (
           <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
         ) : page === "home" && profile.role === roles.sales ? (
           <ExecutiveHome
@@ -1548,7 +1541,9 @@ export default function App() {
             inmobiliariaId={inmobiliariaId}
             onNavigate={navigateToPage}
           />
-        ) : page === "admin-profile" && profile.role === roles.admin ? (
+        ) : page === "admin-reports" && canViewStaffPage(page, profile.role) ? (
+          <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
+        ) : page === "admin-profile" && canViewStaffPage(page, profile.role) ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
           <section className="evaluation-panel home-panel">
@@ -1671,37 +1666,37 @@ export default function App() {
                 </div>
               </section>
             ) : <>
-            {userOnboarding && (
-              <div className="context-summary context-summary--prequalification">
-                <strong>Contexto inicial</strong>
-                <span>
-                  {userOnboarding.comuna_interes} ·{" "}
-                  {plazoLabels[userOnboarding.plazo_compra] ||
-                    userOnboarding.plazo_compra}
-                </span>
-                <button
-                  className="primary-button compact-button"
-                  type="button"
-                  onClick={() => navigateToPage("onboarding")}
-                >
-                  Editar contexto
-                </button>
-              </div>
-            )}
-            <ScoreForm
-              targetCommune={userOnboarding?.comuna_interes}
-              objective={userOnboarding?.objetivo_principal}
-              onboardingData={userOnboarding}
-              birthDate={profile?.birth_date || profile?.fecha_nacimiento}
-              profile={profile}
-              consentGranted={consentGranted}
-              onConsentAccept={handleDataConsent}
-              onBirthDateSave={handleBirthDateSave}
-              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
-              initialDraft={scoreFormDraft}
-              onDraftChange={setScoreFormDraft}
-              onResult={handleResult}
-            />
+              {userOnboarding && (
+                <div className="context-summary context-summary--prequalification">
+                  <strong>Contexto inicial</strong>
+                  <span>
+                    {userOnboarding.comuna_interes} ·{" "}
+                    {plazoLabels[userOnboarding.plazo_compra] ||
+                      userOnboarding.plazo_compra}
+                  </span>
+                  <button
+                    className="primary-button compact-button"
+                    type="button"
+                    onClick={() => navigateToPage("onboarding")}
+                  >
+                    Editar contexto
+                  </button>
+                </div>
+              )}
+              <ScoreForm
+                targetCommune={userOnboarding?.comuna_interes}
+                objective={userOnboarding?.objetivo_principal}
+                onboardingData={userOnboarding}
+                birthDate={profile?.birth_date || profile?.fecha_nacimiento}
+                profile={profile}
+                consentGranted={consentGranted}
+                onConsentAccept={handleDataConsent}
+                onBirthDateSave={handleBirthDateSave}
+                onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+                initialDraft={scoreFormDraft}
+                onDraftChange={setScoreFormDraft}
+                onResult={handleResult}
+              />
             </>}
           </section>
         ) : page === "profile" && profile.role === roles.user ? (
@@ -1709,9 +1704,9 @@ export default function App() {
             profile={profile}
             onboarding={userOnboarding}
             evaluations={userEvaluations}
-          onSaveOnboarding={handleProfileOnboardingSave}
-          onProfileUpdate={handleProfileUpdate}
-          onRetryExplanation={handleRetryAiExplanation}
+            onSaveOnboarding={handleProfileOnboardingSave}
+            onProfileUpdate={handleProfileUpdate}
+            onRetryExplanation={handleRetryAiExplanation}
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
@@ -1785,24 +1780,24 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-      ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
+      ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           role={profile.role}
         />
-      ) : page === "projects" && profile.role === roles.sales ? (
+      ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           isAdmin={false}
         />
-      ) : page === "sales-profile" && profile.role === roles.sales ? (
+      ) : page === "sales-profile" && canViewStaffPage(page, profile.role) ? (
         <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
-      ) : page === "admin" && profile.role === roles.admin ? (
+      ) : page === "admin" && canViewStaffPage(page, profile.role) ? (
         <AdminPanel evaluations={evaluations} profile={profile} />
-      ) : page === "admin-projects" && profile.role === roles.admin ? (
+      ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
       ) : (
         <section className="section-block">

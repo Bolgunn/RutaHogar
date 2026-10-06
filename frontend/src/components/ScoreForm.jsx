@@ -231,6 +231,7 @@ export default function ScoreForm({
   initialDraft,
   onDraftChange,
 }) {
+  const mountTimeRef = useRef(Date.now());
   const debtIncomeMessage =
     "El monto de deuda mensual no puede ser mayor a tus ingresos declarados. Revisa este valor antes de continuar.";
   const storedBirthDate = normalizeBirthDate(
@@ -828,6 +829,13 @@ export default function ScoreForm({
           ? "manual"
           : "calculado_referencial";
 
+      const timeToSubmitSeconds = (Date.now() - mountTimeRef.current) / 1000;
+      let deviceIdHash = localStorage.getItem("rutahogar_device_id_hash");
+      if (!deviceIdHash) {
+        deviceIdHash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem("rutahogar_device_id_hash", deviceIdHash);
+      }
+
       const payload = {
         birth_date: effectiveBirthDate || undefined,
         ingreso_mensual: parseFloat(form.ingreso_mensual),
@@ -891,6 +899,8 @@ export default function ScoreForm({
         market_snapshot_fetched_at: marketReference.snapshot_fetched_at,
         plazo_compra: normalizePurchaseTermForScore(onboardingData?.plazo_compra),
         tiene_propiedad_vista: onboardingData?.tiene_propiedad_vista === true,
+        time_to_submit: Math.floor(timeToSubmitSeconds),
+        device_id_hash: deviceIdHash,
       };
       scorePayload = payload;
 
@@ -1142,7 +1152,7 @@ export default function ScoreForm({
             <div />
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!effectiveBirthDate}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1160,7 +1170,7 @@ export default function ScoreForm({
           </div>
 
           {incomeTipVisible && <div className="tip" style={{ marginBottom: '1.25rem' }}>
-            <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
+            <div className="tip__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg></div>
             <div className="tip__text">
               <strong>Consejo:</strong> Usa tu ingreso líquido real. No incluyas propinas o bonos variables.
             </div>
@@ -1344,13 +1354,13 @@ export default function ScoreForm({
           <div className="pre-wizard-nav">
             {showFinancialBackButton ? (
               <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 Volver
               </button>
             ) : <div />}
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1610,12 +1620,12 @@ export default function ScoreForm({
 
           <div className="pre-wizard-nav">
             <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Volver
             </button>
             <button type="button" className="pre-wizard-btn-next" onClick={goNext} disabled={!canGoNext()}>
               Continuar
-              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
         </div>
@@ -1697,7 +1707,7 @@ export default function ScoreForm({
 
           <div className="pre-wizard-nav">
             <button type="button" className="pre-wizard-btn-back" onClick={goBack}>
-              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg viewBox="0 0 20 20" fill="none"><path d="M15 10H5M9 5l-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               Volver
             </button>
             <button
@@ -1713,7 +1723,7 @@ export default function ScoreForm({
               ) : (
                 <>
                   Calcular mi precalificación
-                  <svg viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <svg viewBox="0 0 20 20" fill="none"><path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </>
               )}
             </button>
