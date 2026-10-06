@@ -361,15 +361,17 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
 
                       <div className="portal-card-actions">
                         {compatibility ? (
-                          <button
-                            type="button"
-                            className="primary-button portal-qualify-btn"
-                            onClick={() => setSelectedProperty(prop)}
-                            id={`cta-qualify-${prop.id}`}
-                          >
+                          <>
                             <span className={`simulation-status ${STATUS_CLASS[compatibility.status] || "adjust"}`}>{compatibility.status}</span>
-                            {" "}Ver mi compatibilidad
-                          </button>
+                            <button
+                              type="button"
+                              className="primary-button portal-qualify-btn"
+                              onClick={() => setSelectedProperty(prop)}
+                              id={`cta-qualify-${prop.id}`}
+                            >
+                              Ver mi compatibilidad
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
