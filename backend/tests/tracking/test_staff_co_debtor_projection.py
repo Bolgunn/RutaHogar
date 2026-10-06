@@ -139,3 +139,19 @@ def test_scope_denial_never_returns_another_leads_hu18_data():
 
     assert service(repository).evaluations("executive-token")["items"]
     assert all(row["user_id"] == LEAD_ID for row in service(repository).evaluations("executive-token")["items"])
+
+
+def test_list_checks_each_lead_scope_once_and_keeps_newest_first_order():
+    repository = StaffRepository()
+    allowed_leads = {f"lead-{index}" for index in range(0, 40, 3)}
+    repository.rows = [
+        {**evaluation(), "id": f"evaluation-{index}-{copy}", "user_id": f"lead-{index}"}
+        for index in range(40) for copy in range(2)
+    ]
+    checked = []
+    repository.staff_can_access = lambda _actor, lead_id: checked.append(lead_id) or lead_id in allowed_leads
+
+    items = service(repository).evaluations("executive-token")["items"]
+
+    assert sorted(checked) == sorted(f"lead-{index}" for index in range(40))
+    assert [row["id"] for row in items] == [row["id"] for row in repository.rows if row["user_id"] in allowed_leads]
