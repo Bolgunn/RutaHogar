@@ -21,17 +21,29 @@ create table if not exists public.profiles (
   onboarding_data jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin'))
+  constraint profiles_role_check check (role in ('usuario', 'ejecutivo', 'admin', 'admin_inmobiliario'))
 );
 
 alter table public.profiles
 add column if not exists onboarding_data jsonb,
 add column if not exists last_lead_seen_at timestamptz,
 add column if not exists phone text,
+add column if not exists rut text,
 add column if not exists birth_date date;
 
 alter table public.profiles
-add column if not exists consent_data jsonb;
+add column if not exists consent_data jsonb,
+add column if not exists reliability_status text not null default 'normal' check (reliability_status in ('normal', 'sospechoso', 'en_revision', 'descartado', 'reactivado', 'silenciado'));
+
+create table if not exists public.lead_status_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  changed_by uuid references auth.users(id) on delete set null,
+  old_status text,
+  new_status text not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.evaluations (
   id uuid primary key default gen_random_uuid(),
@@ -47,6 +59,8 @@ create table if not exists public.evaluations (
   explanation text,
   recommendations jsonb not null default '[]'::jsonb,
   plan_accepted_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb,
   created_at timestamptz not null default now(),
   constraint evaluations_score_check check (score between 0 and 100),
   constraint evaluations_classification_check check (classification in ('Alto', 'Medio', 'Bajo'))
@@ -74,7 +88,9 @@ add column if not exists target_commune text,
 add column if not exists alternative_commune text,
 add column if not exists purchase_timeline text,
 add column if not exists financial_data jsonb,
-add column if not exists plan_accepted_at timestamptz;
+add column if not exists plan_accepted_at timestamptz,
+add column if not exists fraud_score_probability numeric,
+add column if not exists shap_top_factors jsonb;
 
 create table if not exists public.improvement_goals (
   id uuid primary key default gen_random_uuid(),
@@ -260,26 +276,132 @@ with check (auth.uid() = user_id::uuid);
 
 -- Entrega solo contacto de leads a ejecutivos y administradores. La función
 -- evita abrir lectura directa de todos los perfiles personales al staff.
+drop function if exists public.list_lead_contacts(uuid[]);
 create or replace function public.list_lead_contacts(p_user_ids uuid[])
 returns table (
   id uuid,
   full_name text,
-  phone text
+  phone text,
+  reliability_status text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
   from public.profiles p
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
-    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text]);
+    and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
 $$;
 
 revoke all on function public.list_lead_contacts(uuid[]) from public;
 grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
+-- Permite actualizar de forma segura el estado de confiabilidad de un lead
+create or replace function public.update_lead_reliability(
+  p_lead_id uuid,
+  p_reporter_id uuid default null,
+  p_new_status text default 'silenciado',
+  p_reason text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_old_status text;
+  v_changed_by uuid;
+  v_role text;
+begin
+  v_changed_by := auth.uid();
+  v_role := public.get_my_role();
+
+  if v_role not in ('ejecutivo', 'admin', 'admin_inmobiliario') then
+    raise exception 'Unauthorized';
+  end if;
+
+  select reliability_status into v_old_status from public.profiles where id = p_lead_id;
+  
+  update public.profiles 
+  set reliability_status = p_new_status, updated_at = now()
+  where id = p_lead_id;
+
+  insert into public.lead_status_history (profile_id, changed_by, old_status, new_status, reason)
+  values (p_lead_id, v_changed_by, v_old_status, p_new_status, coalesce(p_reason, 'Cambio de estado'));
+end;
+$$;
+
+revoke all on function public.update_lead_reliability(uuid, uuid, text, text) from public;
+grant execute on function public.update_lead_reliability(uuid, uuid, text, text) to authenticated;
+
+alter table public.lead_status_history enable row level security;
+drop policy if exists "Staff select lead_status_history" on public.lead_status_history;
+create policy "Staff select lead_status_history"
+on public.lead_status_history for select
+using (public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario'));
+
+-- Entrega a administradores globales y de inmobiliaria los leads en revisión y silenciados
+create or replace function public.get_reported_leads_for_admin()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  created_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct on (p.id)
+    p.id,
+    u.email::text as email,
+    p.full_name,
+    p.phone,
+    p.rut,
+    p.reliability_status,
+    e.created_at,
+    e.fraud_score_probability,
+    e.shap_top_factors
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  join public.evaluations e on e.user_id = p.id
+  where p.reliability_status in ('en_revision', 'silenciado', 'descartado', 'sospechoso')
+    and (
+      public.get_my_role() = 'admin'
+      or (
+        public.get_my_role() = 'admin_inmobiliario'
+        and (
+          exists (
+            select 1 from public.proyectos pr
+            where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+            and (
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+              or pr.comuna = p.onboarding_data->>'comuna_interes'
+              or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+            )
+          )
+          or exists (
+            select 1 from public.lead_status_history lsh
+            join public.profiles exec_p on exec_p.id = lsh.changed_by
+            where lsh.profile_id = p.id
+            and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+          )
+        )
+      )
+    )
+  order by p.id, e.created_at desc;
+$$;
+
+revoke all on function public.get_reported_leads_for_admin() from public;
+grant execute on function public.get_reported_leads_for_admin() to authenticated;
 
 drop policy if exists "Evaluations delete own" on public.evaluations;
 create policy "Evaluations delete own"
@@ -470,7 +592,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.get_my_role() = 'admin'
+  select public.get_my_role() in ('admin', 'admin_inmobiliario')
     and (
       public.get_my_inmobiliaria() is null
       or public.get_my_inmobiliaria() = p_inmobiliaria_id
@@ -592,7 +714,7 @@ begin
   end if;
 
   update public.profiles
-  set role = 'admin',
+  set role = 'admin_inmobiliario',
       inmobiliaria_id = p_inmobiliaria_id
   where id = v_target;
 
@@ -706,7 +828,7 @@ create policy "Proyectos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = inmobiliaria_id
@@ -756,7 +878,7 @@ create policy "Proyecto ejecutivos select tenant"
   for select
   using (
     (
-      public.get_my_role() = 'admin'
+      public.get_my_role() in ('admin', 'admin_inmobiliario')
       and (
         public.get_my_inmobiliaria() is null
         or public.get_my_inmobiliaria() = public.get_proyecto_inmobiliaria(proyecto_id)
@@ -959,6 +1081,45 @@ create index if not exists market_snapshots_resolution_idx
 
 alter table public.market_snapshots enable row level security;
 revoke all on table public.market_snapshots from anon, authenticated;
+
+-- HU17: backend-only reviewed benefits and immutable scenarios owned by the lead.
+create table if not exists public.housing_benefit_catalog_versions (
+  id uuid primary key default gen_random_uuid(), version text not null unique,
+  status text not null check (status in ('draft', 'published', 'retired')),
+  official_source_metadata jsonb not null check (jsonb_typeof(official_source_metadata) = 'object'),
+  source_checksum text not null, effective_from date, effective_to date, published_at timestamptz,
+  entries jsonb not null check (jsonb_typeof(entries) = 'array' and jsonb_array_length(entries) > 0),
+  created_at timestamptz not null default now(),
+  constraint housing_benefit_catalog_published_check check ((status = 'published') = (published_at is not null))
+);
+alter table public.housing_benefit_catalog_versions enable row level security;
+revoke all on table public.housing_benefit_catalog_versions from anon, authenticated;
+
+create table if not exists public.mortgage_scenarios (
+  id uuid primary key default gen_random_uuid(), user_id uuid not null references public.profiles(id) on delete cascade,
+  evaluation_id uuid not null references public.evaluations(id) on delete cascade,
+  project_id uuid references public.proyectos(id) on delete set null,
+  parent_scenario_id uuid references public.mortgage_scenarios(id) on delete set null,
+  name text not null check (length(trim(name)) between 1 and 120),
+  project_snapshot jsonb not null check (jsonb_typeof(project_snapshot) = 'object'),
+  input_snapshot jsonb not null check (jsonb_typeof(input_snapshot) = 'object'),
+  result_snapshot jsonb not null check (jsonb_typeof(result_snapshot) = 'object'),
+  market_reference_snapshot jsonb not null check (jsonb_typeof(market_reference_snapshot) = 'object'),
+  benefit_catalogue_snapshot jsonb not null check (jsonb_typeof(benefit_catalogue_snapshot) in ('object', 'null')),
+  created_at timestamptz not null default now()
+);
+create index if not exists mortgage_scenarios_owner_created_idx on public.mortgage_scenarios (user_id, created_at desc);
+alter table public.mortgage_scenarios enable row level security;
+grant select, insert, delete on table public.mortgage_scenarios to authenticated;
+revoke update on table public.mortgage_scenarios from authenticated;
+drop policy if exists "Mortgage scenarios select own" on public.mortgage_scenarios;
+create policy "Mortgage scenarios select own" on public.mortgage_scenarios for select using (auth.uid() = user_id);
+drop policy if exists "Mortgage scenarios insert own consented evaluation" on public.mortgage_scenarios;
+create policy "Mortgage scenarios insert own consented evaluation" on public.mortgage_scenarios for insert with check (
+  auth.uid() = user_id and exists (select 1 from public.evaluations e where e.id = evaluation_id and e.user_id = auth.uid() and coalesce((e.financial_data -> 'input' ->> 'consentimiento')::boolean, false))
+);
+drop policy if exists "Mortgage scenarios delete own" on public.mortgage_scenarios;
+create policy "Mortgage scenarios delete own" on public.mortgage_scenarios for delete using (auth.uid() = user_id);
 
 drop policy if exists "ARCO select admin" on public.arco_requests;
 create policy "ARCO select admin"
@@ -1389,6 +1550,8 @@ commit;
 -- =============================================================
 -- Espejo de migrations/20260930120000_commercial_stage.sql (sin el backfill,
 -- que solo aplica a bases con datos). Diseño: docs/stories/commercial-stage/PLAN.md.
+-- Incluye migrations/20261005120000_commercial_stage_project_tracks.sql (sin su
+-- guardia): registros por proyecto. Diseño: docs/stories/commercial-stage-project-tracks/PLAN.md.
 
 
 create table if not exists public.commercial_stage_events (
@@ -1410,16 +1573,51 @@ create table if not exists public.commercial_stage_events (
     check (stage_before in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido')),
   constraint commercial_stage_events_stage_after_check
     check (stage_after in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido')),
-  constraint commercial_stage_events_change_check
-    check (stage_before is distinct from stage_after),
   constraint commercial_stage_events_source_check
     check (source in ('web', 'backend', 'job', 'backfill'))
 );
+
+-- Historial por proyecto. Sin FK a proyectos a propósito: el trigger de inmutabilidad
+-- impide que un ON DELETE actúe sobre el historial, y un RESTRICT aquí
+-- bloquearía borrar proyectos que solo tienen historial. Quien protege el
+-- borrado es la FK de lead_project_commercial_stage.
+alter table public.commercial_stage_events
+  add column if not exists proyecto_id uuid;
+
+-- Un evento sin cambio de etapa solo puede ser la "revivida" general: hecha
+-- por una persona, sin proyecto y con motivo.
+alter table public.commercial_stage_events
+  drop constraint if exists commercial_stage_events_change_check;
+alter table public.commercial_stage_events
+  add constraint commercial_stage_events_change_check
+    check (
+      stage_before is distinct from stage_after
+      or (proyecto_id is null and actor_role <> 'sistema' and length(trim(coalesce(reason, ''))) > 0)
+    );
+
+alter table public.commercial_stage_events
+  drop constraint if exists commercial_stage_events_lead_level_stage_check;
+alter table public.commercial_stage_events
+  add constraint commercial_stage_events_lead_level_stage_check
+    check (proyecto_id is not null or stage_after not in ('en_negociacion', 'reserva', 'venta_cerrada'));
+
+-- Los trabajos solo actúan sobre registros de proyecto.
+alter table public.commercial_stage_events
+  drop constraint if exists commercial_stage_events_job_project_check;
+alter table public.commercial_stage_events
+  add constraint commercial_stage_events_job_project_check
+    check (source <> 'job' or proyecto_id is not null);
+
 
 create index if not exists commercial_stage_events_pair_idx
   on public.commercial_stage_events (subject_user_id, inmobiliaria_id, occurred_at, id);
 create index if not exists commercial_stage_events_tenant_idx
   on public.commercial_stage_events (inmobiliaria_id, occurred_at);
+create index if not exists commercial_stage_events_record_idx
+  on public.commercial_stage_events (subject_user_id, inmobiliaria_id, proyecto_id, occurred_at, id);
+create index if not exists commercial_stage_events_proyecto_idx
+  on public.commercial_stage_events (proyecto_id, occurred_at)
+  where proyecto_id is not null;
 
 create table if not exists public.lead_commercial_stage (
   subject_user_id uuid not null,
@@ -1435,13 +1633,30 @@ create table if not exists public.lead_commercial_stage (
 create index if not exists lead_commercial_stage_tenant_idx
   on public.lead_commercial_stage (inmobiliaria_id, stage);
 
--- Única definición de "lead de una inmobiliaria". Es la regla de comunas del
--- PR #97 con dos correcciones: lee las columnas reales (evaluations no tiene
--- `input`) y no incluye la rama "alguien de mi inmobiliaria ya escribió
--- historial sobre este lead", que permitía a un ejecutivo ampliarse el alcance
--- a sí mismo. Suma los proyectos favoritos del lead. HU 16 y H14 deberían
--- reutilizarla en vez de definir otra.
-create or replace function public.lead_belongs_to_inmobiliaria(p_lead uuid, p_inmobiliaria uuid)
+-- Etapa vigente de cada registro de proyecto. Igual que en la base, sin FK
+-- en subject_user_id para que la supresión del §5.8 pueda reemplazar el id.
+-- ON DELETE RESTRICT hacia proyectos: una reserva o una venta no deben
+-- desaparecer de HU 15 porque alguien borró el proyecto; se marca agotado.
+create table if not exists public.lead_project_commercial_stage (
+  subject_user_id uuid not null,
+  inmobiliaria_id uuid not null references public.inmobiliarias(id) on delete restrict,
+  proyecto_id uuid not null references public.proyectos(id) on delete restrict,
+  stage text not null,
+  last_event_id uuid not null references public.commercial_stage_events(id),
+  updated_at timestamptz not null,
+  primary key (subject_user_id, inmobiliaria_id, proyecto_id),
+  constraint lead_project_commercial_stage_stage_check
+    check (stage in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion', 'reserva', 'venta_cerrada', 'perdido'))
+);
+
+create index if not exists lead_project_commercial_stage_proyecto_idx
+  on public.lead_project_commercial_stage (proyecto_id, stage);
+create index if not exists lead_project_commercial_stage_tenant_idx
+  on public.lead_project_commercial_stage (inmobiliaria_id, stage);
+
+-- Única definición de "el lead pertenece a este proyecto": lo marcó como
+-- favorito o declaró su comuna. HU 15 la reutiliza.
+create or replace function public.lead_belongs_to_proyecto(p_lead uuid, p_proyecto uuid)
 returns boolean
 language sql
 stable
@@ -1451,39 +1666,106 @@ as $$
   select exists (
     select 1
     from public.profiles p
+    join public.proyectos pr on pr.id = p_proyecto
     where p.id = p_lead
       and p.role = 'usuario'
-      and p_inmobiliaria is not null
       and (
         exists (
           select 1
           from public.proyecto_favoritos f
-          join public.proyectos pr on pr.id = f.proyecto_id
           where f.usuario_id = p.id
-            and pr.inmobiliaria_id = p_inmobiliaria
+            and f.proyecto_id = pr.id
         )
-        or exists (
-          select 1
-          from public.proyectos pr
-          where pr.inmobiliaria_id = p_inmobiliaria
-            and lower(trim(pr.comuna)) in (
-              select lower(trim(declared.comuna))
-              from (
-                select e.target_commune as comuna from public.evaluations e where e.user_id = p.id
-                union all
-                select e.alternative_commune from public.evaluations e where e.user_id = p.id
-                union all
-                select e.financial_data -> 'input' ->> 'comuna_objetivo' from public.evaluations e where e.user_id = p.id
-                union all
-                select p.onboarding_data ->> 'comuna_interes'
-                union all
-                select p.onboarding_data ->> 'comuna_alternativa'
-              ) declared
-              where nullif(trim(declared.comuna), '') is not null
-            )
+        or lower(trim(pr.comuna)) in (
+          select lower(trim(declared.comuna))
+          from (
+            select e.target_commune as comuna from public.evaluations e where e.user_id = p.id
+            union all
+            select e.alternative_commune from public.evaluations e where e.user_id = p.id
+            union all
+            select e.financial_data -> 'input' ->> 'comuna_objetivo' from public.evaluations e where e.user_id = p.id
+            union all
+            select p.onboarding_data ->> 'comuna_interes'
+            union all
+            select p.onboarding_data ->> 'comuna_alternativa'
+          ) declared
+          where nullif(trim(declared.comuna), '') is not null
         )
       )
   );
+$$;
+
+-- Misma regla que la base, ahora expresada sobre la de proyecto para que
+-- exista una sola vez: favorito en un proyecto de la inmobiliaria o comuna de
+-- uno de ellos equivale a "existe un proyecto de la inmobiliaria al que el
+-- lead pertenece".
+create or replace function public.lead_belongs_to_inmobiliaria(p_lead uuid, p_inmobiliaria uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_inmobiliaria is not null
+    and exists (
+      select 1
+      from public.proyectos pr
+      where pr.inmobiliaria_id = p_inmobiliaria
+        and public.lead_belongs_to_proyecto(p_lead, pr.id)
+    );
+$$;
+
+-- is_ejecutivo_asignado no mira el estado y las policies de proyectos dependen
+-- de eso; para escribir etapas el ejecutivo debe estar vinculado.
+create or replace function public.is_ejecutivo_vinculado(p_proyecto uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.proyecto_ejecutivos pe
+    where pe.proyecto_id = p_proyecto
+      and pe.estado = 'vinculado'
+      and (
+        pe.ejecutivo_id = auth.uid()
+        or pe.ejecutivo_email = public.get_my_email()
+      )
+  );
+$$;
+
+-- Única regla de alcance de escritura sobre un registro de proyecto. Devuelve
+-- null si se permite, o el código de error. El RPC y commercial_stage_scope
+-- la usan las dos, así la interfaz y la base no pueden discrepar.
+-- Un registro ya creado sigue siendo escribible aunque el lead deje de
+-- pertenecer al proyecto (quitó el favorito, cambió de comuna): crearlo
+-- exigió pertenencia real, y así se puede cerrar una reserva igual.
+create or replace function public.commercial_stage_project_access(
+  p_lead uuid,
+  p_proyecto uuid,
+  p_role text,
+  p_tenant uuid
+) returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when not exists (
+      select 1 from public.proyectos pr
+      where pr.id = p_proyecto and pr.inmobiliaria_id = p_tenant
+    ) then 'proyecto_not_in_scope'
+    when p_role = 'ejecutivo' and not public.is_ejecutivo_vinculado(p_proyecto) then 'proyecto_not_in_scope'
+    when not exists (
+      select 1 from public.lead_project_commercial_stage s
+      where s.subject_user_id = p_lead
+        and s.inmobiliaria_id = p_tenant
+        and s.proyecto_id = p_proyecto
+    ) and not public.lead_belongs_to_proyecto(p_lead, p_proyecto) then 'lead_not_in_scope'
+  end;
 $$;
 
 create or replace function public.lead_in_my_inmobiliaria(p_lead uuid)
@@ -1542,11 +1824,17 @@ begin
 end;
 $$;
 
+-- RPC de escritura. Se elimina la firma de 4 argumentos para que PostgREST
+-- no vea dos sobrecargas ambiguas; las llamadas con argumentos nombrados de
+-- antes siguen resolviendo y actúan sobre el registro general.
+drop function if exists public.change_commercial_stage(uuid, text, text, text);
+
 create or replace function public.change_commercial_stage(
   p_lead uuid,
   p_to_stage text,
   p_reason text default null,
-  p_expected_stage text default null
+  p_expected_stage text default null,
+  p_proyecto uuid default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -1556,53 +1844,161 @@ declare
   caller_id uuid := auth.uid();
   caller_role text := public.get_my_role();
   caller_tenant uuid := public.get_my_inmobiliaria();
+  access_error text;
   current_stage text;
+  has_projects boolean;
+  all_lost boolean;
+  is_revival boolean := false;
   saved public.commercial_stage_events;
 begin
-  -- El tenant sale siempre de la sesión, nunca de un parámetro. El admin
-  -- global (sin inmobiliaria) lee todo pero no escribe.
   if caller_id is null
      or coalesce(caller_role, '') not in ('ejecutivo', 'admin', 'admin_inmobiliario')
      or caller_tenant is null then
     raise exception 'forbidden' using errcode = '42501';
   end if;
-  if not public.lead_belongs_to_inmobiliaria(p_lead, caller_tenant) then
-    raise exception 'lead_not_in_scope' using errcode = '42501';
+
+  if p_proyecto is null then
+    if not public.lead_belongs_to_inmobiliaria(p_lead, caller_tenant) then
+      raise exception 'lead_not_in_scope' using errcode = '42501';
+    end if;
+  else
+    access_error := public.commercial_stage_project_access(p_lead, p_proyecto, caller_role, caller_tenant);
+    if access_error is not null then
+      raise exception '%', access_error using errcode = '42501';
+    end if;
   end if;
 
-  -- Serializa también la primera escritura de un par, cuando aún no hay fila
-  -- que bloquear con FOR UPDATE.
+  -- Un candado por (lead, inmobiliaria), no por registro: las reglas que
+  -- cruzan registros ("tiene registros de proyecto", "todos perdidos") y los
+  -- trabajos de agotar/reponer quedan serializados con cada escritura.
   perform pg_advisory_xact_lock(hashtextextended(p_lead::text || ':' || caller_tenant::text, 0));
 
-  select stage into current_stage
-  from public.lead_commercial_stage
-  where subject_user_id = p_lead and inmobiliaria_id = caller_tenant
-  for update;
+  if p_proyecto is null then
+    select stage into current_stage
+    from public.lead_commercial_stage
+    where subject_user_id = p_lead and inmobiliaria_id = caller_tenant
+    for update;
+  else
+    select stage into current_stage
+    from public.lead_project_commercial_stage
+    where subject_user_id = p_lead and inmobiliaria_id = caller_tenant and proyecto_id = p_proyecto
+    for update;
+  end if;
   current_stage := coalesce(current_stage, 'nuevo');
 
   if p_expected_stage is not null and p_expected_stage <> current_stage then
     raise exception 'stale_stage';
   end if;
 
-  perform public.commercial_stage_transition_check(current_stage, p_to_stage, caller_role, p_reason);
+  if p_proyecto is null then
+    select count(*) > 0, count(*) > 0 and bool_and(stage = 'perdido')
+      into has_projects, all_lost
+    from public.lead_project_commercial_stage
+    where subject_user_id = p_lead and inmobiliaria_id = caller_tenant;
+
+    if p_to_stage in ('en_negociacion', 'reserva', 'venta_cerrada') then
+      raise exception 'project_required';
+    end if;
+    if p_to_stage = 'perdido' and has_projects then
+      raise exception 'project_required';
+    end if;
+    -- Revivir: todos sus proyectos se perdieron, pero el lead sigue vivo.
+    if p_to_stage = current_stage and current_stage <> 'perdido' and all_lost then
+      if length(trim(coalesce(p_reason, ''))) = 0 then
+        raise exception 'reason_required';
+      end if;
+      is_revival := true;
+    end if;
+  end if;
+
+  if not is_revival then
+    perform public.commercial_stage_transition_check(current_stage, p_to_stage, caller_role, p_reason);
+  end if;
 
   insert into public.commercial_stage_events (
-    subject_user_id, inmobiliaria_id, actor_id, actor_role,
+    subject_user_id, inmobiliaria_id, proyecto_id, actor_id, actor_role,
     stage_before, stage_after, reason, source
   ) values (
-    p_lead, caller_tenant, caller_id, caller_role,
+    p_lead, caller_tenant, p_proyecto, caller_id, caller_role,
     current_stage, p_to_stage, nullif(trim(p_reason), ''), 'web'
   )
   returning * into saved;
 
-  insert into public.lead_commercial_stage (subject_user_id, inmobiliaria_id, stage, last_event_id, updated_at)
-  values (p_lead, caller_tenant, p_to_stage, saved.id, saved.occurred_at)
-  on conflict (subject_user_id, inmobiliaria_id) do update
-    set stage = excluded.stage,
-        last_event_id = excluded.last_event_id,
-        updated_at = excluded.updated_at;
+  if p_proyecto is null then
+    insert into public.lead_commercial_stage (subject_user_id, inmobiliaria_id, stage, last_event_id, updated_at)
+    values (p_lead, caller_tenant, p_to_stage, saved.id, saved.occurred_at)
+    on conflict (subject_user_id, inmobiliaria_id) do update
+      set stage = excluded.stage,
+          last_event_id = excluded.last_event_id,
+          updated_at = excluded.updated_at;
+  else
+    insert into public.lead_project_commercial_stage (subject_user_id, inmobiliaria_id, proyecto_id, stage, last_event_id, updated_at)
+    values (p_lead, caller_tenant, p_proyecto, p_to_stage, saved.id, saved.occurred_at)
+    on conflict (subject_user_id, inmobiliaria_id, proyecto_id) do update
+      set stage = excluded.stage,
+          last_event_id = excluded.last_event_id,
+          updated_at = excluded.updated_at;
+  end if;
 
-  return jsonb_build_object('stage', saved.stage_after, 'event_id', saved.id, 'occurred_at', saved.occurred_at);
+  return jsonb_build_object(
+    'stage', saved.stage_after,
+    'event_id', saved.id,
+    'occurred_at', saved.occurred_at,
+    'proyecto_id', saved.proyecto_id
+  );
+end;
+$$;
+
+-- RPC de lectura para el panel: qué registros ve quien llama y cuáles puede
+-- escribir. A un ejecutivo solo le muestra los proyectos a los que está
+-- vinculado, más los que ya tienen registro del lead (para leer su
+-- historial). No devuelve actor, motivo ni datos del lead.
+create or replace function public.commercial_stage_scope(p_lead uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  caller_role text := public.get_my_role();
+  caller_tenant uuid := public.get_my_inmobiliaria();
+begin
+  if auth.uid() is null
+     or coalesce(caller_role, '') not in ('ejecutivo', 'admin', 'admin_inmobiliario')
+     or caller_tenant is null then
+    return jsonb_build_object('lead_level_writable', false, 'lead_level', null, 'proyectos', '[]'::jsonb);
+  end if;
+
+  return jsonb_build_object(
+    'lead_level_writable', public.lead_belongs_to_inmobiliaria(p_lead, caller_tenant),
+    'lead_level', (
+      select jsonb_build_object('stage', s.stage, 'updated_at', s.updated_at)
+      from public.lead_commercial_stage s
+      where s.subject_user_id = p_lead and s.inmobiliaria_id = caller_tenant
+    ),
+    'proyectos', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', pr.id,
+          'nombre', pr.nombre,
+          'estado', pr.estado,
+          'stage', s.stage,
+          'updated_at', s.updated_at,
+          'writable', public.commercial_stage_project_access(p_lead, pr.id, caller_role, caller_tenant) is null
+        )
+        order by pr.nombre, pr.id
+      )
+      from public.proyectos pr
+      left join public.lead_project_commercial_stage s
+        on s.proyecto_id = pr.id
+       and s.subject_user_id = p_lead
+       and s.inmobiliaria_id = caller_tenant
+      where pr.inmobiliaria_id = caller_tenant
+        and (s.proyecto_id is not null or public.lead_belongs_to_proyecto(p_lead, pr.id))
+        and (caller_role <> 'ejecutivo' or s.proyecto_id is not null or public.is_ejecutivo_vinculado(pr.id))
+    ), '[]'::jsonb)
+  );
 end;
 $$;
 
@@ -1623,6 +2019,124 @@ drop trigger if exists commercial_stage_events_immutable on public.commercial_st
 create trigger commercial_stage_events_immutable
   before update or delete on public.commercial_stage_events
   for each row execute function public.commercial_stage_reject_mutation();
+
+-- Trabajos de agotar y reponer. Son un trigger y no un servicio porque el
+-- frontend escribe proyectos.estado directamente y cualquier escritor debe
+-- dispararlos. Cada corrida lee el estado actual, así que alternar el estado
+-- varias veces es seguro, y agotado → agotado no dispara. Los motivos son
+-- códigos fijos que no identifican al lead.
+create or replace function public.commercial_stage_project_estado_changed()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec record;
+  current_stage text;
+  closure public.commercial_stage_events;
+  saved public.commercial_stage_events;
+begin
+  if new.estado = 'agotado' then
+    for rec in
+      select s.subject_user_id, s.inmobiliaria_id
+      from public.lead_project_commercial_stage s
+      where s.proyecto_id = new.id
+        and s.stage in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion')
+      order by s.subject_user_id, s.inmobiliaria_id
+    loop
+      perform pg_advisory_xact_lock(hashtextextended(rec.subject_user_id::text || ':' || rec.inmobiliaria_id::text, 0));
+
+      select s.stage into current_stage
+      from public.lead_project_commercial_stage s
+      where s.subject_user_id = rec.subject_user_id
+        and s.inmobiliaria_id = rec.inmobiliaria_id
+        and s.proyecto_id = new.id
+      for update;
+      if current_stage is null
+         or current_stage not in ('nuevo', 'contactado', 'en_plan_mejora', 'en_negociacion') then
+        continue;
+      end if;
+
+      perform public.commercial_stage_transition_check(current_stage, 'perdido', 'sistema', 'proyecto_agotado');
+
+      insert into public.commercial_stage_events (
+        subject_user_id, inmobiliaria_id, proyecto_id, actor_id, actor_role,
+        stage_before, stage_after, reason, source
+      ) values (
+        rec.subject_user_id, rec.inmobiliaria_id, new.id, null, 'sistema',
+        current_stage, 'perdido', 'proyecto_agotado', 'job'
+      )
+      returning * into saved;
+
+      update public.lead_project_commercial_stage
+      set stage = saved.stage_after, last_event_id = saved.id, updated_at = saved.occurred_at
+      where subject_user_id = rec.subject_user_id
+        and inmobiliaria_id = rec.inmobiliaria_id
+        and proyecto_id = new.id;
+    end loop;
+
+  elsif old.estado = 'agotado' then
+    -- Solo se reabren los registros cuyo último evento sigue siendo el cierre
+    -- automático: si una persona los movió después, su decisión se respeta.
+    for rec in
+      select s.subject_user_id, s.inmobiliaria_id
+      from public.lead_project_commercial_stage s
+      join public.commercial_stage_events e on e.id = s.last_event_id
+      where s.proyecto_id = new.id
+        and e.actor_role = 'sistema'
+        and e.source = 'job'
+        and e.stage_after = 'perdido'
+        and e.reason = 'proyecto_agotado'
+      order by s.subject_user_id, s.inmobiliaria_id
+    loop
+      perform pg_advisory_xact_lock(hashtextextended(rec.subject_user_id::text || ':' || rec.inmobiliaria_id::text, 0));
+
+      closure := null;
+      select e.* into closure
+      from public.lead_project_commercial_stage s
+      join public.commercial_stage_events e on e.id = s.last_event_id
+      where s.subject_user_id = rec.subject_user_id
+        and s.inmobiliaria_id = rec.inmobiliaria_id
+        and s.proyecto_id = new.id
+        and e.actor_role = 'sistema'
+        and e.source = 'job'
+        and e.stage_after = 'perdido'
+        and e.reason = 'proyecto_agotado'
+      for update of s;
+      if closure.id is null then
+        continue;
+      end if;
+
+      perform public.commercial_stage_transition_check('perdido', closure.stage_before, 'sistema', 'proyecto_repuesto');
+
+      insert into public.commercial_stage_events (
+        subject_user_id, inmobiliaria_id, proyecto_id, actor_id, actor_role,
+        stage_before, stage_after, reason, source
+      ) values (
+        rec.subject_user_id, rec.inmobiliaria_id, new.id, null, 'sistema',
+        'perdido', closure.stage_before, 'proyecto_repuesto', 'job'
+      )
+      returning * into saved;
+
+      update public.lead_project_commercial_stage
+      set stage = saved.stage_after, last_event_id = saved.id, updated_at = saved.occurred_at
+      where subject_user_id = rec.subject_user_id
+        and inmobiliaria_id = rec.inmobiliaria_id
+        and proyecto_id = new.id;
+    end loop;
+  end if;
+
+  return null;
+end;
+$$;
+
+drop trigger if exists proyectos_commercial_stage_jobs on public.proyectos;
+create trigger proyectos_commercial_stage_jobs
+  after update of estado on public.proyectos
+  for each row
+  when (old.estado is distinct from new.estado)
+  execute function public.commercial_stage_project_estado_changed();
 
 -- Privilegios (H12): los roles del navegador solo leen, y RLS acota qué.
 alter table public.commercial_stage_events enable row level security;
@@ -1661,15 +2175,51 @@ create policy "Lead commercial stage select tenant"
     or (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null)
   );
 
+alter table public.lead_project_commercial_stage enable row level security;
+
+revoke all on public.lead_project_commercial_stage from anon, authenticated;
+grant select on public.lead_project_commercial_stage to authenticated;
+grant select, insert, update on public.lead_project_commercial_stage to service_role;
+
+drop policy if exists "Lead project commercial stage select tenant" on public.lead_project_commercial_stage;
+create policy "Lead project commercial stage select tenant"
+  on public.lead_project_commercial_stage
+  for select
+  to authenticated
+  using (
+    (
+      public.get_my_role() in ('ejecutivo', 'admin', 'admin_inmobiliario')
+      and public.get_my_inmobiliaria() = inmobiliaria_id
+    )
+    or (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null)
+  );
+
 revoke all on function public.lead_belongs_to_inmobiliaria(uuid, uuid),
   public.lead_in_my_inmobiliaria(uuid),
   public.commercial_stage_transition_check(text, text, text, text),
-  public.change_commercial_stage(uuid, text, text, text),
+  public.change_commercial_stage(uuid, text, text, text, uuid),
   public.commercial_stage_reject_mutation() from public, anon, authenticated;
 grant execute on function public.lead_in_my_inmobiliaria(uuid),
-  public.change_commercial_stage(uuid, text, text, text) to authenticated;
+  public.change_commercial_stage(uuid, text, text, text, uuid) to authenticated;
 grant execute on function public.lead_belongs_to_inmobiliaria(uuid, uuid),
-  public.change_commercial_stage(uuid, text, text, text) to service_role;
+  public.change_commercial_stage(uuid, text, text, text, uuid) to service_role;
+
+-- Privilegios. El navegador ejecuta change_commercial_stage (firma nueva),
+-- commercial_stage_scope y lead_in_my_inmobiliaria; nada más de esta historia.
+revoke all on function public.lead_belongs_to_proyecto(uuid, uuid),
+  public.is_ejecutivo_vinculado(uuid),
+  public.commercial_stage_project_access(uuid, uuid, text, uuid),
+  public.change_commercial_stage(uuid, text, text, text, uuid),
+  public.commercial_stage_scope(uuid),
+  public.commercial_stage_project_estado_changed() from public, anon, authenticated;
+grant execute on function public.change_commercial_stage(uuid, text, text, text, uuid),
+  public.commercial_stage_scope(uuid) to authenticated;
+grant execute on function public.lead_belongs_to_proyecto(uuid, uuid),
+  public.is_ejecutivo_vinculado(uuid),
+  public.commercial_stage_project_access(uuid, uuid, text, uuid),
+  public.change_commercial_stage(uuid, text, text, text, uuid),
+  public.commercial_stage_scope(uuid) to service_role;
+
 
 -- Backfill (decisión Q5): cada lead con evaluación parte en 'nuevo' en cada
 -- inmobiliaria a la que pertenece, fechado en su primera evaluación. Volver a
@@ -1964,3 +2514,944 @@ end;
 $$;
 
 grant execute on function public.lead_changes_record_quick_update(jsonb) to authenticated;
+
+-- =============================================================
+-- HU19 — Portal Inmobiliario (RAG) sobre public.proyectos_rag
+-- =============================================================
+-- Espejo de migrations/20260920000000_hu19_proyectos_rag.sql con
+-- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql y
+-- migrations/20261006090000_hu19_proyectos_rag_campos_catalogo.sql ya aplicadas.
+
+create extension if not exists vector;
+
+create table if not exists public.proyectos_rag (
+    id uuid primary key default gen_random_uuid(),
+    nombre text,
+    descripcion text,
+    valor_uf numeric,
+    precio_clp numeric,
+    comuna text,
+    direccion text,
+    tipo_vivienda text,
+    dormitorios integer default 0,
+    banos integer default 0,
+    superficie_m2 numeric default 0,
+    url text,
+    imagen_url text,
+    fuente text,
+    estado text default 'disponible',
+    inmobiliaria text,
+    precio_desde boolean not null default false,
+    embedding vector(384),
+    created_at timestamptz default now()
+);
+
+-- Indice HNSW para busqueda por similitud semantica de coseno
+create index if not exists proyectos_rag_embedding_hnsw_idx
+  on public.proyectos_rag using hnsw (embedding vector_cosine_ops);
+
+-- Indice secundario por comuna para acelerar filtros
+create index if not exists proyectos_rag_comuna_idx
+  on public.proyectos_rag (lower(comuna));
+
+-- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
+-- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
+alter table public.proyectos_rag enable row level security;
+
+drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;
+create policy "Allow public read access to proyectos_rag"
+  on public.proyectos_rag for select
+  using (true);
+
+-- Defensa en profundidad: aunque alguien recree una policy permisiva, anon y
+-- authenticated no tienen el privilegio de tabla para escribir.
+revoke insert, update, delete, truncate on table public.proyectos_rag from anon, authenticated;
+grant select on table public.proyectos_rag to anon, authenticated;
+grant select, insert, update, delete, truncate on table public.proyectos_rag to service_role;
+
+create or replace function public.truncate_proyectos_rag ()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.proyectos_rag;
+end;
+$$;
+
+revoke execute on function public.truncate_proyectos_rag() from public, anon, authenticated;
+grant execute on function public.truncate_proyectos_rag() to service_role;
+
+-- RPC Function: match_proyectos_rag
+create or replace function public.match_proyectos_rag (
+  query_embedding vector(384),
+  match_threshold float default 0.0,
+  match_count int default 20,
+  filter_commune text default null,
+  filter_max_price_uf float default null,
+  filter_property_type text default null
+)
+returns table (
+  id uuid,
+  nombre text,
+  descripcion text,
+  valor_uf numeric,
+  precio_clp numeric,
+  comuna text,
+  direccion text,
+  tipo_vivienda text,
+  dormitorios int,
+  banos int,
+  superficie_m2 numeric,
+  url text,
+  imagen_url text,
+  fuente text,
+  estado text,
+  similarity float
+)
+language plpgsql
+stable
+as $$
+begin
+  return query
+  select
+    p.id,
+    p.nombre,
+    p.descripcion,
+    p.valor_uf,
+    p.precio_clp,
+    p.comuna,
+    p.direccion,
+    p.tipo_vivienda,
+    p.dormitorios,
+    p.banos,
+    p.superficie_m2,
+    p.url,
+    p.imagen_url,
+    p.fuente,
+    p.estado,
+    cast(1 - (p.embedding <=> query_embedding) as float) as similarity
+  from public.proyectos_rag p
+  where (1 - (p.embedding <=> query_embedding)) >= match_threshold
+    and (filter_commune is null or lower(p.comuna) = lower(filter_commune))
+    and (filter_max_price_uf is null or p.valor_uf <= filter_max_price_uf)
+    and (filter_property_type is null or lower(p.tipo_vivienda) = lower(filter_property_type))
+  order by p.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;
+-- =============================================================
+-- RutaHogar — HU 15: hechos del embudo comercial
+-- =============================================================
+-- Migraciones 20261005150000 y 20261005160000 (plan aceptado, ALG-18 G32). Diseño: docs/stories/HU15-dashboard-conversion-tiempos/PLAN.md.
+-- Solo lectura: { now, proyectos, facts } del alcance de quien llama (ALG-18 Inputs).
+create or replace function public.commercial_funnel_facts()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_role text := public.get_my_role();
+  v_tenant uuid := public.get_my_inmobiliaria();
+  v_scope uuid[];
+  v_scope_text text[];
+  v_proyectos jsonb;
+  v_facts jsonb;
+begin
+  if v_uid is null
+     or v_tenant is null
+     or coalesce(v_role, '') not in ('admin_inmobiliario', 'admin', 'ejecutivo') then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+
+  select coalesce(array_agg(pr.id order by pr.nombre, pr.id), '{}')
+    into v_scope
+  from public.proyectos pr
+  where pr.inmobiliaria_id = v_tenant
+    and (v_role <> 'ejecutivo' or public.is_ejecutivo_vinculado(pr.id));
+  v_scope_text := v_scope::text[];
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', pr.id,
+           'nombre', pr.nombre,
+           'comuna', pr.comuna,
+           'tipo', pr.tipo,
+           'precio_min_uf', pr.precio_min_uf,
+           'precio_max_uf', pr.precio_max_uf,
+           'estado', pr.estado
+         ) order by array_position(v_scope, pr.id)), '[]'::jsonb)
+    into v_proyectos
+  from public.proyectos pr
+  where pr.id = any(v_scope);
+
+  with lead_projects as (
+    select p.id as lead, s.proyecto_id
+    from public.profiles p
+    cross join unnest(v_scope) as s(proyecto_id)
+    where p.role = 'usuario'
+      and exists (select 1 from public.evaluations e where e.user_id = p.id)
+      and (
+        public.lead_belongs_to_proyecto(p.id, s.proyecto_id)
+        or exists (
+          select 1
+          from public.commercial_stage_events ev
+          where ev.subject_user_id = p.id
+            and ev.inmobiliaria_id = v_tenant
+            and ev.proyecto_id = s.proyecto_id
+        )
+      )
+  ),
+  leads as (
+    select lp.lead,
+           row_number() over (order by lp.lead) as n,
+           jsonb_agg(lp.proyecto_id order by array_position(v_scope, lp.proyecto_id)) as proyectos
+    from lead_projects lp
+    group by lp.lead
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'lead_id', l.n::text,
+           'first_evaluation_at', (select min(e.created_at) from public.evaluations e where e.user_id = l.lead),
+           'evaluaciones', (
+             select jsonb_agg(jsonb_build_object(
+                      'at', e.created_at,
+                      'project_goal_id', case
+                        when e.financial_data -> 'input' -> 'project_goal' ->> 'id' = any(v_scope_text)
+                          then e.financial_data -> 'input' -> 'project_goal' ->> 'id'
+                      end
+                    ) order by e.created_at, e.id)
+             from public.evaluations e
+             where e.user_id = l.lead
+           ),
+           'evaluacion_actual', (
+             select jsonb_build_object(
+                      'input', coalesce(e.financial_data -> 'input', '{}'::jsonb),
+                      'onboarding', coalesce(pf.onboarding_data, '{}'::jsonb),
+                      'result', coalesce(e.financial_data -> 'result', '{}'::jsonb)
+                    )
+             from public.evaluations e
+             join public.profiles pf on pf.id = e.user_id
+             where e.user_id = l.lead
+             order by e.created_at desc, e.id desc
+             limit 1
+           ),
+           'proyectos', l.proyectos,
+           'postulaciones', coalesce((
+             select jsonb_agg(jsonb_build_object('proyecto_id', g.proyecto_id, 'first_at', g.first_at)
+                              order by g.first_at, g.proyecto_id)
+             from (
+               select e.financial_data -> 'input' -> 'project_goal' ->> 'id' as proyecto_id,
+                      min(e.created_at) as first_at
+               from public.evaluations e
+               where e.user_id = l.lead
+                 and e.financial_data -> 'input' -> 'project_goal' ->> 'id' = any(v_scope_text)
+               group by 1
+             ) g
+           ), '[]'::jsonb),
+           'stage_events', coalesce((
+             select jsonb_agg(jsonb_build_object(
+                      'proyecto_id', ev.proyecto_id,
+                      'stage_after', ev.stage_after,
+                      'occurred_at', ev.occurred_at,
+                      'por_sistema', ev.actor_role = 'sistema',
+                      'por_mi', coalesce(ev.actor_id = v_uid, false)
+                    ) order by ev.occurred_at, ev.id)
+             from public.commercial_stage_events ev
+             where ev.subject_user_id = l.lead
+               and ev.inmobiliaria_id = v_tenant
+               and (ev.proyecto_id is null or ev.proyecto_id = any(v_scope))
+           ), '[]'::jsonb),
+           'plan', (
+             select jsonb_build_object(
+                      'baseline_at', acc.at,
+                      'target_proyecto_id', case when acc.goal = any(v_scope_text) then acc.goal end
+                    )
+             from (
+               select ee.effective_at as at,
+                      e.financial_data -> 'input' -> 'project_goal' ->> 'id' as goal
+               from public.evaluation_events ee
+               join public.evaluations e on e.id = ee.evaluation_id and e.user_id = ee.user_id
+               where ee.user_id = l.lead
+                 and ee.kind = 'plan_accepted'
+               union all
+               select e.plan_accepted_at,
+                      e.financial_data -> 'input' -> 'project_goal' ->> 'id'
+               from public.evaluations e
+               where e.user_id = l.lead
+                 and e.plan_accepted_at is not null
+               order by 1, 2
+               limit 1
+             ) acc
+           ),
+           'favoritos', coalesce((
+             select jsonb_agg(jsonb_build_object('proyecto_id', f.proyecto_id, 'created_at', f.created_at)
+                              order by f.created_at, f.proyecto_id)
+             from public.proyecto_favoritos f
+             where f.usuario_id = l.lead
+               and f.proyecto_id = any(v_scope)
+           ), '[]'::jsonb),
+           'progress_update_ats', coalesce((
+             select jsonb_agg(te.recorded_at order by te.recorded_at, te.event_id)
+             from public.tracking_events te
+             where te.user_id = l.lead
+               and te.event_kind in ('data_update', 'evaluation')
+           ), '[]'::jsonb),
+           'confirmed_goal_ats', coalesce((
+             select jsonb_agg(ge.recorded_at order by ge.recorded_at, ge.event_id)
+             from public.improvement_goal_events ge
+             where ge.user_id = l.lead
+               and ge.confirmed
+           ), '[]'::jsonb)
+         ) order by l.n), '[]'::jsonb)
+    into v_facts
+  from leads l;
+
+  return jsonb_build_object('now', clock_timestamp(), 'proyectos', v_proyectos, 'facts', v_facts);
+end;
+$$;
+
+revoke all on function public.commercial_funnel_facts() from public, anon, authenticated;
+grant execute on function public.commercial_funnel_facts() to authenticated;
+-- HU18 — Participación y consentimiento del co-deudor
+-- Espejo acumulado de las migraciones HU18 de consentimiento.
+-- =============================================================
+
+create table if not exists public.co_debtor_invitations (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.profiles(id) on delete restrict,
+  recipient_email text not null check (length(trim(recipient_email)) > 0),
+  recipient_rut text
+    check (recipient_rut is null or recipient_rut ~ '^[0-9]{7,8}-[0-9K]$'),
+  ingreso_mensual_complementario numeric,
+  deuda_mensual_complementario numeric,
+  tipo_contrato_complementario text,
+  continuidad_laboral_complementario text,
+  morosidad_complementario text,
+  token_digest text not null unique check (length(trim(token_digest)) > 0),
+  management_token_digest text
+    check (management_token_digest is null or length(trim(management_token_digest)) > 0),
+  status text not null default 'pending'
+    check (status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  replaced_at timestamptz,
+  replacement_of_invitation_id uuid
+    references public.co_debtor_invitations(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint co_debtor_invitations_expiry_check check (expires_at > created_at),
+  constraint co_debtor_invitations_replacement_check check (
+    replacement_of_invitation_id is distinct from id
+  ),
+  constraint co_debtor_invitations_declared_complement_check check (
+    num_nonnulls(
+      ingreso_mensual_complementario,
+      deuda_mensual_complementario,
+      tipo_contrato_complementario,
+      continuidad_laboral_complementario,
+      morosidad_complementario
+    ) = 0
+    or (
+      num_nonnulls(
+        ingreso_mensual_complementario,
+        deuda_mensual_complementario,
+        tipo_contrato_complementario,
+        continuidad_laboral_complementario,
+        morosidad_complementario
+      ) = 5
+      and ingreso_mensual_complementario >= 0
+      and deuda_mensual_complementario >= 0
+      and tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')
+      and continuidad_laboral_complementario in ('menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios')
+      and morosidad_complementario in ('si', 'no')
+    )
+  )
+);
+
+create unique index if not exists co_debtor_invitations_one_pending_per_lead_idx
+  on public.co_debtor_invitations (lead_id)
+  where status = 'pending';
+create unique index if not exists co_debtor_invitations_management_token_digest_idx
+  on public.co_debtor_invitations (management_token_digest)
+  where management_token_digest is not null;
+create index if not exists co_debtor_invitations_lead_created_idx
+  on public.co_debtor_invitations (lead_id, created_at desc);
+create index if not exists co_debtor_invitations_expiry_idx
+  on public.co_debtor_invitations (expires_at)
+  where status = 'pending';
+
+create table if not exists public.co_debtor_confirmations (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null unique
+    references public.co_debtor_invitations(id) on delete restrict,
+  ingreso_mensual_complementario numeric not null
+    check (ingreso_mensual_complementario >= 0),
+  deuda_mensual_complementario numeric not null
+    check (deuda_mensual_complementario >= 0),
+  tipo_contrato_complementario text not null
+    check (tipo_contrato_complementario in ('indefinido', 'plazo_fijo', 'independiente', 'honorarios_variable')),
+  continuidad_laboral_complementario text not null
+    check (continuidad_laboral_complementario in (
+      'menos_6_meses', 'entre_6_y_12_meses', 'entre_1_y_3_anios', 'mas_3_anios'
+    )),
+  morosidad_complementario text not null
+    check (morosidad_complementario in ('si', 'no')),
+  treatment_consent_version text not null
+    check (length(trim(treatment_consent_version)) > 0),
+  treatment_consented_at timestamptz not null,
+  confirmed_at timestamptz not null default now()
+);
+
+create index if not exists co_debtor_confirmations_confirmed_idx
+  on public.co_debtor_confirmations (confirmed_at desc);
+
+create table if not exists public.co_debtor_consent_events (
+  id uuid primary key default gen_random_uuid(),
+  invitation_id uuid not null
+    references public.co_debtor_invitations(id) on delete restrict,
+  event_type text not null
+    check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked')),
+  actor_type text not null
+    check (actor_type in ('lead', 'co_debtor', 'system')),
+  invitation_status text not null
+    check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+  occurred_at timestamptz not null default clock_timestamp()
+);
+
+create index if not exists co_debtor_consent_events_invitation_occurred_idx
+  on public.co_debtor_consent_events (invitation_id, occurred_at, id);
+
+create or replace function public.hu18_reject_consent_event_mutation()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  raise exception 'co_debtor_consent_events_are_append_only' using errcode = '23514';
+end;
+$$;
+
+drop trigger if exists co_debtor_consent_events_append_only on public.co_debtor_consent_events;
+create trigger co_debtor_consent_events_append_only
+  before update or delete on public.co_debtor_consent_events
+  for each row execute function public.hu18_reject_consent_event_mutation();
+
+alter table public.co_debtor_invitations enable row level security;
+alter table public.co_debtor_confirmations enable row level security;
+alter table public.co_debtor_consent_events enable row level security;
+
+drop policy if exists "Co-debtor invitations select own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations select own lead"
+  on public.co_debtor_invitations
+  for select to authenticated
+  using (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor invitations insert own lead" on public.co_debtor_invitations;
+create policy "Co-debtor invitations insert own lead"
+  on public.co_debtor_invitations
+  for insert to authenticated
+  with check (auth.uid() = lead_id);
+
+drop policy if exists "Co-debtor confirmations select own lead" on public.co_debtor_confirmations;
+create policy "Co-debtor confirmations select own lead"
+  on public.co_debtor_confirmations
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Co-debtor consent events select own lead" on public.co_debtor_consent_events;
+create policy "Co-debtor consent events select own lead"
+  on public.co_debtor_consent_events
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.co_debtor_invitations invitation
+      where invitation.id = invitation_id
+        and invitation.lead_id = auth.uid()
+    )
+  );
+
+revoke all on table public.co_debtor_invitations,
+  public.co_debtor_confirmations,
+  public.co_debtor_consent_events from anon, authenticated;
+grant select, insert on table public.co_debtor_invitations to authenticated;
+grant select on table public.co_debtor_confirmations,
+  public.co_debtor_consent_events to authenticated;
+grant select, insert, update, delete on table public.co_debtor_invitations,
+  public.co_debtor_confirmations to service_role;
+grant select, insert on table public.co_debtor_consent_events to service_role;
+
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid, p_recipient_email text, p_token_digest text, p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare existing_invitation public.co_debtor_invitations%rowtype; created_id uuid;
+begin
+  perform 1 from public.profiles where id = p_lead_id for update;
+  if not found then raise exception 'hu18_lead_not_found' using errcode = 'P0001'; end if;
+  select * into existing_invitation from public.co_debtor_invitations
+    where lead_id = p_lead_id and status = 'pending' for update;
+  if found and existing_invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'expired', 'system', 'expired');
+    existing_invitation := null;
+  elsif found then
+    update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+      where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'replaced', 'lead', 'replaced');
+  end if;
+  insert into public.co_debtor_invitations
+    (lead_id, recipient_email, token_digest, expires_at, replacement_of_invitation_id)
+    values (p_lead_id, lower(trim(p_recipient_email)), p_token_digest, p_expires_at,
+      case when existing_invitation.id is null then null else existing_invitation.id end)
+    returning id into created_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (created_id, 'invited', 'lead', 'pending');
+  return query select created_id, existing_invitation.id;
+end;
+$$;
+
+-- Declared-complement overload used by the authenticated Edge Function. Its
+-- values stay on the invitation until the co-debtor confirms their own data.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz,
+  p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric,
+  p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text,
+  p_morosidad_complementario text
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_recipient_rut, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set ingreso_mensual_complementario = p_ingreso_mensual_complementario,
+        deuda_mensual_complementario = p_deuda_mensual_complementario,
+        tipo_contrato_complementario = p_tipo_contrato_complementario,
+        continuidad_laboral_complementario = p_continuidad_laboral_complementario,
+        morosidad_complementario = p_morosidad_complementario
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+-- RUT-aware overload used only by the authenticated Edge Function. The
+-- original four-argument operation remains for existing hosted callers.
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_recipient_rut text,
+  p_token_digest text,
+  p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare created_invitation record;
+begin
+  if p_recipient_rut !~ '^[0-9]{7,8}-[0-9K]$' then
+    raise exception 'hu18_invalid_recipient_rut' using errcode = 'P0001';
+  end if;
+  select * into created_invitation from public.hu18_create_invitation(
+    p_lead_id, p_recipient_email, p_token_digest, p_expires_at
+  );
+  update public.co_debtor_invitations
+    set recipient_rut = p_recipient_rut
+    where id = created_invitation.invitation_id;
+  return query select created_invitation.invitation_id, created_invitation.previous_invitation_id;
+end;
+$$;
+
+create or replace function public.hu18_revert_invitation_after_delivery_failure(
+  p_invitation_id uuid, p_previous_invitation_id uuid default null
+)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations
+    where id = p_invitation_id for update;
+  if current_status is distinct from 'pending' then return false; end if;
+  update public.co_debtor_invitations set status = 'replaced', replaced_at = clock_timestamp()
+    where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'replaced', 'system', 'replaced');
+  if p_previous_invitation_id is not null then
+    update public.co_debtor_invitations set status = 'pending', replaced_at = null
+      where id = p_previous_invitation_id and status = 'replaced';
+  end if;
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitation(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found or invitation.status <> 'pending' or invitation.expires_at > clock_timestamp() then return false; end if;
+  update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'expired', 'system', 'expired');
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitations()
+returns table (invitation_id uuid, recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  for invitation in select * from public.co_debtor_invitations
+    where status = 'pending' and expires_at <= clock_timestamp() for update skip locked
+  loop
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    invitation_id := invitation.id; recipient_email := invitation.recipient_email; lead_id := invitation.lead_id;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public.hu18_confirm_invitation(
+  p_invitation_id uuid, p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric, p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text, p_morosidad_complementario text,
+  p_treatment_consent_version text, p_management_token_digest text
+)
+returns table (recipient_email text, lead_id uuid)
+language plpgsql security definer set search_path = public
+as $$
+declare invitation public.co_debtor_invitations%rowtype;
+begin
+  select * into invitation from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if invitation.status = 'pending' and invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+    insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+      values (invitation.id, 'expired', 'system', 'expired');
+    return;
+  end if;
+  if invitation.status <> 'pending' then raise exception 'hu18_invitation_not_pending' using errcode = 'P0001'; end if;
+  if length(trim(p_management_token_digest)) = 0 then
+    raise exception 'hu18_management_token_missing' using errcode = 'P0001';
+  end if;
+  insert into public.co_debtor_confirmations (
+    invitation_id, ingreso_mensual_complementario, deuda_mensual_complementario,
+    tipo_contrato_complementario, continuidad_laboral_complementario, morosidad_complementario,
+    treatment_consent_version, treatment_consented_at
+  ) values (
+    invitation.id, p_ingreso_mensual_complementario, p_deuda_mensual_complementario,
+    p_tipo_contrato_complementario, p_continuidad_laboral_complementario, p_morosidad_complementario,
+    p_treatment_consent_version, clock_timestamp()
+  );
+  update public.co_debtor_invitations set status = 'confirmed', consumed_at = clock_timestamp(),
+    management_token_digest = p_management_token_digest where id = invitation.id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'consent_granted', 'co_debtor', 'confirmed'),
+      (invitation.id, 'confirmed', 'co_debtor', 'confirmed');
+  return query select invitation.recipient_email, invitation.lead_id;
+end;
+$$;
+
+create or replace function public.hu18_revoke_consent(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if current_status = 'revoked' then return false; end if;
+  if current_status <> 'confirmed' then raise exception 'hu18_consent_not_confirmed' using errcode = 'P0001'; end if;
+  update public.co_debtor_invitations set status = 'revoked' where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'revoked', 'co_debtor', 'revoked');
+  return true;
+end;
+$$;
+
+revoke all on function public.hu18_create_invitation(uuid, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revert_invitation_after_delivery_failure(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitation(uuid) from public, anon, authenticated;
+revoke all on function public.hu18_expire_invitations() from public, anon, authenticated;
+revoke all on function public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.hu18_revoke_consent(uuid) from public, anon, authenticated;
+grant execute on function public.hu18_create_invitation(uuid, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz),
+  public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text),
+  public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
+  public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
+  public.hu18_revoke_consent(uuid) to service_role;
+
+-- HU18 Step 8: staff never reads raw evaluation/history snapshots directly.
+-- The backend applies consent-state redaction and the existing commercial
+-- tenant scope before returning an executive projection.
+drop policy if exists "Evaluations select own" on public.evaluations;
+create policy "Evaluations select own"
+  on public.evaluations
+  for select to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Evaluations select sales" on public.evaluations;
+
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
+-- ScoreLeads — HU16: Historial de estados de leads para admins
+-- =============================================================
+
+create or replace function public.get_lead_status_history_for_admin()
+returns table (
+  history_id uuid,
+  profile_id uuid,
+  lead_name text,
+  lead_email text,
+  changed_by_name text,
+  changed_by_email text,
+  old_status text,
+  new_status text,
+  reason text,
+  created_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select 
+    h.id as history_id,
+    p.id as profile_id,
+    p.full_name as lead_name,
+    u_lead.email::text as lead_email,
+    p_changer.full_name as changed_by_name,
+    u_changer.email::text as changed_by_email,
+    h.old_status,
+    h.new_status,
+    h.reason,
+    h.created_at
+  from public.lead_status_history h
+  join public.profiles p on p.id = h.profile_id
+  join auth.users u_lead on u_lead.id = p.id
+  left join public.profiles p_changer on p_changer.id = h.changed_by
+  left join auth.users u_changer on u_changer.id = h.changed_by
+  where (
+    public.get_my_role() = 'admin'
+    or (
+      public.get_my_role() = 'admin_inmobiliario'
+      and (
+        exists (
+          select 1 from public.evaluations e
+          join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
+          where e.user_id = p.id
+          and (
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+            or pr.comuna = p.onboarding_data->>'comuna_interes'
+            or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+          )
+        )
+        or exists (
+          select 1 from public.lead_status_history lsh
+          join public.profiles exec_p on exec_p.id = lsh.changed_by
+          where lsh.profile_id = p.id
+          and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        )
+      )
+    )
+  )
+  order by h.created_at desc;
+$$;
+
+grant execute on function public.get_lead_status_history_for_admin() to authenticated;
+
+-- Migración para controlar avances irreales en el plan de mejora (HU16)
+
+CREATE OR REPLACE FUNCTION public.check_housing_plan_progress()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_new_progress jsonb;
+  v_old_progress jsonb;
+  v_new_total numeric := 0;
+  v_old_total numeric := 0;
+  v_income numeric := 0;
+  v_month jsonb;
+  v_profile RECORD;
+  v_days_active numeric;
+  v_months_active numeric;
+  v_max_logical_savings numeric;
+  v_fraud_reason jsonb := NULL;
+BEGIN
+  -- Extraer el array de meses registrados en el plan de ahorro
+  v_new_progress := NEW.housing_plan->'progress'->'months';
+  v_old_progress := OLD.housing_plan->'progress'->'months';
+
+  -- Si no hay progreso nuevo, no hacemos nada
+  IF v_new_progress IS NULL OR v_new_progress = v_old_progress THEN
+    RETURN NEW;
+  END IF;
+
+  -- Sumar total ahorrado en el nuevo snapshot
+  IF jsonb_typeof(v_new_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_new_progress) LOOP
+      v_new_total := v_new_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Sumar total ahorrado en el viejo snapshot
+  IF jsonb_typeof(v_old_progress) = 'array' THEN
+    FOR v_month IN SELECT * FROM jsonb_array_elements(v_old_progress) LOOP
+      v_old_total := v_old_total + COALESCE((v_month->>'savedAmount')::numeric, 0);
+    END LOOP;
+  END IF;
+
+  -- Verificar el comportamiento de ahorro
+  IF v_new_total > v_old_total THEN
+    -- Obtenemos el ingreso mensual del snapshot inicial
+    v_income := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+    
+    IF v_income > 0 THEN
+      -- Calculamos la velocidad del tiempo
+      v_days_active := EXTRACT(EPOCH FROM (now() - NEW.created_at)) / 86400;
+      v_months_active := GREATEST(0, v_days_active / 30.0);
+      
+      -- Techo máximo de la realidad: 3 sueldos iniciales + 1 sueldo entero por cada mes que ha pasado
+      v_max_logical_savings := (v_income * 3) + (v_income * v_months_active);
+
+      -- REGLA 1: Salto gigante en una sola petición (Regla original)
+      IF (v_new_total - v_old_total) > (v_income * 3) THEN
+        v_fraud_reason := '"Avance irreal vs renta mensual en Plan de Mejora"'::jsonb;
+        
+      -- REGLA 2: Velocidad de ahorro imposible / Smurfing (Micro-transacciones para evadir regla 1)
+      ELSIF v_new_total > v_max_logical_savings THEN
+        v_fraud_reason := '"Velocidad de ahorro matemáticamente imposible (Smurfing detectado)"'::jsonb;
+      END IF;
+
+      -- Si se violó alguna regla, castigamos
+      IF v_fraud_reason IS NOT NULL THEN
+        -- Obtenemos el estado actual del lead
+        SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+        
+        -- Si el lead está normal o reactivado, lo marcamos para revisión
+        IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+          UPDATE public.profiles 
+          SET reliability_status = 'en_revision', updated_at = now() 
+          WHERE id = NEW.user_id;
+        END IF;
+        
+        -- Inyectamos el flag en la evaluación
+        NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || v_fraud_reason;
+        NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 100);
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Recrear el trigger en la tabla evaluations
+DROP TRIGGER IF EXISTS trg_check_housing_plan_progress ON public.evaluations;
+CREATE TRIGGER trg_check_housing_plan_progress
+BEFORE UPDATE ON public.evaluations
+FOR EACH ROW
+WHEN (OLD.housing_plan IS DISTINCT FROM NEW.housing_plan)
+EXECUTE FUNCTION public.check_housing_plan_progress();
+
+-- Trigger para marcar fraude desde el ML o reglas SQL en el momento del INSERT
+CREATE OR REPLACE FUNCTION public.check_ml_fraud_on_insert()
+RETURNS trigger AS $$
+DECLARE
+  v_profile RECORD;
+  v_device_hash text;
+  v_intentos integer;
+  v_ahorro_previo numeric;
+  v_ahorro_actual numeric;
+  v_renta numeric;
+  v_time_to_submit numeric;
+BEGIN
+  v_device_hash := NEW.financial_data->'input'->>'device_id_hash';
+  v_time_to_submit := COALESCE((NEW.financial_data->'input'->>'time_to_submit')::numeric, 999);
+
+  -- 1. Evaluamos reglas duras en la BD (Fallback robusto y bypass de RLS por SECURITY DEFINER)
+  IF v_device_hash IS NOT NULL THEN
+    
+    -- Tanteo: más de 3 intentos en 15 minutos
+    SELECT count(*) INTO v_intentos 
+    FROM public.evaluations 
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '15 minutes';
+    
+    IF v_intentos >= 3 THEN 
+       NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+       NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tanteo detectado: demasiadas evaluaciones en corto tiempo"'::jsonb;
+    END IF;
+    
+    -- Avance irreal: salto ilógico en 24 horas
+    SELECT (financial_data->'input'->>'ahorro_disponible')::numeric INTO v_ahorro_previo
+    FROM public.evaluations
+    WHERE financial_data->'input'->>'device_id_hash' = v_device_hash
+    AND created_at >= now() - interval '24 hours'
+    ORDER BY created_at ASC
+    LIMIT 1;
+    
+    IF v_ahorro_previo IS NOT NULL THEN
+       v_ahorro_actual := COALESCE((NEW.financial_data->'input'->>'ahorro_disponible')::numeric, 0);
+       v_renta := COALESCE((NEW.financial_data->'input'->>'ingreso_mensual')::numeric, 0);
+       IF v_ahorro_actual > (v_ahorro_previo + (v_renta * 3)) THEN
+          NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 99.0);
+          NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Avance de ahorro irreal detectado en 24h"'::jsonb;
+       END IF;
+    END IF;
+  END IF;
+
+  -- Script automatizado
+  IF v_time_to_submit < 5 THEN
+    NEW.fraud_score_probability := GREATEST(COALESCE(NEW.fraud_score_probability, 0), 95.0);
+    NEW.shap_top_factors := COALESCE(NEW.shap_top_factors, '[]'::jsonb) || '"Tiempo de llenado anormalmente bajo (<5s)"'::jsonb;
+  END IF;
+
+  -- 2. Si cualquier regla (o el ML mismo) arrojó fraude, marcamos el perfil
+  IF NEW.fraud_score_probability >= 90 THEN
+    SELECT reliability_status INTO v_profile FROM public.profiles WHERE id = NEW.user_id;
+    
+    IF v_profile.reliability_status IN ('normal', 'reactivado') THEN
+      UPDATE public.profiles 
+      SET reliability_status = 'sospechoso', updated_at = now() 
+      WHERE id = NEW.user_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_ml_fraud_on_insert ON public.evaluations;
+CREATE TRIGGER trg_check_ml_fraud_on_insert
+BEFORE INSERT ON public.evaluations
+FOR EACH ROW
+EXECUTE FUNCTION public.check_ml_fraud_on_insert();

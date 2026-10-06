@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/matching/leadProjectMatching.js` (pure, no Supabase, no fetch) |
 | **Cases** | `docs/algorithms/ALG-10-cases.json` — asserted by `frontend/src/lib/matching/__tests__/leadProjectMatching.test.js` (**vitest**, not pytest) |
 | **Open assumptions** | 9 open, 1 confirmed — see the log below |
-| **Last changed** | 2026-08-31 · HU 10 · created |
+| **Last changed** | 2026-10-05 · HU 15 · A1 note: the conversion dashboard is the first evidence (text only, no number changed) |
 
 > **Why this one runs on the frontend.** The project catalog lives in Supabase and is reached through
 > `frontend/src/services/projectService.js` (HU 7); guardrail #5 forbids new FastAPI endpoints, so
@@ -431,7 +431,7 @@ active**, or the list reads as unstable.
 
 | # | Assumption | Made by | Date | Would be wrong if | Status |
 | :- | :--------- | :------ | :--- | :---------------- | :----- |
-| A1 | The affinity weights and the 70 / 45 bands are v1, from domain reasoning, **not fitted** | Spike 1 · E4 + HU 10 build | 2026-08-31 | Real conversion data showed a different ordering. There is none until HU 16 | open · revisit with HU 16 |
+| A1 | The affinity weights and the 70 / 45 bands are v1, from domain reasoning, **not fitted** | Spike 1 · E4 + HU 10 build | 2026-08-31 | Real conversion data showed a different ordering. There is none until HU 16. HU 15 (`ALG-18` R1, R8) is the first surface that shows real conversion split by ALG-10 band: the funnel filtered by `Compatible` / `Cercano` / `Marginal` and by capacity bucket. That is the first evidence for or against this assumption. Read it with three caveats before retuning anything: bands are the lead's **current** band, not the band it had when it was contacted (`ALG-18` A3); each lead is counted once, in its **best** band across the tenant's non-`agotado` projects (`ALG-18` A4); and no sample-size floor is applied. It is a signal to revisit A1, not a fit | open · revisit with HU 16 |
 | A2 | `capacidad_status === "requires_info"` excludes the pair rather than scoring it at zero | HU 10 build | 2026-08-31 | A missing capacity should read as "cannot buy". It must not: `ALG-9` invariant 4 keeps `null` and `0` distinct so a lead who never answered is not shown as a lead who cannot buy. **This got safer after `ALG-9` narrowed `requires_info` to genuinely missing data** — a lead with an unviable term now computes and is ranked (`ALG-9` invariant 4b), so G0 no longer swallows leads whose file is complete | open |
 | A3 | An unrecognised `classification` takes the full −15 | HU 10 build | 2026-08-31 | Unknown classification deserved a middle penalty. The weights here (R2) inherit the asymmetry argued in `ALG-9` R3: over-recommending burns the executive's trust, under-recommending still surfaces the lead as `Cercano`. `"Requiere antecedentes"` is itself known drift — returned by the engine, documented nowhere, not enumerated by the dashboard filter | open |
 | A4 | `HOLGURA_EN_TOPE = 12` — reaching a project with zero margin costs 12, below `SOBRECALCE_MAX` | HU 10 build | 2026-08-31 | Gastos operacionales (2–3%, not modelled) were larger than assumed, or a zero-margin buyer converts as well as a holgado one. If anything this is **light** | open |

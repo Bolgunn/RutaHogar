@@ -8,11 +8,67 @@
       "schedule": "0 12 * * *"
     }
   ],
+  "functions": {
+    "api/score.py": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
-    { "source": "/score", "destination": "/api/score" },
-    { "source": "/tracking", "destination": "/api/score" },
-    { "source": "/tracking/(.*)", "destination": "/api/score" },
-    { "source": "/lead-changes/(.*)", "destination": "/api/score" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/score",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/score/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/market-reference",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/interest",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/academy/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/properties/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/api/properties/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/tracking",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/tracking/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/api/v1/crm-mock/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/market-reference-history",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/housing-benefit-catalog",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/lead-changes/(.*)",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

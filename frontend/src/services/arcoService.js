@@ -15,7 +15,7 @@ function writeLocalArcoRequests(requests) {
   localStorage.setItem(ARCO_KEY, JSON.stringify(requests));
 }
 
-export async function submitArcoRequest({ tipo, email, descripcion, userId, userRole, userName }) {
+export async function submitArcoRequest({ tipo, email, descripcion, userId }) {
   const request = {
     id: window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Date.now()),
     tipo,
@@ -41,7 +41,8 @@ export async function submitArcoRequest({ tipo, email, descripcion, userId, user
   const { data, error } = await supabase
     .from("arco_requests")
     .insert({
-      user_id: userId,
+      // La identidad de la fila siempre viene de la sesión validada, no del caller.
+      user_id: user.id,
       tipo,
       email,
       descripcion,
@@ -55,19 +56,13 @@ export async function submitArcoRequest({ tipo, email, descripcion, userId, user
     throw error;
   }
 
-  if (userRole === "usuario") {
-    try {
-      await supabase.functions.invoke("notify-admin-arco", {
-        body: {
-          tipo,
-          descripcion,
-          email_usuario: email,
-          nombre_usuario: userName || email,
-        },
-      });
-    } catch (notifyError) {
-      console.warn("No se pudo notificar a los admins:", notifyError);
-    }
+  try {
+    const { error: notifyError } = await supabase.functions.invoke("notify-admin-arco", {
+      body: { request_id: data.id },
+    });
+    if (notifyError) console.warn("No se pudo notificar a los admins:", notifyError);
+  } catch (notifyError) {
+    console.warn("No se pudo notificar a los admins:", notifyError);
   }
 
   return normalizeArcoRequest(data);

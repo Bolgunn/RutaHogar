@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { roleLabels } from "../services/auth";
+import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
+import AdminReportedLeads from "./AdminReportedLeads";
 
 function formatFecha(value) {
   if (!value) return "Sin fecha";
@@ -42,7 +44,7 @@ export default function AdminPanel({ evaluations, profile }) {
       .then((context) => {
         if (!active) return;
         setTenant(context);
-        setCanSeeArco(PROVIDER === "local" || context.isGlobalAdmin === true);
+        setCanSeeArco(PROVIDER === "local" || isGlobalAdmin(profile?.role, context.inmobiliaria_id));
       })
       .catch(() => {
         if (!active) return;
@@ -53,7 +55,7 @@ export default function AdminPanel({ evaluations, profile }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [profile?.role]);
 
   const counts = useMemo(
     () =>
@@ -96,7 +98,7 @@ export default function AdminPanel({ evaluations, profile }) {
       key: "admin",
       title: roleLabels.admin,
       description: "Supervisa catálogo, permisos y solicitudes sensibles.",
-      state: profile?.role === "admin" ? "Sesión actual" : "Disponible",
+      state: isAdminRole(profile?.role) ? "Sesión actual" : "Disponible",
     },
     {
       key: "sales",
@@ -133,7 +135,9 @@ export default function AdminPanel({ evaluations, profile }) {
         <span className="eyebrow">Administración</span>
         <h1>Panel administrativo</h1>
         <p>
-          Vista de control para el equipo que coordina captación, catálogo y resguardo operativo en RutaHogar.
+          {profile?.role === "admin_inmobiliario" 
+            ? "Vista de control para la gestión de proyectos, leads asignados y resguardo comercial de la Inmobiliaria."
+            : "Vista de control para el equipo que coordina captación, catálogo y resguardo operativo en RutaHogar."}
         </p>
       </div>
 
@@ -265,10 +269,14 @@ export default function AdminPanel({ evaluations, profile }) {
       
 
       {canSeeArco && (
-        <div className="admin-surface admin-panel-arco-surface">
+        <div className="admin-surface admin-panel-arco-surface admin-section-gap">
           <AdminArcoRequests />
         </div>
       )}
+
+      <div className="admin-section-gap">
+        <AdminReportedLeads profile={profile} evaluations={evaluations} />
+      </div>
     </section>
   );
 }

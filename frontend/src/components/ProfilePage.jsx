@@ -4,6 +4,7 @@ import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
 import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
 import { getLeadNotificationPreferences, setLeadNotificationPreference } from "../services/leadChangeService";
+import { isStaffRole } from "../lib/roles";
 import AiExplanationBlock from "./AiExplanationBlock";
 import {
   formatScore,
@@ -400,7 +401,7 @@ function ProfessionalEvaluationDetails({ result }) {
 
 export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation }) {
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
-  const canSeeTechnicalScoring = profile?.role === "ejecutivo" || profile?.role === "admin";
+  const canSeeTechnicalScoring = isStaffRole(profile?.role);
   const [form, setForm] = useState(savedOnboarding);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -1069,6 +1070,10 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
                   <div>
                     <dt>Plazo compra</dt>
                     <dd>{text(selectedEvaluation.onboarding?.plazo_compra, plazoLabels)}</dd>
+                  </div>
+                  <div>
+                    <dt>Propiedad o proyecto visto</dt>
+                    <dd>{booleanText(selectedEvaluation.onboarding?.tiene_propiedad_vista)}</dd>
                   </div>
                   <div>
                     <dt>Monto vivienda</dt>

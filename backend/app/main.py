@@ -1,20 +1,32 @@
 import asyncio
+import logging
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde el archivo .env local si existe
+load_dotenv()
+
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi.middleware.cors import CORSMiddleware
-from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
+from .market_data.service import MarketSnapshotUnavailable, read_persisted_uf_history, repository_from_environment, resolve_market_snapshot_from_environment
 from .market_data.repository import MarketRepositoryError
+from .housing_benefit_catalog import HousingBenefitCatalogueError, HousingBenefitCatalogueRepository
 from .scoring import calculate_score
+from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
     generate_executive_summary,
     generate_user_explanation,
 )
+from .routers import crm_mock
+from .tracking.routes import router as tracking_router
 from .academy_news import router as academy_news_router
 from .lead_changes.routes import router as lead_changes_router
 
+logger = logging.getLogger(__name__)
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -39,11 +51,11 @@ VALID_RELATION_TYPES = {
 }
 
 app = FastAPI(title="RutaHogar")
+app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
 app.include_router(academy_news_router)
 app.include_router(lead_changes_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
-from .tracking.routes import router as tracking_router
 app.include_router(tracking_router)
 
 LOCAL_FRONTEND_ORIGINS = [
@@ -125,6 +137,8 @@ class ScoreRequest(BaseModel):
     valor_vehiculos: Optional[float] = 0.0
     valor_inmuebles: Optional[float] = 0.0
     patrimonio_unit: Optional[str] = "clp"
+    time_to_submit: Optional[int] = None
+    device_id_hash: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -310,7 +324,59 @@ async def score_endpoint(payload: ScoreRequest):
             status_code=409,
             detail="La referencia de mercado se actualizó. Vuelve a cargarla antes de calcular.",
         )
-    return calculate_score(payload.model_dump(), market_snapshot=snapshot)
+
+    data = payload.model_dump()
+
+    # -------------------------------------------------------------
+    # REGLA DE BACKEND: Tanteo / Múltiples Intentos
+    # -------------------------------------------------------------
+    device_hash = data.get("device_id_hash")
+    intentos_previos = 0
+    ahorro_previo = None
+
+    if device_hash:
+        try:
+            from .ml_fraud import get_supabase_client
+            supabase = get_supabase_client()
+
+            hace_24_horas = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+
+            response = supabase.table("evaluations") \
+                .select("financial_data, created_at") \
+                .eq("financial_data->input->>device_id_hash", device_hash) \
+                .gte("created_at", hace_24_horas) \
+                .order("created_at", desc=False) \
+                .execute()
+
+            filas = response.data if response.data else []
+
+            quince_minutos_atras = datetime.now(timezone.utc) - timedelta(minutes=15)
+            intentos_15m = 0
+
+            for f in filas:
+                dt = datetime.fromisoformat(f["created_at"].replace("Z", "+00:00"))
+                if dt >= quince_minutos_atras:
+                    intentos_15m += 1
+
+                if ahorro_previo is None:
+                    fin_data = f.get("financial_data") or {}
+                    inp = fin_data.get("input") or {}
+                    ah_disp = inp.get("ahorro_disponible")
+                    if ah_disp is not None:
+                        ahorro_previo = float(ah_disp)
+
+            intentos_previos = intentos_15m
+
+        except Exception as e:
+            print(f"Error consultando historial de intentos: {e}")
+
+    # Inyectamos el historial de intentos al payload
+    data["intentos_previos"] = intentos_previos
+
+    if ahorro_previo is not None:
+        data["ahorro_previo_24h"] = ahorro_previo
+
+    return calculate_score(data, market_snapshot=snapshot)
 
 
 def resolve_market_snapshot() -> dict:
@@ -338,6 +404,64 @@ async def market_reference_endpoint():
         },
     }
 
+
+@app.get("/market-reference-history")
+async def market_reference_history_endpoint():
+    try:
+        observations = await asyncio.to_thread(read_persisted_uf_history, repository_from_environment())
+    except (MarketSnapshotUnavailable, MarketRepositoryError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"observations": observations}
+
+
+def housing_benefit_catalogue_from_environment() -> HousingBenefitCatalogueRepository:
+    secret = os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    return HousingBenefitCatalogueRepository(os.getenv("SUPABASE_URL", ""), secret)
+
+
+def complete_housing_benefit_catalogue(catalogue: dict | None) -> bool:
+    entries = catalogue.get("entries") if isinstance(catalogue, dict) else None
+    if not isinstance(entries, list):
+        return False
+    primary = {entry.get("identifier"): entry for entry in entries if isinstance(entry, dict)}
+    return all(isinstance(primary.get(identifier, {}).get("value", {}).get("amount_clp"), (int, float)) and primary[identifier]["value"]["amount_clp"] > 0 for identifier in ("DS1", "DS49"))
+
+
+@app.get("/housing-benefit-catalog")
+async def housing_benefit_catalog_endpoint():
+    try:
+        catalogue = await asyncio.to_thread(housing_benefit_catalogue_from_environment().current_published)
+    except HousingBenefitCatalogueError as exc:
+        raise HTTPException(status_code=503, detail="No fue posible leer el catÃ¡logo oficial revisado.") from exc
+    if not complete_housing_benefit_catalogue(catalogue):
+        raise HTTPException(status_code=503, detail="No hay un catÃ¡logo oficial revisado disponible.")
+    return {"version": catalogue["version"], "published_at": catalogue.get("published_at"), "entries": catalogue["entries"]}
+
+
+class PropertySearchRequest(BaseModel):
+    query: str
+    commune: Optional[str] = None
+    max_price_uf: Optional[float] = None
+    property_type: Optional[str] = None
+    limit: Optional[int] = 10
+    similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
+
+
+@app.post("/api/properties/search")
+@app.post("/properties/search")
+async def properties_search_endpoint(payload: PropertySearchRequest):
+    try:
+        return search_properties(
+            query=payload.query,
+            commune=payload.commune,
+            max_price_uf=payload.max_price_uf,
+            property_type=payload.property_type,
+            limit=payload.limit or 10,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EmbeddingError as exc:
+        logger.warning("Búsqueda de propiedades sin embedding: %s", exc)
+        raise HTTPException(status_code=503, detail="El buscador no está disponible en este momento.")
 
 class ExplainRequest(ScoreRequest):
     # Narrative retry recalculates authoritative score inputs without spending AI.
@@ -389,6 +513,7 @@ async def explain_endpoint(payload: ExplainRequest):
         )
 
     return response
+
 
 
 # --- HU 9: interés en un proyecto ---

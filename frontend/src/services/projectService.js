@@ -506,6 +506,10 @@ export async function deleteProject(id) {
   const { error } = await supabase.from("proyectos").delete().eq("id", id);
   if (error) {
     logSupabaseError(error);
+    // lead_project_commercial_stage protege el proyecto con ON DELETE RESTRICT.
+    if (error.code === "23503") {
+      throw new Error("Este proyecto tiene historial comercial y no se puede eliminar; márcalo como agotado.");
+    }
     throw new Error(error.message || "No se pudo eliminar el proyecto.");
   }
   return true;
@@ -619,4 +623,28 @@ export async function unassignExecutive(projectId, email) {
     throw new Error(error.message || "No se pudo quitar el ejecutivo.");
   }
   return getProjectExecutives(projectId);
+}
+
+// ---------------------------------------------------------------
+// Avisos de Portal Inmobiliario (HU 19) para la sección Proyectos
+// ---------------------------------------------------------------
+
+// Solo los que informan inmobiliaria y precio: sin ellos la tarjeta no tendría el
+// mismo formato que un proyecto del catálogo. No forman parte del contrato
+// congelado de arriba: viven en public.proyectos_rag y no tienen ejecutivos.
+export async function getPortalProjects() {
+  if (PROVIDER === "local") return [];
+
+  const { data, error } = await supabase
+    .from("proyectos_rag")
+    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
+    .not("inmobiliaria", "is", null)
+    .gt("valor_uf", 0)
+    .order("comuna");
+
+  if (error) {
+    logSupabaseError(error);
+    throw new Error("No se pudieron cargar los proyectos del portal.");
+  }
+  return data || [];
 }

@@ -18,6 +18,7 @@ import { CLP_FORMATTER } from "../services/financialTracking";
 import { plazoLabels, propertyLabels } from "../constants";
 import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
 import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
+import FinancingSimulatorPanel from "./financing/FinancingSimulatorPanel";
 
 const TARGET_PROJECT_KEY = "rutahogar_simulation_target_project";
 const MAX_MANUAL_UF_VALUE = 9999999;
@@ -447,7 +448,7 @@ function RecommendationEmpty({ onStartEvaluation }) {
   );
 }
 
-export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate, initialProjectId }) {
+export default function SimulationPage({ evaluation, onboarding, onStartEvaluation, onNavigate, initialProjectId, initialSimulationSection, onSimulationSectionChange }) {
   const context = useMemo(
     () => buildSimulationContext(evaluation, onboarding),
     [evaluation, onboarding],
@@ -455,6 +456,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
   const ufValueClp = Number(context.uf_value_clp) || 0;
   const currentProjectGoal = getCurrentProjectGoal(evaluation);
   const [mode, setMode] = useState("project");
+  const simulationSection = initialSimulationSection === "financing" ? "financing" : "housing";
+  const selectSimulationSection = (section) => onSimulationSectionChange?.(section);
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [projectsError, setProjectsError] = useState("");
@@ -722,7 +725,7 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
       <div className="page-head">
         <div>
           <span className="eyebrow">Simulación</span>
-          <h1>Compatibilidad y alternativas</h1>
+          <h1>{simulationSection === "housing" ? "Compatibilidad y alternativas" : "Financiamiento referencial"}</h1>
           <p>
             Compara proyectos referenciales o ingresa un valor de vivienda para estimar brechas con los datos de tu última precalificación.
           </p>
@@ -733,6 +736,20 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
         <i className="ti ti-info-circle" aria-hidden="true" />
         <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
       </div>
+
+      <div className="simulation-section-tabs" role="tablist" aria-label="Tipo de simulación">
+        <button role="tab" aria-selected={simulationSection === "housing"} className={simulationSection === "housing" ? "is-active" : ""} type="button" onClick={() => selectSimulationSection("housing")}>
+          Comparar viviendas
+        </button>
+        <button role="tab" aria-selected={simulationSection === "financing"} className={simulationSection === "financing" ? "is-active" : ""} type="button" onClick={() => selectSimulationSection("financing")}>
+          Simular financiamiento
+        </button>
+      </div>
+
+      <div hidden={simulationSection !== "financing"}>
+        <FinancingSimulatorPanel evaluation={evaluation} projects={projects} onNavigate={onNavigate} initialProjectId={initialProjectId} />
+      </div>
+      <div hidden={simulationSection !== "housing"}>
 
       <div className="simulation-layout">
         <div className="simulation-config-stack">
@@ -1039,6 +1056,8 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
             );
           })}
         </AlternativesCarousel>
+      </div>
+
       </div>
 
       <ConceptHelpCta onNavigate={onNavigate} />
