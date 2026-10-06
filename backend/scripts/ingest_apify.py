@@ -231,6 +231,14 @@ def _parse_location(item: dict) -> Tuple[str, str]:
     loc_str = html.unescape(loc_str).strip()
     parts = [p.strip() for p in loc_str.split(",") if p.strip()]
 
+    # Portal Inmobiliario cierra la ubicación con la comuna ("..., Barrio, Comuna") o la
+    # abre con ella ("Comuna, Barrio"). Un segmento que ES una comuna gana a la búsqueda
+    # por subcadena, que confunde barrios como "Alto Macul" (La Florida) con Macul.
+    exact = [KNOWN_RM_COMMUNES[p.lower()] for p in parts if p.lower() in KNOWN_RM_COMMUNES]
+    if exact:
+        last = KNOWN_RM_COMMUNES.get(parts[-1].lower())
+        return last or exact[-1], loc_str
+
     # Regla: No utilizar la primera sección del string de dirección (es la calle/número)
     candidate_parts = parts[1:] if len(parts) > 1 else parts
 

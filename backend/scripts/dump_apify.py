@@ -134,12 +134,13 @@ def run_apify_dump(property_type: str = "departamento", max_pages: int = 4, loca
         with urllib.request.urlopen(req) as resp:
             res_data = json.loads(resp.read().decode("utf-8"))
         run = wait_for_run(api_key, res_data["data"]["id"])
-        # usageTotalUsd se consolida segundos después de terminar; los eventos cobrados ya están.
-        cobrados = (run.get("chargedEventCounts") or {}).get("apify-default-dataset-item", 0)
-        print(f"🧾 Run {run['id']}: {run['status']}, {cobrados} avisos cobrados (~US${cobrados * USD_PER_ITEM:.2f})")
+        print(f"🧾 Run {run['id']}: {run['status']}")
         dataset_id = run.get("defaultDatasetId")
         if dataset_id:
-            return fetch_apify_dataset_items(dataset_id)
+            items = fetch_apify_dataset_items(dataset_id)
+            # Apify consolida el cobro minutos después; se estima por aviso.
+            print(f"💵 Costo estimado: ~US${len(items) * USD_PER_ITEM:.2f}")
+            return items
         print("⚠️ No se obtuvo defaultDatasetId de la ejecución del actor.")
         return []
     except Exception as e:

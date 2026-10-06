@@ -40,3 +40,14 @@ def test_estado_segun_entrega():
         assert ingest_apify.normalize_property_item(_raw(possession_date=entrega))["estado"] == "en_construccion"
     for entrega in ("Entrega inmediata", "Pronta entrega", ""):
         assert ingest_apify.normalize_property_item(_raw(possession_date=entrega))["estado"] == "disponible"
+
+
+def test_comuna_no_se_confunde_con_barrio():
+    casos = {
+        "Cam. Del Monte 6318, Lo Cañas - Alto Macul, La Florida": "La Florida",
+        "Peñalolén, Casa Grande": "Peñalolén",
+        "Las Condes, Barrio El Golf": "Las Condes",
+        "San Ignacio De Loyola 2202, Santiago, San Miguel, Franklin - Biobío, Santiago": "Santiago",
+    }
+    for location, comuna in casos.items():
+        assert ingest_apify._parse_location({"location": location})[0] == comuna
