@@ -160,7 +160,7 @@ function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, option
 }
 
 
-export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon }) {
+export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon }) {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     nombre: "",
@@ -374,6 +374,12 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
             {onEvalAnon && (
               <button type="button" className="auth-left-cta" onClick={onEvalAnon}>
                 Evaluar tu perfil gratis
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            )}
+            {onPortalAnon && (
+              <button type="button" className="auth-left-cta auth-left-cta--secondary" onClick={onPortalAnon}>
+                Buscar propiedades
                 <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             )}

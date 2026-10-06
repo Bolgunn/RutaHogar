@@ -34,6 +34,7 @@ import ScoreForm from "./components/ScoreForm";
 import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
+import PropertySearch from "./components/PropertySearch";
 import {
   acceptEvaluationPlan,
   applyAcceptedPlanEvent,
@@ -49,6 +50,7 @@ import { isAdminRole, isGlobalAdmin, isStaffRole } from "./lib/roles";
 import { canViewStaffPage, resolveStaffRoute, staffInitialPage } from "./lib/staffRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
+
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
 import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
@@ -290,6 +292,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "subsidios") return "/subsidios";
   if (page === "simulation") return "/comparar-proyectos";
   if (page === "academia") return "/academia";
+  if (page === "portal") return "/portal";
   if (page === "projects") return "/proyectos";
   if (page === "monthly-plan" || page === "objective-review") return "/plan-mejora";
   if (page === "register-milestone") return "/plan-mejora/progreso";
@@ -330,6 +333,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/subsidios",
     "/comparar-proyectos",
     "/academia",
+    "/portal",
     ...trackingRoutePaths,
     "/perfil",
     "/historial",
@@ -354,6 +358,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/precalificacion" || path === "/pre-evaluacion") {
       return { page: hasAnonOnboarding ? "anon-evaluate" : "anon-onboarding", path: "/precalificacion" };
     }
+    // El portal es la puerta de entrada pública: un lead busca antes de tener cuenta.
+    if (path === "/portal") return { page: "anon-portal" };
     if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
@@ -374,6 +380,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     if (path === "/subsidios") return { page: "subsidios" };
     if (path === "/comparar-proyectos") return { page: "simulation" };
     if (path === "/academia") return { page: "academia" };
+    if (path === "/portal") return { page: "portal" };
     if (path === "/proyectos") return { page: "projects" };
     if (trackingPage) return { page: trackingPage };
     if (path === "/perfil" || path === "/historial") return { page: "profile", path: path === "/historial" ? "/perfil" : undefined };
@@ -396,6 +403,7 @@ const getRouteForPage = (page, profile, options = {}) => {
   if (page === "co-debtor-management") return "/co-deudor/gestion";
   if (page === "auth") return options.authMode === "signup" ? "/registro" : "/login";
   if (page === "anon-onboarding" || page === "anon-evaluate") return "/precalificacion";
+  if (page === "anon-portal") return "/portal";
   if (!profile) return "/login";
   return getPrivatePathForPage(page);
 };
@@ -407,6 +415,7 @@ const pagesWithoutBackButton = new Set([
   "onboarding",
   "anon-onboarding",
   "anon-evaluate",
+  "anon-portal",
   "dataconsent",
   "signup-offer",
   "set-password",
@@ -459,6 +468,7 @@ export default function App() {
   const [simulationInitialProjectId, setSimulationInitialProjectId] = useState(null);
   const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
   const [scoreFormDraft, setScoreFormDraft] = useState(null);
+  const [portalProperty, setPortalProperty] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
     try {
@@ -566,7 +576,12 @@ export default function App() {
     setPathname(nextPath);
   };
 
+  const [selectedAcademyArticleId, setSelectedAcademyArticleId] = useState(null);
+
   const navigateToPageForProfile = (nextPage, nextProfile = profile, options = {}) => {
+    if (nextPage === "academia" && options?.articleId) {
+      setSelectedAcademyArticleId(options.articleId);
+    }
     if (pagesWithoutBackButton.has(nextPage)) {
       navigationHistoryRef.current = [];
     } else if (!options.replace && page && page !== nextPage && !pagesWithoutBackButton.has(page)) {
@@ -998,12 +1013,29 @@ export default function App() {
     navigateToPage("auth");
   };
 
-  const startEvaluation = () => {
+  const startEvaluation = (initialData) => {
+    // Los botones pasan el evento de click; solo el CTA del portal trae valor_uf.
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
     setResult(null);
     setResultSaved(null);
-    setScoreFormDraft(null);
-    setStartingNewEvaluation(false);
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    // Quien llega desde una propiedad ya pidió evaluarla: se salta la confirmación.
+    setStartingNewEvaluation(Boolean(property));
     navigateToPage(onboardingCompleted ? "evaluate" : "onboarding");
+  };
+
+  const startAnonEvaluation = (initialData) => {
+    const valorUf = Math.round(Number(initialData?.valor_uf));
+    const property = valorUf > 0
+      ? { nombre: initialData.nombre || "", comuna: initialData.comuna || "", valor_uf: valorUf }
+      : null;
+    setScoreFormDraft(property ? { form: { property_value: String(valorUf), property_value_unit: "uf" } } : null);
+    setPortalProperty(property);
+    navigateToPage(anonOnboarding ? "anon-evaluate" : "anon-onboarding");
   };
 
   const handleAuth = (nextAuth) => {
@@ -1133,6 +1165,7 @@ export default function App() {
 
   const handleResult = async (scoreResult, input, metadata = {}) => {
     setScoreFormDraft(null);
+    setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
     const financialInput = buildFinancialInput(input, userOnboarding);
 
@@ -1380,7 +1413,17 @@ export default function App() {
             }
             onAuth={handleAuth}
             onEvalAnon={() => navigateToPage("anon-onboarding")}
+            onPortalAnon={() => navigateToPage("anon-portal")}
           />
+        </div>
+      );
+    }
+
+    if (page === "anon-portal") {
+      return (
+        <div className="anon-shell">
+          <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
+          <PropertySearch onStartEvaluation={startAnonEvaluation} onNavigate={navigateToPage} />
         </div>
       );
     }
@@ -1440,8 +1483,16 @@ export default function App() {
                 </button>
               </div>
             )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
             <ScoreForm
-              targetCommune={anonOnboarding?.comuna_interes}
+              targetCommune={portalProperty?.comuna || anonOnboarding?.comuna_interes}
               objective={anonOnboarding?.objetivo_principal}
               onboardingData={anonOnboarding}
               birthDate={anonOnboarding?.birth_date || null}
@@ -1680,37 +1731,45 @@ export default function App() {
                 </div>
               </section>
             ) : <>
-              {userOnboarding && (
-                <div className="context-summary context-summary--prequalification">
-                  <strong>Contexto inicial</strong>
-                  <span>
-                    {userOnboarding.comuna_interes} ·{" "}
-                    {plazoLabels[userOnboarding.plazo_compra] ||
-                      userOnboarding.plazo_compra}
-                  </span>
-                  <button
-                    className="primary-button compact-button"
-                    type="button"
-                    onClick={() => navigateToPage("onboarding")}
-                  >
-                    Editar contexto
-                  </button>
-                </div>
-              )}
-              <ScoreForm
-                targetCommune={userOnboarding?.comuna_interes}
-                objective={userOnboarding?.objetivo_principal}
-                onboardingData={userOnboarding}
-                birthDate={profile?.birth_date || profile?.fecha_nacimiento}
-                profile={profile}
-                consentGranted={consentGranted}
-                onConsentAccept={handleDataConsent}
-                onBirthDateSave={handleBirthDateSave}
-                onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
-                initialDraft={scoreFormDraft}
-                onDraftChange={setScoreFormDraft}
-                onResult={handleResult}
-              />
+            {userOnboarding && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Contexto inicial</strong>
+                <span>
+                  {userOnboarding.comuna_interes} ·{" "}
+                  {plazoLabels[userOnboarding.plazo_compra] ||
+                    userOnboarding.plazo_compra}
+                </span>
+                <button
+                  className="primary-button compact-button"
+                  type="button"
+                  onClick={() => navigateToPage("onboarding")}
+                >
+                  Editar contexto
+                </button>
+              </div>
+            )}
+            {portalProperty && (
+              <div className="context-summary context-summary--prequalification">
+                <strong>Propiedad seleccionada</strong>
+                <span>
+                  {[portalProperty.nombre, portalProperty.comuna, `${portalProperty.valor_uf.toLocaleString("es-CL")} UF`].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+            )}
+            <ScoreForm
+              targetCommune={portalProperty?.comuna || userOnboarding?.comuna_interes}
+              objective={userOnboarding?.objetivo_principal}
+              onboardingData={userOnboarding}
+              birthDate={profile?.birth_date || profile?.fecha_nacimiento}
+              profile={profile}
+              consentGranted={consentGranted}
+              onConsentAccept={handleDataConsent}
+              onBirthDateSave={handleBirthDateSave}
+              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+              initialDraft={scoreFormDraft}
+              onDraftChange={setScoreFormDraft}
+              onResult={handleResult}
+            />
             </>}
           </section>
         ) : page === "profile" && profile.role === roles.user ? (
@@ -1780,8 +1839,15 @@ export default function App() {
           initialProjectId={simulationInitialProjectId}
           onRetryExplanation={handleRetryAiExplanation}
         />
-        ) : page === "academia" && profile.role === roles.user ? (
+      ) : page === "academia" && profile.role === roles.user ? (
           <AcademiaFinanciera evaluation={currentEvaluation} onStartEvaluation={startEvaluation} onNavigate={navigateToPage} initialArticleId={academyArticleId} onRetryExplanation={handleRetryAiExplanation} />
+        ) : page === "portal" && profile.role === roles.user ? (
+          <PropertySearch
+            evaluation={currentEvaluation}
+            onboarding={userOnboarding}
+            onStartEvaluation={startEvaluation}
+            onNavigate={navigateToPage}
+          />
         ) : page === "projects" && profile.role === roles.user ? (
           <ProjectsCatalog
             evaluationBase={currentEvaluation}

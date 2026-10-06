@@ -181,6 +181,12 @@
   width: 16px;
   height: 16px;
 }
+.auth-left-cta--secondary {
+  margin-left: 12px;
+  background: transparent;
+  border: 1.5px solid #D4A843;
+  color: #D4A843;
+}
 
 /* ── Right Panel ── */
 .auth-right {

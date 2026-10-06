@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from dotenv import load_dotenv
 
@@ -13,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .market_data.service import MarketSnapshotUnavailable, resolve_market_snapshot_from_environment
 from .market_data.repository import MarketRepositoryError
 from .scoring import calculate_score
+from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
     generate_executive_summary,
@@ -22,6 +24,7 @@ from .routers import crm_mock
 from .tracking.routes import router as tracking_router
 from .academy_news import router as academy_news_router
 
+logger = logging.getLogger(__name__)
 
 
 VALID_CONTRACT_TYPES = {"indefinido", "plazo_fijo", "independiente", "honorarios_variable"}
@@ -398,6 +401,31 @@ async def market_reference_endpoint():
         },
     }
 
+
+class PropertySearchRequest(BaseModel):
+    query: str
+    commune: Optional[str] = None
+    max_price_uf: Optional[float] = None
+    property_type: Optional[str] = None
+    limit: Optional[int] = 10
+    similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD
+
+
+@app.post("/api/properties/search")
+@app.post("/properties/search")
+async def properties_search_endpoint(payload: PropertySearchRequest):
+    try:
+        return search_properties(
+            query=payload.query,
+            commune=payload.commune,
+            max_price_uf=payload.max_price_uf,
+            property_type=payload.property_type,
+            limit=payload.limit or 10,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EmbeddingError as exc:
+        logger.warning("Búsqueda de propiedades sin embedding: %s", exc)
+        raise HTTPException(status_code=503, detail="El buscador no está disponible en este momento.")
 
 class ExplainRequest(ScoreRequest):
     # Narrative retry recalculates authoritative score inputs without spending AI.

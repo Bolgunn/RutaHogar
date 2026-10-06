@@ -624,3 +624,27 @@ export async function unassignExecutive(projectId, email) {
   }
   return getProjectExecutives(projectId);
 }
+
+// ---------------------------------------------------------------
+// Avisos de Portal Inmobiliario (HU 19) para la sección Proyectos
+// ---------------------------------------------------------------
+
+// Solo los que informan inmobiliaria y precio: sin ellos la tarjeta no tendría el
+// mismo formato que un proyecto del catálogo. No forman parte del contrato
+// congelado de arriba: viven en public.proyectos_rag y no tienen ejecutivos.
+export async function getPortalProjects() {
+  if (PROVIDER === "local") return [];
+
+  const { data, error } = await supabase
+    .from("proyectos_rag")
+    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
+    .not("inmobiliaria", "is", null)
+    .gt("valor_uf", 0)
+    .order("comuna");
+
+  if (error) {
+    logSupabaseError(error);
+    throw new Error("No se pudieron cargar los proyectos del portal.");
+  }
+  return data || [];
+}
