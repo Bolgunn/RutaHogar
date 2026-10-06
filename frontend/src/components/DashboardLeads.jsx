@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getAvailableProjects } from "../services/projectService";
+import { syncLeadToSimulatedCrm, getSimulatedCrmLeads, buildCrmPayload } from "../services/crmService";
 import { reportLead } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { detectContactOpportunities } from "../lib/matching/contactOpportunities";
@@ -11,7 +12,8 @@ import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
 import LeadDetailModal from "./LeadDetailModal";
-import { getCommercialStages } from "../services/commercialStageService";
+import { getCommercialRecords } from "../services/commercialStageService";
+import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
 import {
   formatScore,
@@ -403,7 +405,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     setLocalEvaluations(evaluations || []);
   }, [evaluations]);
 
-  const [commercialStages, setCommercialStages] = useState({});
+  
+  // CRM Mock State
+  const [crmLeads, setCrmLeads] = useState({});
+  const [isCrmModalOpen, setIsCrmModalOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  
+  // Commercial Records State
+  const [commercialRecords, setCommercialRecords] = useState({});
   const selectedResult = selectedLead?.result || {};
   const selectedInput = selectedLead?.input || {};
   const selectedOnboarding = selectedLead?.onboarding || {};
@@ -479,14 +488,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
   useEffect(() => {
     let active = true;
-    getCommercialStages(leadUserIds ? leadUserIds.split(",") : [], inmobiliariaId)
-      .then((stages) => { if (active) setCommercialStages(stages); });
+    getCommercialRecords(leadUserIds ? leadUserIds.split(",") : [], inmobiliariaId)
+      .then((records) => { if (active) setCommercialRecords(records); });
     return () => { active = false; };
   }, [leadUserIds, inmobiliariaId]);
 
-  const handleStageChanged = (leadId, stage) => {
-    setCommercialStages((current) => ({ ...current, [leadId]: stage }));
-  };
+  const handleStageChanged = useMemo(() => createLeadRecordsReloader(
+    (leadId) => getCommercialRecords([leadId], inmobiliariaId),
+    (leadId, records) => setCommercialRecords((current) => ({ ...current, [leadId]: records })),
+  ), [inmobiliariaId]);
 
   useEffect(() => {
     setSelectedLead((current) => {
@@ -496,7 +506,52 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     });
   }, [latestEvaluations]);
 
-  const communes = useMemo(() => [...new Set(latestEvaluations.flatMap((item) => [
+  // Load CRM Leads
+  const loadCrmLeads = () => {
+    getSimulatedCrmLeads().then(leads => {
+      const map = {};
+      leads.forEach(l => { map[l.lead_id] = l; });
+      setCrmLeads(map);
+    });
+  };
+
+  useEffect(() => {
+    loadCrmLeads();
+  }, []);
+
+  const handleSyncLead = async (lead, match) => {
+    if (!lead) return;
+    try {
+      setSyncing(true);
+      console.log("[DashboardLeads] Iniciando derivación de lead:", lead.id);
+      const res = await syncLeadToSimulatedCrm(lead, selectedProject, match);
+      console.log("[DashboardLeads] Resultado de derivación:", res);
+      await loadCrmLeads();
+    } catch (err) {
+      console.error("[DashboardLeads] Error al derivar lead:", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleBulkSync = async () => {
+    try {
+      setSyncing(true);
+      const leadsConConsentimiento = ranked.filter(item => item.lead.input?.consentimiento !== false);
+      console.log(`[DashboardLeads] Iniciando sincronización masiva de leads visibles con consentimiento: ${leadsConConsentimiento.length} de ${ranked.length}`);
+      for (const item of leadsConConsentimiento) {
+        await syncLeadToSimulatedCrm(item.lead, selectedProject, item.match);
+      }
+      await loadCrmLeads();
+      console.log("[DashboardLeads] Sincronización masiva finalizada.");
+    } catch (err) {
+      console.error("[DashboardLeads] Error en sincronización masiva:", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const communes = useMemo(() => [...new Set(evaluations.flatMap((item) => [
     item.input?.comuna_objetivo || item.onboarding?.comuna_interes,
     item.onboarding?.comuna_alternativa,
   ]).filter(Boolean))].sort(), [latestEvaluations]);
@@ -521,6 +576,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
       if (ageRange.min && item.input?.edad == null) return false;
+      
+      // Fix for comment 6: Date filter check restored
       if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;
       const status = item.reliability_status || "normal";
       // Leads silenciados no salen en el perfil de ejecutivos a no ser que sean reactivados o filtrados explícitamente
@@ -658,8 +715,25 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <div className="executive-lead-card__status">
             {getReliabilityBadgeCard(lead.reliability_status || "normal")}
             <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
-            <CommercialStageBadge stage={commercialStages[lead.user_id]?.stage} />
+            <CommercialStageBadge records={commercialRecords[lead.user_id]} />
             <small>{formatDate(lead.created_at)}</small>
+            {crmLeads[lead.id] ? (
+              <span className="status-pill status-pill--success" style={{marginTop: '4px'}}>En CRM Simulado</span>
+            ) : (
+              <button
+                type="button"
+                className="secondary-button compact-button"
+                style={{marginTop: '4px', fontSize: '0.75rem', padding: '2px 8px'}}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSyncLead(lead, match);
+                }}
+                disabled={syncing || lead.input?.consentimiento === false}
+                title={lead.input?.consentimiento === false ? "Sin consentimiento" : "Derivar al CRM Simulado"}
+              >
+                {syncing ? "..." : "Derivar a CRM"}
+              </button>
+            )}
           </div>
         </div>
         <dl className="executive-lead-card__facts">
@@ -925,7 +999,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <h2>{selectedProject ? "Leads con mejor encaje" : "Leads para revisar"}</h2>
           <p>{selectedProject ? `${ranked.length} de ${filtered.length} alcanzan ${selectedProject.nombre}.` : `${ranked.length} resultado${ranked.length === 1 ? "" : "s"} según la prioridad y los filtros aplicados.`}</p>
         </div>
-        <span className="executive-leads-inbox__cue">Selecciona un lead para ver su ficha</span>
+        <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+           <button type="button" className="secondary-button compact-button" onClick={() => setIsCrmModalOpen(true)}>Auditoría CRM</button>
+           <button type="button" className="primary-button compact-button" onClick={handleBulkSync} disabled={syncing || ranked.length === 0}>{syncing ? "Sincronizando..." : "Sincronizar Visibles"}</button>
+        </div>
       </div>
       <div className="executive-leads-list executive-leads-list--scroll" aria-label="Bandeja de leads">{ranked.map(leadCard)}{!ranked.length && <div className="executive-leads-empty"><strong>No hay leads en esta vista.</strong><span>Ajusta los filtros o restablece la vista para recuperar resultados.</span></div>}</div>
     </section>
@@ -950,7 +1027,52 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           );
           setSelectedLead((prev) => (prev ? { ...prev, ...updatedLead } : null));
         }}
+        commercialRecords={commercialRecords}
+        onStageChanged={handleStageChanged}
+        crm={{ leads: crmLeads, syncing, onSync: handleSyncLead }}
       />
+    )}
+
+    {isCrmModalOpen && (
+      <div className="admin-modal" onClick={() => setIsCrmModalOpen(false)}>
+        <div className="admin-modal-card admin-modal-card--xl" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-header">
+            <div className="admin-modal-heading">
+              <span className="eyebrow">Auditoría CRM Simulado</span>
+              <h2>Leads Derivados</h2>
+              <p>Total de leads registrados: {Object.keys(crmLeads).length}</p>
+            </div>
+            <button type="button" className="secondary-button compact-button" onClick={() => setIsCrmModalOpen(false)}>Cerrar</button>
+          </div>
+          <div className="admin-modal-body" style={{maxHeight: '60vh', overflowY: 'auto'}}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nombre / ID</th>
+                  <th>Fecha Sincronización</th>
+                  <th>Score / Clasificación</th>
+                  <th>Prioridad Comercial</th>
+                  <th>Proyecto / Capacidad</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.values(crmLeads).map(crm => (
+                  <tr key={crm.lead_id}>
+                    <td><strong>{crm.lead_info.nombre}</strong><br/><small>{crm.lead_id.split('-')[0]}...</small></td>
+                    <td>{new Date(crm.sincronizacion.actualizado_el).toLocaleString('es-CL')}</td>
+                    <td>{crm.evaluacion_general.score} ({crm.evaluacion_general.clasificacion})</td>
+                    <td>{crm.priorizacion_comercial.nivel_accion}</td>
+                    <td>{crm.proyecto_objetivo ? `${crm.proyecto_objetivo.proyecto_nombre} - ${crm.proyecto_objetivo.compatibilidad_capacidad.estado}` : "Sin proyecto"}</td>
+                  </tr>
+                ))}
+                {Object.keys(crmLeads).length === 0 && (
+                  <tr><td colSpan="5" style={{textAlign:'center', padding: '1rem'}}>No hay leads derivados al CRM.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     )}
   </section>;
 }

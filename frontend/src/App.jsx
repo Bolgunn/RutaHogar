@@ -42,6 +42,8 @@ import {
 import ProjectsCatalog from "./components/ProjectsCatalog";
 import { buildProjectGoalInput } from "./lib/projectGoalInput";
 import { resolveTrackingRoute, trackingPathForPage, trackingRoutePaths } from "./lib/trackingRoutes";
+import { isAdminRole, isStaffRole } from "./lib/roles";
+import { canViewStaffPage, resolveStaffRoute, staffInitialPage } from "./lib/staffRoutes";
 import { currentTrackingEvaluation } from "./lib/tracking/currentEvaluation";
 import { fetchJsonWithTimeout } from "./services/httpRequest";
 import { useLeads } from "./hooks/useLeads";
@@ -250,8 +252,8 @@ const mergeOnboardingData = (currentData, pendingData) => {
 
 const getInitialPageForProfile = (profile) => {
   if (!profile) return "auth";
-  if (profile.role === roles.sales) return "home";
-  if (profile.role === roles.admin || profile.role === roles.admin_inmo) return "admin";
+  const staffPage = staffInitialPage(profile.role);
+  if (staffPage) return staffPage;
   if (profile.role !== roles.user) return "home";
   return hasCompletedOnboarding(getOnboardingData(profile)) ? "home" : "onboarding";
 };
@@ -357,28 +359,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "home", path: "/inicio" };
   }
 
-  if (profile.role === roles.sales) {
-    if (path === "/") return { page: "home", path: "/inicio" };
-    if (path === "/inicio") return { page: "home" };
-    if (path === "/proyectos") return { page: "projects" };
-    if (path === "/perfil") return { page: "sales-profile" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") {
-      return { page: "leads", path: path === "/dashboard" ? undefined : "/dashboard" };
-    }
-    return { page: "home", path: "/inicio" };
-  }
-
-  if (profile.role === roles.admin || profile.role === roles.admin_inmo) {
-    if (path === "/") return { page: "admin", path: "/admin" };
-    if (path === "/admin") return { page: "admin" };
-    if (path === "/admin/proyectos") return { page: "admin-projects" };
-    if (path === "/admin/perfil") return { page: "admin-profile" };
-    if (path === "/admin/reportes") return { page: "admin-reports" };
-    if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
-    if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
-    if (path === "/inicio") return { page: "admin", path: "/admin" };
-    return { page: "admin", path: "/admin" };
-  }
+  const staffRoute = resolveStaffRoute(path, profile.role);
+  if (staffRoute) return staffRoute;
 
   return { page: getInitialPageForProfile(profile), path: getPrivatePathForPage(getInitialPageForProfile(profile)) };
 };
@@ -693,7 +675,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (page === "leads" && (profile?.role === roles.sales || profile?.role === roles.admin)) markLeadsSeen();
+    if (page === "leads" && isStaffRole(profile?.role)) markLeadsSeen();
   }, [page]);
 
   useEffect(() => {
@@ -706,7 +688,7 @@ export default function App() {
   // El catálogo de proyectos es por inmobiliaria (HU 7); el feed de leads no.
   // El id llega desde el perfil del propio ejecutivo, no desde la URL.
   useEffect(() => {
-    if (profile?.role !== roles.sales && profile?.role !== roles.admin && profile?.role !== roles.admin_inmo) {
+    if (!isStaffRole(profile?.role)) {
       setInmobiliariaId(null);
       return;
     }
@@ -877,15 +859,20 @@ export default function App() {
     setPage("signup-offer");
   };
 
-  const handleSignupFromOffer = async ({ full_name, email, phone, password, birth_date, consentData }) => {
+  const handleSignupFromOffer = async ({ nombre, apellido_paterno, apellido_materno, rut, email, phone, password, birth_date, consentData }) => {
     setSignupOfferLoading(true);
     setSignupOfferError("");
     let nextAuth = null;
     try {
+      const full_name = `${nombre} ${apellido_paterno} ${apellido_materno}`.trim();
       nextAuth = await signUp({
         email,
         password,
+        nombre,
+        apellido_paterno,
+        apellido_materno,
         full_name,
+        rut,
         phone,
         birth_date,
         role: roles.user,
@@ -1457,7 +1444,7 @@ export default function App() {
             onAccept={handleDataConsent}
             onBack={() => navigateToPage(consentGranted ? "evaluate" : "onboarding")}
           />
-        ) : page === "home" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+        ) : page === "home" && isAdminRole(profile.role) ? (
           <AdminHome evaluations={evaluations} onNavigate={navigateToPage} />
         ) : page === "home" && profile.role === roles.sales ? (
           <ExecutiveHome
@@ -1466,9 +1453,9 @@ export default function App() {
             inmobiliariaId={inmobiliariaId}
             onNavigate={navigateToPage}
           />
-        ) : page === "admin-reports" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+        ) : page === "admin-reports" && canViewStaffPage(page, profile.role) ? (
           <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
-        ) : page === "admin-profile" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
+        ) : page === "admin-profile" && canViewStaffPage(page, profile.role) ? (
           <AdminProfile profile={profile} />
         ) : page === "home" ? (
           <section className="evaluation-panel home-panel">
@@ -1703,34 +1690,34 @@ export default function App() {
             onSetGoal={handleSetProjectGoal}
             onNavigate={navigateToPage}
           />
-        ) : page === "leads" && (profile.role === roles.sales || profile.role === roles.admin) ? (
-          <DashboardLeads
-            evaluations={evaluations}
-            inmobiliariaId={inmobiliariaId}
-            ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
-            role={profile.role}
-          />
-        ) : page === "projects" && profile.role === roles.sales ? (
-          <ProjectsWorkspace
-            inmobiliariaId={inmobiliariaId}
-            ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
-            isAdmin={false}
-          />
-        ) : page === "sales-profile" && profile.role === roles.sales ? (
-          <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
-        ) : page === "admin" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
-          <AdminPanel evaluations={evaluations} profile={profile} />
-        ) : page === "admin-projects" && (profile.role === roles.admin || profile.role === roles.admin_inmo) ? (
-          <AdminProjectCatalog />
-        ) : (
-          <section className="section-block">
-            <div className="section-heading">
-              <span className="eyebrow">Vista no disponible</span>
-              <h1>Revisa tu navegacion</h1>
-              <p>Tu rol actual no tiene acceso a esta vista.</p>
-            </div>
-          </section>
-        )}
+      ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
+        <DashboardLeads
+          evaluations={evaluations}
+          inmobiliariaId={inmobiliariaId}
+          ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          role={profile.role}
+        />
+      ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
+        <ProjectsWorkspace
+          inmobiliariaId={inmobiliariaId}
+          ejecutivo={profile.role === roles.sales ? { id: profile.id, email: profile.email } : null}
+          isAdmin={false}
+        />
+      ) : page === "sales-profile" && canViewStaffPage(page, profile.role) ? (
+        <ExecutiveProfile profile={profile} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
+      ) : page === "admin" && canViewStaffPage(page, profile.role) ? (
+        <AdminPanel evaluations={evaluations} profile={profile} />
+      ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
+        <AdminProjectCatalog />
+      ) : (
+        <section className="section-block">
+          <div className="section-heading">
+            <span className="eyebrow">Vista no disponible</span>
+            <h1>Revisa tu navegacion</h1>
+            <p>Tu rol actual no tiene acceso a esta vista.</p>
+          </div>
+        </section>
+      )}
       </div></main>
     </div>
   );

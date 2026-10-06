@@ -152,4 +152,4 @@ Spike en curso. E2 y E4 tienen documento de investigación en `docs/research/`, 
 | `E3` | ⚠️ | `docs/crm-integration.md` es punto de partida; faltan credenciales, límites y comportamiento ante fallo. |
 | `E4` | ⚠️ | Investigación entregada, pendiente de revisión del equipo: [E4 — Fuentes de datos externas](../../docs/research/spike2-e4-external-data-sources.md). UF, tasas y precios referenciales siguen siendo constantes en el código. |
 | `E5` | ❌ | Sin levantamiento de flujos ni inventario de fricciones. |
-| `E6` | ❌ | El corredor no está modelado como actor. |
+| `E6` | ✅ | Investigación completada en [spike2-e6-real-estate-brokers.md](../../docs/research/spike2-e6-real-estate-brokers.md). |

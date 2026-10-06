@@ -1,6 +1,7 @@
 import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
-import { ensureUserProfile, getAuthenticatedUser } from "./profileService";
+import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
+import { isStaffRole } from "../lib/roles";
 import { annotateEvaluation, appendTrackingEvent, getTracking, newTrackingCommand } from "./trackingService";
 
 function cloneJson(value, fallback) {
@@ -56,6 +57,13 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     full_name: contact.full_name || null,
     phone: contact.phone || null,
     reliability_status: contact.reliability_status || "normal",
+    profile: {
+      nombre: contact.nombre || null,
+      apellido_paterno: contact.apellido_paterno || null,
+      apellido_materno: contact.apellido_materno || null,
+      rut: contact.rut || null,
+      phone: contact.phone || null,
+    },
     user_id: row.user_id,
     onboarding,
     input: financialData.input || financialData.input_snapshot || financialData,
@@ -204,7 +212,7 @@ export function applyEvaluationAnnotations(row, annotations) {
 }
 
 export function evaluationAnnotationOwner(role, userId) {
-  return role === "ejecutivo" || role === "admin" ? null : userId;
+  return isStaffRole(role) ? null : userId;
 }
 
 export async function getEvaluations(userId, role) {
@@ -212,22 +220,30 @@ export async function getEvaluations(userId, role) {
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("No hay usuario autenticado para cargar calificaciones.");
   await ensureUserProfile(user);
-  const isSales = role === "ejecutivo" || role === "admin" || role === "admin_inmobiliario";
+  const isSales = isStaffRole(role);
   let query = supabase.from("evaluations").select("*").order("created_at", { ascending: false });
   if (!isSales) query = query.eq("user_id", user.id);
   const { data, error } = await query;
   if (error) throw error;
   let contactsMap = {};
   if (isSales && data?.length) {
-    const { data: contacts, error: contactsError } = await supabase.rpc("list_lead_contacts", {
-      p_user_ids: [...new Set(data.map((row) => row.user_id))],
-    });
+    const userIds = [...new Set(data.map((r) => r.user_id).filter(Boolean))];
+    const { data: contactsData, error: contactsError } = await supabase
+      .rpc("list_lead_contacts", { p_user_ids: userIds });
+
     if (contactsError) {
-      console.error("Error fetching lead contacts:", contactsError);
-    } else if (contacts) {
-      contactsMap = Object.fromEntries(contacts.map((contact) => [
-        contact.id,
-        { ...contact, reliability_status: contact.reliability_status || "normal" }
+      logSupabaseError(contactsError);
+    } else if (contactsData) {
+      contactsMap = Object.fromEntries(contactsData.map((contact) => [
+        contact.id, 
+        { 
+          ...contact, 
+          nombre: contact.nombre,
+          apellido_paterno: contact.apellido_paterno,
+          apellido_materno: contact.apellido_materno,
+          rut: contact.rut,
+          reliability_status: contact.reliability_status || "normal" 
+        }
       ]));
     }
   }

@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { roles } from "../lib/roles";
 import {
   ensureUserProfile,
   getCurrentProfile,
@@ -13,18 +14,13 @@ const PROFILE_KEY = "RutaHogar_profile";
 const SESSION_KEY = "RutaHogar_session";
 const ONBOARDING_KEY = "RutaHogar_onboarding";
 
-export const roles = {
-  user: "usuario",
-  sales: "ejecutivo",
-  admin: "admin",
-  admin_inmo: "admin_inmobiliario",
-};
+export { roles };
 
 export const roleLabels = {
   usuario: "Usuario",
   ejecutivo: "Ejecutivo comercial",
   admin: "Admin",
-  admin_inmobiliario: "Admin Inmobiliario",
+  admin_inmobiliario: "Admin inmobiliaria",
 };
 
 function readStored(key) {
@@ -126,7 +122,7 @@ export async function signIn({ email, password, role = roles.user }) {
   return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, role));
 }
 
-export async function signUp({ email, password, role = roles.user, full_name = "", phone = "", rut = "", birth_date = "" }) {
+export async function signUp({ email, password, role = roles.user, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "" }) {
   const normalizedRole = normalizeRole(role || roles.user);
   const normalizedPhone = normalizePhoneForStorage(phone);
   const normalizedBirthDate = normalizeBirthDateForStorage(birth_date);
@@ -139,7 +135,7 @@ export async function signUp({ email, password, role = roles.user, full_name = "
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { role: normalizedRole, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
+      options: { data: { role: normalizedRole, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
     });
     if (error) {
       logSupabaseError(error);

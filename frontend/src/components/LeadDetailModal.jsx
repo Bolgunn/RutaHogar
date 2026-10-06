@@ -6,7 +6,8 @@ import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import CommercialStagePanel from "./CommercialStagePanel";
-import { getCommercialStages } from "../services/commercialStageService";
+import { getCommercialRecords } from "../services/commercialStageService";
+import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
 import {
   formatScore,
@@ -296,6 +297,9 @@ export default function LeadDetailModal({
   profile = null,
   executiveScope = null,
   onLeadUpdated = null,
+  commercialRecords = null,
+  onStageChanged = null,
+  crm = null,
 }) {
   const [activeLead, setActiveLead] = useState(lead);
   const [isReporting, setIsReporting] = useState(false);
@@ -306,7 +310,7 @@ export default function LeadDetailModal({
   const [showAllContactQuestions, setShowAllContactQuestions] = useState(false);
   const [questionsCopied, setQuestionsCopied] = useState(false);
   const [history, setHistory] = useState([]);
-  const [commercialStages, setCommercialStages] = useState({});
+  const [ownCommercialRecords, setOwnCommercialRecords] = useState({});
 
   useEffect(() => {
     setActiveLead(lead);
@@ -375,20 +379,18 @@ export default function LeadDetailModal({
     };
   }, [activeLead, selectedLeadEvaluations]);
 
-  // Load commercial stage
+  // Sin registros del padre (p. ej. AdminReportedLeads), la ficha carga los suyos.
   useEffect(() => {
     const uid = activeLead?.user_id || activeLead?.id;
-    if (!uid) return;
+    if (commercialRecords || !uid) return;
     let active = true;
-    getCommercialStages([uid])
-      .then((data) => {
-        if (active && data) setCommercialStages(data);
-      })
-      .catch(() => {});
+    getCommercialRecords([uid]).then((records) => {
+      if (active) setOwnCommercialRecords(records);
+    });
     return () => {
       active = false;
     };
-  }, [activeLead?.user_id, activeLead?.id]);
+  }, [commercialRecords, activeLead?.user_id, activeLead?.id]);
 
   // Close on Escape key
   useEffect(() => {
@@ -452,12 +454,12 @@ export default function LeadDetailModal({
     }
   };
 
-  const handleStageChanged = (leadId, nextStage) => {
-    setCommercialStages((current) => ({
-      ...current,
-      [leadId]: { stage: nextStage },
-    }));
-  };
+  const reloadOwnRecords = useMemo(() => createLeadRecordsReloader(
+    (leadId) => getCommercialRecords([leadId]),
+    (leadId, records) => setOwnCommercialRecords((current) => ({ ...current, [leadId]: records })),
+  ), []);
+  const handleStageChanged = onStageChanged || reloadOwnRecords;
+  const leadCommercialRecords = commercialRecords || ownCommercialRecords;
 
   const isAdmin = role === "admin" || role === "admin_inmobiliario" || profile?.role === "admin" || profile?.role === "admin_inmobiliario";
 
@@ -655,6 +657,17 @@ export default function LeadDetailModal({
                   <a href={selectedWhatsappHref} className="primary-button admin-link-button" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>
                 ) : (
                   <button type="button" className="secondary-button admin-link-button" disabled>WhatsApp no disponible</button>
+                )}
+                {crm && (
+                  <button
+                    type="button"
+                    className="secondary-button admin-link-button"
+                    onClick={() => crm.onSync(activeLead, selectedMatch)}
+                    disabled={crm.syncing || activeLead.input?.consentimiento === false}
+                    title={activeLead.input?.consentimiento === false ? "El lead no otorgó consentimiento de datos" : "Derivar a CRM Simulado"}
+                  >
+                    {crm.syncing ? "Sincronizando..." : (crm.leads[activeLead.id] ? "Actualizar en CRM" : "Derivar a CRM Simulado")}
+                  </button>
                 )}
                 {!isAdmin && !isReporting && (activeLead.reliability_status === "normal" || activeLead.reliability_status === "reactivado") && (
                   <button
@@ -886,7 +899,7 @@ export default function LeadDetailModal({
         {(activeLead.user_id || activeLead.id) && (
           <CommercialStagePanel
             leadId={activeLead.user_id || activeLead.id}
-            stage={commercialStages[activeLead.user_id || activeLead.id]?.stage}
+            records={leadCommercialRecords[activeLead.user_id || activeLead.id]}
             role={role}
             onChanged={handleStageChanged}
           />

@@ -35,6 +35,10 @@ insert into public.evaluations(id, user_id, score, classification, target_commun
   ('d0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000002', 55, 'Medio', 'Valparaíso', '2026-03-01Z');
 insert into public.proyecto_favoritos(usuario_id, proyecto_id) values
   ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000002');
+-- Late stages always name a project (commercial-stage-project-tracks): lead A's deal runs on
+-- project A's record, where executive A is vinculado.
+insert into public.proyecto_ejecutivos(proyecto_id, ejecutivo_id, ejecutivo_email, estado) values
+  ('b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003', 'cs-exec-a@example.invalid', 'vinculado');
 
 create function public.cs_expect_error(p_sql text, p_expected text)
 returns void
@@ -77,8 +81,8 @@ $$;
 
 -- 11. The system is an explicit actor, never a user id; a user is never null.
 select public.cs_expect_error($q$
-  insert into public.commercial_stage_events(subject_user_id, inmobiliaria_id, actor_id, actor_role, stage_after, source)
-  values ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001',
+  insert into public.commercial_stage_events(subject_user_id, inmobiliaria_id, proyecto_id, actor_id, actor_role, stage_after, source)
+  values ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001',
           'c0000000-0000-0000-0000-000000000001', 'sistema', 'contactado', 'job')
 $q$, 'commercial_stage_events_system_actor_check');
 select public.cs_expect_error($q$
@@ -103,9 +107,9 @@ select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000003
 do $$
 declare saved jsonb;
 begin
-  saved := public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva');
+  saved := public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva', null, null, 'b0000000-0000-0000-0000-000000000001');
   assert saved ->> 'stage' = 'reserva', 'rpc returns new stage';
-  assert (select stage from public.lead_commercial_stage
+  assert (select stage from public.lead_project_commercial_stage
           where subject_user_id = 'c0000000-0000-0000-0000-000000000001') = 'reserva', 'current stage updated';
   assert exists (select 1 from public.commercial_stage_events
                  where id = (saved ->> 'event_id')::uuid
@@ -137,39 +141,39 @@ select public.cs_expect_error(
 
 -- 5. Reasons.
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'reason_required');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', '   ')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', '   ', null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'reason_required');
-select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', 'La reserva no se concretó');
+select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', 'La reserva no se concretó', null, 'b0000000-0000-0000-0000-000000000001');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'reason_required');
-select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'No contesta hace 60 días');
+select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'No contesta hace 60 días', null, 'b0000000-0000-0000-0000-000000000001');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'reason_required');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'venta_cerrada', 'x')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'venta_cerrada', 'x', null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'invalid_transition');
-select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', 'Volvió a escribir');
+select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', 'Volvió a escribir', null, 'b0000000-0000-0000-0000-000000000001');
 
 -- 7. Same stage, stale expectation, unknown stage.
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'contactado', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'same_stage');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva', null, 'nuevo')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva', null, 'nuevo', 'b0000000-0000-0000-0000-000000000001')$q$,
   'stale_stage');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'firmado')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'firmado', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'invalid_stage');
-select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'venta_cerrada', null, 'contactado');
+select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'venta_cerrada', null, 'contactado', 'b0000000-0000-0000-0000-000000000001');
 
 -- 6. Only an admin can undo a closed sale, only to 'perdido', always with a reason.
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'Desistió')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'Desistió', null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'admin_required');
 
 -- 8a. Browser roles cannot write either table directly.
@@ -205,14 +209,14 @@ $$;
 -- As admin A.
 select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000004', true);
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva', 'x')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'reserva', 'x', null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'invalid_transition');
 select public.cs_expect_error(
-  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido')$q$,
+  $q$select public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', null, null, 'b0000000-0000-0000-0000-000000000001')$q$,
   'reason_required');
 do $$
 begin
-  assert public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'Desistió de la promesa')
+  assert public.change_commercial_stage('c0000000-0000-0000-0000-000000000001', 'perdido', 'Desistió de la promesa', null, 'b0000000-0000-0000-0000-000000000001')
     ->> 'stage' = 'perdido', 'admin can undo a closed sale';
 end;
 $$;
