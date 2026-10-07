@@ -84,6 +84,7 @@ const ANON_RESULT_KEY = "RutaHogar_anon_result";
 const ANON_INPUT_KEY = "RutaHogar_anon_input";
 const ANON_CO_DEBTOR_INVITATION_KEY = "RutaHogar_anon_co_debtor_invitation";
 const SIMULATION_SECTION_KEY = "RutaHogar_simulation_section";
+const SCORE_FORM_DRAFT_KEY = "RutaHogar_score_form_draft";
 
 function resolveApiBase() {
   const configuredUrl =
@@ -929,8 +930,11 @@ export default function App() {
       return "housing";
     }
   });
-  const [startingNewEvaluation, setStartingNewEvaluation] = useState(false);
-  const [scoreFormDraft, setScoreFormDraft] = useState(null);
+  const [catalogInitialProjectId, setCatalogInitialProjectId] = useState(null);
+  // Un borrador pertenece solo a la pestaña actual: permite recorrer la app
+  // sin perder la precalificación y se elimina al terminarla o cerrar sesión.
+  const [scoreFormDraft, setScoreFormDraft] = useState(() => readSessionJson(SCORE_FORM_DRAFT_KEY));
+  const [startingNewEvaluation, setStartingNewEvaluation] = useState(() => Boolean(readSessionJson(SCORE_FORM_DRAFT_KEY)));
   const [portalProperty, setPortalProperty] = useState(null);
   const [housingInitialPieType, setHousingInitialPieType] = useState("minimo");
   const [onboarding, setOnboarding] = useState(() => {
@@ -953,6 +957,15 @@ export default function App() {
   const [quickUpdateEvent, setQuickUpdateEvent] = useState(null);
   const [quickUpdateSaving, setQuickUpdateSaving] = useState(false);
   const [tenantResolved, setTenantResolved] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (scoreFormDraft) sessionStorage.setItem(SCORE_FORM_DRAFT_KEY, JSON.stringify(scoreFormDraft));
+      else sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
+    } catch {
+      // El flujo continúa en memoria si el almacenamiento de sesión no existe.
+    }
+  }, [scoreFormDraft]);
 
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
@@ -1128,6 +1141,7 @@ export default function App() {
     setSubsidyFocusId(nextPage === "subsidios" ? options.benefitId || null : null);
     setSimulationInitialProjectId(nextPage === "simulation" ? options.projectId || null : null);
     if (nextPage === "simulation" && options.simulationSection) updateSimulationSection(options.simulationSection);
+    setCatalogInitialProjectId(nextPage === "projects" ? options.projectId || null : null);
     navigateToPageForProfile(nextPage, profile, options);
   };
 
@@ -1339,6 +1353,7 @@ export default function App() {
     sessionStorage.removeItem(ANON_RESULT_KEY);
     sessionStorage.removeItem(ANON_INPUT_KEY);
     sessionStorage.removeItem(ANON_CO_DEBTOR_INVITATION_KEY);
+    sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
     setAnonOnboarding(null);
     setAnonResult(null);
     setAnonInput(null);
@@ -1988,9 +2003,13 @@ export default function App() {
     setConsentGranted(false);
     setResult(null);
     setResultSaved(null);
+    setScoreFormDraft(null);
+    setStartingNewEvaluation(false);
+    setPortalProperty(null);
     setOnboarding(null);
     setAnonOnboarding(null);
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
+    sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
     navigateToPage("auth", { replace: true });
   };
 
@@ -2178,7 +2197,11 @@ export default function App() {
         inmobiliariaId={inmobiliariaId}
         currentScore={currentScore}
         onNavigate={(nextPage) =>
-          nextPage === "evaluate" ? startEvaluation() : navigateToPage(nextPage)
+          nextPage === "evaluate"
+            ? scoreFormDraft
+              ? navigateToPage("evaluate")
+              : startEvaluation()
+            : navigateToPage(nextPage)
         }
         onLogout={handleLogout}
       />
@@ -2450,6 +2473,7 @@ export default function App() {
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
           evaluation={currentEvaluation}
+          trackingState={trackingState}
           onAcceptPlan={handleAcceptPlan}
           onStartEvaluation={startEvaluation}
           onOpenProgress={() => navigateToPage("progress")}
@@ -2462,6 +2486,7 @@ export default function App() {
       ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
         <ProgressPage
           onOpenHistory={() => navigateToPage("progress-history")}
+          onOpenProject={(projectId) => navigateToPage("projects", { projectId })}
           onStartEvaluation={startEvaluation}
           onChanged={refreshTracking}
         />
@@ -2521,6 +2546,8 @@ export default function App() {
           <ProjectsCatalog
             evaluationBase={currentEvaluation}
             frozenTrackingTarget={trackingState?.status === "active" ? trackingState.baseline?.target_project_snapshot : null}
+            frozenTrackingCompatibility={trackingState?.status === "active" ? trackingState.current_evaluation?.project_fit?.classification : null}
+            initialProjectId={catalogInitialProjectId}
             onboarding={userOnboarding}
             userId={profile.id}
             contactEmail={profile.email}

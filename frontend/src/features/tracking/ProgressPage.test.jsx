@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PointTooltip, ProgressView, TrackingHistoryView, formatHistoricalProjectGoal,
-  historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
-  tooltipPlacement,
+  bulkAnnulSuccessMessage, canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
+  dateTime, financialHistoryRows, tooltipPlacement,
 } from "./ProgressPage";
 
 const data = {
@@ -54,6 +54,14 @@ describe("HU13 compact projection summary", () => {
     expect(html).not.toContain("Ver supuestos técnicos");
   });
 
+  it("links the frozen projection target to its project detail when navigation is available", () => {
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{ status: "not_projectable" }}
+      onOpenProject={vi.fn()} />);
+
+    expect(html).toContain("progress-summary__project-link");
+    expect(html).toContain("Proyecto Norte");
+  });
+
   it("shows a simple message when a date cannot be projected", () => {
     const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{
       status: "not_projectable", cause: "insufficient_data", target_compatible_at: null,
@@ -64,9 +72,59 @@ describe("HU13 compact projection summary", () => {
     expect(html).not.toContain("provenance");
     expect(html).not.toContain("variables");
   });
+
+  it("briefly explains when projection is still loading or cannot be requested", () => {
+    const loading = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={null} />);
+    const unavailable = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={null}
+      projectionError="No se pudo conectar al seguimiento." onRetryProjection={vi.fn()} />);
+
+    expect(loading).toContain("Aún no está lista porque estamos revisando tus observaciones y el objetivo del plan.");
+    expect(unavailable).toContain("La proyección no está disponible por ahora");
+    expect(unavailable).toContain("No se pudo conectar al seguimiento.");
+    expect(unavailable).toContain("Reintentar proyección");
+  });
+});
+
+describe("HU13 compact financial history", () => {
+  it("shows the latest ten rows until the person explicitly expands the history", () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({ id: `row-${index}` }));
+
+    expect(financialHistoryRows(rows).map((row) => row.id)).toEqual([
+      "row-2", "row-3", "row-4", "row-5", "row-6", "row-7", "row-8", "row-9", "row-10", "row-11",
+    ]);
+    expect(financialHistoryRows(rows, true)).toEqual(rows);
+  });
+
+  it("formats the recorded hour in the Chilean time zone", () => {
+    // 03:47 UTC is 00:47 (shown as 12:47 a. m. in es-CL) in Santiago
+    // during October daylight-saving time.
+    expect(dateTime("2026-10-07T03:47:00Z")).toMatch(/12:47/);
+  });
+
+  it("allows bulk annulment for prior versions outside the protected baseline slot", () => {
+    const baseline = { event_id: "baseline" };
+    const priorVersion = { event_id: "old-update", correction_of: "update" };
+    const update = { event_id: "update" };
+    const audit = [baseline, update, priorVersion];
+
+    expect(canBulkAnnul(baseline, "baseline", audit)).toBe(false);
+    expect(canBulkAnnul(update, "baseline", audit)).toBe(true);
+    expect(canBulkAnnul(priorVersion, "baseline", audit)).toBe(true);
+  });
+
+  it("confirms how many records left the visible evolution after a bulk annulment", () => {
+    expect(bulkAnnulSuccessMessage(1)).toBe("1 registro fue eliminado de tu historial visible y evolución.");
+    expect(bulkAnnulSuccessMessage(3)).toBe("3 registros fueron eliminados de tu historial visible y evolución.");
+  });
 });
 
 describe("HU13 goal cards and client language", () => {
+  it("explains why a plan has no goals and states that every generated goal is shown", () => {
+    expect(goalsStatusMessage([])).toContain("no detectó bloqueadores");
+    expect(goalsStatusMessage([{ goal_id: "one" }, { goal_id: "two" }, { goal_id: "three" }]))
+      .toBe("3 metas fueron generadas desde los bloqueadores de la evaluación inicial. Mostramos todas las metas de tu plan.");
+  });
+
   it("prioritizes goal status, percentage, values and temporal state without repeating the description", () => {
     const goalData = { ...data, goals: [{
       goal_id: "goal-1", action_status: "en_progreso", temporal_status: "atrasado",
@@ -295,5 +353,28 @@ describe("HU13 readable recorded history", () => {
 
     expect(html).toContain("progress-audit-record__correct");
     expect(html).toContain("Corregir registro");
+  });
+
+  it("opens and closes a correction using its corresponding correction button", () => {
+    const row = historicalRecord;
+
+    expect(correctionTargetForClick(null, row)).toBe(row);
+    expect(correctionTargetForClick(row, row)).toBeNull();
+  });
+
+  it("renders the correction form inside the selected historical record", () => {
+    const first = { ...historicalRecord, event_id: "first-record" };
+    const selected = { ...historicalRecord, event_id: "selected-record", reason: "Registro seleccionado" };
+    const selectedId = "progress-audit-record-selected-record";
+    const html = renderToStaticMarkup(<TrackingHistoryView data={{ ...historyData, audit_line: [first, selected] }}
+      initialTarget={selected} busy={false} onCorrect={vi.fn()} />);
+    const selectedStart = html.indexOf(selectedId);
+    const selectedEnd = html.indexOf("</li>", selectedStart);
+    const correctionStart = html.indexOf('class="progress-correction"');
+
+    expect(selectedStart).toBeGreaterThan(-1);
+    expect(correctionStart).toBeGreaterThan(selectedStart);
+    expect(correctionStart).toBeLessThan(selectedEnd);
+    expect(html).not.toContain(">Cancelar<");
   });
 });

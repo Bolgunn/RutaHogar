@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from uuid import uuid4
 
 from .contracts import TrackingError, parse_time
@@ -28,6 +29,38 @@ def valid_project_snapshot(snapshot):
     return deepcopy(project_goal) if isinstance(project_goal, dict) and project_goal else None
 
 
+def frozen_target_scoring_snapshot(snapshot, target_project):
+    """Overlay the frozen catalogue price without rewriting financial history.
+
+    Tracking saves the user-entered snapshot verbatim.  When a plan has a
+    catalogue target, though, its `precio_min_uf` is the canonical property
+    value for compatibility and pie calculations.  Historic input can contain
+    a previous/manual property value, which must not silently replace that
+    frozen target during later data updates or ALG-13 projections.
+    """
+    state = deepcopy(snapshot or {})
+    target = deepcopy(target_project) if isinstance(target_project, dict) else None
+    try:
+        price_uf = float((target or {}).get("precio_min_uf") or (target or {}).get("valor_uf") or 0)
+    except (TypeError, ValueError):
+        price_uf = 0
+    if not isfinite(price_uf) or price_uf <= 0:
+        return state
+    state.update({
+        "property_value": price_uf,
+        "property_value_unit": "uf",
+        "property_value_uf": price_uf,
+        # The resolver gives CLP priority, so this historical value must be
+        # explicitly cleared before the target UF value is evaluated.
+        "property_value_clp": None,
+        "property_value_source": "project_selection",
+        "project_goal": target,
+    })
+    if target.get("comuna"):
+        state["comuna_objetivo"] = target["comuna"]
+    return state
+
+
 def source_events(bundle):
     evaluations = {row["id"]: row for row in bundle["evaluations"]}
     return [
@@ -39,6 +72,31 @@ def source_events(bundle):
         }
         for row in bundle["events"]
     ]
+
+
+def client_tracking_view(view):
+    """Hide logically annulled facts from the lead without deleting audit data.
+
+    The service keeps the complete audit trail for staff and all lineage
+    calculations.  The lead sees only current records, so an annulled update
+    disappears consistently from both its evolution and its change history.
+    `root_event_id` preserves the baseline-slot guard for a visible correction
+    whose original source is intentionally hidden.
+    """
+    output = deepcopy(view)
+    active_by_id = {row["event_id"]: row for row in view.get("active_line", [])}
+    output["audit_line"] = [
+        {
+            **deepcopy(row),
+            "root_event_id": active_by_id[row["event_id"]].get("root_event_id", row["event_id"]),
+        }
+        for row in view.get("audit_line", [])
+        if row.get("event_id") in active_by_id
+    ]
+    # Excluded IDs are internal audit metadata; exposing them would reveal
+    # entries the lead explicitly asked to remove from their visible history.
+    output["excluded_from_metrics"] = []
+    return output
 
 
 def goal_view(bundle, lineage, as_of):
@@ -231,14 +289,17 @@ class TrackingService:
         market_snapshot = self._stored_market_snapshot(view.get("active_line")) or self.market_snapshot_resolver()
         baseline = view.get("baseline") or {}
         target = baseline.get("target_project_snapshot")
-        # Project identity and value come from the evaluation that froze the target.
-        # For plans born with a target this is the root; for E3 it is the first later
-        # evaluation carrying that target. Historical rows remain untouched.
+        # Older frozen targets may not contain a catalogue price. Keep their
+        # historical source as a compatibility fallback, but whenever the
+        # target does contain `precio_min_uf`, it is the single price source.
         target_source = next((
             row for row in view["audit_line"]
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
-        if target_source:
+        target_with_price = frozen_target_scoring_snapshot(latest, target)
+        if target_with_price != latest:
+            latest = target_with_price
+        elif target_source:
             original = target_source["recorded_complete_snapshot"]
             for field in ("property_value", "property_value_unit", "property_value_clp", "property_value_uf",
                           "property_value_source", "comuna_objetivo"):
@@ -330,7 +391,13 @@ class TrackingService:
                 if complement_source != "co_debtor_confirmed":
                     raise TrackingError("co_debtor_confirmation_required")
             complete_input = complete_snapshot(resolved_input)
-            result = self._score(complete_input, market_snapshot)
+            # A plan evaluates every later financial update against its frozen
+            # target. Keep complete_input as the immutable recorded fact, but
+            # clear any legacy property amount before scoring the catalogue UF
+            # price of that target.
+            frozen_target = (bundle.get("plan") or {}).get("target_project_snapshot") or valid_project_snapshot(complete_input)
+            scoring_input = frozen_target_scoring_snapshot(complete_input, frozen_target)
+            result = self._score(scoring_input, market_snapshot)
             details = {
                 **provenance(result),
                 "source_event_ids": [source_event["event_id"]],

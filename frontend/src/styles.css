@@ -8,6 +8,9 @@
 :root {
   color: var(--rh-text);
   font-family: var(--rh-font);
+  /* La marca define --rh-font; este alias evita que componentes de progreso
+     hereden accidentalmente la tipografía de encabezados. */
+  --rh-font-body: var(--rh-font);
   --rh-text-muted: #6B7A8E;
   --rh-text-sec: #5A6A7E;
 }
@@ -2769,6 +2772,7 @@ body:has(.consent-modal-overlay) {
 
 .tracking-page-head p { max-width: 64ch; margin: 0; color: var(--rh-text-secondary); line-height: 1.55; }
 .tracking-page-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.tracking-progress-button { display: inline-flex; align-items: center; gap: 10px; }
 
 .tracking-project-goal { display: inline-flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; margin-top: 8px; padding: 7px 10px; border: 1px solid rgba(19, 43, 74, 0.13); border-radius: var(--rh-radius-sm); background: rgba(19, 43, 74, 0.045); color: var(--rh-navy); }
 .tracking-project-goal > i { flex: 0 0 auto; color: var(--rh-gold-dark); font-size: 1rem; }
@@ -2791,7 +2795,7 @@ body:has(.consent-modal-overlay) {
 
 .tracking-overview__score { display: grid; gap: 2px; min-width: 132px; padding-right: clamp(20px, 3vw, 30px); border-right: 1px solid rgba(19,43,74,0.14); }
 .tracking-overview__score span { color: var(--rh-text-secondary); font-family: var(--rh-font-body); font-size: 0.76rem; font-weight: 700; line-height: 1.15; }
-.tracking-overview__score strong { color: var(--rh-navy); font-family: var(--rh-font-mono); font-size: clamp(2.25rem, 4vw, 2.75rem); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.055em; line-height: 0.95; }
+.tracking-overview__score strong { color: var(--rh-navy); font-family: var(--rh-font-body); font-size: clamp(2.25rem, 4vw, 2.75rem); font-weight: 700; letter-spacing: -0.055em; line-height: 0.95; }
 .tracking-overview__score small { color: var(--rh-text-secondary); font-family: var(--rh-font-body); font-size: 0.72rem; font-weight: 700; line-height: 1.2; }
 .tracking-overview__score.score-high strong,
 .tracking-overview__score.score-alto strong { color: var(--rh-success); }
@@ -2824,10 +2828,16 @@ body:has(.consent-modal-overlay) {
 
 .tracking-indicator-card h3 { color: var(--rh-navy) !important; font-family: var(--rh-font-display); font-size: 1.02rem !important; font-weight: 400; line-height: 1.3; }
 .tracking-indicator-card span { color: var(--rh-text-secondary) !important; font-family: var(--rh-font-body); font-size: 0.84rem !important; line-height: 1.35; }
-.tracking-indicator-card strong { color: var(--rh-navy); font-family: var(--rh-font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.tracking-indicator-card strong { color: var(--rh-navy); font-family: var(--rh-font-body); letter-spacing: -0.02em; }
 .tracking-indicator-card > div { min-width: 0; }
 .tracking-indicator-card > div:last-child { border-color: rgba(19,43,74,0.14) !important; }
 .tracking-indicator-note { margin: auto 0 0; padding-top: 10px; border-top: 1px dashed rgba(19,43,74,0.14); color: var(--rh-text-muted); font-size: 0.78rem; font-style: italic; line-height: 1.4; }
+
+/* Las cuatro métricas del plan comparten ritmo, alturas y jerarquía visual. */
+.tracking-indicators > .tracking-indicator-card { min-height: 216px; }
+.tracking-indicators > .tracking-indicator-card > div:first-child { min-height: 42px; margin-bottom: 0.75rem !important; }
+.tracking-indicators > .tracking-indicator-card > h3 { display: flex; align-items: flex-start; min-height: 42px; margin-bottom: 0.75rem !important; }
+.tracking-indicators > .tracking-indicator-card h3 .field-tooltip-wrap { margin-left: 0.35rem; }
 
 @media (max-width: 760px) {
   .tracking-page-head { grid-template-columns: minmax(0, 1fr); }
@@ -2998,7 +3008,7 @@ body:has(.consent-modal-overlay) {
 .milestone-source__options button.is-active { border-color: var(--rh-success); background: rgba(45, 138, 78, 0.08); color: var(--rh-success); box-shadow: inset 0 0 0 1px var(--rh-success); }
 .milestone-current-value { display: flex; align-items: center; justify-content: space-between; gap: var(--rh-space-3); padding: 12px 14px; border-radius: var(--rh-radius-md); background: var(--rh-surface-alt); }
 .milestone-current-value span { color: var(--rh-text-secondary); font-size: 0.86rem; }
-.milestone-current-value strong { color: var(--rh-navy); font-family: var(--rh-font-mono); font-size: 1rem; font-variant-numeric: tabular-nums; text-align: right; }
+.milestone-current-value strong { color: var(--rh-navy); font-family: var(--rh-font-body); font-size: 1rem; text-align: right; }
 .milestone-field input, .milestone-field select { width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border: 1px solid rgba(19, 43, 74, 0.22); border-radius: var(--rh-radius-sm); background: var(--rh-surface); color: var(--rh-navy); font: inherit; }
 .milestone-field select { appearance: auto; cursor: pointer; border-color: rgba(19, 43, 74, 0.35); background-color: var(--rh-surface-alt); font-weight: 600; }
 .milestone-field input:focus, .milestone-field select:focus, .milestone-source__options button:focus-visible { outline: 3px solid rgba(212, 168, 67, 0.55); outline-offset: 2px; }
@@ -3181,7 +3191,7 @@ body:has(.consent-modal-overlay) {
 .project-fit-value {
   color: var(--rh-text);
   font-weight: 600;
-  font-family: var(--rh-font-mono);
+  font-family: var(--rh-font-body);
   font-size: 0.85rem;
 }
 
@@ -3440,7 +3450,7 @@ body:has(.consent-modal-overlay) {
 .score-visual-card.score-medio { --score-accent: var(--rh-gold-dark); --score-track: rgba(196,132,29,0.15); }
 .score-visual-card.score-low,
 .score-visual-card.score-bajo { --score-accent: #9b1c1c; --score-track: rgba(155,28,28,0.13); }
-.score-visual-card strong { color: var(--score-accent) !important; font-family: var(--rh-font-mono); font-size: clamp(2.15rem, 4vw, 2.8rem) !important; }
+.score-visual-card strong { color: var(--score-accent) !important; font-family: var(--rh-font-body); font-size: clamp(2.15rem, 4vw, 2.8rem) !important; }
 .score-visual-card span, .score-visual-card small, .score-visual-card b { color: var(--rh-text-secondary) !important; }
 
 .recommendation-score-ai-card { display: flex; align-items: center; gap: var(--rh-space-4); min-width: 0; padding: var(--rh-space-4); border: 1px solid var(--rh-border); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-xs); }
@@ -3499,7 +3509,7 @@ body:has(.consent-modal-overlay) {
 .tracking-plan-card .goal-actions button { width: 100%; margin: 0; }
 
 .tracking-goals-toolbar { display: flex; align-items: center; justify-content: flex-end; margin: 4px 0 18px; }
-.tracking-goals-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-md); background: var(--rh-surface); }
+.tracking-goals-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px 8px 14px; border: 0; border-radius: var(--rh-radius-md); background: transparent; }
 .tracking-goals-filters__label { color: var(--rh-navy); font-size: 0.82rem; font-weight: 800; }
 .tracking-goals-filter { display: flex; align-items: center; gap: 6px; }
 .tracking-goals-filter label { color: var(--rh-text-secondary); font-size: 0.78rem; font-weight: 700; }
@@ -6618,6 +6628,7 @@ th {
     0 10px 25px rgba(0, 0, 0, 0.08),
     0 4px 10px rgba(0, 0, 0, 0.04);
   font-size: 13px;
+  font-family: var(--rh-font-body);
   line-height: 1.4;
   color: var(--rh-text);
   z-index: 1000;
@@ -8090,10 +8101,10 @@ th {
   justify-content: space-between;
   gap: 14px;
   padding: var(--rh-space-3) var(--rh-space-4);
-  border: 1px solid rgba(19, 43, 74, 0.1);
-  border-radius: var(--rh-radius-lg);
-  background: var(--rh-surface);
-  box-shadow: 0 1px 3px rgba(11, 26, 46, 0.06), 0 6px 16px rgba(11, 26, 46, 0.05);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   position: relative;
   overflow: hidden;
 }
@@ -8104,17 +8115,16 @@ th {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--rh-gold) 0%, transparent 100%);
+  display: none;
 }
 
 .regime-segmented-toggle {
   display: inline-flex;
   gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--rh-border);
+  padding: 0;
+  border: 0;
   border-radius: var(--rh-radius-sm);
-  background: var(--rh-border);
+  background: transparent;
 }
 
 .regime-segmented-toggle button {
@@ -8198,7 +8208,7 @@ th {
 
 .checkbox-label {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   cursor: pointer;
   font-size: 0.9rem;
@@ -8208,7 +8218,7 @@ th {
 .checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  margin-top: 2px;
+  margin: 0;
   accent-color: var(--rh-blue);
 }
 
@@ -8246,6 +8256,8 @@ th {
   border-radius: var(--rh-radius-sm);
   background: var(--rh-surface);
   transition: background 0.2s ease, border-color 0.2s ease;
+  display: flex;
+  align-items: center;
 }
 
 .minimal-row:hover {
@@ -8273,6 +8285,8 @@ th {
   display: grid;
   gap: 2px;
 }
+
+.minimal-row .row-main-wrapper { align-items: center; }
 
 .row-title-line {
   display: flex;
@@ -19383,6 +19397,24 @@ section-heading {
   font-size: 0.72rem;
   line-height: 1.2;
 }
+
+.tracking-overview__score.score-visual-card,
+.tracking-overview__score.score-visual-card > * {
+  text-align: center;
+}
+
+.tracking-plan-change-confirm {
+  display: grid;
+  gap: 8px;
+  max-width: 300px;
+  padding: 10px 12px;
+  border: 1px solid rgba(196, 132, 29, 0.32);
+  border-radius: var(--rh-radius-sm);
+  background: rgba(212, 168, 67, 0.08);
+}
+
+.tracking-plan-change-confirm p { margin: 0; color: var(--rh-text); font-size: 0.8rem; line-height: 1.35; }
+.tracking-plan-change-confirm > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 820px) {
   .app-back-button {

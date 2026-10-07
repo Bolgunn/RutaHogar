@@ -225,7 +225,9 @@ no es válido reemplazar R6 por un horizonte o una cantidad fija de meses.
 | all reachable material states remain non-compatible | `not_projectable / objective_unreachable` |
 
 Score `Alto`, capacidad mayor o igual al precio, o la mejora de una variable aislada nunca sustituyen
-el predicado final.
+el predicado final. Tener un proyecto objetivo tampoco basta: la proyección exige al menos dos
+fechas efectivas y una tendencia favorable (ahorro al alza, ingreso al alza o deuda a la baja).
+`Cercano` no equivale a `Compatible` para este predicado.
 
 ### R8 — Versions and auditability
 

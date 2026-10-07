@@ -30,6 +30,46 @@ describe("HU13 evolution point context", () => {
     expect(second.deltas.score).toBe(7);
   });
 
+  it("folds an automatic reevaluation into its unchanged financial observation", () => {
+    const reevaluated = [
+      history[0],
+      { ...history[1], evaluation: undefined },
+      {
+        event_id: "automatic-reevaluation", event_kind: "evaluation", slot_kind: "evaluation",
+        effective_at: "2026-10-06T00:00:00Z", patch: {}, snapshot: history[1].snapshot,
+        evaluation: history[1].evaluation,
+      },
+    ];
+
+    const series = evolutionSeries(reevaluated);
+
+    expect(series).toHaveLength(2);
+    expect(series[1].debt).toBe(200000);
+    expect(series[1].deltas.debt).toBe(-50000);
+    expect(series[1].deltas.score).toBe(7);
+  });
+
+  it("keeps the real debt delta when a correction is followed by its automatic reevaluation", () => {
+    const correctedDebt = [
+      { ...history[0], snapshot: { ...history[0].snapshot, deuda_mensual: 30000 } },
+      {
+        event_id: "corrected-debt", event_kind: "correction", slot_kind: "data_update",
+        effective_at: "2026-10-01T00:00:00Z", snapshot: { ...history[1].snapshot, deuda_mensual: 40000 },
+      },
+      {
+        event_id: "reevaluated-debt", event_kind: "evaluation", slot_kind: "evaluation", patch: {},
+        effective_at: "2026-10-06T00:00:00Z", snapshot: { ...history[1].snapshot, deuda_mensual: 40000 },
+        evaluation: history[1].evaluation,
+      },
+    ];
+
+    const series = evolutionSeries(correctedDebt);
+
+    expect(series).toHaveLength(2);
+    expect(series[1].debt).toBe(40000);
+    expect(series[1].deltas.debt).toBe(10000);
+  });
+
   it("detects a classification change", () => {
     expect(evolutionSeries(history)[1].classificationChange).toEqual({ from: "Medio", to: "Alto" });
   });

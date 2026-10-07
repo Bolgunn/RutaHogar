@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.tracking.contracts import TrackingError
-from app.tracking.service import TrackingService
+from app.tracking.service import TrackingService, client_tracking_view
 
 
 def market_snapshot():
@@ -102,6 +102,39 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
     assert app.read("u1", "2026-03-03T00:00:00Z")["update_due"]
     with pytest.raises(TrackingError, match="idempotency_conflict"):
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
+
+
+def test_frozen_catalogue_price_is_used_for_updates_and_projection():
+    """The card's `precio_min_uf` and tracking pie must use one target price."""
+    repo, app = service()
+    original_scorer = app.scorer
+    scored = []
+
+    def recording_scorer(snapshot):
+        scored.append(deepcopy(snapshot))
+        return original_scorer(snapshot, market_snapshot=market_snapshot())
+
+    app.scorer = recording_scorer
+    target = {"id": "terrazas", "nombre": "Terrazas de Maipú", "comuna": "Maipú", "precio_min_uf": 2900}
+    # This represents an old/manual property amount left in the initial score.
+    # It must not make a 2,900 UF catalogue target require the pie of a much
+    # more expensive property.
+    baseline = app.execute("u1", command({
+        **valid_snapshot(), "property_value_clp": 404_000_000, "project_goal": target,
+    }))
+    app.execute("u1", command({"ahorro_disponible": 12_000_000}, baseline["event_id"], "2026-02-01T00:00:00Z"))
+
+    assert len(scored) == 2
+    assert all(row["property_value_uf"] == 2900 for row in scored)
+    assert all(row["property_value_clp"] is None for row in scored)
+    # The original source snapshot remains immutable for audit/history.
+    assert repo.bundle["evaluations"][0]["financial_data"]["input"]["property_value_clp"] == 404_000_000
+
+    scored.clear()
+    app.projection("u1")
+    assert scored
+    assert all(row["property_value_uf"] == 2900 for row in scored)
+    assert all(row["property_value_clp"] is None for row in scored)
 
 
 def test_evaluations_keep_their_own_preliminary_question_snapshot():
@@ -255,6 +288,9 @@ def test_correction_replays_intermediate_then_appends_new_real_evaluation_atomic
     assert second["event_id"] in view["excluded_from_metrics"]
     assert view["latest_effective_snapshot"]["ahorro_disponible"] == 1500000
     assert view["latest_effective_snapshot"]["deuda_mensual"] == 250000
+    lead_view = client_tracking_view(view)
+    assert second["event_id"] not in [row["event_id"] for row in lead_view["audit_line"]]
+    assert lead_view["excluded_from_metrics"] == []
 
 
 def test_sole_baseline_cannot_be_annulled_or_leave_tracking_empty():

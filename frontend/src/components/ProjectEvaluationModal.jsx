@@ -39,6 +39,7 @@ export default function ProjectEvaluationModal({
   onToggleFavorite,
   isFavorite,
   isCurrentGoal,
+  compatibilityStatus,
 }) {
   const [interestStatus, setInterestStatus] = useState("");
   const [actionError, setActionError] = useState("");
@@ -60,10 +61,16 @@ export default function ProjectEvaluationModal({
   }, [project]);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
-  const evaluation = useMemo(
+  const localEvaluation = useMemo(
     () => evaluateScenario(context, projectToScenario(project, ufValueClp)),
     [context, project, ufValueClp],
   );
+  // El proyecto objetivo activo ya fue evaluado por el seguimiento. Su estado
+  // debe ser idéntico al de "Estado actual"; otros proyectos siguen usando la
+  // comparación local del catálogo.
+  const evaluation = useMemo(() => (
+    compatibilityStatus ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
+  ), [compatibilityStatus, localEvaluation]);
   const alternatives = useMemo(() => {
     if (evaluation.status === "Compatible") return [];
     return buildAccessibleAlternatives(
@@ -134,6 +141,7 @@ export default function ProjectEvaluationModal({
         <span className="eyebrow">Proyecto seleccionado</span>
         <h2 id="project-evaluation-title">{project.nombre}</h2>
         <p className="project-evaluation-modal__context">{project.comuna || "Comuna sin dato"} · {propertyLabels[project.tipo_vivienda] || project.tipo_vivienda || "Vivienda"}</p>
+        {(project.descripcion || project.descripcion_corta) && <p className="project-evaluation-modal__context">{project.descripcion || project.descripcion_corta}</p>}
       </header>
       <div className={`project-evaluation-result ${isCompatible ? "is-compatible" : evaluation.status === "Cercano" ? "is-close" : "is-far"}`}>
         <div className="project-evaluation-result__heading"><span>Resultado referencial</span><strong className={`simulation-status ${statusClass[evaluation.status] || "adjust"}`}>{evaluation.status}</strong></div>
