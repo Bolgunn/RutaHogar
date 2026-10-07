@@ -59,12 +59,12 @@ class TrackingRepository:
                 "morosidad_complementario)"
             ),
             "order": "created_at.desc",
-            "limit": 1,
+            "limit": 10,
         })
         rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
         if not isinstance(rows, list) or not rows:
             return None
-        invitation = rows[0]
+        invitation = next((row for row in rows if row.get("status") == "pending"), rows[0])
         confirmations = invitation.get("co_debtor_confirmations")
         if isinstance(confirmations, dict):
             confirmation = confirmations

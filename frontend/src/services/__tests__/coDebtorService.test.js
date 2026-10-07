@@ -9,6 +9,7 @@ vi.mock("../../utils/supabase", () => ({
 import {
   CO_DEBTOR_TREATMENT_CONSENT_VERSION,
   createCoDebtorInvitation,
+  declineCoDebtorInvitation,
   getLeadCoDebtorInvitation,
   inspectCoDebtorInvitation,
   inspectCoDebtorManagement,
@@ -30,7 +31,7 @@ const declaredComplement = {
 function invitationQuery(result) {
   const query = {};
   for (const name of ["select", "order", "limit"]) query[name] = vi.fn(() => query);
-  query.maybeSingle = vi.fn(async () => result);
+  Object.assign(query, result);
   return query;
 }
 
@@ -41,10 +42,10 @@ describe("HU18 lead co-debtor service", () => {
   });
 
   it("reads only the lead-visible invitation fields and normalizes an expired pending invitation", async () => {
-    const query = invitationQuery({ data: {
+    const query = invitationQuery({ data: [{
       recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending",
       expires_at: "2026-10-03T12:00:00Z", created_at: "2026-09-26T12:00:00Z",
-    }, error: null });
+    }], error: null });
     mocks.from.mockReturnValue(query);
 
     const invitation = await getLeadCoDebtorInvitation();
@@ -70,6 +71,16 @@ describe("HU18 lead co-debtor service", () => {
     expect(normalizeLeadCoDebtorInvitation({ ...raw, status: "revoked" })).toEqual(expect.objectContaining({
       status: "revoked", confirmation: null,
     }));
+  });
+
+  it("prefers a new pending invitation over an older revoked consent", async () => {
+    const query = invitationQuery({ data: [
+      { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "revoked", created_at: "2026-10-06T12:00:00Z" },
+      { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending", expires_at: "2026-10-12T12:00:00Z", created_at: "2026-10-05T12:00:00Z" },
+    ], error: null });
+    mocks.from.mockReturnValue(query);
+
+    await expect(getLeadCoDebtorInvitation()).resolves.toEqual(expect.objectContaining({ status: "pending" }));
   });
 
   it("validates the recipient email before calling the Edge Function", async () => {
@@ -107,9 +118,9 @@ describe("HU18 lead co-debtor service", () => {
     const result = await inspectCoDebtorInvitation("invitation-token");
 
     expect(Object.keys(result).sort()).toEqual([
-      "can_submit", "deuda_mensual_complementario", "ingreso_mensual_complementario",
-      "morosidad_complementario", "status", "tipo_contrato_complementario",
-      "continuidad_laboral_complementario",
+      "can_submit", "continuidad_laboral_complementario", "deuda_mensual_complementario",
+      "ingreso_mensual_complementario", "morosidad_complementario", "status",
+      "tipo_contrato_complementario",
     ]);
   });
 
@@ -142,6 +153,15 @@ describe("HU18 lead co-debtor service", () => {
         morosidad_complementario: "si", treatment_consent: true,
         treatment_consent_version: CO_DEBTOR_TREATMENT_CONSENT_VERSION,
       },
+    });
+  });
+
+  it("lets the co-debtor decline a pending invitation without sending financial values", async () => {
+    mocks.invoke.mockResolvedValue({ data: { status: "declined" }, error: null });
+
+    await expect(declineCoDebtorInvitation("invitation-token")).resolves.toEqual({ status: "declined" });
+    expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
+      body: { action: "decline_invitation", token: "invitation-token" },
     });
   });
 
