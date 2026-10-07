@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PointTooltip, ProgressView, TrackingHistoryView, formatHistoricalProjectGoal,
-  bulkAnnulSuccessMessage, canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
+  activeBaselineForComparison, bulkAnnulSuccessMessage, canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
   dateTime, financialHistoryRows, tooltipPlacement,
 } from "./ProgressPage";
 
@@ -50,10 +50,49 @@ describe("HU13 compact projection summary", () => {
       current_evaluation: { score: 65, classification: "Medio", financial_indicators: {}, project_fit: {} },
     };
 
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 55 });
+
     const html = renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />);
 
     expect(html).toContain("+10 puntos desde el inicio");
     expect(html).not.toContain("+15 puntos desde el inicio");
+  });
+
+  it("falls back to the source baseline score when later updates prevent associating a recalculation", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [
+        { event_id: "baseline-replacement", root_event_id: "baseline", snapshot: {} },
+        { event_id: "latest-update", root_event_id: "latest-update", snapshot: {} },
+      ],
+      audit_line: [
+        { event_id: "baseline", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline" },
+        { event_id: "latest-update" },
+        { event_id: "later-recalculation", event_kind: "evaluation", previous: "latest-update", evaluation: { score: 65 } },
+      ],
+      excluded_from_metrics: ["baseline"],
+    };
+
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 50 });
+    expect(renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />))
+      .toContain("+15 puntos desde el inicio");
+  });
+
+  it("keeps the source baseline score when its correction does not create a recalculation", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [{ event_id: "baseline-replacement", root_event_id: "baseline", snapshot: {} }],
+      audit_line: [
+        { event_id: "baseline", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline" },
+      ],
+      excluded_from_metrics: ["baseline"],
+    };
+
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 50 });
+    expect(renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />))
+      .toContain("+15 puntos desde el inicio");
   });
 
   it("shows the estimated date, capacity and compatibility in the top summary", () => {
@@ -123,20 +162,21 @@ describe("HU13 compact financial history", () => {
     expect(dateTime("2026-10-07T03:47:00Z")).toMatch(/12:47/);
   });
 
-  it("allows bulk annulment for prior versions outside the protected baseline slot", () => {
+  it("selects only current non-baseline records for bulk annulment", () => {
     const baseline = { event_id: "baseline" };
-    const priorVersion = { event_id: "old-update", correction_of: "update" };
-    const update = { event_id: "update" };
-    const audit = [baseline, update, priorVersion];
+    const normalUpdate = { event_id: "update-2" };
+    const priorVersion = { event_id: "update-1", root_event_id: "update-1" };
+    const correctedUpdate = { event_id: "update-1-correction", root_event_id: "update-1" };
+    const audit = [baseline, normalUpdate, priorVersion, correctedUpdate];
+    const bulkRows = audit.filter((row) => canBulkAnnul(row, "baseline", audit, ["update-1"]));
 
-    expect(canBulkAnnul(baseline, "baseline", audit)).toBe(false);
-    expect(canBulkAnnul(update, "baseline", audit)).toBe(true);
-    expect(canBulkAnnul(priorVersion, "baseline", audit)).toBe(true);
+    expect(bulkRows.map((row) => row.event_id)).toEqual(["update-2", "update-1-correction"]);
+    expect(bulkRows).toHaveLength(2);
   });
 
-  it("confirms how many records left the visible evolution after a bulk annulment", () => {
+  it("reports the number of current logical records annulled in bulk", () => {
     expect(bulkAnnulSuccessMessage(1)).toBe("1 registro fue eliminado de tu historial visible y evolución.");
-    expect(bulkAnnulSuccessMessage(3)).toBe("3 registros fueron eliminados de tu historial visible y evolución.");
+    expect(bulkAnnulSuccessMessage(2)).toBe("2 registros fueron eliminados de tu historial visible y evolución.");
   });
 });
 

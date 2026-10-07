@@ -223,8 +223,8 @@ export function correctionTargetForClick(currentTarget, row) {
   return currentTarget?.event_id === row.event_id ? null : row;
 }
 
-export function canBulkAnnul(row, baselineEventId, auditLine) {
-  return !belongsToSlot(row, baselineEventId, auditLine);
+export function canBulkAnnul(row, baselineEventId, auditLine, excludedFromMetrics = []) {
+  return !belongsToSlot(row, baselineEventId, auditLine) && !excludedFromMetrics.includes(row.event_id);
 }
 
 export function bulkAnnulSuccessMessage(count) {
@@ -266,14 +266,18 @@ export function activeBaselineForComparison(data) {
     (row) => (row.root_event_id ?? row.event_id) === data.baseline.root_event_id,
   );
   if (!baseline || baseline.evaluation) return baseline;
-  // A correction records its recalculation as the separately identified
-  // evaluation immediately following that active correction. Keep the logical
-  // baseline slot, but use that recalculation instead of falling back to the
-  // superseded source baseline.
+  // Prefer a recalculation explicitly linked to the active baseline version.
+  // Other correction paths can omit that follow-up or link it to a later
+  // record, so the immutable source baseline preserves the initial score.
   const recalculation = (data.audit_line || []).find(
     (row) => row.event_kind === "evaluation" && row.previous === baseline.event_id && row.evaluation,
   );
-  return recalculation ? { ...baseline, evaluation: recalculation.evaluation } : baseline;
+  const source = (data.audit_line || []).find(
+    (row) => row.event_id === data.baseline.root_event_id,
+  );
+  return recalculation
+    ? { ...baseline, evaluation: recalculation.evaluation }
+    : { ...baseline, evaluation: source?.evaluation };
 }
 
 export function ProgressView({ data, projection, projectionError = "", onRetryProjection, onConfirm, onUpdate, onOpenHistory, onOpenProject, busy = false }) {
@@ -478,12 +482,12 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
     </div>;
   };
 
-  // Every non-baseline source can be logically annulled, including a prior
-  // version. It remains in audit_line, while lineage excludes its slot from
-  // the evolution series and metrics. Baseline corrections remain protected:
-  // annulling that root would leave the tracking plan without its required
-  // initial state.
-  const canAnnulRow = (row) => canBulkAnnul(row, data.baseline.root_event_id, data.audit_line);
+  // Only current non-baseline records are selectable in bulk. Prior versions
+  // stay visible for audit and individual correction, but are already excluded
+  // from metrics and must not receive a second annulment for the same slot.
+  const canAnnulRow = (row) => canBulkAnnul(
+    row, data.baseline.root_event_id, data.audit_line, data.excluded_from_metrics,
+  );
   const annullableRows = data.audit_line.filter(canAnnulRow);
   const selectedRows = data.audit_line.filter((row) => selectedForAnnul.includes(row.event_id) && canAnnulRow(row));
   const resetBulkAnnul = () => {
