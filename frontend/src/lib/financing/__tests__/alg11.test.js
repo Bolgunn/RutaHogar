@@ -3,7 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import cases from "../../../../../docs/algorithms/ALG-11-financing-cases.json";
 import { calculateScenarioResult, classifyFinancialScenario } from "../scenarioResult";
-import { applyRangeReferenceAmount, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
+import { applyRangeReferenceAmount, benefitOptions, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
 import { BENEFIT_ESTIMATION_BASELINE } from "../benefitEstimationBaseline";
 import { projectUf } from "../ufProjection";
 import { closeComposition, allowedTerms } from "../scenarioDraft";
@@ -11,11 +11,12 @@ import { persistedScenarioStatus, referenceAlternatives, suggestedDraftFromResul
 import { applyDraftScenario, synchronizeScenario } from "../scenarioState";
 import { historicalScenarioView, scenarioDifferences } from "../scenarioComparison";
 import { toggleComparisonSelection } from "../comparisonSelection";
-import ScenarioStatus from "../../../components/financing/ScenarioStatus";
+import ScenarioStatus, { scenarioMetricTones } from "../../../components/financing/ScenarioStatus";
 import SuggestedConfiguration from "../../../components/financing/SuggestedConfiguration";
-import FinancingOverview, { FinancingAdjustments } from "../../../components/financing/FinancingOverview";
+import FinancingOverview, { FinancingAdjustments, formattedAmountCursorPosition, normalizedDecimalInput } from "../../../components/financing/FinancingOverview";
+import SubsidyDetailPanel from "../../../components/financing/subsidies/SubsidyDetailPanel";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
-import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+import { ADJUSTMENTS_SCROLL_OPTIONS, RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, requiresScenarioDecision, savedSuggestedScenarioState, scrollToFinancingAdjustments, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
 
 const findElementByType = (node, type) => {
   if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
@@ -69,6 +70,14 @@ describe("ALG-11", () => {
     const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [100, 200] };
     expect(applyRangeReferenceAmount(rangeBenefit, 200)).toMatchObject({ amount_kind: "range_selected", amount_clp: 200, range_reference_clp: [100, 200] });
     expect(applyRangeReferenceAmount(rangeBenefit, 201)).toBe(rangeBenefit);
+  });
+  it("keeps informational benefits available when a reviewed catalogue only supplies monetary entries", () => {
+    const entries = benefitOptions({ entries: [{ identifier: "DS1", value: { amount_clp: 15000000 }, eligibility: {} }] });
+
+    expect(entries.find((entry) => entry.identifier === "DS1")?.value.amount_clp).toBe(15000000);
+    expect(entries.map((entry) => entry.identifier)).toEqual(expect.arrayContaining([
+      "FOGAES", "PADHI", "LEASING", "LEY_21748",
+    ]));
   });
   it("builds minimum, middle and maximum simulation references from a normalized range", () => {
     expect(rangeSimulationOptions([250, 550])).toEqual([
@@ -124,6 +133,56 @@ describe("ALG-11", () => {
     expect(synchronizeScenario(applied)).toEqual(applied);
     expect(synchronizeScenario(applied)).not.toBe(applied);
   });
+  it("enables applying only when the staged draft differs from the applied scenario", () => {
+    const active = { pie_clp: 100, credito_clp: 900, selected_benefit: null };
+    expect(hasEffectiveScenarioChanges({ ...active }, active)).toBe(false);
+    expect(hasEffectiveScenarioChanges({ ...active, pie_clp: 250, credito_clp: 750 }, active)).toBe(true);
+  });
+  it("keeps the saved scenario as the applied base when saving before loading a suggestion", () => {
+    const savedScenario = {
+      id: "scenario-s",
+      input_snapshot: { pie_clp: 250, credito_clp: 750, tasa_anual: 0.05, parent_scenario_id: "scenario-a" },
+    };
+    const suggestion = { pie_clp: 300, credito_clp: 700, tasa_anual: 0.04, parent_scenario_id: "scenario-a" };
+    const next = savedSuggestedScenarioState(savedScenario, suggestion);
+
+    expect(next.activeScenarioId).toBe("scenario-s");
+    expect(next.activeDraft).toEqual({ ...savedScenario.input_snapshot, parent_scenario_id: "scenario-s" });
+    expect(next.draft).toEqual({ ...suggestion, parent_scenario_id: "scenario-s" });
+    expect(hasEffectiveScenarioChanges(next.draft, next.activeDraft)).toBe(true);
+    expect(synchronizeScenario(next.activeDraft)).toEqual(next.activeDraft);
+  });
+  it.each([
+    [null, false, false],
+    [null, true, true],
+    ["scenario-a", false, false],
+    ["scenario-a", true, true],
+  ])("requires a scenario decision only for pending changes (active id %s, changes %s)", (_activeScenarioId, hasUnsavedChanges, expected) => {
+    expect(requiresScenarioDecision(hasUnsavedChanges)).toBe(expected);
+  });
+  it("normalizes decimal input without returning non-finite values", () => {
+    const normalized = ["", ".", ",", "1.", "1,5", "1.5"]
+      .map((value) => normalizedDecimalInput(value, { maxIntegerDigits: 3, decimalPlaces: 2 }));
+
+    expect(normalized.map((item) => item.value)).toEqual([0, 0, 0, 1, 1.5, 1.5]);
+    expect(normalized.every((item) => Number.isFinite(item.value))).toBe(true);
+    expect(normalized[3].rawValue).toBe("1.");
+  });
+  it("respects decimal length limits while normalizing editable values", () => {
+    expect(normalizedDecimalInput("123.45", { maxIntegerDigits: 3, decimalPlaces: 2 })).toMatchObject({ value: 123.45 });
+    expect(normalizedDecimalInput("1234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
+    expect(normalizedDecimalInput("1.234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
+  });
+  it("preserves the logical cursor position across formatted amount edits", () => {
+    expect(formattedAmountCursorPosition("234.567", 0)).toBe(0);
+    expect(formattedAmountCursorPosition("1.234.567", 3)).toBe(4);
+    expect(formattedAmountCursorPosition("1.234", 4)).toBe(5);
+    expect(formattedAmountCursorPosition("123.567", 3)).toBe(3);
+  });
+  it("shows each scenario restriction with its own tone", () => {
+    expect(scenarioMetricTones({ ltvRatio: 0.82, ltvLimit: 0.8, dividendRatio: 0.26, burdenRatio: 0.4 }))
+      .toEqual({ ltvTone: "adjustment", dividendTone: "near", burdenTone: "compatible" });
+  });
   it("reads the historic scenario classification from its saved snapshot", () => {
     expect(persistedScenarioStatus({ financial_status: "Cercano" })).toBe("Cercano");
   });
@@ -137,6 +196,8 @@ describe("ALG-11", () => {
     expect(differences.join(" ")).toContain("renta complementaria");
     const markup = renderToStaticMarkup(React.createElement(ScenarioComparison, { scenarios: [first, second], onClose: () => {} }));
     expect(markup).toContain("Comparación de escenarios");
+    expect(markup).toContain(">Delta<");
+    expect(markup).toContain("financing-comparison-table__delta is-better");
     expect(markup).toContain("Principales diferencias");
     expect(markup).not.toContain("mejor escenario");
   });
@@ -157,11 +218,13 @@ describe("ALG-11", () => {
     const draft = { precio_uf: 1000, pie_clp: 200, credito_clp: 800, composition_mode: "pie", plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 2200, renta_complementaria_clp: 800, usar_renta_complementaria: true, deuda_mensual_clp: 0 };
     const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.8 }, benefit: { amount_clp: 0 } });
     const overview = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, ufReference: { uf_value_clp: 1 } }));
-    const adjustments = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
+    const adjustments = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, onApply: () => {}, onCancel: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
     expect(result.renta_total_clp).toBe(3000);
     expect(overview).not.toContain("Complemento de renta");
     expect(adjustments).toContain("Renta considerada");
     expect(adjustments).toContain("2.200");
+    expect(adjustments).toContain("maxLength=\"13\"");
+    expect(adjustments).toContain("Cancelar");
     expect(adjustments).toContain("Aplicar cambios");
   });
   it("renders the explicit range choices without selecting a subsidy by default", () => {
@@ -192,6 +255,45 @@ describe("ALG-11", () => {
     expect(markup).toContain("Selecciona el monto que quieres usar en esta simulación.");
     expect(findElementByType(adjustments, "select").props.value).toBe("");
     expect(markup).toContain("Aplicar cambios");
+  });
+  it("shows an informational benefit selected in the pending draft without treating it as a discount", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
+    const pendingBenefit = { selected: "LEY_21748", amount_kind: "information", amount_clp: 0, entry: { name: "Subsidio al Dividendo — Ley N.º 21.748" } };
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, pendingBenefit, ufReference: { uf_value_clp: 1 } }));
+
+    expect(markup).toContain("Subsidio al Dividendo — Ley N.º 21.748");
+    expect(markup).toContain("Cambio pendiente: revísalo y aplica tus cambios.");
+    expect(markup).not.toContain("Sin subsidio");
+  });
+  it("applies the Ley 21.748 rate reduction without treating it as a capital subsidy", () => {
+    const draft = { precio_uf: 1000, pie_clp: 10000000, credito_clp: 90000000, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const withoutBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
+    const benefit = { selected: "LEY_21748", eligible: true, amount_kind: "information", amount_clp: 0, entry: { name: "Subsidio al Dividendo — Ley N.º 21.748", rate_reduction_percentage_points: 0.60 } };
+    const withBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result: withBenefit, ufReference: { uf_value_clp: 100000 } }));
+
+    expect(withBenefit.subsidio_principal_clp).toBe(0);
+    expect(withBenefit.tasa_anual_aplicada).toBeCloseTo(0.034);
+    expect(withBenefit.dividendo_clp).toBeLessThan(withoutBenefit.dividendo_clp);
+    expect(markup).toContain("Tasa reducida 0,6 pp");
+    expect(markup).not.toContain("Sin subsidio");
+  });
+  it("offers a clear action to cancel an applied subsidy", () => {
+    const markup = renderToStaticMarkup(React.createElement(SubsidyDetailPanel, {
+      subsidy: { title: "Subsidio al Dividendo — Ley N.º 21.748", tag: "Apoyo", icon: "percent", description: "", profile: "", requirements: [], summary: {} },
+      compatibility: { compatible: true, reasons: [] }, isSelected: true, isApplied: true, onApply: () => {}, onClear: () => {}, onClose: () => {},
+    }));
+
+    expect(markup).toContain("Cancelar subsidio");
+    expect(markup).toContain("El beneficio está aplicado a esta simulación.");
+  });
+  it("moves the user to the adjustment controls after selecting a benefit", () => {
+    const scrollIntoView = vi.fn();
+
+    scrollToFinancingAdjustments({ scrollIntoView });
+
+    expect(scrollIntoView).toHaveBeenCalledWith(ADJUSTMENTS_SCROLL_OPTIONS);
   });
   it("clears the guide through the selector interaction without replacing the apply flow", () => {
     const onRangeAmountInteraction = vi.fn();

@@ -6,6 +6,13 @@ const DIVIDEND_MAX = 0.30;
 const BURDEN_MAX = 0.45;
 const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
 
+function appliedAnnualRate(draft, benefit) {
+  const annualRate = Math.max(0, Number(draft?.tasa_anual || 0));
+  if (benefit?.selected !== "LEY_21748" || !benefit?.eligible) return { annualRate, reduction: 0 };
+  const reduction = Math.max(0, Number(benefit?.entry?.rate_reduction_percentage_points || 0) / 100);
+  return { annualRate: Math.max(0, annualRate - reduction), reduction };
+}
+
 export function classifyFinancialScenario({ precio_clp, credito_clp, dividendo_clp, renta_total_clp, deuda_mensual_clp, ltv_referencial }) {
   const price = finite(precio_clp); const credit = finite(credito_clp); const dividend = finite(dividendo_clp);
   const income = finite(renta_total_clp); const debt = finite(deuda_mensual_clp); const ltvLimit = finite(ltv_referencial);
@@ -72,12 +79,14 @@ export function calculateScenarioResult({ draft, ufReference, marketReference, b
   const pie = manualCredit
     ? Math.max(0, precio_clp - subsidy - credito)
     : Math.min(availableAfterSubsidy, Math.max(0, Number(draft?.pie_clp || 0)));
-  const mortgage = calculateMortgageDividendFromPrincipal({ principalClp: credito, termYears: draft?.plazo_anios, annualRate: draft?.tasa_anual });
+  const rate = appliedAnnualRate(draft, benefit);
+  const mortgage = calculateMortgageDividendFromPrincipal({ principalClp: credito, termYears: draft?.plazo_anios, annualRate: rate.annualRate });
   const renta_total = Number(draft?.renta_propia_clp || 0) + (draft?.usar_renta_complementaria !== false ? Number(draft?.renta_complementaria_clp || 0) : 0);
   const classification = classifyFinancialScenario({ precio_clp, credito_clp: credito, dividendo_clp: mortgage.dividend, renta_total_clp: renta_total, deuda_mensual_clp: draft?.deuda_mensual_clp, ltv_referencial: marketReference?.ltv_referencial });
   const result = {
     precio_uf: Number(draft?.precio_uf), precio_clp, pie_clp: pie, credito_clp: credito,
     subsidio_principal_clp: subsidy, dividendo_clp: mortgage.dividend, renta_total_clp: renta_total,
+    tasa_anual_aplicada: rate.annualRate, tasa_reduccion_anual: rate.reduction,
     ...classification, benefit, uf_reference: ufReference,
     benefit_range_impact: benefitRangeImpact({ range: benefit?.estimated_range_clp, precio_clp, pie_clp: pie, draft }),
   };
