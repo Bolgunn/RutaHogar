@@ -14,7 +14,7 @@ export const DELINQUENCY_VALUES = new Set(["si", "no"]);
 
 export type InvitationRow = {
   id: string;
-  status: "pending" | "expired" | "confirmed" | "revoked" | "replaced";
+  status: "pending" | "expired" | "confirmed" | "revoked" | "declined" | "replaced";
   expires_at: string;
   token_digest?: string | null;
   management_token_digest?: string | null;

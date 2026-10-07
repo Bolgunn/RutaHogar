@@ -18690,6 +18690,9 @@ th {
 .co-debtor-public-form__consent { display: flex; gap: 10px; align-items: flex-start; color: var(--rh-text-secondary); font-size: .9rem; line-height: 1.5; }
 .co-debtor-public-form__consent input { width: auto; min-width: 17px; margin: 3px 0 0; }
 .co-debtor-public-form__feedback { margin: 0; }
+.co-debtor-public-form__actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.co-debtor-public-form__actions .primary-button,
+.co-debtor-public-form__actions .secondary-button { margin: 0; }
 .co-debtor-public-form .primary-button { justify-self: start; margin: 0; }
 .co-debtor-public-revoke-confirm { display: grid; gap: 11px; padding: 16px; border: 1px solid rgba(154,52,18,.24); border-radius: var(--rh-radius-md); background: #fff8f4; }
 .co-debtor-public-revoke-confirm strong { color: #7c2d12; }
@@ -18708,6 +18711,7 @@ th {
   .co-debtor-public-page__brand { margin-bottom: 20px; }
   .co-debtor-public-form__grid { grid-template-columns: 1fr; }
   .co-debtor-public-form__grid label:last-child, .co-debtor-public-form__field:last-child { grid-column: auto; max-width: none; }
+  .co-debtor-public-form__actions .primary-button, .co-debtor-public-form__actions .secondary-button { width: 100%; }
   .co-debtor-public-form .primary-button { width: 100%; }
   .co-debtor-public-revoke-confirm > div { display: grid; grid-template-columns: 1fr; }
 }

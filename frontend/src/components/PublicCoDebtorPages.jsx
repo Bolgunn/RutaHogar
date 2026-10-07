@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   inspectCoDebtorInvitation,
   inspectCoDebtorManagement,
+  declineCoDebtorInvitation,
   readPublicCoDebtorToken,
   revokeCoDebtorManagement,
   runExclusive,
@@ -79,7 +80,7 @@ function validationMessage(values) {
   return "";
 }
 
-export function CoDebtorInvitationView({ context, loading, confirmation, onChange, onSubmit, busy, error, submitted }) {
+export function CoDebtorInvitationView({ context, loading, confirmation, onChange, onSubmit, onDecline, busy, error, submitted }) {
   if (loading) return <PublicShell><StatusCard eyebrow="RutaHogar" title="Verificando tu invitación"><p>Espera un momento mientras verificamos el enlace.</p></StatusCard></PublicShell>;
 
   if (submitted) return <PublicShell><StatusCard eyebrow="Antecedentes registrados" title="Gracias por completar tus antecedentes" tone="success">
@@ -94,6 +95,10 @@ export function CoDebtorInvitationView({ context, loading, confirmation, onChang
 
   if (context?.status === "confirmed") return <PublicShell><StatusCard eyebrow="Antecedentes confirmados" title="Ya registraste tus antecedentes" tone="success">
     <p>No necesitas enviar esta información nuevamente. Revisa el correo que recibiste para gestionar o revocar tu consentimiento.</p>
+  </StatusCard></PublicShell>;
+
+  if (context?.status === "declined") return <PublicShell><StatusCard eyebrow="Participación rechazada" title="No autorizaste el uso de tus datos" tone="warning">
+    <p>No usaremos tus antecedentes como co-deudor para esta evaluación.</p>
   </StatusCard></PublicShell>;
 
   if (context?.status !== "pending" || context?.can_submit !== true) return <PublicShell><StatusCard eyebrow="Enlace no disponible" title="No podemos usar este enlace" tone="warning">
@@ -140,9 +145,12 @@ export function CoDebtorInvitationView({ context, loading, confirmation, onChang
         <input id="co-debtor-treatment-consent" name="treatment_consent" type="checkbox" checked={confirmation.treatment_consent} onChange={(event) => onChange("treatment_consent", event.target.checked)} disabled={busy} />
         <span>Autorizo el tratamiento de estos antecedentes para la evaluación relacionada en RutaHogar.</span>
       </label>
+      <div className="co-debtor-public-form__actions">
+        <button className="primary-button" type="submit" disabled={busy}>{busy ? "Registrando antecedentes..." : "Confirmar mis antecedentes"}</button>
+        <button className="secondary-button" type="button" onClick={onDecline} disabled={busy}>No autorizo el uso de mis datos</button>
+      </div>
       <p className="co-debtor-public-card__note">Completar esta información no implica una aprobación hipotecaria. Recibirás un enlace por correo para revocar tu consentimiento posteriormente.</p>
       {error && <p className="error-message co-debtor-public-form__feedback" role="alert">{error}</p>}
-      <button className="primary-button" type="submit" disabled={busy}>{busy ? "Registrando antecedentes..." : "Confirmar mis antecedentes"}</button>
     </form>
   </StatusCard></PublicShell>;
 }
@@ -228,6 +236,22 @@ export function CoDebtorInvitationPage({ token = readPublicCoDebtorToken() }) {
       }
     });
   };
+  const decline = () => {
+    if (submitLock.current) return;
+    setBusy(true);
+    setError("");
+    return runExclusive(submitLock, async () => {
+      try {
+        await declineCoDebtorInvitation(token);
+        setContext({ status: "declined", can_submit: false });
+        setConfirmation(emptyConfirmation);
+      } catch (failure) {
+        setError(failure.message || "No se pudo registrar tu decisión. Intenta nuevamente.");
+      } finally {
+        setBusy(false);
+      }
+    });
+  };
 
   return <CoDebtorInvitationView
     context={context}
@@ -235,6 +259,7 @@ export function CoDebtorInvitationPage({ token = readPublicCoDebtorToken() }) {
     confirmation={confirmation}
     onChange={changeConfirmation}
     onSubmit={submit}
+    onDecline={decline}
     busy={busy}
     error={error}
     submitted={submitted}

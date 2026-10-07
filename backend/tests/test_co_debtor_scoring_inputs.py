@@ -147,6 +147,19 @@ def test_revocation_removes_the_complement_from_all_future_score_inputs():
     }
 
 
+def test_declining_an_invitation_removes_the_declared_complement_from_future_score_inputs():
+    resolved, provenance = assemble_co_debtor_scoring_input(
+        lead_input(),
+        co_debtor_consent={"invitation_status": "declined"},
+        now=NOW,
+    )
+
+    assert resolved["complemento_renta"] is False
+    assert all(resolved[field] is None for field in (*FINANCIAL_FIELDS, "relacion_complementario"))
+    assert provenance["complement_source"] == "excluded_after_decline"
+    assert provenance["complement_confirmation_status"] == "declined"
+
+
 def test_repository_loads_only_latest_server_side_hu18_facts():
     repository = TrackingRepository.__new__(TrackingRepository)
     calls = []
@@ -175,6 +188,16 @@ def test_repository_loads_only_latest_server_side_hu18_facts():
     assert kwargs == {}
     assert query["lead_id"] == ["eq.lead-1"]
     assert query["order"] == ["created_at.desc"]
-    assert query["limit"] == ["1"]
+    assert query["limit"] == ["10"]
     assert "recipient_email" not in query["select"][0]
     assert "management_token" not in query["select"][0]
+
+
+def test_repository_prefers_a_new_pending_invitation_over_a_previous_revocation():
+    repository = TrackingRepository.__new__(TrackingRepository)
+    repository.request = lambda *_args, **_kwargs: [
+        {"status": "revoked", "created_at": "2026-10-06T00:00:00Z", "expires_at": "2026-10-08T00:00:00Z"},
+        {"status": "pending", "created_at": "2026-10-05T00:00:00Z", "expires_at": "2026-10-12T00:00:00Z"},
+    ]
+
+    assert repository.load_co_debtor_consent("lead-1")["invitation_status"] == "pending"

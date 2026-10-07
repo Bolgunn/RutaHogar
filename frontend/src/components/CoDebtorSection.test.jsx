@@ -15,6 +15,7 @@ const declaredProps = {
   onInvite: vi.fn(),
   onResend: vi.fn(),
   onEditInvitation: vi.fn(),
+  onCancelEditInvitation: vi.fn(),
   onUpdateScore: vi.fn(),
 };
 
@@ -69,6 +70,13 @@ describe("HU18 lead co-debtor section", () => {
     expect(html).not.toContain("RUT del co-deudor");
   });
 
+  it("lets the lead close the co-debtor correction form without sending a new invitation", () => {
+    const html = render({ status: "pending", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5" }, { editingInvitation: true });
+
+    expect(html).toContain("Cerrar");
+    expect(html).not.toContain("nombre@correo.cl");
+  });
+
   it("shows the update action and the five confirmed values only for a valid confirmation", () => {
     const html = render(confirmed, { scoreUpdateRequired: true });
     const incomplete = render({ status: "confirmed", recipientEmail: "co.deudor@correo.cl", confirmation: null });
@@ -95,6 +103,14 @@ describe("HU18 lead co-debtor section", () => {
     expect(html).not.toContain("1.400.000");
     expect(html).not.toContain("invitation-secret");
     expect(html).not.toContain("management-secret");
+  });
+
+  it("shows a declined invitation as unavailable for complementary income", () => {
+    const html = render({ ...confirmed, status: "declined" });
+
+    expect(html).toContain("Participación rechazada");
+    expect(html).toContain("no autorizó el uso de sus datos");
+    expect(html).not.toContain("1.400.000");
   });
 
   it("disables the update button while a confirmed-score update is in progress", () => {
