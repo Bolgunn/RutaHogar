@@ -4,7 +4,6 @@ import SubsidyFilters from "./SubsidyFilters";
 import SubsidyList from "./SubsidyList";
 import { subsidyCompatibility } from "./subsidyCompatibility";
 import { SUBSIDY_DASHBOARD_ITEMS } from "./subsidyDashboardData";
-import SectionNumber from "../SectionNumber";
 
 function ordered(items, sort) {
   const copy = [...items];
@@ -14,8 +13,8 @@ function ordered(items, sort) {
 }
 
 export default function SubsidyDashboard({ evaluation, benefitStates, selectedBenefit, selectedVariant, onSelectBenefit, onClearBenefit }) {
-  const [selectedId, setSelectedId] = useState("ds1-tramo-1");
-  const [detailOpen, setDetailOpen] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("relevance");
   useEffect(() => {
@@ -38,7 +37,7 @@ export default function SubsidyDashboard({ evaluation, benefitStates, selectedBe
   const detailCompatibility = detailSubsidy ? compatibilityById[detailSubsidy.id] : null;
   return <section className={`subsidy-dashboard ${detailOpen ? "" : "is-detail-closed"}`} aria-labelledby="subsidy-dashboard-title">
     <div className="subsidy-dashboard__main">
-      <header className="subsidy-dashboard__header"><SectionNumber number="2" /><div><span className="eyebrow">Subsidios</span><h2 id="subsidy-dashboard-title">Subsidios disponibles</h2></div></header>
+      <header className="subsidy-dashboard__header"><div><span className="eyebrow">Subsidios</span><h2 id="subsidy-dashboard-title">Subsidios disponibles</h2></div></header>
       <SubsidyFilters filter={filter} onFilterChange={setFilter} sort={sort} onSortChange={setSort} />
       <SubsidyList subsidies={subsidies} selectedId={selectedId} compatibilityById={compatibilityById} onSelect={selectDetail} />
     </div>

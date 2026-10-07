@@ -11,11 +11,11 @@ import { persistedScenarioStatus, referenceAlternatives, suggestedDraftFromResul
 import { applyDraftScenario, synchronizeScenario } from "../scenarioState";
 import { historicalScenarioView, scenarioDifferences } from "../scenarioComparison";
 import { toggleComparisonSelection } from "../comparisonSelection";
-import ScenarioStatus from "../../../components/financing/ScenarioStatus";
+import ScenarioStatus, { scenarioMetricTones } from "../../../components/financing/ScenarioStatus";
 import SuggestedConfiguration from "../../../components/financing/SuggestedConfiguration";
 import FinancingOverview, { FinancingAdjustments } from "../../../components/financing/FinancingOverview";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
-import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
 
 const findElementByType = (node, type) => {
   if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
@@ -124,6 +124,15 @@ describe("ALG-11", () => {
     expect(synchronizeScenario(applied)).toEqual(applied);
     expect(synchronizeScenario(applied)).not.toBe(applied);
   });
+  it("enables applying only when the staged draft differs from the applied scenario", () => {
+    const active = { pie_clp: 100, credito_clp: 900, selected_benefit: null };
+    expect(hasEffectiveScenarioChanges({ ...active }, active)).toBe(false);
+    expect(hasEffectiveScenarioChanges({ ...active, pie_clp: 250, credito_clp: 750 }, active)).toBe(true);
+  });
+  it("shows each scenario restriction with its own tone", () => {
+    expect(scenarioMetricTones({ ltvRatio: 0.82, ltvLimit: 0.8, dividendRatio: 0.26, burdenRatio: 0.4 }))
+      .toEqual({ ltvTone: "adjustment", dividendTone: "near", burdenTone: "compatible" });
+  });
   it("reads the historic scenario classification from its saved snapshot", () => {
     expect(persistedScenarioStatus({ financial_status: "Cercano" })).toBe("Cercano");
   });
@@ -137,6 +146,8 @@ describe("ALG-11", () => {
     expect(differences.join(" ")).toContain("renta complementaria");
     const markup = renderToStaticMarkup(React.createElement(ScenarioComparison, { scenarios: [first, second], onClose: () => {} }));
     expect(markup).toContain("Comparación de escenarios");
+    expect(markup).toContain(">Delta<");
+    expect(markup).toContain("financing-comparison-table__delta is-better");
     expect(markup).toContain("Principales diferencias");
     expect(markup).not.toContain("mejor escenario");
   });
@@ -157,11 +168,13 @@ describe("ALG-11", () => {
     const draft = { precio_uf: 1000, pie_clp: 200, credito_clp: 800, composition_mode: "pie", plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 2200, renta_complementaria_clp: 800, usar_renta_complementaria: true, deuda_mensual_clp: 0 };
     const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.8 }, benefit: { amount_clp: 0 } });
     const overview = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, ufReference: { uf_value_clp: 1 } }));
-    const adjustments = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, onApply: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
+    const adjustments = renderToStaticMarkup(React.createElement(FinancingAdjustments, { draft, result, ufReference: { uf_value_clp: 1 }, terms: [20], hasDraftChanges: true, onApply: () => {}, onCancel: () => {}, onPieChange: () => {}, onCreditChange: () => {}, onRangeAmountChange: () => {}, onUpdate: () => {} }));
     expect(result.renta_total_clp).toBe(3000);
     expect(overview).not.toContain("Complemento de renta");
     expect(adjustments).toContain("Renta considerada");
     expect(adjustments).toContain("2.200");
+    expect(adjustments).toContain("maxLength=\"13\"");
+    expect(adjustments).toContain("Cancelar");
     expect(adjustments).toContain("Aplicar cambios");
   });
   it("renders the explicit range choices without selecting a subsidy by default", () => {

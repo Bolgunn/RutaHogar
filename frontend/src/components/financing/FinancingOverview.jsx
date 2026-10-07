@@ -1,6 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import FieldTooltip from "../FieldTooltip";
-import SectionNumber from "./SectionNumber";
 import { rangeSimulationOptions } from "../../lib/financing/benefitScenario";
 
 const money = (value) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0));
@@ -12,18 +11,50 @@ const preventWheel = (event) => event.currentTarget.blur();
 const amountLabel = (value) => new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(Math.max(0, Number(value) || 0));
 
 function FormattedAmountInput({ value, onChange, ...props }) {
-  const [editing, setEditing] = useState(false);
-  const [rawValue, setRawValue] = useState("");
-  const startEditing = () => {
-    setRawValue(Number.isFinite(Number(value)) ? String(Math.max(0, Number(value))) : "");
-    setEditing(true);
-  };
+  const inputRef = useRef(null);
+  const maxDigits = props.maxDigits || 12;
+  const maxLength = maxDigits + Math.floor((maxDigits - 1) / 3);
   const changeValue = (event) => {
-    const nextRaw = event.target.value.replace(/\D/g, "");
-    setRawValue(nextRaw);
+    const digitsBeforeCursor = event.target.value.slice(0, event.target.selectionStart || 0).replace(/\D/g, "").length;
+    const nextRaw = event.target.value.replace(/\D/g, "").slice(0, maxDigits);
     onChange(nextRaw === "" ? 0 : Number(nextRaw));
+    const formatted = amountLabel(nextRaw === "" ? 0 : nextRaw);
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      let seenDigits = 0;
+      let position = formatted.length;
+      for (let index = 0; index < formatted.length; index += 1) {
+        if (/\d/.test(formatted[index])) seenDigits += 1;
+        if (seenDigits >= digitsBeforeCursor) { position = index + 1; break; }
+      }
+      input.setSelectionRange(position, position);
+    });
   };
-  return <input {...props} type="text" inputMode="numeric" value={editing ? rawValue : amountLabel(value)} onFocus={startEditing} onBlur={() => setEditing(false)} onChange={changeValue} />;
+  const { maxDigits: _maxDigits, ...inputProps } = props;
+  return <input {...inputProps} ref={inputRef} type="text" inputMode="numeric" autoComplete="off" maxLength={maxLength}
+    value={amountLabel(value)} onChange={changeValue} />;
+}
+
+function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2, ...props }) {
+  const numericValue = () => Number(String(value ?? 0).replace(",", ".")) || 0;
+  const [rawValue, setRawValue] = useState(() => String(numericValue()));
+  const isEditing = useRef(false);
+  useEffect(() => {
+    if (!isEditing.current) setRawValue(String(numericValue()));
+  }, [value]);
+  const maxLength = maxIntegerDigits + (decimalPlaces ? decimalPlaces + 1 : 0);
+  const changeValue = (event) => {
+    const next = event.target.value.replace(",", ".");
+    const pattern = new RegExp(`^\\d{0,${maxIntegerDigits}}(?:\\.\\d{0,${decimalPlaces}})?$`);
+    if (!pattern.test(next)) return;
+    setRawValue(next);
+    onChange(next === "" ? 0 : Number(next));
+  };
+  return <input {...props} type="text" inputMode="decimal" maxLength={maxLength} value={rawValue}
+    onFocus={() => { isEditing.current = true; }}
+    onBlur={() => { isEditing.current = false; setRawValue(String(numericValue())); }}
+    onChange={changeValue} />;
 }
 
 function SummaryCard({ title, children, icon, tone = "blue" }) {
@@ -74,7 +105,7 @@ export default function FinancingOverview({ draft, result, ufReference }) {
   </section>;
 }
 
-export function FinancingAdjustments({ draft, result, ufReference, terms = [], fromSuggested = false, hasDraftChanges = false, rangeAmountControlRef, isRangeAmountHighlighted = false, onRangeAmountInteraction = () => {}, onApply, onPieChange, onCreditChange, onRangeAmountChange, onUpdate }) {
+export function FinancingAdjustments({ draft, result, ufReference, terms = [], fromSuggested = false, hasDraftChanges = false, rangeAmountControlRef, isRangeAmountHighlighted = false, onRangeAmountInteraction = () => {}, onApply, onCancel, onPieChange, onCreditChange, onRangeAmountChange, onUpdate }) {
   if (!draft || !result) return null;
   const ufValue = Number(ufReference?.uf_value_clp) || 0;
   const price = Number(result.precio_clp) || 0;
@@ -93,19 +124,19 @@ export function FinancingAdjustments({ draft, result, ufReference, terms = [], f
     : rangeOptions;
 
   return <section className="financing-adjustments" aria-labelledby="financing-adjustments-title">
-      <header><SectionNumber number="4" /><div><h3 id="financing-adjustments-title">Ajusta tus supuestos</h3><p>{fromSuggested ? "Partiste desde la configuración referencial sugerida. Puedes modificar cualquier supuesto." : "Modifica los valores para ver cómo cambia tu financiamiento."}</p></div></header>
+      <header><div><h3 id="financing-adjustments-title">Ajusta tus supuestos</h3><p>{fromSuggested ? "Partiste desde la configuración referencial sugerida. Puedes modificar cualquier supuesto." : "Modifica los valores para ver cómo cambia tu financiamiento."}</p></div></header>
       <div className="financing-adjustments__grid">
-        <label><span>Pie en UF <FieldTooltip text="Monto que aportarás inicialmente. Al modificarlo, RutaHogar recalcula el crédito referencial." /></span><input type="number" min="0" step="0.1" value={oneDecimal(uf(pie, ufValue))} onWheel={preventWheel} onChange={(event) => onPieChange(Number(event.target.value) * ufValue)} /></label>
-        <label><span>Pie (% del valor) <FieldTooltip text="Proporción del precio de vivienda que cubrirás con tu aporte inicial." /></span><input type="number" min="0" max="100" step="0.01" value={percentage(pie, price).toFixed(2)} onWheel={preventWheel} onChange={(event) => onPieChange((Number(event.target.value) / 100) * price)} /></label>
+        <label><span>Pie en UF <FieldTooltip text="Monto que aportarás inicialmente. Al modificarlo, RutaHogar recalcula el crédito referencial." /></span><DecimalInput maxIntegerDigits={7} decimalPlaces={1} value={oneDecimal(uf(pie, ufValue))} onWheel={preventWheel} onChange={(next) => onPieChange(next * ufValue)} /></label>
+        <label><span>Pie (% del valor) <FieldTooltip text="Proporción del precio de vivienda que cubrirás con tu aporte inicial." /></span><DecimalInput maxIntegerDigits={3} decimalPlaces={2} value={percentage(pie, price).toFixed(2)} onWheel={preventWheel} onChange={(next) => onPieChange((next / 100) * price)} /></label>
         {(isRange || hasSelectedRange) ? <label ref={rangeAmountControlRef} className={`financing-adjustments__range-field${isRangeAmountHighlighted ? " is-highlighted" : ""}`}><span>Monto del subsidio a simular <FieldTooltip text="Este subsidio tiene un rango referencial. Elige el monto mínimo, intermedio o máximo que quieres usar en esta simulación. No constituye una asignación oficial." /></span><select value={hasSelectedRange ? String(benefit.selected_range_amount_clp) : ""} onFocus={onRangeAmountInteraction} onChange={(event) => { onRangeAmountInteraction(); onRangeAmountChange(event.target.value === "" ? null : Number(event.target.value)); }}><option value="">Selecciona un monto</option>{selectableRangeOptions.map((option) => <option key={`${option.kind}-${option.amount}`} value={option.amount}>{option.label} · {ufLabel(uf(option.amount, ufValue))}</option>)}</select><small className="financing-adjustments__range-help">{isRangeAmountHighlighted ? "Selecciona el monto que quieres usar en esta simulación." : "Este subsidio tiene un rango referencial. Elige el monto que quieres usar en esta simulación. No constituye una asignación oficial."}</small></label> : null}
-        <label><span>Crédito referencial (CLP) <FieldTooltip text="Monto que necesitarías financiar después de tu pie y de un beneficio con monto definido. No es una aprobación bancaria." /></span><FormattedAmountInput value={credit} onWheel={preventWheel} onChange={onCreditChange} /></label>
+        <label><span>Crédito referencial (CLP) <FieldTooltip text="Monto que necesitarías financiar después de tu pie y de un beneficio con monto definido. No es una aprobación bancaria." /></span><FormattedAmountInput value={credit} maxDigits={12} onWheel={preventWheel} onChange={onCreditChange} /></label>
         <label><span>Plazo <FieldTooltip text="Tiempo en años para pagar el crédito. Las opciones respetan el límite de edad de esta simulación." /></span><select value={draft.plazo_anios} onChange={(event) => onUpdate("plazo_anios", Number(event.target.value))}>{terms.map((term) => <option key={term} value={term}>{term} años</option>)}</select></label>
-        <label><span>Tasa referencial anual (%) <FieldTooltip text="Tasa anual usada solo para estimar el dividendo mensual. La tasa final depende de la evaluación de la entidad financiera." /></span><input type="number" min="0" step="0.01" value={(Number(draft.tasa_anual || 0) * 100).toFixed(2)} onWheel={preventWheel} onChange={(event) => onUpdate("tasa_anual", Number(event.target.value) / 100)} /></label>
-        <label><span>Ingreso mensual <FieldTooltip text="Ingreso líquido mensual considerado para revisar la carga del dividendo en este escenario." /></span><FormattedAmountInput value={draft.renta_propia_clp} onWheel={preventWheel} onChange={(value) => onUpdate("renta_propia_clp", value)} /></label>
+        <label><span>Tasa referencial anual (%) <FieldTooltip text="Tasa anual usada solo para estimar el dividendo mensual. La tasa final depende de la evaluación de la entidad financiera." /></span><DecimalInput maxIntegerDigits={3} decimalPlaces={2} value={(Number(draft.tasa_anual || 0) * 100).toFixed(2)} onWheel={preventWheel} onChange={(next) => onUpdate("tasa_anual", next / 100)} /></label>
+        <label><span>Ingreso mensual <FieldTooltip text="Ingreso líquido mensual considerado para revisar la carga del dividendo en este escenario." /></span><FormattedAmountInput value={draft.renta_propia_clp} maxDigits={10} onWheel={preventWheel} onChange={(value) => onUpdate("renta_propia_clp", value)} /></label>
         <label className="financing-adjustments__toggle"><input type="checkbox" checked={complementaryEnabled} onChange={(event) => onUpdate("usar_renta_complementaria", event.target.checked)} />Complementar renta <FieldTooltip text="Incluye otro ingreso mensual en la referencia. No representa una evaluación crediticia de otra persona." /></label>
-        {complementaryEnabled ? <label><span>Renta complementaria <FieldTooltip text="Monto mensual que se suma al ingreso considerado solo mientras mantengas activada la complementación de renta." /></span><FormattedAmountInput value={draft.renta_complementaria_clp ?? 0} onWheel={preventWheel} onChange={(value) => onUpdate("renta_complementaria_clp", value)} /></label> : null}
+        {complementaryEnabled ? <label><span>Renta complementaria <FieldTooltip text="Monto mensual que se suma al ingreso considerado solo mientras mantengas activada la complementación de renta." /></span><FormattedAmountInput value={draft.renta_complementaria_clp ?? 0} maxDigits={10} onWheel={preventWheel} onChange={(value) => onUpdate("renta_complementaria_clp", value)} /></label> : null}
       </div>
       <div className="financing-income-composition"><strong>Renta considerada: {money(result.renta_total_clp)}</strong><span>{money(draft.renta_propia_clp)} propia + {money(complementaryEnabled ? draft.renta_complementaria_clp : 0)} complementaria</span></div>
-      <footer className="financing-adjustments__footer"><span>{hasDraftChanges ? "Tienes cambios pendientes de aplicar." : "Los valores editables coinciden con el escenario aplicado."}</span><button type="button" className="primary-button compact-button" onClick={onApply} disabled={!hasDraftChanges}>Aplicar cambios</button></footer>
+      <footer className="financing-adjustments__footer"><div>{hasDraftChanges && <button type="button" className="secondary-button compact-button" onClick={onCancel}>Cancelar</button>}<button type="button" className="primary-button compact-button" onClick={onApply} disabled={!hasDraftChanges}>Aplicar cambios</button></div></footer>
     </section>;
 }

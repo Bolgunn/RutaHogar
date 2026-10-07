@@ -6,7 +6,6 @@ import { applyRangeReferenceAmount, benefitOptions, evaluateBenefit } from "../.
 import { BENEFIT_ESTIMATION_BASELINE } from "../../lib/financing/benefitEstimationBaseline";
 import SubsidyDashboard from "./subsidies/SubsidyDashboard";
 import FinancingOverview, { FinancingAdjustments } from "./FinancingOverview";
-import SectionNumber from "./SectionNumber";
 import ScenarioStatus from "./ScenarioStatus";
 import SuggestedConfiguration from "./SuggestedConfiguration";
 import SuggestedAlternatives from "./SuggestedAlternatives";
@@ -41,6 +40,14 @@ export function clearRangeAmountGuide(timeoutRef, setHighlighted) {
   }
 }
 
+export function hasEffectiveScenarioChanges(draft, activeDraft) {
+  const normalize = (value) => Object.keys(value || {}).sort().reduce((result, key) => {
+    result[key] = value[key];
+    return result;
+  }, {});
+  return JSON.stringify(normalize(draft)) !== JSON.stringify(normalize(activeDraft));
+}
+
 export default function FinancingSimulatorPanel({ evaluation, projects = [], onNavigate, initialProjectId }) {
   const market = evaluation?.result?.financial_indicators?.capacidad_supuestos?.market_snapshot || {};
   const goal = getCurrentProjectGoal(evaluation);
@@ -50,9 +57,10 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const [draft, setDraft] = useState(null);
   const [activeDraft, setActiveDraft] = useState(null);
   const [saved, setSaved] = useState([]);
+  const [showAllSaved, setShowAllSaved] = useState(false);
   const [notice, setNotice] = useState("");
   const [name, setName] = useState("");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasUnsavedChangeIntent, setHasUnsavedChanges] = useState(false);
   const [activeScenarioId, setActiveScenarioId] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +72,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const [isRangeAmountHighlighted, setIsRangeAmountHighlighted] = useState(false);
   const rangeAmountSelectorRef = useRef(null);
   const rangeAmountGuideTimeoutRef = useRef(null);
+  const simulationHeaderRef = useRef(null);
   const project = useMemo(() => selectedId === "__project_goal__" ? goal || projects[0] || null : projects.find((item) => String(item.id) === String(selectedId)) || goal || projects[0] || null, [selectedId, goal, projects]);
   const current = currentUfReference(market);
   const ufReference = current;
@@ -84,6 +93,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const suggestedDraft = activeDraft && activeResult ? suggestedDraftFromResult(activeDraft, activeResult) : null;
   const suggestedResult = suggestedDraft && ufReference ? calculateScenarioResult({ draft: suggestedDraft, ufReference, marketReference: market, benefit: activeBenefit }) : null;
   const alternatives = useMemo(() => referenceAlternatives(activeDraft, activeResult).map((alternative) => ({ ...alternative, result: calculateScenarioResult({ draft: alternative.draft, ufReference, marketReference: market, benefit: activeBenefit }) })), [activeDraft, activeResult, ufReference, market, activeBenefit]);
+  const hasUnsavedChanges = hasUnsavedChangeIntent && hasEffectiveScenarioChanges(draft, activeDraft);
 
   useEffect(() => {
     if (!project || !current) return;
@@ -115,7 +125,16 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
       rangeAmountGuideTimeoutRef.current = null;
     }, RANGE_AMOUNT_GUIDE_DELAY_MS);
   }, [rangeAmountGuideVersion]);
-  const refresh = async () => { try { setSaved(await listMortgageScenarios(evaluation.id)); } catch { setNotice("No pudimos cargar los escenarios guardados. Reintenta después de aplicar la migración de HU17."); } };
+  const refresh = async () => {
+    try {
+      const scenarios = await listMortgageScenarios(evaluation.id);
+      setSaved(scenarios);
+      return scenarios;
+    } catch {
+      setNotice("No pudimos cargar los escenarios guardados. Reintenta después de aplicar la migración de HU17.");
+      return null;
+    }
+  };
   useEffect(() => { if (consented) refresh(); }, [evaluation?.id, consented]);
   if (!consented) return null;
   const dismissRangeAmountGuide = () => clearRangeAmountGuide(rangeAmountGuideTimeoutRef, setIsRangeAmountHighlighted);
@@ -129,6 +148,15 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     setDraft(nextDraft);
     setHasUnsavedChanges(false);
     setNotice("Cambios aplicados al escenario actual.");
+    requestAnimationFrame(() => simulationHeaderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const cancelDraftChanges = () => {
+    if (!activeDraft) return;
+    dismissRangeAmountGuide();
+    setDraft(synchronizeScenario(activeDraft));
+    setHasUnsavedChanges(false);
+    setStartedFromSuggested(false);
+    setNotice("Cambios descartados. Restauramos el escenario aplicado.");
   };
   const save = async ({ scenarioDraft = activeDraft, scenarioResult = activeResult, scenarioBenefit = activeBenefit } = {}) => {
     if (!scenarioResult || !scenarioDraft || isSaving) return null;
@@ -140,8 +168,12 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
       setActiveScenarioId(savedScenario.id);
       setName("");
       if (!hasUnsavedChanges) setHasUnsavedChanges(false);
-      setNotice("Escenario guardado.");
-      await refresh();
+      setSaved((existing) => [savedScenario, ...existing.filter((scenario) => scenario.id !== savedScenario.id)]);
+      setNotice(`Escenario “${savedScenario.name}” guardado.`);
+      const refreshed = await refresh();
+      if (refreshed && !refreshed.some((scenario) => scenario.id === savedScenario.id)) {
+        setSaved((existing) => existing.some((scenario) => scenario.id === savedScenario.id) ? existing : [savedScenario, ...existing]);
+      }
       return savedScenario;
     } catch {
       setNotice("No pudimos guardar la simulación. Tu borrador sigue disponible para reintentar.");
@@ -175,16 +207,16 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     setIsComparisonOpen(false);
   };
   const comparisonScenarios = saved.filter((scenario) => comparisonIds.includes(scenario.id));
-  const requestSuggestedDraft = (nextDraft) => {
-    setPendingAction({ type: "suggested", draft: nextDraft });
+  const visibleSaved = showAllSaved ? saved : saved.slice(0, 10);
+  const requestSuggestedDraft = (nextDraft, { suggested = true } = {}) => {
+    setPendingAction({ type: "suggested", draft: nextDraft, suggested, requiresScenarioDecision: hasUnsavedChanges || !activeScenarioId });
   };
   const applySuggestedDraft = (nextDraft, { suggested = false } = {}) => {
     const next = synchronizeScenario(nextDraft);
     setDraft(next);
-    setActiveDraft(next);
-    setHasUnsavedChanges(false);
+    setHasUnsavedChanges(true);
     setStartedFromSuggested(suggested);
-    setNotice(suggested ? "Configuración referencial aplicada al escenario actual." : "Alternativa aplicada al escenario actual.");
+    setNotice(suggested ? "Configuración referencial cargada como cambio pendiente." : "Alternativa cargada como cambio pendiente. Puedes aplicarla o cancelarla.");
   };
   const confirmPendingAction = async (decision) => {
     const action = pendingAction;
@@ -198,8 +230,12 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
       setPendingAction(null);
       return;
     }
-    if (action.type === "suggested" && decision === "use") {
-      applySuggestedDraft(action.draft, { suggested: true });
+    if (action.type === "suggested" && (decision === "use" || decision === "discard" || decision === "save")) {
+      if (decision === "save") {
+        const savedScenario = await save({ scenarioDraft: draft, scenarioResult: draftResult, scenarioBenefit: draftBenefit });
+        if (!savedScenario) return;
+      }
+      applySuggestedDraft(action.draft, { suggested: action.suggested });
       setPendingAction(null);
       return;
     }
@@ -220,10 +256,11 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     }
   };
   return <section className="financing-panel" aria-labelledby="financing-title">
-    <div className="financing-hero"><span className="eyebrow">Simulación de financiamiento</span><h2 id="financing-title">Entiende cuánto necesitarías financiar</h2><p>Partimos desde tu última precalificación. Puedes ajustar los supuestos sin cambiarla.</p></div>
+    <div ref={simulationHeaderRef} className="financing-hero"><span className="eyebrow">Simulación de financiamiento</span><h2 id="financing-title">Entiende cuánto necesitarías financiar</h2><p>Partimos desde tu última precalificación. Puedes ajustar los supuestos sin cambiarla.</p></div>
     {!draft || !draftResult || !activeDraft || !activeResult ? <div className="warning-note">No hay referencia UF persistida disponible para iniciar esta simulación.</div> : <>
-      <section className="financing-step financing-property-step"><SectionNumber number="1" /><div><h3>Vivienda seleccionada</h3></div><article className="financing-selected-property"><span className="financing-selected-property__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></span><div className="financing-selected-property__content"><small>Tu meta actual</small><strong>{project?.nombre || "Vivienda sin seleccionar"}</strong><p>{project?.comuna || "Comuna sin dato"} · {formatProjectPrice(project)}</p>{project?.inmobiliaria ? <b>Inmobiliaria: {project.inmobiliaria}</b> : null}<div className="financing-selected-property__details"><span>{propertyLabels[project?.tipo_vivienda] || project?.tipo_vivienda || "Vivienda"}</span>{project?.estado ? <span>{project.estado === "en_construccion" ? "En construcción" : project.estado === "disponible" ? "Disponible" : project.estado}</span> : null}</div></div><button type="button" className="financing-change-property" onClick={() => onNavigate?.("projects")}>Cambiar vivienda</button></article></section>
+      <section className="financing-step financing-property-step"><div><h3>Vivienda seleccionada</h3></div><article className="financing-selected-property"><span className="financing-selected-property__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></span><div className="financing-selected-property__content"><small>Tu meta actual</small><strong>{project?.nombre || "Vivienda sin seleccionar"}</strong><p>{project?.comuna || "Comuna sin dato"} · {formatProjectPrice(project)}</p>{project?.inmobiliaria ? <b>Inmobiliaria: {project.inmobiliaria}</b> : null}<div className="financing-selected-property__details"><span>{propertyLabels[project?.tipo_vivienda] || project?.tipo_vivienda || "Vivienda"}</span>{project?.estado ? <span>{project.estado === "en_construccion" ? "En construcción" : project.estado === "disponible" ? "Disponible" : project.estado}</span> : null}</div></div><button type="button" className="financing-change-property" onClick={() => onNavigate?.("projects")}>Cambiar vivienda</button></article></section>
       <FinancingOverview draft={activeDraft} result={activeResult} ufReference={ufReference} />
+      <ScenarioStatus result={activeResult} ufReference={ufReference} ltvReference={market.ltv_referencial} />
       <SubsidyDashboard
         evaluation={evaluation}
         benefitStates={benefitStates}
@@ -238,13 +275,12 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
         onClearBenefit={() => { dismissRangeAmountGuide(); setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: null, selected_benefit_variant: null, selected_benefit_range_amount_clp: null })); }}
       />
       <SuggestedConfiguration draft={activeDraft} result={activeResult} suggestedDraft={suggestedDraft} suggestedResult={suggestedResult} benefit={activeBenefit} onUse={requestSuggestedDraft} />
-      <FinancingAdjustments draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} rangeAmountControlRef={rangeAmountSelectorRef} isRangeAmountHighlighted={isRangeAmountHighlighted} onRangeAmountInteraction={dismissRangeAmountGuide} onApply={applyDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
-      <ScenarioStatus result={activeResult} ufReference={ufReference} />
-      <SuggestedAlternatives alternatives={alternatives} onTry={applySuggestedDraft} />
+      <FinancingAdjustments draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} rangeAmountControlRef={rangeAmountSelectorRef} isRangeAmountHighlighted={isRangeAmountHighlighted} onRangeAmountInteraction={dismissRangeAmountGuide} onApply={applyDraftChanges} onCancel={cancelDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
+      <SuggestedAlternatives alternatives={alternatives} onTry={(nextDraft) => requestSuggestedDraft(nextDraft, { suggested: false })} />
       <section className="financing-save"><div><strong>Guardar esta configuración</strong><p>{hasUnsavedChanges ? "Tienes cambios por aplicar. Guardará la configuración actualmente aplicada." : "Se creará una nueva instancia de financiamiento con la configuración aplicada."}</p></div><input value={name} maxLength="120" placeholder="Nombre opcional" onChange={(event) => setName(event.target.value)} /><button type="button" className="primary-button compact-button" onClick={() => save()} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar escenario"}</button>{notice ? <span>{notice}</span> : null}</section>
-      <section className="financing-saved"><h3>Escenarios guardados</h3>{saved.length ? <>{saved.map((item) => { const status = persistedScenarioStatus(item.result_snapshot); const selectedForComparison = comparisonIds.includes(item.id); return <article key={item.id} className={`${item.id === activeScenarioId ? "is-selected" : ""} ${selectedForComparison ? "is-comparison-selected" : ""}`}><div><strong>{item.name}</strong><small className={`financing-saved__status is-${savedStatusTone(status)}`}>{status}</small><span>{money(item.result_snapshot?.dividendo_clp)} mensuales</span>{item.id === activeScenarioId ? <small>Escenario seleccionado</small> : null}{selectedForComparison ? <small className="financing-saved__comparison-label">Seleccionado para comparar</small> : null}</div><button type="button" onClick={() => requestScenarioSelection(item)} disabled={item.id === activeScenarioId && !hasUnsavedChanges}>{item.id === activeScenarioId ? "Seleccionado" : "Seleccionar"}</button><button type="button" onClick={() => toggleScenarioComparison(item)}>{selectedForComparison ? "Quitar" : "Comparar"}</button><button type="button" className="financing-saved__delete" onClick={() => requestScenarioDeletion(item)}>Eliminar</button></article>; })}{comparisonIds.length ? <div className="financing-comparison-bar"><span>{comparisonIds.length} {comparisonIds.length === 1 ? "escenario seleccionado" : "escenarios seleccionados"}</span><div><button type="button" className="secondary-button" onClick={clearScenarioComparison}>Cancelar comparación</button>{comparisonIds.length === 2 ? <button type="button" className="primary-button" onClick={() => setIsComparisonOpen(true)}>Comparar escenarios</button> : null}</div></div> : null}</> : <p>Aún no guardas escenarios.</p>}</section>
+      <section className="financing-saved"><h3>Escenarios guardados</h3>{saved.length ? <>{visibleSaved.map((item) => { const status = persistedScenarioStatus(item.result_snapshot); const selectedForComparison = comparisonIds.includes(item.id); return <article key={item.id} className={`${item.id === activeScenarioId ? "is-selected" : ""} ${selectedForComparison ? "is-comparison-selected" : ""}`}><div><strong>{item.name}</strong><small className={`financing-saved__status is-${savedStatusTone(status)}`}>{status}</small><span>{money(item.result_snapshot?.dividendo_clp)} mensuales</span>{item.id === activeScenarioId ? <small>Escenario seleccionado</small> : null}{selectedForComparison ? <small className="financing-saved__comparison-label">Seleccionado para comparar</small> : null}</div><button type="button" onClick={() => requestScenarioSelection(item)} disabled={item.id === activeScenarioId && !hasUnsavedChanges}>{item.id === activeScenarioId ? "Seleccionado" : "Seleccionar"}</button><button type="button" onClick={() => toggleScenarioComparison(item)}>{selectedForComparison ? "Quitar" : "Comparar"}</button><button type="button" className="financing-saved__delete" onClick={() => requestScenarioDeletion(item)}>Eliminar</button></article>; })}{saved.length > 10 ? <button type="button" className="financing-saved__toggle" onClick={() => setShowAllSaved((currentValue) => !currentValue)}>{showAllSaved ? "Ver menos escenarios" : `Ver todos los escenarios (${saved.length})`}</button> : null}{comparisonIds.length ? <div className="financing-comparison-bar"><span>{comparisonIds.length} {comparisonIds.length === 1 ? "escenario seleccionado" : "escenarios seleccionados"}</span><div><button type="button" className="secondary-button" onClick={clearScenarioComparison}>Cancelar comparación</button>{comparisonIds.length === 2 ? <button type="button" className="primary-button" onClick={() => setIsComparisonOpen(true)}>Comparar escenarios</button> : null}</div></div> : null}</> : <p>Aún no guardas escenarios.</p>}</section>
       {isComparisonOpen ? <ScenarioComparison scenarios={comparisonScenarios} onClose={() => setIsComparisonOpen(false)} /> : null}
-      {pendingAction ? <div className="financing-confirmation-backdrop" role="presentation" onMouseDown={() => !isSaving && !isDeleting && setPendingAction(null)}><section className="financing-confirmation" role="dialog" aria-modal="true" aria-labelledby="financing-confirmation-title" onMouseDown={(event) => event.stopPropagation()}>{pendingAction.type === "select" ? <><span className="eyebrow">Cambiar escenario</span><h3 id="financing-confirmation-title">Tienes cambios sin guardar</h3><p>¿Quieres guardarlos antes de seleccionar “{pendingAction.scenario.name}”?</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)} disabled={isSaving}>Cancelar</button><button type="button" className="secondary-button financing-confirmation__discard" onClick={() => confirmPendingAction("discard")} disabled={isSaving}>Descartar cambios</button><button type="button" className="primary-button" onClick={() => confirmPendingAction("save")} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar y cambiar"}</button></div></> : pendingAction.type === "suggested" ? <><span className="eyebrow">Configuración referencial</span><h3 id="financing-confirmation-title">¿Usar esta configuración?</h3><p>Los valores actuales del simulador serán reemplazados por esta configuración sugerida. Tus escenarios guardados no se eliminarán.</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)}>Cancelar</button><button type="button" className="primary-button" onClick={() => confirmPendingAction("use")}>Usar configuración</button></div></> : <><h3 id="financing-confirmation-title">¿Eliminar este escenario?</h3><p>Se eliminará “{pendingAction.scenario.name}”. Esta acción no se puede deshacer.</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)} disabled={isDeleting}>Cancelar</button><button type="button" className="primary-button financing-confirmation__delete" onClick={() => confirmPendingAction("delete")} disabled={isDeleting}>{isDeleting ? "Eliminando…" : "Sí, eliminar"}</button></div></>}</section></div> : null}
+      {pendingAction ? <div className="financing-confirmation-backdrop" role="presentation" onMouseDown={() => !isSaving && !isDeleting && setPendingAction(null)}><section className="financing-confirmation" role="dialog" aria-modal="true" aria-labelledby="financing-confirmation-title" onMouseDown={(event) => event.stopPropagation()}>{pendingAction.type === "select" ? <><span className="eyebrow">Cambiar escenario</span><h3 id="financing-confirmation-title">Tienes cambios sin guardar</h3><p>¿Quieres guardarlos antes de seleccionar “{pendingAction.scenario.name}”?</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)} disabled={isSaving}>Cancelar</button><button type="button" className="secondary-button financing-confirmation__discard" onClick={() => confirmPendingAction("discard")} disabled={isSaving}>Descartar cambios</button><button type="button" className="primary-button" onClick={() => confirmPendingAction("save")} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar y cambiar"}</button></div></> : pendingAction.type === "suggested" ? <><span className="eyebrow">{pendingAction.suggested ? "Configuración referencial" : "Alternativa referencial"}</span><h3 id="financing-confirmation-title">{pendingAction.requiresScenarioDecision ? "Tienes un escenario sin guardar" : "¿Cargar esta configuración?"}</h3><p>{pendingAction.requiresScenarioDecision ? "Guárdalo con un nombre estándar o descártalo antes de cargar esta nueva configuración como borrador." : "La dejaremos como un cambio pendiente para que puedas revisarla, aplicarla o cancelarla. Tus escenarios guardados no se modificarán."}</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)} disabled={isSaving}>Cancelar</button>{pendingAction.requiresScenarioDecision ? <><button type="button" className="secondary-button financing-confirmation__discard" onClick={() => confirmPendingAction("discard")} disabled={isSaving}>Descartar y cargar</button><button type="button" className="primary-button" onClick={() => confirmPendingAction("save")} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar y cargar"}</button></> : <button type="button" className="primary-button" onClick={() => confirmPendingAction("use")}>Cargar como borrador</button>}</div></> : <><h3 id="financing-confirmation-title">¿Eliminar este escenario?</h3><p>Se eliminará “{pendingAction.scenario.name}”. Esta acción no se puede deshacer.</p><div className="financing-confirmation__actions"><button type="button" className="secondary-button" onClick={() => setPendingAction(null)} disabled={isDeleting}>Cancelar</button><button type="button" className="primary-button financing-confirmation__delete" onClick={() => confirmPendingAction("delete")} disabled={isDeleting}>{isDeleting ? "Eliminando…" : "Sí, eliminar"}</button></div></>}</section></div> : null}
     </>}
   </section>;
 }
