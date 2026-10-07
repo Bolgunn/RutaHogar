@@ -48,6 +48,18 @@ export function hasEffectiveScenarioChanges(draft, activeDraft) {
   return JSON.stringify(normalize(draft)) !== JSON.stringify(normalize(activeDraft));
 }
 
+export function requiresScenarioDecision(hasUnsavedChanges) {
+  return hasUnsavedChanges;
+}
+
+export function savedSuggestedScenarioState(savedScenario, suggestedDraft) {
+  return {
+    activeScenarioId: savedScenario.id,
+    activeDraft: synchronizeScenario(draftFromMortgageScenario(savedScenario)),
+    draft: synchronizeScenario({ ...suggestedDraft, parent_scenario_id: savedScenario.id }),
+  };
+}
+
 export default function FinancingSimulatorPanel({ evaluation, projects = [], onNavigate, initialProjectId }) {
   const market = evaluation?.result?.financial_indicators?.capacidad_supuestos?.market_snapshot || {};
   const goal = getCurrentProjectGoal(evaluation);
@@ -163,8 +175,9 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     setIsSaving(true);
     try {
       const savedScenario = await saveMortgageScenario({ evaluationId: evaluation.id, projectId: project?.id || null, parentScenarioId: scenarioDraft.parent_scenario_id || null, name: name.trim() || `Mi escenario · ${new Date().toLocaleDateString("es-CL")}`, projectSnapshot: snapshot(project), inputSnapshot: { ...scenarioDraft, credito_clp: scenarioResult.credito_clp }, resultSnapshot: scenarioResult, marketReferenceSnapshot: { persisted_market: market, selected_uf: ufReference }, benefitCatalogueSnapshot: catalogue?.entries?.length ? { version: catalogue.version, benefit: scenarioBenefit } : { version: BENEFIT_ESTIMATION_BASELINE.version, benefit: scenarioBenefit } });
-      setActiveDraft((old) => old ? { ...old, parent_scenario_id: savedScenario.id } : old);
-      if (!hasUnsavedChanges) setDraft((old) => old ? { ...old, parent_scenario_id: savedScenario.id } : old);
+      const savedDraft = synchronizeScenario(draftFromMortgageScenario(savedScenario));
+      setActiveDraft(savedDraft);
+      if (!hasUnsavedChanges) setDraft(savedDraft);
       setActiveScenarioId(savedScenario.id);
       setName("");
       if (!hasUnsavedChanges) setHasUnsavedChanges(false);
@@ -209,7 +222,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const comparisonScenarios = saved.filter((scenario) => comparisonIds.includes(scenario.id));
   const visibleSaved = showAllSaved ? saved : saved.slice(0, 10);
   const requestSuggestedDraft = (nextDraft, { suggested = true } = {}) => {
-    setPendingAction({ type: "suggested", draft: nextDraft, suggested, requiresScenarioDecision: hasUnsavedChanges || !activeScenarioId });
+    setPendingAction({ type: "suggested", draft: nextDraft, suggested, requiresScenarioDecision: requiresScenarioDecision(hasUnsavedChanges) });
   };
   const applySuggestedDraft = (nextDraft, { suggested = false } = {}) => {
     const next = synchronizeScenario(nextDraft);
@@ -234,6 +247,12 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
       if (decision === "save") {
         const savedScenario = await save({ scenarioDraft: draft, scenarioResult: draftResult, scenarioBenefit: draftBenefit });
         if (!savedScenario) return;
+        const next = savedSuggestedScenarioState(savedScenario, action.draft);
+        setActiveScenarioId(next.activeScenarioId);
+        setActiveDraft(next.activeDraft);
+        applySuggestedDraft(next.draft, { suggested: action.suggested });
+        setPendingAction(null);
+        return;
       }
       applySuggestedDraft(action.draft, { suggested: action.suggested });
       setPendingAction(null);

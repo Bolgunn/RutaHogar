@@ -10,6 +10,28 @@ const oneDecimal = (value) => Math.round(Number(value || 0) * 10) / 10;
 const preventWheel = (event) => event.currentTarget.blur();
 const amountLabel = (value) => new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(Math.max(0, Number(value) || 0));
 
+export function formattedAmountCursorPosition(formatted, digitsBeforeCursor) {
+  if (digitsBeforeCursor === 0) return 0;
+  let seenDigits = 0;
+  let position = formatted.length;
+  for (let index = 0; index < formatted.length; index += 1) {
+    if (/\d/.test(formatted[index])) seenDigits += 1;
+    if (seenDigits >= digitsBeforeCursor) { position = index + 1; break; }
+  }
+  return position;
+}
+
+export function normalizedDecimalInput(value, { maxIntegerDigits = 3, decimalPlaces = 2 } = {}) {
+  const rawValue = String(value).replace(",", ".");
+  const pattern = new RegExp(`^\\d{0,${maxIntegerDigits}}(?:\\.\\d{0,${decimalPlaces}})?$`);
+  if (!pattern.test(rawValue)) return null;
+  const parsed = Number(rawValue);
+  return {
+    rawValue,
+    value: rawValue === "" || rawValue === "." ? 0 : Number.isFinite(parsed) ? parsed : null,
+  };
+}
+
 function FormattedAmountInput({ value, onChange, ...props }) {
   const inputRef = useRef(null);
   const maxDigits = props.maxDigits || 12;
@@ -22,12 +44,7 @@ function FormattedAmountInput({ value, onChange, ...props }) {
     requestAnimationFrame(() => {
       const input = inputRef.current;
       if (!input) return;
-      let seenDigits = 0;
-      let position = formatted.length;
-      for (let index = 0; index < formatted.length; index += 1) {
-        if (/\d/.test(formatted[index])) seenDigits += 1;
-        if (seenDigits >= digitsBeforeCursor) { position = index + 1; break; }
-      }
+      const position = formattedAmountCursorPosition(formatted, digitsBeforeCursor);
       input.setSelectionRange(position, position);
     });
   };
@@ -45,11 +62,10 @@ function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2
   }, [value]);
   const maxLength = maxIntegerDigits + (decimalPlaces ? decimalPlaces + 1 : 0);
   const changeValue = (event) => {
-    const next = event.target.value.replace(",", ".");
-    const pattern = new RegExp(`^\\d{0,${maxIntegerDigits}}(?:\\.\\d{0,${decimalPlaces}})?$`);
-    if (!pattern.test(next)) return;
-    setRawValue(next);
-    onChange(next === "" ? 0 : Number(next));
+    const next = normalizedDecimalInput(event.target.value, { maxIntegerDigits, decimalPlaces });
+    if (!next) return;
+    setRawValue(next.rawValue);
+    if (next.value !== null) onChange(next.value);
   };
   return <input {...props} type="text" inputMode="decimal" maxLength={maxLength} value={rawValue}
     onFocus={() => { isEditing.current = true; }}

@@ -13,9 +13,9 @@ import { historicalScenarioView, scenarioDifferences } from "../scenarioComparis
 import { toggleComparisonSelection } from "../comparisonSelection";
 import ScenarioStatus, { scenarioMetricTones } from "../../../components/financing/ScenarioStatus";
 import SuggestedConfiguration from "../../../components/financing/SuggestedConfiguration";
-import FinancingOverview, { FinancingAdjustments } from "../../../components/financing/FinancingOverview";
+import FinancingOverview, { FinancingAdjustments, formattedAmountCursorPosition, normalizedDecimalInput } from "../../../components/financing/FinancingOverview";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
-import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, requiresScenarioDecision, savedSuggestedScenarioState, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
 
 const findElementByType = (node, type) => {
   if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
@@ -128,6 +128,47 @@ describe("ALG-11", () => {
     const active = { pie_clp: 100, credito_clp: 900, selected_benefit: null };
     expect(hasEffectiveScenarioChanges({ ...active }, active)).toBe(false);
     expect(hasEffectiveScenarioChanges({ ...active, pie_clp: 250, credito_clp: 750 }, active)).toBe(true);
+  });
+  it("keeps the saved scenario as the applied base when saving before loading a suggestion", () => {
+    const savedScenario = {
+      id: "scenario-s",
+      input_snapshot: { pie_clp: 250, credito_clp: 750, tasa_anual: 0.05, parent_scenario_id: "scenario-a" },
+    };
+    const suggestion = { pie_clp: 300, credito_clp: 700, tasa_anual: 0.04, parent_scenario_id: "scenario-a" };
+    const next = savedSuggestedScenarioState(savedScenario, suggestion);
+
+    expect(next.activeScenarioId).toBe("scenario-s");
+    expect(next.activeDraft).toEqual({ ...savedScenario.input_snapshot, parent_scenario_id: "scenario-s" });
+    expect(next.draft).toEqual({ ...suggestion, parent_scenario_id: "scenario-s" });
+    expect(hasEffectiveScenarioChanges(next.draft, next.activeDraft)).toBe(true);
+    expect(synchronizeScenario(next.activeDraft)).toEqual(next.activeDraft);
+  });
+  it.each([
+    [null, false, false],
+    [null, true, true],
+    ["scenario-a", false, false],
+    ["scenario-a", true, true],
+  ])("requires a scenario decision only for pending changes (active id %s, changes %s)", (_activeScenarioId, hasUnsavedChanges, expected) => {
+    expect(requiresScenarioDecision(hasUnsavedChanges)).toBe(expected);
+  });
+  it("normalizes decimal input without returning non-finite values", () => {
+    const normalized = ["", ".", ",", "1.", "1,5", "1.5"]
+      .map((value) => normalizedDecimalInput(value, { maxIntegerDigits: 3, decimalPlaces: 2 }));
+
+    expect(normalized.map((item) => item.value)).toEqual([0, 0, 0, 1, 1.5, 1.5]);
+    expect(normalized.every((item) => Number.isFinite(item.value))).toBe(true);
+    expect(normalized[3].rawValue).toBe("1.");
+  });
+  it("respects decimal length limits while normalizing editable values", () => {
+    expect(normalizedDecimalInput("123.45", { maxIntegerDigits: 3, decimalPlaces: 2 })).toMatchObject({ value: 123.45 });
+    expect(normalizedDecimalInput("1234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
+    expect(normalizedDecimalInput("1.234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
+  });
+  it("preserves the logical cursor position across formatted amount edits", () => {
+    expect(formattedAmountCursorPosition("234.567", 0)).toBe(0);
+    expect(formattedAmountCursorPosition("1.234.567", 3)).toBe(4);
+    expect(formattedAmountCursorPosition("1.234", 4)).toBe(5);
+    expect(formattedAmountCursorPosition("123.567", 3)).toBe(3);
   });
   it("shows each scenario restriction with its own tone", () => {
     expect(scenarioMetricTones({ ltvRatio: 0.82, ltvLimit: 0.8, dividendRatio: 0.26, burdenRatio: 0.4 }))
