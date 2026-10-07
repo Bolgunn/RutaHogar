@@ -18268,7 +18268,7 @@ th {
 .project-goal-badge { display: inline-flex; align-items: center; width: fit-content; padding: 3px 7px; border: 1px solid rgba(138, 91, 0, 0.2); border-radius: 999px; background: rgba(212, 168, 67, 0.14); color: #755000; font-size: 0.7rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.02em; text-transform: uppercase; }
 .simulation-alternative.is-current-goal { border-color: rgba(138, 91, 0, 0.28); }
 .simulation-alternative__heading .project-goal-badge { margin-left: 6px; vertical-align: middle; }
-.project-catalog-card__body { display: grid; gap: 10px; padding: 18px; height: 100%; }
+.project-catalog-card__body { display: grid; gap: 2px; padding: 15px; height: 100%; }
 .project-catalog-card__location { margin: 0; color: var(--rh-text-muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; }
 .project-catalog-card h2 { margin: 0; color: var(--rh-navy); font-family: var(--rh-font-display); font-size: 1.2rem; line-height: 1.2; }
 .project-catalog-card h2 + p { margin: -4px 0 4px; color: var(--rh-text-secondary); font-size: 0.86rem; }
@@ -19902,6 +19902,30 @@ section-heading {
   padding-right: 54px;
 }
 
+.project-catalog-card__media {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  overflow: hidden;
+  background: #e5e7eb;
+  color: var(--rh-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.project-catalog-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.project-catalog-card__media.is-placeholder {
+  padding: 16px;
+  border-bottom: 1px solid rgba(19, 43, 74, 0.08);
+}
+
 .project-catalog-favorite-button {
   position: absolute;
   top: 10px;
@@ -20254,18 +20278,23 @@ section-heading {
 /* Proyectos: acciones compactas para revisar o simular. */
 .project-catalog-card__actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .project-catalog-card__actions .compact-button {
-  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
   margin: 0;
   padding-right: 12px;
   padding-left: 12px;
-  white-space: nowrap;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
 }
 
 .project-catalog-card__actions .secondary-button {

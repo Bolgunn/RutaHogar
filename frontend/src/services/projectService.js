@@ -637,7 +637,7 @@ export async function getPortalProjects() {
 
   const { data, error } = await supabase
     .from("proyectos_rag")
-    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
+    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url, imagen_url")
     .not("inmobiliaria", "is", null)
     .gt("valor_uf", 0)
     .order("comuna");
