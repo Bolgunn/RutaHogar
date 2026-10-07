@@ -2,6 +2,12 @@
   "version": 2,
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
+  "crons": [
+    {
+      "path": "/lead-changes/daily-digest",
+      "schedule": "0 12 * * *"
+    }
+  ],
   "functions": {
     "api/score.py": {
       "maxDuration": 60
@@ -54,6 +60,10 @@
     },
     {
       "source": "/housing-benefit-catalog",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/lead-changes/(.*)",
       "destination": "/api/score"
     },
     {
