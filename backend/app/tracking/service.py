@@ -75,27 +75,50 @@ def source_events(bundle):
 
 
 def client_tracking_view(view):
-    """Hide logically annulled facts from the lead without deleting audit data.
+    """Build the lead-safe history without collapsing replacement provenance.
 
-    The service keeps the complete audit trail for staff and all lineage
-    calculations.  The lead sees only current records, so an annulled update
-    disappears consistently from both its evolution and its change history.
-    `root_event_id` preserves the baseline-slot guard for a visible correction
-    whose original source is intentionally hidden.
+    The complete lineage is retained in ``view`` for repository, service and
+    staff audit use.  A replacement leaves its prior source visible to the
+    lead as an audit-only version; an annulment hides its whole logical slot.
+    That keeps charts on effective records while making the correction UI's
+    promise about retaining a previous version true.
     """
     output = deepcopy(view)
+    audit_line = view.get("audit_line", [])
+    by_id = {row.get("event_id"): row for row in audit_line if row.get("event_id")}
+
+    def root_event_id(row):
+        current = row
+        seen = set()
+        while current and current.get("correction_of") and current["event_id"] not in seen:
+            seen.add(current["event_id"])
+            current = by_id.get(current["correction_of"])
+        return (current or row).get("event_id")
+
     active_by_id = {row["event_id"]: row for row in view.get("active_line", [])}
-    output["audit_line"] = [
-        {
+    active_roots = {
+        row.get("root_event_id") or row["event_id"]
+        for row in view.get("active_line", [])
+    }
+    # A source slot absent from the reconstructed active line is annulled.
+    # A replaced slot is still active under its correction event ID and must
+    # retain every prior version in the lead's visible audit timeline.
+    visible_audit = []
+    for row in audit_line:
+        root_id = root_event_id(row)
+        if root_id not in active_roots:
+            continue
+        active = active_by_id.get(row.get("event_id"))
+        visible_audit.append({
             **deepcopy(row),
-            "root_event_id": active_by_id[row["event_id"]].get("root_event_id", row["event_id"]),
-        }
-        for row in view.get("audit_line", [])
-        if row.get("event_id") in active_by_id
+            "root_event_id": active.get("root_event_id") if active else root_id,
+        })
+    output["audit_line"] = visible_audit
+    # These are only visible audit-only rows: the client uses them to label a
+    # replacement as "Versión anterior" and must never receive annulled IDs.
+    output["excluded_from_metrics"] = [
+        row["event_id"] for row in visible_audit if row["event_id"] not in active_by_id
     ]
-    # Excluded IDs are internal audit metadata; exposing them would reveal
-    # entries the lead explicitly asked to remove from their visible history.
-    output["excluded_from_metrics"] = []
     return output
 
 

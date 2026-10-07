@@ -261,9 +261,26 @@ function SectionHeading({ id, eyebrow, title, description }) {
   </div>;
 }
 
+export function activeBaselineForComparison(data) {
+  const baseline = (data.active_line || []).find(
+    (row) => (row.root_event_id ?? row.event_id) === data.baseline.root_event_id,
+  );
+  if (!baseline || baseline.evaluation) return baseline;
+  // A correction records its recalculation as the separately identified
+  // evaluation immediately following that active correction. Keep the logical
+  // baseline slot, but use that recalculation instead of falling back to the
+  // superseded source baseline.
+  const recalculation = (data.audit_line || []).find(
+    (row) => row.event_kind === "evaluation" && row.previous === baseline.event_id && row.evaluation,
+  );
+  return recalculation ? { ...baseline, evaluation: recalculation.evaluation } : baseline;
+}
+
 export function ProgressView({ data, projection, projectionError = "", onRetryProjection, onConfirm, onUpdate, onOpenHistory, onOpenProject, busy = false }) {
   const series = evolutionSeries(data.active_line, data.baseline.target_project_snapshot);
-  const baseline = data.audit_line.find((row) => row.event_id === data.baseline.root_event_id);
+  // The initial slot can have a replacement correction. Its active version,
+  // not the immutable source event, is the baseline for score comparison.
+  const baseline = activeBaselineForComparison(data);
   const initialScore = baseline?.evaluation?.score;
   const current = data.current_evaluation;
   const projectContext = trackingProjectContext(data);

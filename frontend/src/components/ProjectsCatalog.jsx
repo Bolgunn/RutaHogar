@@ -14,6 +14,17 @@ export function initialCatalogProject(projects, projectId) {
   return { project, unavailable: !project };
 }
 
+export function initialProjectNavigation({ projectId, projects, catalogLoading, portalLoading, consumedProjectId }) {
+  if (!projectId || catalogLoading || consumedProjectId === projectId) {
+    return { project: null, unavailable: false, consume: false };
+  }
+  const initial = initialCatalogProject(projects, projectId);
+  if (initial.project) return { ...initial, consume: true };
+  // The portal list arrives independently. Do not declare a target missing
+  // while it can still be the next asynchronous result.
+  return { ...initial, unavailable: !portalLoading, consume: false };
+}
+
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
   const [canPrev, setCanPrev] = useState(false);
@@ -79,6 +90,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   const [projects, setProjects] = useState([]);
   const [portalProjects, setPortalProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [initialProjectUnavailable, setInitialProjectUnavailable] = useState(false);
@@ -104,7 +116,8 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
     let active = true;
     getPortalProjects()
       .then((rows) => { if (active) setPortalProjects(rows.map(portalProjectToCatalogCard)); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (active) setPortalLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -158,20 +171,30 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   // Favoritos, meta y compatibilidad se apoyan en public.proyectos, así que solo
   // listado y filtros incluyen los avisos del portal.
   const listedProjects = useMemo(() => [...projects, ...portalProjects], [portalProjects, projects]);
+  const consumedInitialProjectIdRef = useRef(null);
   useEffect(() => {
-    if (!initialProjectId || loading) {
+    if (!initialProjectId) {
+      consumedInitialProjectIdRef.current = null;
       setInitialProjectUnavailable(false);
       return;
     }
-    const initial = initialCatalogProject(listedProjects, initialProjectId);
-    if (initial.project) {
+    const initial = initialProjectNavigation({
+      projectId: initialProjectId,
+      projects: listedProjects,
+      catalogLoading: loading,
+      portalLoading,
+      consumedProjectId: consumedInitialProjectIdRef.current,
+    });
+    if (initial.project && initial.consume) {
       setInitialProjectUnavailable(false);
       setSelectedProjectId(initial.project.id);
+      consumedInitialProjectIdRef.current = initialProjectId;
+    } else if (initial.unavailable) {
+      setInitialProjectUnavailable(true);
     } else {
-      setSelectedProjectId("");
-      setInitialProjectUnavailable(initial.unavailable);
+      setInitialProjectUnavailable(false);
     }
-  }, [initialProjectId, listedProjects, loading]);
+  }, [initialProjectId, listedProjects, loading, portalLoading]);
   const communes = useMemo(() => [...new Set(listedProjects.map((project) => project.comuna).filter(Boolean))].sort(), [listedProjects]);
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es-CL");

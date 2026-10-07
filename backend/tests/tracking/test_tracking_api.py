@@ -160,10 +160,14 @@ def test_baseline_partial_update_correction_and_read_only_projection(api):
     fixed = client.post(f"/tracking/events/{patch['event_id']}/corrections", json=correction, headers=headers)
     assert fixed.status_code == 200, fixed.text
     current = client.get("/tracking", headers=headers).json()
-    # Leads see the effective history only. The full immutable audit remains
-    # server-side for authorized staff and lineage replay.
-    assert patch["event_id"] not in [row["event_id"] for row in current["audit_line"]]
-    assert current["excluded_from_metrics"] == []
+    # Replacements preserve the original as lead-visible audit provenance,
+    # while active history and charts remain restricted to effective states.
+    assert patch["event_id"] in [row["event_id"] for row in current["audit_line"]]
+    assert patch["event_id"] in current["excluded_from_metrics"]
+    active_history = client.get("/tracking/history?view=active", headers=headers).json()
+    audit_history = client.get("/tracking/history?view=audit", headers=headers).json()
+    assert patch["event_id"] not in [row["event_id"] for row in active_history["items"]]
+    assert patch["event_id"] in [row["event_id"] for row in audit_history["items"]]
     assert current["latest_effective_snapshot"]["ahorro_disponible"] == 1000000
 
 

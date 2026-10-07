@@ -268,7 +268,7 @@ def test_idempotency_compares_equivalent_timestamps_canonically():
     assert repo.commits == 2
 
 
-def test_correction_replays_intermediate_then_appends_new_real_evaluation_atomically():
+def test_replace_keeps_the_original_visible_as_audit_only_version():
     repo, app = service()
     first = app.execute("u1", command(valid_snapshot()))
     second = app.execute("u1", command({"ahorro_disponible": 2000000}, first["event_id"], "2026-02-01T00:00:00Z"))
@@ -289,8 +289,38 @@ def test_correction_replays_intermediate_then_appends_new_real_evaluation_atomic
     assert view["latest_effective_snapshot"]["ahorro_disponible"] == 1500000
     assert view["latest_effective_snapshot"]["deuda_mensual"] == 250000
     lead_view = client_tracking_view(view)
-    assert second["event_id"] not in [row["event_id"] for row in lead_view["audit_line"]]
-    assert lead_view["excluded_from_metrics"] == []
+    visible_ids = [row["event_id"] for row in lead_view["audit_line"]]
+    assert second["event_id"] in visible_ids
+    assert correction["event_id"] in visible_ids
+    assert correction["event_id"] in [row["event_id"] for row in lead_view["active_line"]]
+    assert second["event_id"] in lead_view["excluded_from_metrics"]
+    assert correction["event_id"] not in lead_view["excluded_from_metrics"]
+    assert next(row for row in lead_view["audit_line"] if row["event_id"] == second["event_id"])["root_event_id"] == second["event_id"]
+    assert next(row for row in lead_view["audit_line"] if row["event_id"] == correction["event_id"])["root_event_id"] == second["event_id"]
+
+
+def test_annul_hides_its_slot_from_lead_but_keeps_the_internal_audit():
+    repo, app = service()
+    first = app.execute("u1", command(valid_snapshot()))
+    update = app.execute("u1", command({"ahorro_disponible": 2_000_000}, first["event_id"], "2026-02-01T00:00:00Z"))
+    annul = {
+        "event_id": str(uuid4()), "effective_at": "2026-03-01T00:00:00Z",
+        "reason": "Registro duplicado", "correction_effect": "annul", "patch": {},
+    }
+    app.execute("u1", annul, update["event_id"])
+
+    internal = app.read("u1")
+    lead = client_tracking_view(internal)
+    internal_ids = [row["event_id"] for row in internal["audit_line"]]
+    lead_ids = [row["event_id"] for row in lead["audit_line"]]
+
+    assert update["event_id"] in internal_ids
+    assert annul["event_id"] in internal_ids
+    assert update["event_id"] not in lead_ids
+    assert annul["event_id"] not in lead_ids
+    assert update["event_id"] not in lead["excluded_from_metrics"]
+    assert annul["event_id"] not in lead["excluded_from_metrics"]
+    assert update["event_id"] not in [row["event_id"] for row in lead["active_line"]]
 
 
 def test_sole_baseline_cannot_be_annulled_or_leave_tracking_empty():
@@ -329,6 +359,7 @@ def test_baseline_replacement_is_effective_and_later_events_replay_from_it():
     assert repo.bundle["plan"] == frozen
     assert repo.bundle["events"][0] == original
     assert corrected_view["active_line"][0]["event_id"] == correction_id
+    assert corrected_view["active_line"][0]["root_event_id"] == first["event_id"]
     assert corrected_view["latest_effective_snapshot"] == replacement_snapshot
     assert first["event_id"] in corrected_view["excluded_from_metrics"]
 

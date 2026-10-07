@@ -34,6 +34,28 @@ const data = {
 const handlers = { onConfirm: vi.fn(), onOpenHistory: vi.fn(), onUpdate: vi.fn() };
 
 describe("HU13 compact projection summary", () => {
+  it("uses the active replacement in the baseline slot for the score delta", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [{
+        event_id: "baseline-replacement", root_event_id: "baseline",
+        effective_at: "2026-01-01T00:00:00Z", snapshot: {},
+      }],
+      audit_line: [
+        { event_id: "baseline", effective_at: "2026-01-01T00:00:00Z", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline", effective_at: "2026-01-01T00:00:00Z" },
+        { event_id: "baseline-recalculation", event_kind: "evaluation", previous: "baseline-replacement", evaluation: { score: 55 } },
+      ],
+      excluded_from_metrics: ["baseline"],
+      current_evaluation: { score: 65, classification: "Medio", financial_indicators: {}, project_fit: {} },
+    };
+
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />);
+
+    expect(html).toContain("+10 puntos desde el inicio");
+    expect(html).not.toContain("+15 puntos desde el inicio");
+  });
+
   it("shows the estimated date, capacity and compatibility in the top summary", () => {
     const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{
       status: "projected", target_compatible_at: "2026-08-15T00:00:00Z",
@@ -353,6 +375,19 @@ describe("HU13 readable recorded history", () => {
 
     expect(html).toContain("progress-audit-record__correct");
     expect(html).toContain("Corregir registro");
+  });
+
+  it("labels a replace original as a prior version and its correction as current", () => {
+    const original = { ...historicalRecord, event_id: "original", reason: "Dato original" };
+    const replacement = { ...historicalRecord, event_id: "replacement", correction_of: "original", reason: "Dato corregido" };
+    const html = renderToStaticMarkup(<TrackingHistoryView data={{
+      ...historyData, audit_line: [original, replacement], excluded_from_metrics: ["original"],
+    }} busy={false} onCorrect={vi.fn()} />);
+
+    expect(html).toContain("Dato original");
+    expect(html).toContain("Dato corregido");
+    expect(html).toContain("Versión anterior");
+    expect(html).toContain("Registro vigente");
   });
 
   it("opens and closes a correction using its corresponding correction button", () => {
