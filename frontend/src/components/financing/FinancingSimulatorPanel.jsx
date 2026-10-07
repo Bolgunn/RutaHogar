@@ -27,9 +27,14 @@ const savedStatusTone = (status) => status === "Compatible" ? "compatible" : sta
 
 export const RANGE_AMOUNT_GUIDE_DELAY_MS = 4500;
 export const RANGE_AMOUNT_SCROLL_OPTIONS = Object.freeze({ behavior: "smooth", block: "center" });
+export const ADJUSTMENTS_SCROLL_OPTIONS = Object.freeze({ behavior: "smooth", block: "start" });
 
 export function scrollToRangeAmountSelector(element) {
   element?.scrollIntoView?.(RANGE_AMOUNT_SCROLL_OPTIONS);
+}
+
+export function scrollToFinancingAdjustments(element) {
+  element?.scrollIntoView?.(ADJUSTMENTS_SCROLL_OPTIONS);
 }
 
 export function clearRangeAmountGuide(timeoutRef, setHighlighted) {
@@ -84,6 +89,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const [isRangeAmountHighlighted, setIsRangeAmountHighlighted] = useState(false);
   const rangeAmountSelectorRef = useRef(null);
   const rangeAmountGuideTimeoutRef = useRef(null);
+  const adjustmentsRef = useRef(null);
   const simulationHeaderRef = useRef(null);
   const project = useMemo(() => selectedId === "__project_goal__" ? goal || projects[0] || null : projects.find((item) => String(item.id) === String(selectedId)) || goal || projects[0] || null, [selectedId, goal, projects]);
   const current = currentUfReference(market);
@@ -95,10 +101,6 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const activeEntry = benefits.find((item) => item.identifier === activeDraft?.selected_benefit);
   const activeEvaluatedBenefit = evaluateBenefit(activeEntry, evaluation, snapshot(project), ufReference?.uf_value_clp);
   const activeBenefit = applyRangeReferenceAmount(activeEvaluatedBenefit, activeDraft?.selected_benefit_range_amount_clp);
-  const benefitStates = useMemo(() => Object.fromEntries(benefits.map((item) => [
-    item.identifier,
-    evaluateBenefit(item, evaluation, snapshot(project), ufReference?.uf_value_clp),
-  ])), [benefits, evaluation, project, ufReference?.uf_value_clp]);
   const draftResult = draft && ufReference ? calculateScenarioResult({ draft, ufReference, marketReference: market, benefit: draftBenefit }) : null;
   const activeResult = activeDraft && ufReference ? calculateScenarioResult({ draft: activeDraft, ufReference, marketReference: market, benefit: activeBenefit }) : null;
   const terms = allowedTerms(evaluation?.input?.edad);
@@ -278,23 +280,28 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
     <div ref={simulationHeaderRef} className="financing-hero"><span className="eyebrow">Simulación de financiamiento</span><h2 id="financing-title">Entiende cuánto necesitarías financiar</h2><p>Partimos desde tu última precalificación. Puedes ajustar los supuestos sin cambiarla.</p></div>
     {!draft || !draftResult || !activeDraft || !activeResult ? <div className="warning-note">No hay referencia UF persistida disponible para iniciar esta simulación.</div> : <>
       <section className="financing-step financing-property-step"><div><h3>Vivienda seleccionada</h3></div><article className="financing-selected-property"><span className="financing-selected-property__marker"><i className="ti ti-target-arrow" aria-hidden="true" /></span><div className="financing-selected-property__content"><small>Tu meta actual</small><strong>{project?.nombre || "Vivienda sin seleccionar"}</strong><p>{project?.comuna || "Comuna sin dato"} · {formatProjectPrice(project)}</p>{project?.inmobiliaria ? <b>Inmobiliaria: {project.inmobiliaria}</b> : null}<div className="financing-selected-property__details"><span>{propertyLabels[project?.tipo_vivienda] || project?.tipo_vivienda || "Vivienda"}</span>{project?.estado ? <span>{project.estado === "en_construccion" ? "En construcción" : project.estado === "disponible" ? "Disponible" : project.estado}</span> : null}</div></div><button type="button" className="financing-change-property" onClick={() => onNavigate?.("projects")}>Cambiar vivienda</button></article></section>
-      <FinancingOverview draft={activeDraft} result={activeResult} ufReference={ufReference} />
+      <FinancingOverview draft={activeDraft} result={activeResult} pendingBenefit={draftBenefit} ufReference={ufReference} />
       <ScenarioStatus result={activeResult} ufReference={ufReference} ltvReference={market.ltv_referencial} />
       <SubsidyDashboard
         evaluation={evaluation}
-        benefitStates={benefitStates}
         selectedBenefit={draft.selected_benefit}
         selectedVariant={draft.selected_benefit_variant}
+        appliedBenefit={activeDraft.selected_benefit}
+        appliedVariant={activeDraft.selected_benefit_variant}
         onSelectBenefit={(identifier, variant) => {
           setHasUnsavedChanges(true);
           setDraft((old) => ({ ...old, selected_benefit: identifier, selected_benefit_variant: variant, selected_benefit_range_amount_clp: null }));
-          if (benefitStates[identifier]?.amount_kind === "range") setRangeAmountGuideVersion((version) => version + 1);
+          requestAnimationFrame(() => scrollToFinancingAdjustments(adjustmentsRef.current));
+          const selectedBenefitState = evaluateBenefit(
+            benefits.find((item) => item.identifier === identifier), evaluation, snapshot(project), ufReference?.uf_value_clp,
+          );
+          if (selectedBenefitState.amount_kind === "range") setRangeAmountGuideVersion((version) => version + 1);
           else dismissRangeAmountGuide();
         }}
-        onClearBenefit={() => { dismissRangeAmountGuide(); setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: null, selected_benefit_variant: null, selected_benefit_range_amount_clp: null })); }}
+        onClearBenefit={() => { dismissRangeAmountGuide(); setHasUnsavedChanges(true); setDraft((old) => ({ ...old, selected_benefit: null, selected_benefit_variant: null, selected_benefit_range_amount_clp: null })); requestAnimationFrame(() => scrollToFinancingAdjustments(adjustmentsRef.current)); }}
       />
       <SuggestedConfiguration draft={activeDraft} result={activeResult} suggestedDraft={suggestedDraft} suggestedResult={suggestedResult} benefit={activeBenefit} onUse={requestSuggestedDraft} />
-      <FinancingAdjustments draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} rangeAmountControlRef={rangeAmountSelectorRef} isRangeAmountHighlighted={isRangeAmountHighlighted} onRangeAmountInteraction={dismissRangeAmountGuide} onApply={applyDraftChanges} onCancel={cancelDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
+      <FinancingAdjustments sectionRef={adjustmentsRef} draft={draft} result={draftResult} ufReference={ufReference} terms={terms} fromSuggested={startedFromSuggested} hasDraftChanges={hasUnsavedChanges} rangeAmountControlRef={rangeAmountSelectorRef} isRangeAmountHighlighted={isRangeAmountHighlighted} onRangeAmountInteraction={dismissRangeAmountGuide} onApply={applyDraftChanges} onCancel={cancelDraftChanges} onPieChange={updatePie} onCreditChange={updateCredit} onRangeAmountChange={(value) => update("selected_benefit_range_amount_clp", value)} onUpdate={update} />
       <SuggestedAlternatives alternatives={alternatives} onTry={(nextDraft) => requestSuggestedDraft(nextDraft, { suggested: false })} />
       <section className="financing-save"><div><strong>Guardar esta configuración</strong><p>{hasUnsavedChanges ? "Tienes cambios por aplicar. Guardará la configuración actualmente aplicada." : "Se creará una nueva instancia de financiamiento con la configuración aplicada."}</p></div><input value={name} maxLength="120" placeholder="Nombre opcional" onChange={(event) => setName(event.target.value)} /><button type="button" className="primary-button compact-button" onClick={() => save()} disabled={isSaving}>{isSaving ? "Guardando…" : "Guardar escenario"}</button>{notice ? <span>{notice}</span> : null}</section>
       <section className="financing-saved"><h3>Escenarios guardados</h3>{saved.length ? <>{visibleSaved.map((item) => { const status = persistedScenarioStatus(item.result_snapshot); const selectedForComparison = comparisonIds.includes(item.id); return <article key={item.id} className={`${item.id === activeScenarioId ? "is-selected" : ""} ${selectedForComparison ? "is-comparison-selected" : ""}`}><div><strong>{item.name}</strong><small className={`financing-saved__status is-${savedStatusTone(status)}`}>{status}</small><span>{money(item.result_snapshot?.dividendo_clp)} mensuales</span>{item.id === activeScenarioId ? <small>Escenario seleccionado</small> : null}{selectedForComparison ? <small className="financing-saved__comparison-label">Seleccionado para comparar</small> : null}</div><button type="button" onClick={() => requestScenarioSelection(item)} disabled={item.id === activeScenarioId && !hasUnsavedChanges}>{item.id === activeScenarioId ? "Seleccionado" : "Seleccionar"}</button><button type="button" onClick={() => toggleScenarioComparison(item)}>{selectedForComparison ? "Quitar" : "Comparar"}</button><button type="button" className="financing-saved__delete" onClick={() => requestScenarioDeletion(item)}>Eliminar</button></article>; })}{saved.length > 10 ? <button type="button" className="financing-saved__toggle" onClick={() => setShowAllSaved((currentValue) => !currentValue)}>{showAllSaved ? "Ver menos escenarios" : `Ver todos los escenarios (${saved.length})`}</button> : null}{comparisonIds.length ? <div className="financing-comparison-bar"><span>{comparisonIds.length} {comparisonIds.length === 1 ? "escenario seleccionado" : "escenarios seleccionados"}</span><div><button type="button" className="secondary-button" onClick={clearScenarioComparison}>Cancelar comparación</button>{comparisonIds.length === 2 ? <button type="button" className="primary-button" onClick={() => setIsComparisonOpen(true)}>Comparar escenarios</button> : null}</div></div> : null}</> : <p>Aún no guardas escenarios.</p>}</section>

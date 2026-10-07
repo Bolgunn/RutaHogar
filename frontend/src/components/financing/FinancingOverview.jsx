@@ -77,17 +77,24 @@ function SummaryCard({ title, children, icon, tone = "blue" }) {
   return <article className={`financing-summary-card is-${tone}`}><header><span className="financing-summary-card__icon"><i className={`ti ${icon}`} aria-hidden="true" /></span><small>{title}</small></header>{children}</article>;
 }
 
-export default function FinancingOverview({ draft, result, ufReference }) {
+export default function FinancingOverview({ draft, result, pendingBenefit, ufReference }) {
   if (!draft || !result) return null;
   const ufValue = Number(ufReference?.uf_value_clp) || 0;
   const price = Number(result.precio_clp) || 0;
   const pie = Number(result.pie_clp) || 0;
   const credit = Number(result.credito_clp) || 0;
   const benefit = result.benefit || {};
-  const isRange = benefit.amount_kind === "range" && Array.isArray(benefit.estimated_range_clp);
-  const hasSelectedRange = benefit.amount_kind === "range_selected";
+  const hasPendingBenefitChange = pendingBenefit?.selected && (
+    pendingBenefit.selected !== benefit.selected
+    || pendingBenefit.selected_range_amount_clp !== benefit.selected_range_amount_clp
+  );
+  const displayedBenefit = hasPendingBenefitChange ? pendingBenefit : benefit;
+  const benefitName = displayedBenefit.entry?.name || displayedBenefit.selected || "Beneficio";
+  const isRange = displayedBenefit.amount_kind === "range" && Array.isArray(displayedBenefit.estimated_range_clp);
+  const hasSelectedRange = displayedBenefit.amount_kind === "range_selected";
   const knownBenefit = !isRange && Number(result.subsidio_principal_clp) > 0;
-  const rangeAmounts = benefit.range_reference_clp || benefit.estimated_range_clp;
+  const rateReduction = Number(result.tasa_reduccion_anual) || 0;
+  const rangeAmounts = displayedBenefit.range_reference_clp || displayedBenefit.estimated_range_clp;
   const rangeReferenceOptions = rangeSimulationOptions(rangeAmounts);
   const rangeBounds = rangeReferenceOptions.length
     ? [rangeReferenceOptions[0].amount, rangeReferenceOptions.at(-1).amount]
@@ -104,7 +111,7 @@ export default function FinancingOverview({ draft, result, ufReference }) {
     <div className="financing-summary-grid">
       <SummaryCard title="Precio de vivienda" icon="ti-home"><strong>{ufLabel(result.precio_uf)}</strong><span>{money(price)}</span></SummaryCard>
       <SummaryCard title="Tu pie" icon="ti-wallet" tone="gold"><strong>{ufLabel(uf(pie, ufValue))}</strong><span>{money(pie)} · {percentage(pie, price).toFixed(2)}% del valor</span></SummaryCard>
-      <SummaryCard title="Subsidio / beneficio" icon="ti-gift" tone="blue">{isRange ? <><strong>Rango referencial</strong><span>{rangeLabel}</span></> : hasSelectedRange ? <><strong>Monto simulado</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · referencia elegida dentro del rango</span></> : knownBenefit ? <><strong>{benefit.amount_kind === "base" ? "Aporte base" : "Monto informado"}</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · {money(result.subsidio_principal_clp)}</span></> : <><strong>Sin subsidio</strong><span>No se descuenta del financiamiento</span></>}</SummaryCard>
+      <SummaryCard title="Subsidio / beneficio" icon="ti-gift" tone="blue">{hasPendingBenefitChange ? <><strong>{benefitName}</strong><span>{isRange ? `${rangeLabel} · ` : ""}Cambio pendiente: revísalo y aplica tus cambios.</span></> : rateReduction > 0 ? <><strong>{benefitName}</strong><span>Tasa reducida {`${(rateReduction * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })} pp`} · {`${(Number(draft.tasa_anual || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`} a {`${(Number(result.tasa_anual_aplicada || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`}</span></> : benefit.selected ? <><strong>{benefitName}</strong><span>Beneficio aplicado; no descuenta el capital del financiamiento.</span></> : isRange ? <><strong>Rango referencial</strong><span>{rangeLabel}</span></> : hasSelectedRange ? <><strong>Monto simulado</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · referencia elegida dentro del rango</span></> : knownBenefit ? <><strong>{benefit.amount_kind === "base" ? "Aporte base" : "Monto informado"}</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · {money(result.subsidio_principal_clp)}</span></> : <><strong>Sin subsidio</strong><span>No se descuenta del financiamiento</span></>}</SummaryCard>
       <SummaryCard title="Crédito referencial" icon="ti-file-invoice" tone="navy"><strong>{ufLabel(uf(credit, ufValue))}</strong><span>{money(credit)}</span></SummaryCard>
       <SummaryCard title="Dividendo estimado" icon="ti-calendar-month"><strong>{money(result.dividendo_clp)} / mes</strong><span>Estimación referencial</span></SummaryCard>
     </div>
@@ -121,7 +128,7 @@ export default function FinancingOverview({ draft, result, ufReference }) {
   </section>;
 }
 
-export function FinancingAdjustments({ draft, result, ufReference, terms = [], fromSuggested = false, hasDraftChanges = false, rangeAmountControlRef, isRangeAmountHighlighted = false, onRangeAmountInteraction = () => {}, onApply, onCancel, onPieChange, onCreditChange, onRangeAmountChange, onUpdate }) {
+export function FinancingAdjustments({ sectionRef, draft, result, ufReference, terms = [], fromSuggested = false, hasDraftChanges = false, rangeAmountControlRef, isRangeAmountHighlighted = false, onRangeAmountInteraction = () => {}, onApply, onCancel, onPieChange, onCreditChange, onRangeAmountChange, onUpdate }) {
   if (!draft || !result) return null;
   const ufValue = Number(ufReference?.uf_value_clp) || 0;
   const price = Number(result.precio_clp) || 0;
@@ -139,7 +146,7 @@ export function FinancingAdjustments({ draft, result, ufReference, terms = [], f
     ? [...rangeOptions, { kind: "saved", label: "Monto seleccionado", amount: selectedRangeAmount }]
     : rangeOptions;
 
-  return <section className="financing-adjustments" aria-labelledby="financing-adjustments-title">
+  return <section ref={sectionRef} className="financing-adjustments" aria-labelledby="financing-adjustments-title">
       <header><div><h3 id="financing-adjustments-title">Ajusta tus supuestos</h3><p>{fromSuggested ? "Partiste desde la configuración referencial sugerida. Puedes modificar cualquier supuesto." : "Modifica los valores para ver cómo cambia tu financiamiento."}</p></div></header>
       <div className="financing-adjustments__grid">
         <label><span>Pie en UF <FieldTooltip text="Monto que aportarás inicialmente. Al modificarlo, RutaHogar recalcula el crédito referencial." /></span><DecimalInput maxIntegerDigits={7} decimalPlaces={1} value={oneDecimal(uf(pie, ufValue))} onWheel={preventWheel} onChange={(next) => onPieChange(next * ufValue)} /></label>

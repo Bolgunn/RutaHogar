@@ -3,7 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import cases from "../../../../../docs/algorithms/ALG-11-financing-cases.json";
 import { calculateScenarioResult, classifyFinancialScenario } from "../scenarioResult";
-import { applyRangeReferenceAmount, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
+import { applyRangeReferenceAmount, benefitOptions, displayStatus, evaluateBenefit, rangeSimulationOptions } from "../benefitScenario";
 import { BENEFIT_ESTIMATION_BASELINE } from "../benefitEstimationBaseline";
 import { projectUf } from "../ufProjection";
 import { closeComposition, allowedTerms } from "../scenarioDraft";
@@ -14,8 +14,9 @@ import { toggleComparisonSelection } from "../comparisonSelection";
 import ScenarioStatus, { scenarioMetricTones } from "../../../components/financing/ScenarioStatus";
 import SuggestedConfiguration from "../../../components/financing/SuggestedConfiguration";
 import FinancingOverview, { FinancingAdjustments, formattedAmountCursorPosition, normalizedDecimalInput } from "../../../components/financing/FinancingOverview";
+import SubsidyDetailPanel from "../../../components/financing/subsidies/SubsidyDetailPanel";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
-import { RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, requiresScenarioDecision, savedSuggestedScenarioState, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+import { ADJUSTMENTS_SCROLL_OPTIONS, RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, requiresScenarioDecision, savedSuggestedScenarioState, scrollToFinancingAdjustments, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
 
 const findElementByType = (node, type) => {
   if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
@@ -69,6 +70,14 @@ describe("ALG-11", () => {
     const rangeBenefit = { amount_kind: "range", amount_clp: 0, estimated_range_clp: [100, 200] };
     expect(applyRangeReferenceAmount(rangeBenefit, 200)).toMatchObject({ amount_kind: "range_selected", amount_clp: 200, range_reference_clp: [100, 200] });
     expect(applyRangeReferenceAmount(rangeBenefit, 201)).toBe(rangeBenefit);
+  });
+  it("keeps informational benefits available when a reviewed catalogue only supplies monetary entries", () => {
+    const entries = benefitOptions({ entries: [{ identifier: "DS1", value: { amount_clp: 15000000 }, eligibility: {} }] });
+
+    expect(entries.find((entry) => entry.identifier === "DS1")?.value.amount_clp).toBe(15000000);
+    expect(entries.map((entry) => entry.identifier)).toEqual(expect.arrayContaining([
+      "FOGAES", "PADHI", "LEASING", "LEY_21748",
+    ]));
   });
   it("builds minimum, middle and maximum simulation references from a normalized range", () => {
     expect(rangeSimulationOptions([250, 550])).toEqual([
@@ -246,6 +255,45 @@ describe("ALG-11", () => {
     expect(markup).toContain("Selecciona el monto que quieres usar en esta simulación.");
     expect(findElementByType(adjustments, "select").props.value).toBe("");
     expect(markup).toContain("Aplicar cambios");
+  });
+  it("shows an informational benefit selected in the pending draft without treating it as a discount", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, credito_clp: 900, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
+    const pendingBenefit = { selected: "LEY_21748", amount_kind: "information", amount_clp: 0, entry: { name: "Subsidio al Dividendo — Ley N.º 21.748" } };
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, pendingBenefit, ufReference: { uf_value_clp: 1 } }));
+
+    expect(markup).toContain("Subsidio al Dividendo — Ley N.º 21.748");
+    expect(markup).toContain("Cambio pendiente: revísalo y aplica tus cambios.");
+    expect(markup).not.toContain("Sin subsidio");
+  });
+  it("applies the Ley 21.748 rate reduction without treating it as a capital subsidy", () => {
+    const draft = { precio_uf: 1000, pie_clp: 10000000, credito_clp: 90000000, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const withoutBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
+    const benefit = { selected: "LEY_21748", eligible: true, amount_kind: "information", amount_clp: 0, entry: { name: "Subsidio al Dividendo — Ley N.º 21.748", rate_reduction_percentage_points: 0.60 } };
+    const withBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result: withBenefit, ufReference: { uf_value_clp: 100000 } }));
+
+    expect(withBenefit.subsidio_principal_clp).toBe(0);
+    expect(withBenefit.tasa_anual_aplicada).toBeCloseTo(0.034);
+    expect(withBenefit.dividendo_clp).toBeLessThan(withoutBenefit.dividendo_clp);
+    expect(markup).toContain("Tasa reducida 0,6 pp");
+    expect(markup).not.toContain("Sin subsidio");
+  });
+  it("offers a clear action to cancel an applied subsidy", () => {
+    const markup = renderToStaticMarkup(React.createElement(SubsidyDetailPanel, {
+      subsidy: { title: "Subsidio al Dividendo — Ley N.º 21.748", tag: "Apoyo", icon: "percent", description: "", profile: "", requirements: [], summary: {} },
+      compatibility: { compatible: true, reasons: [] }, isSelected: true, isApplied: true, onApply: () => {}, onClear: () => {}, onClose: () => {},
+    }));
+
+    expect(markup).toContain("Cancelar subsidio");
+    expect(markup).toContain("El beneficio está aplicado a esta simulación.");
+  });
+  it("moves the user to the adjustment controls after selecting a benefit", () => {
+    const scrollIntoView = vi.fn();
+
+    scrollToFinancingAdjustments({ scrollIntoView });
+
+    expect(scrollIntoView).toHaveBeenCalledWith(ADJUSTMENTS_SCROLL_OPTIONS);
   });
   it("clears the guide through the selector interaction without replacing the apply flow", () => {
     const onRangeAmountInteraction = vi.fn();

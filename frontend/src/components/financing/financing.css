@@ -1,3 +1,7 @@
+.subsidy-list-item__title em.is-compatible,
+.subsidy-detail__summary strong.is-compatible { color: #1d7d45 !important; }
+.subsidy-detail__compatibility.is-compatible { border-color: #b7e3c8 !important; background: #effaf3 !important; color: #1d7d45 !important; }
+
 .financing-panel { margin: .5rem 0 0; padding: 1.35rem; border: 1px solid #dbe4e9; border-radius: 16px; background: #fff; }
 .section-block.simulation-page { gap: .85rem; }.simulation-section-tabs { display: flex; gap: .5rem; margin: .1rem 0 .35rem; padding: .35rem; width: fit-content; border-radius: 12px; background: #edf2f7; }
 .simulation-section-tabs button { border: 0; border-radius: 9px; padding: .7rem 1rem; background: transparent; color: #334155; font: inherit; font-weight: 700; cursor: pointer; }

@@ -2,7 +2,7 @@ import { BENEFIT_ESTIMATION_BASELINE, baselineAmountRangeClp } from "./benefitEs
 
 const PRIMARY = new Set(["DS1", "DS49"]);
 const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
-const normalize = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+export const normalizeBenefitIdentifier = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 function normalizedRange(range) {
   if (!Array.isArray(range) || range.length !== 2) return null;
@@ -36,9 +36,9 @@ function conditions(entry, evaluation = {}, project = {}) {
 }
 
 function assessedBenefit(entry, evaluation) {
-  const id = normalize(entry?.identifier);
+  const id = normalizeBenefitIdentifier(entry?.identifier);
   return (evaluation?.result?.housing_benefits?.applicable_benefits || [])
-    .find((item) => normalize(item?.type) === id);
+    .find((item) => normalizeBenefitIdentifier(item?.type) === id);
 }
 
 function baselineEntry(identifier) {
@@ -46,7 +46,21 @@ function baselineEntry(identifier) {
 }
 
 export function benefitOptions(catalogue) {
-  return catalogue?.entries?.length ? catalogue.entries : BENEFIT_ESTIMATION_BASELINE.entries;
+  const published = catalogue?.entries || [];
+  if (!published.length) return BENEFIT_ESTIMATION_BASELINE.entries;
+  const publishedByIdentifier = new Map(published.map((entry) => [normalizeBenefitIdentifier(entry?.identifier), entry]));
+  const baseline = BENEFIT_ESTIMATION_BASELINE.entries.map((entry) => {
+    const reviewed = publishedByIdentifier.get(normalizeBenefitIdentifier(entry.identifier));
+    return reviewed ? {
+      ...entry,
+      ...reviewed,
+      value: { ...entry.value, ...reviewed.value },
+      eligibility: { ...entry.eligibility, ...reviewed.eligibility },
+    } : entry;
+  });
+  const additional = published.filter((entry) => !BENEFIT_ESTIMATION_BASELINE.entries
+    .some((baselineEntry) => normalizeBenefitIdentifier(baselineEntry.identifier) === normalizeBenefitIdentifier(entry?.identifier)));
+  return [...baseline, ...additional];
 }
 
 export function benefitDisplay(entry, evaluation, ufValue) {
