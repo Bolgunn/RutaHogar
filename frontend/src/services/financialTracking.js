@@ -199,12 +199,10 @@ function goalsFromEvaluation(evaluation, months) {
   return goals;
 }
 
-function goalsFromStructuredPlan(result, fallbackMonths) {
-  const plan = Array.isArray(result?.improvement_plan)
-    ? result.improvement_plan
-    : [];
+function goalsFromStructuredPlan(plan, fallbackMonths) {
+  const actions = Array.isArray(plan) ? plan : [];
 
-  return plan
+  return actions
     .map((action, index) => {
       if (!action || typeof action !== "object") return null;
 
@@ -218,19 +216,34 @@ function goalsFromStructuredPlan(result, fallbackMonths) {
       if (action.description) details.push(action.description);
       if (action.expected_benefit) details.push(`Beneficio esperado: ${action.expected_benefit}`);
 
-      return buildGoal(
+      return {
+        ...buildGoal(
         title,
         details.join(" ") || "Acción sugerida desde tu última precalificación.",
         months,
         "pendiente",
         action.category,
         action.impact_level
-      );
+        ),
+        source_action_type: action.type || null,
+      };
     })
     .filter(Boolean);
 }
 
-export function buildFinancialTracking(evaluation) {
+function frozenPlanActions(trackingState) {
+  if (trackingState?.status !== "active") return null;
+  const frozen = trackingState.baseline?.original_plan_snapshot?.structured_improvement_plan;
+  if (Array.isArray(frozen)) return frozen;
+  const goals = Array.isArray(trackingState.goals) ? trackingState.goals : [];
+  return goals.map((goal) => goal?.definition?.original_action || {
+    type: goal?.definition?.source_action_type,
+    title: goal?.definition?.title,
+    description: goal?.definition?.description,
+  }).filter((action) => action?.type);
+}
+
+export function buildFinancialTracking(evaluation, trackingState = null) {
   if (!evaluation) return null;
   const input = evaluation.input || {};
   const onboarding = evaluation.onboarding || {};
@@ -240,7 +253,11 @@ export function buildFinancialTracking(evaluation) {
   const months = getTimelineMonths(onboarding);
   const classification = evaluation.result?.classification || "Bajo";
   const unrealisticTimeline = isShortTimelineUnrealistic({ classification, input, months });
-  const structuredGoals = goalsFromStructuredPlan(evaluation.result, months);
+  // Once HU13 tracking exists, its baseline plan is immutable. Showing that
+  // same source here keeps "Pasos sugeridos" aligned with the persisted metas
+  // instead of mixing in recommendations from a later re-evaluation.
+  const planActions = frozenPlanActions(trackingState) ?? evaluation.result?.improvement_plan;
+  const structuredGoals = goalsFromStructuredPlan(planActions, months);
 
   if (!hasMinimumData) {
     return {

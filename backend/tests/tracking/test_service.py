@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.tracking.contracts import TrackingError
-from app.tracking.service import TrackingService
+from app.tracking.service import TrackingService, client_tracking_view
 
 
 def market_snapshot():
@@ -102,6 +102,39 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
     assert app.read("u1", "2026-03-03T00:00:00Z")["update_due"]
     with pytest.raises(TrackingError, match="idempotency_conflict"):
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
+
+
+def test_frozen_catalogue_price_is_used_for_updates_and_projection():
+    """The card's `precio_min_uf` and tracking pie must use one target price."""
+    repo, app = service()
+    original_scorer = app.scorer
+    scored = []
+
+    def recording_scorer(snapshot):
+        scored.append(deepcopy(snapshot))
+        return original_scorer(snapshot, market_snapshot=market_snapshot())
+
+    app.scorer = recording_scorer
+    target = {"id": "terrazas", "nombre": "Terrazas de Maipú", "comuna": "Maipú", "precio_min_uf": 2900}
+    # This represents an old/manual property amount left in the initial score.
+    # It must not make a 2,900 UF catalogue target require the pie of a much
+    # more expensive property.
+    baseline = app.execute("u1", command({
+        **valid_snapshot(), "property_value_clp": 404_000_000, "project_goal": target,
+    }))
+    app.execute("u1", command({"ahorro_disponible": 12_000_000}, baseline["event_id"], "2026-02-01T00:00:00Z"))
+
+    assert len(scored) == 2
+    assert all(row["property_value_uf"] == 2900 for row in scored)
+    assert all(row["property_value_clp"] is None for row in scored)
+    # The original source snapshot remains immutable for audit/history.
+    assert repo.bundle["evaluations"][0]["financial_data"]["input"]["property_value_clp"] == 404_000_000
+
+    scored.clear()
+    app.projection("u1")
+    assert scored
+    assert all(row["property_value_uf"] == 2900 for row in scored)
+    assert all(row["property_value_clp"] is None for row in scored)
 
 
 def test_evaluations_keep_their_own_preliminary_question_snapshot():
@@ -235,7 +268,7 @@ def test_idempotency_compares_equivalent_timestamps_canonically():
     assert repo.commits == 2
 
 
-def test_correction_replays_intermediate_then_appends_new_real_evaluation_atomically():
+def test_replace_keeps_the_original_visible_as_audit_only_version():
     repo, app = service()
     first = app.execute("u1", command(valid_snapshot()))
     second = app.execute("u1", command({"ahorro_disponible": 2000000}, first["event_id"], "2026-02-01T00:00:00Z"))
@@ -255,6 +288,39 @@ def test_correction_replays_intermediate_then_appends_new_real_evaluation_atomic
     assert second["event_id"] in view["excluded_from_metrics"]
     assert view["latest_effective_snapshot"]["ahorro_disponible"] == 1500000
     assert view["latest_effective_snapshot"]["deuda_mensual"] == 250000
+    lead_view = client_tracking_view(view)
+    visible_ids = [row["event_id"] for row in lead_view["audit_line"]]
+    assert second["event_id"] in visible_ids
+    assert correction["event_id"] in visible_ids
+    assert correction["event_id"] in [row["event_id"] for row in lead_view["active_line"]]
+    assert second["event_id"] in lead_view["excluded_from_metrics"]
+    assert correction["event_id"] not in lead_view["excluded_from_metrics"]
+    assert next(row for row in lead_view["audit_line"] if row["event_id"] == second["event_id"])["root_event_id"] == second["event_id"]
+    assert next(row for row in lead_view["audit_line"] if row["event_id"] == correction["event_id"])["root_event_id"] == second["event_id"]
+
+
+def test_annul_hides_its_slot_from_lead_but_keeps_the_internal_audit():
+    repo, app = service()
+    first = app.execute("u1", command(valid_snapshot()))
+    update = app.execute("u1", command({"ahorro_disponible": 2_000_000}, first["event_id"], "2026-02-01T00:00:00Z"))
+    annul = {
+        "event_id": str(uuid4()), "effective_at": "2026-03-01T00:00:00Z",
+        "reason": "Registro duplicado", "correction_effect": "annul", "patch": {},
+    }
+    app.execute("u1", annul, update["event_id"])
+
+    internal = app.read("u1")
+    lead = client_tracking_view(internal)
+    internal_ids = [row["event_id"] for row in internal["audit_line"]]
+    lead_ids = [row["event_id"] for row in lead["audit_line"]]
+
+    assert update["event_id"] in internal_ids
+    assert annul["event_id"] in internal_ids
+    assert update["event_id"] not in lead_ids
+    assert annul["event_id"] not in lead_ids
+    assert update["event_id"] not in lead["excluded_from_metrics"]
+    assert annul["event_id"] not in lead["excluded_from_metrics"]
+    assert update["event_id"] not in [row["event_id"] for row in lead["active_line"]]
 
 
 def test_sole_baseline_cannot_be_annulled_or_leave_tracking_empty():
@@ -293,6 +359,7 @@ def test_baseline_replacement_is_effective_and_later_events_replay_from_it():
     assert repo.bundle["plan"] == frozen
     assert repo.bundle["events"][0] == original
     assert corrected_view["active_line"][0]["event_id"] == correction_id
+    assert corrected_view["active_line"][0]["root_event_id"] == first["event_id"]
     assert corrected_view["latest_effective_snapshot"] == replacement_snapshot
     assert first["event_id"] in corrected_view["excluded_from_metrics"]
 

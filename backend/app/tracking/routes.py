@@ -9,7 +9,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, TrackingError
 from .repository import TrackingRepository
-from .service import TrackingService
+from .service import TrackingService, client_tracking_view
 from .staff import StaffLeadService
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
@@ -53,7 +53,7 @@ def staff_context(credentials: Annotated[HTTPAuthorizationCredentials | None, De
 @router.get("")
 def summary(ctx=Depends(context), as_of: AwareDatetime | None = None):
     user_id, _, service = ctx
-    return checked(lambda: service.read(user_id, as_of))
+    return checked(lambda: client_tracking_view(service.read(user_id, as_of)))
 
 
 @router.get("/history")
@@ -61,7 +61,7 @@ def history(ctx=Depends(context), view: Literal["active", "audit"] = "active",
             cursor: Annotated[int, Query(ge=0)] = 0,
             limit: Annotated[int, Query(ge=1, le=200)] = 50):
     user_id, _, service = ctx
-    result = checked(lambda: service.read(user_id))
+    result = checked(lambda: client_tracking_view(service.read(user_id)))
     rows = result[f"{view}_line"]
     return {"items": rows[cursor:cursor + limit], "view": view,
             "next_cursor": cursor + limit if cursor + limit < len(rows) else None}

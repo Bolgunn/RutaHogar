@@ -9,7 +9,7 @@ import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
 const project = {
   id: "project-1", nombre: "Parque Central", comuna: "Santiago",
   tipo_vivienda: "departamento", valor_uf: 3000,
-  precio_min_uf: 3000, precio_max_uf: 3200,
+  precio_min_uf: 3000, precio_max_uf: 3200, descripcion: "Departamentos cercanos al centro de Santiago.",
 };
 
 const baseContext = {
@@ -42,6 +42,7 @@ describe("project evaluation modal copy", () => {
     expect(html).toContain("Parque Central");
     expect(html).toContain("Santiago");
     expect(html).toContain("Departamento");
+    expect(html).toContain(project.descripcion);
     expect(html).toContain(evaluation.status);
     expect(html).toContain("Valor desde");
     expect(html).toContain("Pie mínimo");
@@ -51,6 +52,22 @@ describe("project evaluation modal copy", () => {
     expect(html).not.toContain(evaluation.message);
     expect(html).not.toContain(evaluation.recommendation);
     expect(html).not.toContain(PROJECT_SIMULATION_DISCLAIMER);
+  });
+
+  it("uses the persisted tracking verdict for the same projection target", () => {
+    const html = renderToStaticMarkup(<ProjectEvaluationModal
+      project={project}
+      projects={[]}
+      context={{ ...baseContext, ahorro_disponible: 150 * DEFAULT_UF_CLP }}
+      ufValueClp={DEFAULT_UF_CLP}
+      onboarding={{}}
+      compatibilityStatus="Cercano"
+      onClose={vi.fn()}
+      onToggleFavorite={vi.fn()}
+    />);
+
+    expect(html).toContain("Cercano");
+    expect(html).not.toContain("Requiere ajuste");
   });
 });
 

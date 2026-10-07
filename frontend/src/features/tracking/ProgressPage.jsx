@@ -4,7 +4,7 @@ import {
 } from "../../services/trackingService";
 import {
   belongsToSlot, displayValue, filterSeriesByPeriod,
-  projectName, projectionCauses, trackingProjectContext,
+  projectName, projectionExplanation, trackingProjectContext,
 } from "../../lib/tracking/display";
 import {
   evolutionSeries, expectedProgressLine, sourceForChartField,
@@ -14,12 +14,20 @@ import { formatFormValue } from "../../constants";
 import UpdateFinancialDataForm from "./UpdateFinancialDataForm";
 import "./tracking.css";
 
-const dateTime = (value) => value
-  ? new Date(value).toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" })
+const TRACKING_TIME_ZONE = "America/Santiago";
+const FINANCIAL_HISTORY_PREVIEW_LIMIT = 10;
+
+export const dateTime = (value) => value
+  ? new Date(value).toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short", timeZone: TRACKING_TIME_ZONE })
   : "Sin fecha";
-const dateOnly = (value) => value
+export const dateOnly = (value) => value
   ? new Date(value).toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
   : "Sin fecha";
+
+export function financialHistoryRows(rows, expanded = false) {
+  const history = Array.isArray(rows) ? rows : [];
+  return expanded ? history : history.slice(-FINANCIAL_HISTORY_PREVIEW_LIMIT);
+}
 
 const statusLabels = {
   cumplida: "Cumplida", en_progreso: "En progreso", en_curso: "En curso", pendiente: "Pendiente", vencida: "Fuera de plazo",
@@ -211,6 +219,24 @@ export function historicalEvaluationSummary(row) {
   return summary;
 }
 
+export function correctionTargetForClick(currentTarget, row) {
+  return currentTarget?.event_id === row.event_id ? null : row;
+}
+
+export function canBulkAnnul(row, baselineEventId, auditLine, excludedFromMetrics = []) {
+  return !belongsToSlot(row, baselineEventId, auditLine) && !excludedFromMetrics.includes(row.event_id);
+}
+
+export function bulkAnnulSuccessMessage(count) {
+  return `${count} registro${count === 1 ? " fue eliminado" : "s fueron eliminados"} de tu historial visible y evolución.`;
+}
+
+export function goalsStatusMessage(goals) {
+  const count = Array.isArray(goals) ? goals.length : 0;
+  if (!count) return "No hay metas pendientes: la evaluación inicial no detectó bloqueadores que requieran un plan de mejora.";
+  return `${count} ${count === 1 ? "meta fue generada" : "metas fueron generadas"} desde los bloqueadores de la evaluación inicial. Mostramos todas las metas de tu plan.`;
+}
+
 function HistoricalRecordDetails({ row }) {
   const fields = historySnapshotFields(row.recorded_complete_snapshot || row.snapshot);
   const summary = historicalEvaluationSummary(row);
@@ -235,16 +261,41 @@ function SectionHeading({ id, eyebrow, title, description }) {
   </div>;
 }
 
-export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHistory, busy = false }) {
+export function activeBaselineForComparison(data) {
+  const baseline = (data.active_line || []).find(
+    (row) => (row.root_event_id ?? row.event_id) === data.baseline.root_event_id,
+  );
+  if (!baseline || baseline.evaluation) return baseline;
+  // Prefer a recalculation explicitly linked to the active baseline version.
+  // Other correction paths can omit that follow-up or link it to a later
+  // record, so the immutable source baseline preserves the initial score.
+  const recalculation = (data.audit_line || []).find(
+    (row) => row.event_kind === "evaluation" && row.previous === baseline.event_id && row.evaluation,
+  );
+  const source = (data.audit_line || []).find(
+    (row) => row.event_id === data.baseline.root_event_id,
+  );
+  return recalculation
+    ? { ...baseline, evaluation: recalculation.evaluation }
+    : { ...baseline, evaluation: source?.evaluation };
+}
+
+export function ProgressView({ data, projection, projectionError = "", onRetryProjection, onConfirm, onUpdate, onOpenHistory, onOpenProject, busy = false }) {
   const series = evolutionSeries(data.active_line, data.baseline.target_project_snapshot);
-  const baseline = data.audit_line.find((row) => row.event_id === data.baseline.root_event_id);
+  // The initial slot can have a replacement correction. Its active version,
+  // not the immutable source event, is the baseline for score comparison.
+  const baseline = activeBaselineForComparison(data);
   const initialScore = baseline?.evaluation?.score;
   const current = data.current_evaluation;
   const projectContext = trackingProjectContext(data);
   const scoreChange = initialScore != null && current ? current.score - initialScore : null;
   const [actionError, setActionError] = useState("");
   const [evolutionPeriod, setEvolutionPeriod] = useState("all");
+  const [financialHistoryExpanded, setFinancialHistoryExpanded] = useState(false);
   const visibleSeries = filterSeriesByPeriod(series, evolutionPeriod, data.cutoff_at);
+  const shownFinancialHistory = financialHistoryRows(visibleSeries, financialHistoryExpanded);
+  const hasMoreFinancialHistory = visibleSeries.length > FINANCIAL_HISTORY_PREVIEW_LIMIT;
+  const goals = Array.isArray(data.goals) ? data.goals : [];
   const perform = async (operation) => {
     setActionError("");
     try { await operation(); } catch (failure) { setActionError(failure.message); }
@@ -279,14 +330,17 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
         <i className="ti ti-calendar-stats" aria-hidden="true" />
         <div className="progress-summary__projection-copy">
           <span>Proyección del objetivo</span>
-          {!projection ? <strong>Calculando proyección…</strong> : <>
+          {!projection ? <>{projectionError ? <>
+            <strong>La proyección no está disponible por ahora</strong><p>{projectionError}</p>
+            {onRetryProjection && <button type="button" className="text-button" onClick={onRetryProjection}>Reintentar proyección</button>}
+          </> : <><strong>Calculando proyección…</strong><p>Aún no está lista porque estamos revisando tus observaciones y el objetivo del plan.</p></>}</> : <>
             <strong>{projection.target_compatible_at
               ? projection.status === "already_compatible"
                 ? `Objetivo compatible al ${dateOnly(projection.target_compatible_at)}`
                 : `Fecha compatible estimada: ${dateOnly(projection.target_compatible_at)}`
               : "Aún no podemos estimar una fecha"}</strong>
             {!projection.target_compatible_at && <p>
-              {projectionCauses[projection.cause] || "Registra nuevos antecedentes para actualizar esta proyección."}
+              {projectionExplanation(projection)}
             </p>}
           </>}
         </div>
@@ -296,7 +350,10 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
         </dl>
       </div>
       <div className="progress-summary__foot">
-        <p><strong>Objetivo de proyección:</strong> {projectName(projectContext.frozenTarget)}</p>
+        <p><strong>Proyecto objetivo:</strong> {projectContext.frozenTarget?.id && onOpenProject
+          ? <button type="button" className="text-button progress-summary__project-link"
+              onClick={() => onOpenProject(projectContext.frozenTarget.id)}>{projectName(projectContext.frozenTarget)}</button>
+          : projectName(projectContext.frozenTarget)}</p>
         {projectContext.hasDifferentLatestPreference && <p><strong>Última preferencia evaluada:</strong> {projectName(projectContext.latestPreference)}</p>}
       </div>
     </section>
@@ -304,8 +361,9 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
     <section className="progress-section" aria-labelledby="progress-goals">
       <SectionHeading id="progress-goals" eyebrow="Plan original" title="Mis metas"
         description="Las metas fijadas al iniciar el plan se conservan para que puedas medir avances comparables." />
-      {!data.goals.length && <div className="empty-state"><strong>Este plan no contiene metas.</strong></div>}
-      <div className="progress-goals">{data.goals.map((goal) => {
+      <p className="progress-goals__summary" role="status">{goalsStatusMessage(goals)}</p>
+      {!goals.length && <div className="empty-state"><strong>Este plan no contiene metas pendientes.</strong></div>}
+      <div className="progress-goals">{goals.map((goal) => {
         const presentation = goalPresentation(goal.definition);
         return <article className="progress-goal-card" key={goal.goal_id}>
         <div className="progress-goal-card__head"><div>
@@ -360,14 +418,18 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
       </div>
       <div className="progress-trends">{[["score", "Score"], ["income", "Ingreso"], ["debt", "Deuda"], ["savings", "Ahorro"]]
         .map(([field, label]) => <EvolutionTrend key={field} series={visibleSeries} field={field} label={label}
-          expected={expectedProgressLine(data.goals, sourceForChartField(field), data.baseline.baseline_at)} />)}</div>
+          expected={expectedProgressLine(goals, sourceForChartField(field), data.baseline.baseline_at)} />)}</div>
       <details className="progress-history"><summary>Ver historial financiero</summary>
         <div className="tracking-table"><table><caption>Datos del período seleccionado</caption>
           <thead><tr><th>Fecha</th><th>Score</th><th>Clasificación</th><th>Ingreso</th><th>Deuda</th><th>Ahorro</th></tr></thead>
-          <tbody>{visibleSeries.map((row) => <tr key={row.id}><td>{dateTime(row.at)}</td>
+          <tbody>{shownFinancialHistory.map((row) => <tr key={row.id}><td>{dateTime(row.at)}</td>
             {[row.score, row.classification, row.income, row.debt, row.savings].map((value, index) =>
               <td key={index}>{displayValue(value)}</td>)}</tr>)}</tbody>
         </table></div>
+        {hasMoreFinancialHistory && <button type="button" className="text-button progress-history__more"
+          aria-expanded={financialHistoryExpanded} onClick={() => setFinancialHistoryExpanded((expanded) => !expanded)}>
+          {financialHistoryExpanded ? "Mostrar solo los últimos 10" : `Ver todo el historial (${visibleSeries.length})`}
+        </button>}
         <div className="progress-history__actions">
           <button type="button" className="secondary-button" onClick={onOpenHistory}>
             <i className="ti ti-history" aria-hidden="true" /> Ver y corregir historial
@@ -378,73 +440,164 @@ export function ProgressView({ data, projection, onConfirm, onUpdate, onOpenHist
   </div>;
 }
 
-export function TrackingHistoryView({ data, onCorrect, busy = false }) {
-  const [target, setTarget] = useState(null);
+export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarget = null }) {
+  const [target, setTarget] = useState(initialTarget);
   const [annulReason, setAnnulReason] = useState("");
   const [annulCommand, setAnnulCommand] = useState(null);
+  const [bulkAnnulMode, setBulkAnnulMode] = useState(false);
+  const [selectedForAnnul, setSelectedForAnnul] = useState([]);
+  const [bulkAnnulReason, setBulkAnnulReason] = useState("");
+  const [bulkAnnulCommands, setBulkAnnulCommands] = useState({});
+  const [bulkAnnulSubmitting, setBulkAnnulSubmitting] = useState(false);
+  const [bulkAnnulSuccess, setBulkAnnulSuccess] = useState("");
   const [actionError, setActionError] = useState("");
-  const targetIsBaseline = target && belongsToSlot(target, data.baseline.root_event_id, data.audit_line);
   const perform = async (operation) => {
     setActionError("");
     try { await operation(); } catch (failure) { setActionError(failure.message); }
   };
 
-  return <section className="progress-section progress-audit" aria-labelledby="progress-audit">
-    <SectionHeading id="progress-audit" eyebrow="Historial" title="Historial de cambios"
-      description="Revisa los datos registrados y corrige un registro sin borrar su historia." />
-    <ol className="progress-audit-list">{data.audit_line.map((row) => <li key={row.event_id}>
-      <div className="progress-audit-record__head">
-        <div className="progress-audit-record__meta"><strong>{dateTime(row.effective_at)}</strong><p>{row.reason}</p>
-          <span>{data.excluded_from_metrics.includes(row.event_id) ? "Versión anterior" : "Registro vigente"}</span></div>
-        <button type="button" className="secondary-button progress-audit-record__correct" disabled={busy}
-          onClick={() => { setTarget(row); setAnnulReason(""); setAnnulCommand(null); }}>
-          Corregir registro
-        </button>
-      </div>
-      <details className="progress-recorded-data"><summary>Ver datos registrados</summary>
-        <HistoricalRecordDetails row={row} />
-      </details>
-    </li>)}</ol>
-    {target && <div className="progress-correction">
-      <h3>Corregir registro del {dateOnly(target.effective_at)}</h3>
+  const correctionEditor = (selectedTarget) => {
+    const targetIsBaseline = belongsToSlot(selectedTarget, data.baseline.root_event_id, data.audit_line);
+    return <div className="progress-correction" id={`progress-correction-${selectedTarget.event_id}`}>
+      <h3>Corregir registro del {dateOnly(selectedTarget.effective_at)}</h3>
       <p>El registro original se conservará en el historial de cambios.</p>
-      <UpdateFinancialDataForm key={target.event_id} correction snapshot={target.recorded_complete_snapshot}
+      <UpdateFinancialDataForm key={selectedTarget.event_id} correction snapshot={selectedTarget.recorded_complete_snapshot}
         onSubmit={async (command) => {
-          await onCorrect(target, { event_id: command.event_id, effective_at: command.effective_at,
-            reason: command.reason, correction_effect: "replace", patch: { ...target.patch, ...command.patch } });
+          await onCorrect(selectedTarget, { event_id: command.event_id, effective_at: command.effective_at,
+            reason: command.reason, correction_effect: "replace", patch: { ...selectedTarget.patch, ...command.patch } });
           setTarget(null);
         }} />
       {targetIsBaseline ? <p className="progress-inline-note">La evaluación inicial no se puede anular. Puedes corregir sus datos registrados.</p> : <div className="progress-annul">
-        <label>Motivo de anulación<input value={annulReason}
+        <label>Motivo de anulación<textarea rows="4" maxLength="500" value={annulReason}
           onChange={(event) => { setAnnulReason(event.target.value); setAnnulCommand(null); }} /></label>
         <button type="button" className="secondary-button" disabled={busy || !annulReason.trim()}
           onClick={() => perform(async () => {
             const command = annulCommand || { event_id: crypto.randomUUID(), effective_at: new Date().toISOString(),
               reason: annulReason, correction_effect: "annul", patch: {} };
             setAnnulCommand(command);
-            await onCorrect(target, command);
+            await onCorrect(selectedTarget, command);
             setTarget(null);
           })}>Anular lógicamente</button>
       </div>}
-      <button type="button" className="text-button" onClick={() => setTarget(null)}>Cancelar</button>
-    </div>}
+    </div>;
+  };
+
+  // Only current non-baseline records are selectable in bulk. Prior versions
+  // stay visible for audit and individual correction, but are already excluded
+  // from metrics and must not receive a second annulment for the same slot.
+  const canAnnulRow = (row) => canBulkAnnul(
+    row, data.baseline.root_event_id, data.audit_line, data.excluded_from_metrics,
+  );
+  const annullableRows = data.audit_line.filter(canAnnulRow);
+  const selectedRows = data.audit_line.filter((row) => selectedForAnnul.includes(row.event_id) && canAnnulRow(row));
+  const resetBulkAnnul = () => {
+    setBulkAnnulMode(false);
+    setSelectedForAnnul([]);
+    setBulkAnnulReason("");
+    setBulkAnnulCommands({});
+  };
+  const toggleBulkRow = (eventId) => setSelectedForAnnul((current) => current.includes(eventId)
+    ? current.filter((id) => id !== eventId) : [...current, eventId]);
+  const toggleAllBulkRows = () => setSelectedForAnnul((current) => current.length === annullableRows.length
+    ? [] : annullableRows.map((row) => row.event_id));
+  const bulkAnnul = async () => {
+    setActionError("");
+    setBulkAnnulSuccess("");
+    if (!bulkAnnulReason.trim()) {
+      setActionError("Indica el motivo de la anulación.");
+      return;
+    }
+    if (!selectedRows.length) {
+      setActionError("Selecciona al menos un registro para anular.");
+      return;
+    }
+    const commands = { ...bulkAnnulCommands };
+    selectedRows.forEach((row) => {
+      commands[row.event_id] ||= {
+        event_id: crypto.randomUUID(), effective_at: new Date().toISOString(),
+        reason: bulkAnnulReason, correction_effect: "annul", patch: {},
+      };
+    });
+    setBulkAnnulCommands(commands);
+    // Each request is an immutable logical annulment of its selected source
+    // record. Sequential execution preserves lineage and lets a retry reuse
+    // the same idempotency keys if the connection fails partway through.
+    const count = selectedRows.length;
+    setBulkAnnulSubmitting(true);
+    try {
+      for (const row of selectedRows) await onCorrect(row, commands[row.event_id]);
+      resetBulkAnnul();
+      setBulkAnnulSuccess(bulkAnnulSuccessMessage(count));
+    } catch (failure) {
+      setActionError(failure.message || "No pudimos eliminar los registros seleccionados.");
+    } finally {
+      setBulkAnnulSubmitting(false);
+    }
+  };
+
+  return <section className="progress-section progress-audit" aria-labelledby="progress-audit">
+    <SectionHeading id="progress-audit" eyebrow="Historial" title="Historial de cambios"
+      description="Revisa los datos registrados y corrige un registro sin borrar su historia." />
+    <div className="progress-audit__bulk-actions">
+      {!bulkAnnulMode ? <button type="button" className="secondary-button" disabled={busy}
+        onClick={() => { setBulkAnnulMode(true); setTarget(null); setAnnulReason(""); setAnnulCommand(null); setBulkAnnulSuccess(""); }}>
+        <i className="ti ti-trash" aria-hidden="true" /> Seleccionar registros para anular
+      </button> : <>
+        <p>Selecciona los registros que quieras quitar de la evolución. La evaluación inicial se conserva.</p>
+        <button type="button" className="text-button progress-audit__select-all" disabled={busy || !annullableRows.length}
+          onClick={toggleAllBulkRows}>{selectedRows.length === annullableRows.length ? "Quitar selección" : `Seleccionar todos (${annullableRows.length})`}</button>
+        <label>Motivo de anulación múltiple<textarea rows="4" maxLength="500" value={bulkAnnulReason}
+          onChange={(event) => { setBulkAnnulReason(event.target.value); setBulkAnnulCommands({}); }} /></label>
+        <div><button type="button" className="secondary-button" disabled={busy || bulkAnnulSubmitting} onClick={resetBulkAnnul}>Cancelar</button>
+          <button type="button" className="secondary-button progress-audit__bulk-delete" disabled={busy || bulkAnnulSubmitting || !selectedRows.length || !bulkAnnulReason.trim()}
+            onClick={bulkAnnul}><i className="ti ti-trash" aria-hidden="true" /> Anular {selectedRows.length || ""} registro{selectedRows.length === 1 ? "" : "s"}</button></div>
+      </>}
+    </div>
+    {bulkAnnulSubmitting && <p className="progress-audit__feedback" role="status" aria-live="polite"><span className="loading-spinner" />
+      Eliminando {selectedRows.length} registro{selectedRows.length === 1 ? "" : "s"}…</p>}
+    {bulkAnnulSuccess && <p className="progress-audit__feedback is-success" role="status" aria-live="polite"><i className="ti ti-check" aria-hidden="true" /> {bulkAnnulSuccess}</p>}
+    <ol className="progress-audit-list">{data.audit_line.map((row) => <li key={row.event_id} id={`progress-audit-record-${row.event_id}`}>
+      <div className="progress-audit-record__head">
+        <div className="progress-audit-record__meta"><strong>{dateTime(row.effective_at)}</strong><p>{row.reason}</p>
+          <span>{data.excluded_from_metrics.includes(row.event_id) ? "Versión anterior" : "Registro vigente"}</span></div>
+        {!bulkAnnulMode && <button type="button" className="secondary-button progress-audit-record__correct" disabled={busy}
+          aria-controls={`progress-correction-${row.event_id}`} aria-expanded={target?.event_id === row.event_id}
+          onClick={() => {
+            setTarget((currentTarget) => correctionTargetForClick(currentTarget, row));
+            setAnnulReason(""); setAnnulCommand(null);
+          }}>
+          Corregir registro
+        </button>}
+      </div>
+      <details className="progress-recorded-data"><summary>Ver datos registrados</summary>
+        <HistoricalRecordDetails row={row} />
+      </details>
+      {bulkAnnulMode && canAnnulRow(row) && <label className="progress-audit-record__select">
+        <span>Seleccionar para anular</span><input type="checkbox" checked={selectedForAnnul.includes(row.event_id)} disabled={busy}
+          onChange={() => toggleBulkRow(row.event_id)} aria-label={`Seleccionar registro del ${dateTime(row.effective_at)} para anular`} />
+      </label>}
+      {target?.event_id === row.event_id && correctionEditor(row)}
+    </li>)}</ol>
     {actionError && <p role="alert" className="warning-note">{actionError}</p>}
   </section>;
 }
 
-export default function ProgressPage({ onOpenHistory, onStartEvaluation, onChanged }) {
+export default function ProgressPage({ onOpenHistory, onOpenProject, onStartEvaluation, onChanged }) {
   const [data, setData] = useState(null);
   const [projection, setProjection] = useState(null);
+  const [projectionError, setProjectionError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
   useEffect(() => {
     let active = true;
     setError("");
+    setProjection(null);
+    setProjectionError("");
     getTracking().then((result) => { if (active) setData(result); })
       .catch((failure) => { if (active) setError(failure.message); });
     getProjection().then((result) => { if (active) setProjection(result); })
-      .catch((failure) => { if (active) setError(failure.message); });
+      .catch((failure) => { if (active) setProjectionError(failure.message || "No pudimos calcularla en este momento."); });
     return () => { active = false; };
   }, [version]);
   const mutate = useCallback(async (operation) => {
@@ -466,8 +619,10 @@ export default function ProgressPage({ onOpenHistory, onStartEvaluation, onChang
       <p>La primera evaluación válida fijará el plan y sus metas originales.</p>
       <button className="primary-button" onClick={onStartEvaluation}>Realizar evaluación</button>
     </section>}
-    {data?.status === "active" && <ProgressView data={data} projection={projection} busy={busy}
+    {data?.status === "active" && <ProgressView data={data} projection={projection} projectionError={projectionError} busy={busy}
+      onRetryProjection={() => setVersion((value) => value + 1)}
       onOpenHistory={onOpenHistory}
+      onOpenProject={onOpenProject}
       onUpdate={(command) => mutate(() => appendTrackingEvent(command))}
       onConfirm={(goal) => mutate(() => confirmTrackingGoal(goal.goal_id, {
         event_id: crypto.randomUUID(), effective_at: new Date().toISOString(),
