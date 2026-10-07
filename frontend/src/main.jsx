@@ -5,6 +5,7 @@ import App from "./App";
 import "./styles.css";
 import "./components/user-home.css";
 import "./components/home-news.css";
+import "./components/user-results.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>

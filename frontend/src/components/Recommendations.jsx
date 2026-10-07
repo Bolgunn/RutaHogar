@@ -115,7 +115,7 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
 
   if (!data) {
     return (
-      <section className="section-block recommendations-panel">
+      <section className="section-block recommendations-panel results-panel--guided">
         <div className="section-heading">
           <span className="eyebrow">Resultados de tu calificación</span>
           <h1>Resultados de tu precalificación</h1>
@@ -130,7 +130,7 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
   }
 
   return (
-    <section className="section-block recommendations-panel">
+    <section className="section-block recommendations-panel results-panel--guided">
       <div className="page-head">
         <div>
           <span className="eyebrow">Resultados de tu calificación</span>
@@ -143,19 +143,21 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
 
       <div className="recommendation-hero-row" ref={scoreSummaryRef}>
         <section className="recommendation-score-ai-card">
+          <header className="results-section-head"><div><span className="eyebrow">Tu punto de partida</span><h2>Tu resultado actual</h2></div><span className="results-reference-label">Orientativo</span></header>
           <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
-            <span>Score financiero</span>
+            <span>Score orientativo</span>
             <strong>{formatScore(data.score, "Sin score")}</strong>
             <small>{data.classification || "Sin clasificación"}</small>
           </div>
           <div className="recommendation-score-ai-card__explanation">
-            <strong><i className="ti ti-sparkles"></i> Explicación con IA</strong>
+            <h2 className="results-ai-title"><i className="ti ti-sparkles" aria-hidden="true"></i> Explicación con IA</h2>
             <AiExplanationBlock text={evaluation?.result?.ai_explanation} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation} />
           </div>
         </section>
 
         <div className="recommendation-hero-explanations">
           <div className="recommendation-summary">
+            <h2 className="results-summary-title">Qué significa tu resultado</h2>
             <p>{data.summary}</p>
             {adjustment ? (
               <div className="score-adjustment-note">
@@ -206,7 +208,7 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
 
       {data.housing_benefits?.applicable_benefits?.some((b) => b.eligible) && (
         <div className="simulation-teaser">
-          <strong>Subsidios habitacionales</strong>
+          <h2 className="recommendation-section-title">Subsidios habitacionales</h2>
           <p>
             Descubre qu&#233; beneficios como FOGAES, DS49, DS1 o Ley 21.748 podr&#237;an ser compatibles con tu perfil.
           </p>
@@ -242,6 +244,7 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
       </div>
 
       <div className="recommendations-cta">
+        <div><span className="eyebrow">Tu siguiente paso</span><h2>Convierte tu resultado en acciones</h2><p>Revisa tu plan de mejora y avanza a tu ritmo.</p></div>
         <button className="primary-button" type="button" onClick={() => onNavigate?.("tracking")}>
           Ir al plan de mejora
         </button>
