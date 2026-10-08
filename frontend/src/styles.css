@@ -20730,8 +20730,8 @@ section-heading {
 }
 
 .portal-card-price { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
-.portal-price-uf { color: var(--rh-navy); font-family: var(--rh-font-mono); font-size: 1.1rem; font-weight: 700; }
-.portal-price-clp { color: var(--rh-text-muted); font-size: 0.82rem; }
+.portal-price-uf { color: var(--rh-navy); font-variant-numeric: tabular-nums; font-size: 1.1rem; font-weight: 700; }
+.portal-price-clp { color: var(--rh-text-muted); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
 
 .portal-card-actions {
   display: flex;
@@ -20915,13 +20915,14 @@ section-heading {
 
 .portal-modal-price-uf {
   color: var(--rh-navy);
-  font-family: var(--rh-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 1.5rem;
   font-weight: 700;
 }
 
 .portal-modal-price-clp {
   color: var(--rh-text-muted);
+  font-variant-numeric: tabular-nums;
   font-size: 0.95rem;
 }
 
