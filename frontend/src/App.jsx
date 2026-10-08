@@ -2454,7 +2454,10 @@ export default function App() {
               consentGranted={consentGranted}
               onConsentAccept={handleDataConsent}
               onBirthDateSave={handleBirthDateSave}
-              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+              onBack={currentEvaluation ? () => {
+                setScoreFormDraft(null);
+                setStartingNewEvaluation(false);
+              } : undefined}
               initialDraft={scoreFormDraft}
               onDraftChange={setScoreFormDraft}
               onResult={handleResult}

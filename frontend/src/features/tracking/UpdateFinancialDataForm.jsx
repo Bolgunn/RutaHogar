@@ -10,8 +10,8 @@ const primaryFields = [
   { name: "ingreso_mensual", label: "Ingreso mensual", type: "currency", maxDigits: 10 },
   { name: "deuda_mensual", label: "Deuda mensual", type: "currency", maxDigits: 10 },
   { name: "ahorro_disponible", label: "Ahorro disponible", type: "currency", maxDigits: 12 },
-  { name: "dividendo_estimado", label: "Dividendo estimado", type: "currency", maxDigits: 10 },
-  { name: "monto_morosidad", label: "Monto de morosidad", type: "currency", maxDigits: 12 },
+  { name: "dividendo_estimado", label: "Dividendo estimado", type: "currency", maxDigits: 10, nullable: true },
+  { name: "monto_morosidad", label: "Monto de morosidad", type: "currency", maxDigits: 12, nullable: true },
   { name: "morosidad_actual", label: "Morosidad actual", type: "select", options: ["si", "no"] },
   { name: "tipo_contrato", label: "Tipo de contrato", type: "select", options: ["indefinido", "plazo_fijo", "independiente", "honorarios_variable"] },
   { name: "continuidad_laboral", label: "Continuidad laboral", type: "select", options: [
@@ -80,7 +80,7 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
     const digitCount = digitsBeforeCursor(event.target.value, event.target.selectionStart);
     const value = formatTrackingCurrency(event.target.value, field.maxDigits);
     const cursor = cursorAfterDigits(value, digitCount);
-    change(field.name, { value, type: field.type, nullable: false, clear: false });
+    change(field.name, { value, type: field.type, nullable: Boolean(field.nullable), clear: value === "" });
     requestAnimationFrame(() => {
       const input = currencyRefs.current[field.name];
       if (input && document.activeElement === input) input.setSelectionRange(cursor, cursor);
@@ -125,7 +125,10 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
     <p>Solo se cambian los campos que edites. Para actualizar el avance del pie, modifica “Ahorro disponible” y guarda el cambio con su motivo.</p>
     <fieldset disabled={busy}>
       <div className="tracking-grid">{primaryFields.map((field) => {
-        const value = controls[field.name]?.touched ? controls[field.name].value : snapshot?.[field.name] ?? (field.type === "currency" ? 0 : "");
+        const snapshotValue = snapshot?.[field.name];
+        const value = controls[field.name]?.touched
+          ? controls[field.name].value
+          : snapshotValue === undefined ? (field.type === "currency" ? 0 : "") : snapshotValue;
         return <label key={field.name}>{field.label}
           {field.type === "select" ? <select aria-label={field.label} value={value}
             onChange={(event) => change(field.name, { value: event.target.value, type: field.type, nullable: false, clear: false })}>

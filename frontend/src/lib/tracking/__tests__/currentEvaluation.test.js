@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { currentTrackingEvaluation } from "../currentEvaluation";
 
 describe("HU13 current evaluation for Plan de mejora", () => {
-  it("keeps the later project evaluation available after a frozen target already exists", () => {
-    const baseline = { id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", input: { project_goal: { id: "project-a" } } };
-    const later = { id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", input: { project_goal: { id: "project-b" } } };
+  it("inherits the latest saved plan for the same target project", () => {
+    const accepted = {
+      id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", plan_accepted_at: "2026-01-02T00:00:00Z",
+      input: { project_goal: { id: "project-a" } }, plan_type: "acelerado",
+    };
+    const later = { id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", input: { project_goal: { id: "project-a" } } };
     const tracking = {
       status: "active",
       baseline: { target_project_snapshot: { id: "project-a" } },
@@ -14,7 +17,9 @@ describe("HU13 current evaluation for Plan de mejora", () => {
       current_evaluation: { score: 72 },
     };
 
-    expect(currentTrackingEvaluation(tracking, [later, baseline], "owner")).toBe(later);
+    expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toMatchObject({
+      id: "evaluation-b", plan_type: "acelerado", housing_plan: { plan_type: "acelerado" },
+    });
   });
 
   it("uses the effective snapshot safely while the evaluation list refreshes", () => {
@@ -27,16 +32,39 @@ describe("HU13 current evaluation for Plan de mejora", () => {
     expect(evaluation).toMatchObject({ id: "evaluation-b", user_id: "owner", input: { project_goal: { id: "project-b" } } });
   });
 
-  it("keeps the last persisted plan choice when a later tracking evaluation has no annotation", () => {
+  it("does not inherit a plan from a different target project", () => {
     const accepted = {
       id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", plan_accepted_at: "2026-01-02T00:00:00Z",
-      plan_type: "acelerado", housing_plan: { plan_type: "acelerado" },
+      input: { project_goal: { id: "project-a" } }, plan_type: "acelerado",
+    };
+    const later = { id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", input: { project_goal: { id: "project-b" } } };
+    const tracking = { status: "active", current_evaluation_id: "evaluation-b", current_evaluation: { score: 70 } };
+
+    expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toBe(later);
+  });
+
+  it("does not inherit a plan without a stable target project identity", () => {
+    const accepted = {
+      id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", plan_type: "acelerado",
+      input: { project_goal: { id: "project-a" } },
     };
     const later = { id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", input: {} };
     const tracking = { status: "active", current_evaluation_id: "evaluation-b", current_evaluation: { score: 70 } };
 
-    expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toMatchObject({
-      id: "evaluation-b", plan_type: "acelerado", housing_plan: { plan_type: "acelerado" },
-    });
+    expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toBe(later);
+  });
+
+  it("leaves an evaluation that already selected a plan unchanged", () => {
+    const accepted = {
+      id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", plan_type: "acelerado",
+      input: { project_goal: { id: "project-a" } },
+    };
+    const later = {
+      id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", plan_type: "conservador",
+      input: { project_goal: { id: "project-a" } },
+    };
+    const tracking = { status: "active", current_evaluation_id: "evaluation-b", current_evaluation: { score: 70 } };
+
+    expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toBe(later);
   });
 });

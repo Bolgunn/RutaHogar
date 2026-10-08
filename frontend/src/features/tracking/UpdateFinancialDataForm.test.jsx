@@ -32,6 +32,16 @@ describe("HU13 update form presentation", () => {
     expect(html).toMatch(/disabled=""[^>]*>Guardar actualización/);
   });
 
+  it("renders nullable currency values from the snapshot as empty inputs", () => {
+    const html = renderToStaticMarkup(<UpdateFinancialDataForm previous="event-1" onSubmit={vi.fn()} snapshot={{
+      dividendo_estimado: null,
+      monto_morosidad: null,
+    }} />);
+
+    expect(html).toMatch(/aria-label="Dividendo estimado"[^>]*value=""/);
+    expect(html).toMatch(/aria-label="Monto de morosidad"[^>]*value=""/);
+  });
+
   it("formats typed currency as whole Chilean peso amounts", () => {
     expect(formatTrackingCurrency("250000")).toBe("250.000");
     expect(formatTrackingCurrency("$1.200.000")).toBe("1.200.000");
@@ -77,5 +87,25 @@ describe("HU13 update form presentation", () => {
     expect(effectiveTrackingPatch(unchanged, snapshot)).toEqual({});
     expect(hasUnsavedTrackingChanges(changed, snapshot)).toBe(true);
     expect(effectiveTrackingPatch(changed, snapshot)).toEqual({ ingreso_mensual: 5000000 });
+  });
+
+  it("distinguishes nullable clears, zero, untouched fields and invalid required currency", () => {
+    const snapshot = { dividendo_estimado: 450000, monto_morosidad: 120000, ingreso_mensual: 1000000 };
+
+    expect(effectiveTrackingPatch({
+      dividendo_estimado: { touched: true, type: "currency", value: "", nullable: true, clear: true },
+    }, snapshot)).toEqual({ dividendo_estimado: null });
+    expect(effectiveTrackingPatch({
+      monto_morosidad: { touched: true, type: "currency", value: "", nullable: true, clear: true },
+    }, snapshot)).toEqual({ monto_morosidad: null });
+    expect(effectiveTrackingPatch({
+      dividendo_estimado: { touched: true, type: "currency", value: "0", nullable: true, clear: false },
+    }, snapshot)).toEqual({ dividendo_estimado: 0 });
+    expect(effectiveTrackingPatch({
+      ingreso_mensual: { touched: false, type: "currency", value: "900.000", nullable: false, clear: false },
+    }, snapshot)).toEqual({});
+    expect(() => effectiveTrackingPatch({
+      ingreso_mensual: { touched: true, type: "currency", value: "", nullable: false, clear: true },
+    }, snapshot)).toThrow("Este dato no permite un valor vacío.");
   });
 });
