@@ -17,8 +17,9 @@ const POPULAR_QUERIES = [
   "Departamento en Ñuñoa",
 ];
 
-// Comunas con propiedades en el catálogo; ofrecer otras solo lleva a búsquedas vacías.
-const COMMUNES = ["Santiago", "Ñuñoa", "San Miguel"];
+// Sin Supabase solo existe el catálogo semilla del backend; con Supabase la lista se
+// reemplaza por las comunas que de verdad tienen avisos.
+const FALLBACK_COMMUNES = ["Santiago", "Providencia", "Ñuñoa", "Las Condes", "La Florida", "San Miguel"];
 
 // Datos ingeridos antes de la normalización traen el tipo en plural ("casas").
 const QUALIFY_NOUNS = {
@@ -57,6 +58,16 @@ export default function PropertySearch({ evaluation, onboarding, userId, onStart
   );
   const [query, setQuery] = useState("");
   const [commune, setCommune] = useState("");
+  const [communes, setCommunes] = useState(FALLBACK_COMMUNES);
+  useEffect(() => {
+    let active = true;
+    // Carga diferida: projectService trae el cliente de Supabase (ver loadFavoritesService).
+    import("../services/projectService")
+      .then(({ getPortalCommunes }) => getPortalCommunes())
+      .then((list) => { if (active && list.length) setCommunes(list); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [maxPriceUf, setMaxPriceUf] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [resultsLimit, setResultsLimit] = useState(12);
@@ -238,7 +249,7 @@ export default function PropertySearch({ evaluation, onboarding, userId, onStart
               onChange={(e) => setCommune(e.target.value)}
             >
               <option value="">Todas las comunas</option>
-              {COMMUNES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {communes.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 

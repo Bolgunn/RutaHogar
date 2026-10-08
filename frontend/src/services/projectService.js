@@ -635,18 +635,12 @@ export async function unassignExecutive(projectId, email) {
 // filas por petición, por eso se pagina.
 const PORTAL_PAGE_SIZE = 1000;
 
-export async function getPortalProjects() {
-  if (PROVIDER === "local") return [];
-
+async function fetchAllPortalRows(columns, { priced }) {
   const rows = [];
   for (let from = 0; ; from += PORTAL_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("proyectos_rag")
-      .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
-      .gt("valor_uf", 0)
-      .order("comuna")
-      .order("id")
-      .range(from, from + PORTAL_PAGE_SIZE - 1);
+    let query = supabase.from("proyectos_rag").select(columns);
+    if (priced) query = query.gt("valor_uf", 0);
+    const { data, error } = await query.order("comuna").order("id").range(from, from + PORTAL_PAGE_SIZE - 1);
 
     if (error) {
       logSupabaseError(error);
@@ -656,4 +650,17 @@ export async function getPortalProjects() {
     if ((data || []).length < PORTAL_PAGE_SIZE) break;
   }
   return rows;
+}
+
+export async function getPortalProjects() {
+  if (PROVIDER === "local") return [];
+  return fetchAllPortalRows("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url", { priced: true });
+}
+
+// Comunas con avisos en el catálogo, para el filtro del portal: la búsqueda no exige
+// precio, así que aquí tampoco.
+export async function getPortalCommunes() {
+  if (PROVIDER === "local") return [];
+  const rows = await fetchAllPortalRows("comuna", { priced: false });
+  return [...new Set(rows.map((row) => row.comuna).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
 }
