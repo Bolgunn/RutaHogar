@@ -31,13 +31,22 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   }
   if (!response.ok) {
     const code = payload?.detail?.code || "invalid_request";
+    if (code === "unauthenticated") {
+      // El token aún firma bien para Supabase, pero el backend valida la sesión
+      // contra Auth y esta ya no existe: cerrarla localmente devuelve al login.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    }
     const messages = {
+      unauthenticated: "Tu sesión expiró. Inicia sesión nuevamente.",
       idempotency_conflict: "Este envío ya existe con otros datos.",
       lineage_conflict: "Hay una actualización más reciente. Recarga antes de guardar.",
       invalid_patch: "Revisa los datos enviados; no cumplen el contrato financiero.",
       verifiable_data_contradiction: "Esta meta se verifica con tus datos y no admite confirmación manual.",
       persistence_unavailable: "El seguimiento no está disponible temporalmente.",
       not_found: "No se encontró el registro en tu seguimiento.",
+      co_debtor_confirmation_required: "Aún no hay una confirmación vigente del co-deudor para actualizar tu score.",
+      co_debtor_consent_revoked: "El co-deudor revocó su consentimiento. Sus antecedentes ya no se pueden usar para actualizar tu score.",
+      owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
     };
     const failure = new Error(messages[code] || "No se pudo completar la operación.");
     failure.code = code;
@@ -51,6 +60,10 @@ export const getProjection = (options) => trackingRequest("/projection", undefin
 export const appendTrackingEvent = (command) => trackingRequest("/events", command);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
+export const updateScoreWithConfirmedCoDebtor = () =>
+  trackingRequest("/evaluations/co-debtor-confirmation", {});
+export const getStaffEvaluations = () => trackingRequest("/staff/evaluations", undefined);
+export const getStaffLeadDetail = (leadId) => trackingRequest(`/staff/leads/${encodeURIComponent(leadId)}`, undefined);
 export const annotateEvaluation = (evaluation, kind, payload, eventId = crypto.randomUUID()) =>
   trackingRequest(`/evaluations/${evaluation}/events`, {
     event_id: eventId, effective_at: new Date().toISOString(), kind, payload,

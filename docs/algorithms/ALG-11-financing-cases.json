@@ -1,0 +1,85 @@
+{
+  "algorithm": "ALG-11",
+  "version": "hu17-v2",
+  "note": "Asserted by the frontend Vitest suite. Financial ratios are existing ALG-9 references; values below are small fixtures, not market quotations.",
+  "cases": [
+    {
+      "name": "compatible_with_current_uf",
+      "why": "A closing composition, 25% dividend ratio, 45% total burden ceiling and LTV boundary are compatible.",
+      "input": {
+        "precio_clp": 100000000,
+        "pie_clp": 20000000,
+        "subsidio_principal_clp": 0,
+        "credito_clp": 80000000,
+        "dividendo_clp": 250000,
+        "renta_total_clp": 1000000,
+        "deuda_mensual_clp": 200000,
+        "ltv_referencial": 0.8
+      },
+      "expect": { "financial_status": "Compatible" }
+    },
+    {
+      "name": "near_above_healthy_dividend",
+      "why": "A dividend above 25% and at or below 30% is close when the other limits hold.",
+      "input": {
+        "precio_clp": 100000000,
+        "pie_clp": 20000000,
+        "subsidio_principal_clp": 0,
+        "credito_clp": 80000000,
+        "dividendo_clp": 300000,
+        "renta_total_clp": 1000000,
+        "deuda_mensual_clp": 100000,
+        "ltv_referencial": 0.8
+      },
+      "expect": { "financial_status": "Cercano", "has_reference_adjustment": true }
+    },
+    {
+      "name": "adjustment_when_total_burden_exceeds_limit",
+      "why": "Total burden above 45% cannot be close even if the dividend itself is at the healthy reference.",
+      "input": {
+        "precio_clp": 100000000,
+        "pie_clp": 20000000,
+        "subsidio_principal_clp": 0,
+        "credito_clp": 80000000,
+        "dividendo_clp": 250000,
+        "renta_total_clp": 1000000,
+        "deuda_mensual_clp": 250001,
+        "ltv_referencial": 0.8
+      },
+      "expect": { "financial_status": "Requiere ajuste", "has_reference_adjustment": true }
+    },
+    {
+      "name": "inapplicable_subsidy_overrides_presentation_not_math",
+      "why": "An official hypothetical DS1/DS49 amount may close the financing but cannot present an eligible result.",
+      "input": {
+        "financial_status": "Compatible",
+        "benefit": { "selected": "DS1", "eligible": false, "amount_clp": 10000000 }
+      },
+      "expect": { "display_status": "No aplicable actualmente", "financial_status": "Compatible" }
+    },
+    {
+      "name": "projection_requires_enough_distinct_dates",
+      "why": "Insufficient persisted UF history removes projected UF rather than creating a fallback or explanation.",
+      "input": { "distinct_effective_dates": 89 },
+      "expect": { "uf_projection": null }
+    },
+    {
+      "name": "saved_copy_preserves_provenance",
+      "why": "A derived scenario must freeze its own market and catalogue inputs while retaining its parent reference.",
+      "input": { "parent_scenario_id": "scenario-a", "market_snapshot": true, "catalogue_version": "official-v1" },
+      "expect": { "creates_new_row": true, "updates_existing_row": false }
+    },
+    {
+      "name": "ds49_base_reference_is_not_an_award",
+      "why": "The base amount illustrates capacity impact but an unmet condition remains dominant in the presentation.",
+      "input": { "benefit": "DS49", "base_amount_uf": 314, "uf_value_clp": 40000, "eligible": false },
+      "expect": { "amount_clp": 12560000, "display_status": "No aplicable actualmente" }
+    },
+    {
+      "name": "ds1_variable_amount_stays_a_range",
+      "why": "A range cannot silently become one applied subsidy amount before a reviewed amount matrix is available.",
+      "input": { "benefit": "DS1", "amount_range_uf": [250, 750] },
+      "expect": { "applied_amount_clp": 0, "shows_credit_and_dividend_range": true }
+    }
+  ]
+}

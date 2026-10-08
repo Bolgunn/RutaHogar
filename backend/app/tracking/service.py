@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from uuid import uuid4
 
 from .contracts import TrackingError, parse_time
@@ -12,6 +13,9 @@ from .scoring_adapter import (
     complete_snapshot, financial_field_contract, market_snapshot_from_result,
     provenance, resolve_tracking_market_snapshot, score_snapshot,
 )
+from ..scoring_engine.co_debtor_inputs import assemble_co_debtor_scoring_input
+
+CO_DEBTOR_CONFIRMATION_REASON = "confirmacion_codeudor"
 
 
 def canonical_command(command):
@@ -25,6 +29,52 @@ def valid_project_snapshot(snapshot):
     return deepcopy(project_goal) if isinstance(project_goal, dict) and project_goal else None
 
 
+def frozen_target_scoring_snapshot(snapshot, target_project):
+    """Build the current frozen-target scoring input without rewriting history.
+
+    Tracking retains the recorded user snapshot verbatim.  When a frozen
+    target currently includes a catalogue UF price, this helper overlays that
+    value only for the scoring invocation.  This records the existing target
+    handling; it does not establish `precio_min_uf` as a universal financial
+    rule.  The caller persists the effective overlay in evaluation provenance.
+    """
+    state = deepcopy(snapshot or {})
+    target = deepcopy(target_project) if isinstance(target_project, dict) else None
+    try:
+        price_uf = float((target or {}).get("precio_min_uf") or (target or {}).get("valor_uf") or 0)
+    except (TypeError, ValueError):
+        price_uf = 0
+    if not isfinite(price_uf) or price_uf <= 0:
+        return state
+    state.update({
+        "property_value": price_uf,
+        "property_value_unit": "uf",
+        "property_value_uf": price_uf,
+        # The resolver gives CLP priority, so this historical value must be
+        # explicitly cleared before the target UF value is evaluated.
+        "property_value_clp": None,
+        "property_value_source": "project_selection",
+        "project_goal": target,
+    })
+    if target.get("comuna"):
+        state["comuna_objetivo"] = target["comuna"]
+    return state
+
+
+def frozen_target_scoring_override(recorded_snapshot, scoring_snapshot):
+    """Describe the property overlay actually supplied to scoring, if any."""
+    if recorded_snapshot == scoring_snapshot:
+        return None
+    return {
+        "property_value": {
+            "value": deepcopy(scoring_snapshot.get("property_value")),
+            "unit": scoring_snapshot.get("property_value_unit"),
+            "source": scoring_snapshot.get("property_value_source"),
+            "target_project": deepcopy(scoring_snapshot.get("project_goal")),
+        },
+    }
+
+
 def source_events(bundle):
     evaluations = {row["id"]: row for row in bundle["evaluations"]}
     return [
@@ -36,6 +86,45 @@ def source_events(bundle):
         }
         for row in bundle["events"]
     ]
+
+
+def client_tracking_view(view):
+    """Build the lead-safe history without collapsing replacement provenance.
+
+    The complete lineage is retained in ``view`` for repository, service and
+    staff audit use.  The lead receives that full audit timeline, including
+    replaced originals, annulled records, and annulment events.  ``active_line``
+    is deliberately left untouched: only it feeds metrics, goals, charts, and
+    projections.  Every audit-only event is marked as excluded from metrics.
+    """
+    output = deepcopy(view)
+    audit_line = view.get("audit_line", [])
+    by_id = {row.get("event_id"): row for row in audit_line if row.get("event_id")}
+
+    def root_event_id(row):
+        current = row
+        seen = set()
+        while current and current.get("correction_of") and current["event_id"] not in seen:
+            seen.add(current["event_id"])
+            current = by_id.get(current["correction_of"])
+        return (current or row).get("event_id")
+
+    active_by_id = {row["event_id"]: row for row in view.get("active_line", [])}
+    visible_audit = []
+    for row in audit_line:
+        root_id = root_event_id(row)
+        active = active_by_id.get(row.get("event_id"))
+        visible_audit.append({
+            **deepcopy(row),
+            "root_event_id": active.get("root_event_id") if active else root_id,
+        })
+    output["audit_line"] = visible_audit
+    # The client can label every historic version while keeping the complete
+    # audit-only set out of metrics and bulk-effective operations.
+    output["excluded_from_metrics"] = [
+        row["event_id"] for row in visible_audit if row["event_id"] not in active_by_id
+    ]
+    return output
 
 
 def goal_view(bundle, lineage, as_of):
@@ -94,11 +183,85 @@ class TrackingService:
             return self.scorer(complete, market_snapshot=market_snapshot)
         return self.scorer(complete)
 
+    def _co_debtor_consent(self, user_id):
+        """Keep legacy/in-memory repositories usable while HU18 is optional."""
+        loader = getattr(self.repository, "load_co_debtor_consent", None)
+        return loader(user_id) if callable(loader) else None
+
+    @staticmethod
+    def _confirmation_id(consent_facts):
+        confirmation = (consent_facts or {}).get("co_debtor_confirmed")
+        confirmation_id = confirmation.get("id") if isinstance(confirmation, dict) else None
+        return str(confirmation_id) if confirmation_id else None
+
+    @staticmethod
+    def _confirmation_was_applied(bundle, confirmation_id):
+        return any(
+            event.get("reason") == CO_DEBTOR_CONFIRMATION_REASON
+            and (event.get("provenance") or {}).get("co_debtor_confirmation_id") == confirmation_id
+            for event in bundle.get("events", [])
+        )
+
+    def _co_debtor_update_state(self, bundle, user_id):
+        """Expose the current confirmation's one-time score-update state only."""
+        consent_facts = self._co_debtor_consent(user_id)
+        confirmation_id = self._confirmation_id(consent_facts)
+        required = bool(
+            (consent_facts or {}).get("invitation_status") == "confirmed"
+            and confirmation_id
+            and not self._confirmation_was_applied(bundle, confirmation_id)
+        )
+        return {"score_update_required": required}
+
+    def update_score_with_confirmed_co_debtor(self, user_id):
+        """Append an explicit HU18 re-evaluation for the authenticated lead."""
+        bundle = self.repository.load(user_id)
+        history = source_events(bundle)
+        lineage = reconstruct(history, user_id, financial_field_contract())
+        if not lineage["active_line"]:
+            raise TrackingError("not_found")
+        consent_facts = self._co_debtor_consent(user_id)
+        if (consent_facts or {}).get("invitation_status") == "revoked":
+            raise TrackingError("co_debtor_consent_revoked")
+        confirmation_id = self._confirmation_id(consent_facts)
+        if (consent_facts or {}).get("invitation_status") != "confirmed" or not confirmation_id:
+            raise TrackingError("co_debtor_confirmation_required")
+        if self._confirmation_was_applied(bundle, confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
+        now = self.clock().isoformat()
+        try:
+            return self.execute(
+                user_id,
+                {
+                    "event_id": self.new_id(),
+                    "event_kind": "evaluation",
+                    "effective_at": now,
+                    "reason": CO_DEBTOR_CONFIRMATION_REASON,
+                    "previous_event_id": lineage["active_line"][-1]["event_id"],
+                    "patch": {},
+                },
+                require_co_debtor_confirmation=True,
+                co_debtor_confirmation_id=confirmation_id,
+            )
+        except TrackingError as error:
+            # A simultaneous request can lose the normal HU13 revision race.
+            # Re-read only to report the domain outcome when the winner consumed
+            # this exact confirmation; no retry can create a second evaluation.
+            if error.code == "lineage_conflict" and self._confirmation_was_applied(
+                self.repository.load(user_id), confirmation_id
+            ):
+                raise TrackingError("co_debtor_confirmation_already_applied") from None
+            raise
+
     def read(self, user_id, as_of=None):
         cutoff = parse_time(as_of or self.clock())
         bundle = self.repository.load(user_id)
+        co_debtor = self._co_debtor_update_state(bundle, user_id)
         if not bundle["plan"]:
-            return {"status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": []}
+            return {
+                "status": "not_started", "baseline": None, "goals": [], "active_line": [], "audit_line": [],
+                "co_debtor": co_debtor,
+            }
         # Cutoff is effective time; recorded audit remains complete and immutable.
         lineage = reconstruct(source_events(bundle), user_id, financial_field_contract())
         active = [row for row in lineage["active_line"] if parse_time(row["effective_at"]) <= cutoff]
@@ -115,6 +278,7 @@ class TrackingService:
             "goals": goal_view(bundle, line_at_cutoff, cutoff),
             "last_active_update_at": last_update,
             "update_due": bool(last_update and cutoff - parse_time(last_update) >= timedelta(days=30)),
+            "co_debtor": co_debtor,
         }
 
     def _append(self, history, event, user_id):
@@ -153,14 +317,17 @@ class TrackingService:
         market_snapshot = self._stored_market_snapshot(view.get("active_line")) or self.market_snapshot_resolver()
         baseline = view.get("baseline") or {}
         target = baseline.get("target_project_snapshot")
-        # Project identity and value come from the evaluation that froze the target.
-        # For plans born with a target this is the root; for E3 it is the first later
-        # evaluation carrying that target. Historical rows remain untouched.
+        # Older frozen targets may not contain a catalogue price. Keep their
+        # historical source as a compatibility fallback; a target price is an
+        # existing scoring-input overlay, not a newly asserted universal rule.
         target_source = next((
             row for row in view["audit_line"]
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
-        if target_source:
+        target_with_price = frozen_target_scoring_snapshot(latest, target)
+        if target_with_price != latest:
+            latest = target_with_price
+        elif target_source:
             original = target_source["recorded_complete_snapshot"]
             for field in ("property_value", "property_value_unit", "property_value_clp", "property_value_uf",
                           "property_value_source", "comuna_objetivo"):
@@ -186,11 +353,14 @@ class TrackingService:
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
 
-    def execute(self, user_id, command, target_event_id=None):
+    def execute(self, user_id, command, target_event_id=None, *, require_co_debtor_confirmation=False,
+                co_debtor_confirmation_id=None):
         command = canonical_command(command)
         if target_event_id:
             command["target_event_id"] = target_event_id
         bundle = self.repository.load(user_id)
+        if co_debtor_confirmation_id and self._confirmation_was_applied(bundle, co_debtor_confirmation_id):
+            raise TrackingError("co_debtor_confirmation_already_applied")
         prior = next((row for row in bundle["events"] if row["event_id"] == command["event_id"]), None)
         if prior:
             if prior["canonical_request"] != command:
@@ -198,7 +368,8 @@ class TrackingService:
             return deepcopy(prior["command_result"])
         history = source_events(bundle)
         before = reconstruct(history, user_id, financial_field_contract())
-        now = self.clock().isoformat()
+        recorded_at = self.clock()
+        now = recorded_at.isoformat()
         latest_id = before["active_line"][-1]["event_id"] if before["active_line"] else None
         event = {
             "event_id": command["event_id"], "subject_user_id": user_id,
@@ -226,12 +397,52 @@ class TrackingService:
         event = outcome["appended_record"]
         events, evaluations, goals, plan = [event], [], [], None
         market_snapshot = self._stored_market_snapshot(before.get("active_line")) or self.market_snapshot_resolver()
+        consent_facts = None
+        consent_loaded = False
 
-        def evaluate(source, snapshot):
-            result = self._score(snapshot, market_snapshot)
-            details = {**provenance(result), "source_event_ids": [source["event_id"]], "cutoff_at": now}
-            evaluation = {"id": self.new_id(), "snapshot": deepcopy(snapshot), "result": result, "provenance": details}
-            source.update(evaluation_id=evaluation["id"], evaluation=result, provenance=details)
+        def evaluate(source_event, snapshot):
+            nonlocal consent_facts, consent_loaded
+            if (snapshot.get("complemento_renta") or require_co_debtor_confirmation) and not consent_loaded:
+                consent_facts = self._co_debtor_consent(user_id)
+                consent_loaded = True
+            resolved_input, consent_provenance = assemble_co_debtor_scoring_input(
+                snapshot,
+                co_debtor_consent=consent_facts,
+                now=recorded_at,
+            )
+            if require_co_debtor_confirmation:
+                if self._confirmation_id(consent_facts) != co_debtor_confirmation_id:
+                    raise TrackingError("co_debtor_confirmation_required")
+                complement_source = consent_provenance["complement_source"]
+                if complement_source == "excluded_after_revocation":
+                    raise TrackingError("co_debtor_consent_revoked")
+                if complement_source != "co_debtor_confirmed":
+                    raise TrackingError("co_debtor_confirmation_required")
+            complete_input = complete_snapshot(resolved_input)
+            # Keep complete_input as the immutable recorded fact. A frozen
+            # target can still overlay the scoring input; provenance below
+            # records that operational transformation when it occurs.
+            frozen_target = (bundle.get("plan") or {}).get("target_project_snapshot") or valid_project_snapshot(complete_input)
+            scoring_input = frozen_target_scoring_snapshot(complete_input, frozen_target)
+            scoring_override = frozen_target_scoring_override(complete_input, scoring_input)
+            result = self._score(scoring_input, market_snapshot)
+            details = {
+                **provenance(result),
+                "source_event_ids": [source_event["event_id"]],
+                "cutoff_at": now,
+                "co_debtor_consent": consent_provenance,
+            }
+            if scoring_override:
+                details["scoring_overrides"] = scoring_override
+            if co_debtor_confirmation_id:
+                details["co_debtor_confirmation_id"] = co_debtor_confirmation_id
+            evaluation = {
+                "id": self.new_id(), "snapshot": deepcopy(complete_input),
+                "result": result, "provenance": details,
+            }
+            source_event.update(
+                evaluation_id=evaluation["id"], evaluation=result, provenance=details
+            )
             evaluations.append(evaluation)
             return evaluation
 

@@ -1,0 +1,30 @@
+name: Check housing benefit catalogue sources
+on:
+  schedule:
+    - cron: "0 8 1 * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Check reviewed MINVU sources without extracting amounts
+        id: monitor
+        continue-on-error: true
+        run: python backend/scripts/check_housing_benefit_sources.py backend/housing_benefit_catalog/official-v1.json
+      - name: Open or update review issue
+        if: steps.monitor.outcome != 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Review required: housing benefit catalogue source changed or was unavailable';
+            const issues = await github.paginate(github.rest.issues.listForRepo, {owner: context.repo.owner, repo: context.repo.repo, state: 'open'});
+            if (!issues.some(issue => issue.title === title)) await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body: 'A configured official MINVU source changed or could not be fetched. Review it manually; do not publish or extract amounts automatically.'});
+      - name: Fail loudly after opening review issue
+        if: steps.monitor.outcome != 'success'
+        run: exit 1

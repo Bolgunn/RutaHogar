@@ -1,7 +1,9 @@
 
 /* ═══ Auth Navy/Gold ═══ */
-/* Override .auth-shell so it doesn't constrain the split layout */
-.auth-shell {
+/* Override .auth-shell so it doesn't constrain the split layout.
+   Selector compuesto a propósito: con `.auth-shell` a secas el minificador
+   de producción lo fusiona con la regla de styles.css y descarta el override. */
+.app-shell.auth-shell {
   display: block !important;
   min-height: auto !important;
   place-items: unset !important;
@@ -181,13 +183,21 @@
   width: 16px;
   height: 16px;
 }
+.auth-left-cta--secondary {
+  margin-left: 12px;
+  background: transparent;
+  border: 1.5px solid #D4A843;
+  color: #D4A843;
+}
 
 /* ── Right Panel ── */
+/* Centrado con margin: auto en el hijo y no con justify-content: center, que en un
+   contenedor con scroll deja inalcanzable la parte superior de un formulario largo. */
 .auth-right {
   background: #FAFBFD;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   padding: 2.5rem;
   position: relative;
@@ -197,6 +207,7 @@
 .auth-right-inner {
   width: 100%;
   max-width: 420px;
+  margin-block: auto;
   background: rgba(255,255,255,0.85);
   border: 1px solid rgba(11,26,46,0.1);
   border-radius: 16px;

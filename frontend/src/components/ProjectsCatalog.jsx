@@ -1,12 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
 import { buildSimulationContext } from "../lib/simulation/compatibility";
-import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice } from "../lib/simulation/projectAdapter";
-import { getAvailableProjects } from "../services/projectService";
+import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice, portalProjectToCatalogCard } from "../lib/simulation/projectAdapter";
+import { getAvailableProjects, getPortalProjects } from "../services/projectService";
 import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
 import { propertyLabels } from "../constants";
 import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
-import { getCurrentProjectGoal, isCurrentProjectGoal } from "../lib/projectGoalDisplay";
+import { getCurrentProjectGoal, isCurrentProjectGoal, projectCompatibilityLabel } from "../lib/projectGoalDisplay";
+
+export function initialCatalogProject(projects, projectId) {
+  if (!projectId) return { project: null, unavailable: false };
+  const project = (Array.isArray(projects) ? projects : []).find((item) => item.id === projectId) || null;
+  return { project, unavailable: !project };
+}
+
+export function initialProjectNavigation({ projectId, projects, catalogLoading, portalLoading, consumedProjectId }) {
+  if (!projectId || catalogLoading || consumedProjectId === projectId) {
+    return { project: null, unavailable: false, consume: false };
+  }
+  const initial = initialCatalogProject(projects, projectId);
+  if (initial.project) return { ...initial, consume: true };
+  // The portal list arrives independently. Do not declare a target missing
+  // while it can still be the next asynchronous result.
+  return { ...initial, unavailable: !portalLoading, consume: false };
+}
 
 function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
@@ -69,11 +86,14 @@ function ProjectsCarousel({ children }) {
   );
 }
 
-export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
+export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, frozenTrackingCompatibility, initialProjectId, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
+  const [portalProjects, setPortalProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [initialProjectUnavailable, setInitialProjectUnavailable] = useState(false);
   const [favorites, setFavorites] = useState([]);
   const [favoritesError, setFavoritesError] = useState("");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
@@ -88,6 +108,16 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       .then((rows) => { if (active) setProjects(catalogProjectsToSimulation(rows)); })
       .catch((cause) => { if (active) setError(cause.message || "No se pudo cargar el catálogo de proyectos."); })
       .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  // Los avisos del portal complementan el catálogo: si fallan, el catálogo sigue igual.
+  useEffect(() => {
+    let active = true;
+    getPortalProjects()
+      .then((rows) => { if (active) setPortalProjects(rows.map(portalProjectToCatalogCard)); })
+      .catch(() => {})
+      .finally(() => { if (active) setPortalLoading(false); });
     return () => { active = false; };
   }, []);
 
@@ -138,10 +168,37 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   const hasDifferentCurrentGoal = Boolean(frozenGoalProject && currentGoalProject
     && frozenGoalProject.id !== currentGoalProject.id);
   const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
-  const communes = useMemo(() => [...new Set(projects.map((project) => project.comuna).filter(Boolean))].sort(), [projects]);
+  // Favoritos, meta y compatibilidad se apoyan en public.proyectos, así que solo
+  // listado y filtros incluyen los avisos del portal.
+  const listedProjects = useMemo(() => [...projects, ...portalProjects], [portalProjects, projects]);
+  const consumedInitialProjectIdRef = useRef(null);
+  useEffect(() => {
+    if (!initialProjectId) {
+      consumedInitialProjectIdRef.current = null;
+      setInitialProjectUnavailable(false);
+      return;
+    }
+    const initial = initialProjectNavigation({
+      projectId: initialProjectId,
+      projects: listedProjects,
+      catalogLoading: loading,
+      portalLoading,
+      consumedProjectId: consumedInitialProjectIdRef.current,
+    });
+    if (initial.project && initial.consume) {
+      setInitialProjectUnavailable(false);
+      setSelectedProjectId(initial.project.id);
+      consumedInitialProjectIdRef.current = initialProjectId;
+    } else if (initial.unavailable) {
+      setInitialProjectUnavailable(true);
+    } else {
+      setInitialProjectUnavailable(false);
+    }
+  }, [initialProjectId, listedProjects, loading, portalLoading]);
+  const communes = useMemo(() => [...new Set(listedProjects.map((project) => project.comuna).filter(Boolean))].sort(), [listedProjects]);
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es-CL");
-    return projects.filter((project) => {
+    return listedProjects.filter((project) => {
       const matchesType = propertyType === "todos" || project.tipo_vivienda === propertyType;
       const matchesCommune = !commune || project.comuna === commune;
       const matchesAvailability = availability === "todos" || project.estado === availability;
@@ -149,8 +206,12 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       const searchable = `${project.nombre} ${project.comuna || ""}`.toLocaleLowerCase("es-CL");
       return matchesType && matchesCommune && matchesAvailability && matchesFavorite && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
-  }, [availability, commune, favorites, propertyType, projects, query, showFavoritesOnly]);
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) || null;
+  }, [availability, commune, favorites, listedProjects, propertyType, query, showFavoritesOnly]);
+  const selectedProject = listedProjects.find((project) => project.id === selectedProjectId) || null;
+  const selectedFrozenCompatibility = selectedProject && frozenTrackingTarget
+    && String(selectedProject.id) === String(frozenTrackingTarget.id)
+    ? projectCompatibilityLabel(frozenTrackingCompatibility)
+    : null;
   const availabilityLabel = (status) => status === "en_construccion" ? "En construcción" : status === "disponible" ? "Disponible" : status || "Sin estado";
 
   const handleSimulateProject = (project) => {
@@ -158,7 +219,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       onStartEvaluation?.();
       return;
     }
-    onNavigate?.("simulation", { projectId: project.id });
+    onNavigate?.("simulation", { projectId: project.id, simulationSection: "financing" });
   };
 
   return <section className="section-block simulation-panel projects-catalog-page">
@@ -173,9 +234,12 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       </div>
     </header>
     {favoritesError && <div className="warning-note">{favoritesError}</div>}
+    {initialProjectUnavailable && <div className="warning-note" role="status">
+      El proyecto objetivo ya no está disponible en el catálogo. Puedes explorar las alternativas vigentes.
+    </div>}
     {loading ? <div className="admin-compact-empty"><strong>Cargando proyectos disponibles...</strong></div> : error ? (
       <div className="admin-compact-empty"><strong>{error}</strong><button type="button" className="secondary-button compact-button" onClick={() => window.location.reload()}>Reintentar</button></div>
-    ) : !projects.length ? (
+    ) : !listedProjects.length ? (
       <div className="admin-compact-empty"><strong>No hay proyectos disponibles.</strong><p>Vuelve más tarde para revisar nuevas alternativas.</p></div>
     ) : <>
       {frozenGoalProject && <section className="projects-current-goal projects-current-goal--frozen" aria-labelledby="frozen-goal-title">
@@ -234,11 +298,12 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
         </div>
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
+             const isPortal = project.origen === "portal";
              const isFavorite = favorites.includes(project.id);
              const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
-          {userId && (
+          {userId && !isPortal && (
             <button
               type="button"
               className={`project-catalog-favorite-button ${isFavorite ? "is-active" : ""}`}
@@ -257,7 +322,14 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
             <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
-            {context ? (
+            {isPortal ? (
+              <div className="project-catalog-card__actions">
+                {context
+                  ? <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
+                  : <button type="button" className="primary-button compact-button" onClick={() => onStartEvaluation?.()}>Evaluar</button>}
+                <a href={project.url} target="_blank" rel="noopener noreferrer" className="secondary-button compact-button">Ver publicación original ↗</a>
+              </div>
+            ) : context ? (
               <div className="project-catalog-card__actions">
                 <button type="button" className="primary-button compact-button" onClick={() => setSelectedProjectId(project.id)}>Revisar compatibilidad</button>
                 <button type="button" className="secondary-button compact-button" onClick={() => handleSimulateProject(project)}>Simular</button>
@@ -276,6 +348,6 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       <i className="ti ti-info-circle" aria-hidden="true" />
       <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
     </div>
-    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} />}
+    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} compatibilityStatus={selectedFrozenCompatibility} />}
   </section>;
 }

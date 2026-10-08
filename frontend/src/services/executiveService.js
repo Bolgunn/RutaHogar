@@ -1,6 +1,6 @@
 import { supabase } from "../utils/supabase";
 import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
-import { derivedTestPassword, validateExecutive } from "./projectValidation";
+import { validateExecutive } from "./projectValidation";
 
 // Alta y listado de ejecutivos comerciales de una inmobiliaria (HU 7).
 // La creación real de la cuenta ocurre en la Edge Function `create-executive`,
@@ -66,7 +66,7 @@ export async function createExecutive({ email, full_name, phone, inmobiliaria_id
 
   if (!isSupabaseDataConfigured) {
     // Sin Supabase no hay cuentas reales: se registra el ejecutivo localmente
-    // para poder recorrer la pantalla, con la misma contraseña derivada.
+    // solo para poder recorrer la pantalla.
     const local = readLocalExecutives();
     if (local.some((item) => item.email === payload.email)) {
       throw new Error("Ya existe un ejecutivo con ese correo.");
@@ -86,7 +86,6 @@ export async function createExecutive({ email, full_name, phone, inmobiliaria_id
       created: true,
       ejecutivo: executive,
       email_enviado: false,
-      password_temporal: derivedTestPassword(payload.email),
       mensaje: "Ejecutivo registrado solo en este navegador (Supabase no está configurada).",
     };
   }

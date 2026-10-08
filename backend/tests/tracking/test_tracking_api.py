@@ -9,7 +9,8 @@ from app.main import app
 from app.tracking.contracts import TrackingError
 from app.tracking.repository import TrackingRepository
 from app.tracking.routes import repository
-from test_service import MemoryRepository, command, valid_snapshot
+from app.tracking.service import TrackingService
+from test_service import MemoryRepository, command, market_snapshot, valid_snapshot
 
 
 class ASGITestClient:
@@ -44,6 +45,11 @@ def api(monkeypatch):
     # the exact ASGI/dependency stack while running these small fakes inline.
     monkeypatch.setattr("fastapi.dependencies.utils.run_in_threadpool", inline_threadpool)
     monkeypatch.setattr("fastapi.routing.run_in_threadpool", inline_threadpool)
+    # API contract tests must not depend on a live BCCh request.
+    monkeypatch.setattr(
+        "app.tracking.routes.TrackingService",
+        lambda repo: TrackingService(repo, market_snapshot_resolver=market_snapshot),
+    )
     repo = MemoryRepository()
     repo.authenticate = lambda _token: "u1"
     app.dependency_overrides[repository] = lambda: repo
@@ -58,6 +64,68 @@ def test_bearer_required_before_domain_access(api):
     response = client.get("/tracking")
     assert response.status_code == 401
     assert repo.commits == 0
+
+
+def test_confirmed_co_debtor_evaluation_uses_authenticated_owner_only(api):
+    client, repo = api
+    headers = {"Authorization": "Bearer test-owner"}
+    declared = {
+        **valid_snapshot(),
+        "complemento_renta": True,
+        "ingreso_mensual_complementario": 800000,
+        "deuda_mensual_complementario": 50000,
+        "tipo_contrato_complementario": "plazo_fijo",
+        "continuidad_laboral_complementario": "entre_6_y_12_meses",
+        "morosidad_complementario": "no",
+        "relacion_complementario": "pareja_conviviente",
+    }
+    repo.co_debtor_consent = {"invitation_status": "pending"}
+    baseline = client.post("/tracking/events", json=command(declared), headers=headers)
+    assert baseline.status_code == 200, baseline.text
+    previous = deepcopy(repo.bundle["evaluations"][0])
+    repo.co_debtor_consent = {
+        "invitation_status": "confirmed",
+        "co_debtor_confirmed": {
+            "id": "confirmation-1",
+            "ingreso_mensual_complementario": 1500000,
+            "deuda_mensual_complementario": 300000,
+            "tipo_contrato_complementario": "indefinido",
+            "continuidad_laboral_complementario": "mas_3_anios",
+            "morosidad_complementario": "no",
+        },
+    }
+
+    assert client.post("/tracking/evaluations/co-debtor-confirmation", json={}).status_code == 401
+    before_invalid_request = deepcopy(repo.bundle)
+    invalid = client.post(
+        "/tracking/evaluations/co-debtor-confirmation",
+        json={"lead_id": "another-lead"},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+    assert repo.bundle == before_invalid_request
+
+    updated = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert updated.status_code == 200, updated.text
+    assert repo.bundle["events"][-1]["user_id"] == "u1"
+    assert repo.bundle["events"][-1]["reason"] == "confirmacion_codeudor"
+    assert repo.bundle["events"][-1]["provenance"]["co_debtor_confirmation_id"] == "confirmation-1"
+    current = repo.bundle["evaluations"][-1]["financial_data"]["input"]
+    assert current["ingreso_mensual_complementario"] == 1500000
+    assert current["deuda_mensual_complementario"] == 300000
+    assert current["relacion_complementario"] == "pareja_conviviente"
+    assert repo.bundle["evaluations"][0] == previous
+
+    assert client.get("/tracking", headers=headers).json()["co_debtor"]["score_update_required"] is False
+    duplicate = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["code"] == "co_debtor_confirmation_already_applied"
+    assert len(repo.bundle["evaluations"]) == 2
+
+    repo.co_debtor_consent = {"invitation_status": "revoked"}
+    revoked = client.post("/tracking/evaluations/co-debtor-confirmation", json={}, headers=headers)
+    assert revoked.status_code == 409
+    assert revoked.json()["detail"]["code"] == "co_debtor_consent_revoked"
 
 
 def test_baseline_partial_update_correction_and_read_only_projection(api):
@@ -92,7 +160,14 @@ def test_baseline_partial_update_correction_and_read_only_projection(api):
     fixed = client.post(f"/tracking/events/{patch['event_id']}/corrections", json=correction, headers=headers)
     assert fixed.status_code == 200, fixed.text
     current = client.get("/tracking", headers=headers).json()
+    # Replacements preserve the original as lead-visible audit provenance,
+    # while active history and charts remain restricted to effective states.
+    assert patch["event_id"] in [row["event_id"] for row in current["audit_line"]]
     assert patch["event_id"] in current["excluded_from_metrics"]
+    active_history = client.get("/tracking/history?view=active", headers=headers).json()
+    audit_history = client.get("/tracking/history?view=audit", headers=headers).json()
+    assert patch["event_id"] not in [row["event_id"] for row in active_history["items"]]
+    assert patch["event_id"] in [row["event_id"] for row in audit_history["items"]]
     assert current["latest_effective_snapshot"]["ahorro_disponible"] == 1000000
 
 

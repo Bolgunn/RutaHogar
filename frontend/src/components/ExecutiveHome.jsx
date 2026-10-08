@@ -33,7 +33,8 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
 
   const leadStats = useMemo(() => (evaluations || []).reduce((counts, item) => {
     counts.total += 1;
-    if (item.result?.classification === "Alto") counts.prioritarios += 1;
+    const isReliable = !['sospechoso', 'en_revision', 'silenciado'].includes(item.reliability_status);
+    if (item.result?.classification === "Alto" && isReliable) counts.prioritarios += 1;
     return counts;
   }, { total: 0, prioritarios: 0 }), [evaluations]);
 

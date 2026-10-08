@@ -53,3 +53,20 @@ export async function getMarketReference({ apiBase, fetchImpl = fetch, signal } 
 
   return normalizeMarketReference(body);
 }
+
+export async function getMarketReferenceHistory({ apiBase, fetchImpl = fetch, signal } = {}) {
+  let response;
+  try {
+    response = await fetchImpl(`${String(apiBase || "").replace(/\/$/, "")}/market-reference-history`, { signal });
+  } catch (cause) {
+    throw new MarketReferenceError("No fue posible consultar el historial UF.", { cause });
+  }
+  let body;
+  try { body = await response.json(); } catch (cause) {
+    throw new MarketReferenceError("El backend devolviÃ³ un historial UF invÃ¡lido.", { status: response.status, cause });
+  }
+  if (!response.ok || !Array.isArray(body?.observations)) {
+    throw new MarketReferenceError("No fue posible consultar el historial UF.", { status: response.status });
+  }
+  return body.observations.filter((item) => Number(item?.uf_value_clp) > 0 && item?.effective_date);
+}

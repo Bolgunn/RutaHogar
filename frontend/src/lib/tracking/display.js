@@ -11,10 +11,13 @@ export function serializePatch(controls) {
     if (control.clear) {
       if (!control.nullable) throw new Error("Este dato no permite un valor vacío.");
       patch[name] = null;
-    } else if (control.type === "number") {
-      if (String(control.value).trim() === "" || !Number.isFinite(Number(control.value)))
+    } else if (control.type === "number" || control.type === "currency") {
+      const rawValue = control.type === "currency"
+        ? String(control.value).replaceAll(".", "")
+        : control.value;
+      if (String(rawValue).trim() === "" || !Number.isFinite(Number(rawValue)))
         throw new Error("Ingresa un número válido.");
-      patch[name] = Number(control.value);
+      patch[name] = Number(rawValue);
     } else if (control.type === "boolean") {
       patch[name] = control.value === true || control.value === "true";
     } else {
@@ -61,6 +64,7 @@ export function filterSeriesByPeriod(series, period = "all", asOf) {
 }
 
 export function belongsToSlot(row, rootEventId, auditLine) {
+  if (row?.root_event_id) return row.root_event_id === rootEventId;
   const byId = new Map(auditLine.map((event) => [event.event_id, event]));
   let current = row;
   while (current?.correction_of) current = byId.get(current.correction_of);
@@ -97,5 +101,38 @@ export const projectionCauses = {
   incomplete_state: "Faltan antecedentes para ejecutar las reglas.",
   non_projectable_blocker: "Una condición que no se puede proyectar impide la compatibilidad.",
   no_favorable_trend: "No existe una tendencia favorable observada.",
-  objective_unreachable: "La tendencia observada no permite alcanzar compatibilidad.",
+  objective_unreachable: "Aunque hay una tendencia favorable, ningún estado futuro evaluado alcanza compatibilidad con el proyecto.",
 };
+
+const projectionVariableLabels = {
+  ahorro_disponible: "ahorro",
+  ingreso_mensual: "ingreso",
+  deuda_mensual: "deuda",
+};
+
+const projectionVariableCause = {
+  insufficient_data: "aún no tiene dos fechas distintas",
+  zero_slope: "no ha mostrado cambios",
+  adverse_direction: "ha evolucionado en una dirección desfavorable",
+  invalid_numeric_series: "no tiene datos utilizables",
+};
+
+export function projectionExplanation(projection) {
+  const fallback = projectionCauses[projection?.cause] || "Registra nuevos antecedentes para actualizar esta proyección.";
+  if (!projection) return fallback;
+  if (projection.cause === "no_favorable_trend") {
+    const stalled = Object.entries(projection.variables || {})
+      .filter(([, model]) => model?.status !== "projected" && projectionVariableCause[model?.cause])
+      .map(([field, model]) => `${projectionVariableLabels[field] || field.replaceAll("_", " ")} ${projectionVariableCause[model.cause]}`);
+    return stalled.length ? `Aún no podemos proyectar porque ${stalled.join("; ")}.` : fallback;
+  }
+  if (projection.cause !== "objective_unreachable") return fallback;
+
+  const lastFit = projection.milestones?.at(-1)?.project_fit || {};
+  const mainGap = lastFit.main_gap === "down_payment" ? "el pie" : lastFit.main_gap === "income" ? "los ingresos" : null;
+  const pending = mainGap === "el pie" ? "Brecha principal del pie aún no cerrada"
+    : mainGap === "los ingresos" ? "Brecha principal de ingresos aún no cerrada"
+      : "Aún faltan condiciones del proyecto por cumplir";
+
+  return `${pending}. Tu perfil todavía no es compatible con este proyecto.`;
+}

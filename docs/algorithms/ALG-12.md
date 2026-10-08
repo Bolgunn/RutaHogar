@@ -91,6 +91,10 @@ La meta, su valor inicial, objetivo, dirección, verificabilidad, predicado y fe
 exclusivamente del baseline. Una evaluación posterior puede cambiar el valor actual, pero no esos
 campos. Una meta cumplida continúa visible y su evidencia histórica nunca se elimina.
 
+La interfaz muestra todas las metas congeladas que entregue el plan; no existe un límite de dos
+tarjetas. El generador actual contempla hasta nueve tipos de acción, derivados de los bloqueadores
+de la evaluación inicial, y una actualización posterior no los regenera.
+
 ### R2 — Numeric progress
 
 **Already-satisfied baseline takes precedence.** Evaluate the comparator from the frozen

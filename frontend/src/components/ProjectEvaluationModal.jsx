@@ -39,6 +39,7 @@ export default function ProjectEvaluationModal({
   onToggleFavorite,
   isFavorite,
   isCurrentGoal,
+  compatibilityStatus,
 }) {
   const [interestStatus, setInterestStatus] = useState("");
   const [actionError, setActionError] = useState("");
@@ -60,20 +61,33 @@ export default function ProjectEvaluationModal({
   }, [project]);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
-  const evaluation = useMemo(
+  const localEvaluation = useMemo(
     () => evaluateScenario(context, projectToScenario(project, ufValueClp)),
     [context, project, ufValueClp],
   );
+  // El proyecto objetivo activo ya fue evaluado por el seguimiento. Su estado
+  // debe ser idéntico al de "Estado actual"; otros proyectos siguen usando la
+  // comparación local del catálogo.
+  const hasTrackingVerdict = Boolean(compatibilityStatus);
+  const evaluation = useMemo(() => (
+    hasTrackingVerdict ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
+  ), [compatibilityStatus, hasTrackingVerdict, localEvaluation]);
   const alternatives = useMemo(() => {
-    if (evaluation.status === "Compatible") return [];
+    // Tracking already decided the target project's compatibility. Its payload
+    // does not include alternative/gap details, so do not mix in local advice
+    // calculated for a potentially different verdict.
+    if (hasTrackingVerdict || evaluation.status === "Compatible") return [];
     return buildAccessibleAlternatives(
       projects.filter((item) => item.id !== project.id),
       context,
       onboarding,
       4,
     ).slice(0, 3);
-  }, [context, evaluation.status, onboarding, project.id, projects]);
+  }, [context, evaluation.status, hasTrackingVerdict, onboarding, project.id, projects]);
   const isCompatible = evaluation.status === "Compatible";
+  // Los avisos del portal no están en public.proyectos: favoritos, contacto con
+  // ejecutivo y meta del plan dependen de esa tabla, así que solo se enlaza el aviso.
+  const isPortal = project.origen === "portal";
 
   const handleInterest = async (contactExecutive) => {
     setActionError("");
@@ -131,6 +145,7 @@ export default function ProjectEvaluationModal({
         <span className="eyebrow">Proyecto seleccionado</span>
         <h2 id="project-evaluation-title">{project.nombre}</h2>
         <p className="project-evaluation-modal__context">{project.comuna || "Comuna sin dato"} · {propertyLabels[project.tipo_vivienda] || project.tipo_vivienda || "Vivienda"}</p>
+        {(project.descripcion || project.descripcion_corta) && <p className="project-evaluation-modal__context">{project.descripcion || project.descripcion_corta}</p>}
       </header>
       <div className={`project-evaluation-result ${isCompatible ? "is-compatible" : evaluation.status === "Cercano" ? "is-close" : "is-far"}`}>
         <div className="project-evaluation-result__heading"><span>Resultado referencial</span><strong className={`simulation-status ${statusClass[evaluation.status] || "adjust"}`}>{evaluation.status}</strong></div>
@@ -146,7 +161,10 @@ export default function ProjectEvaluationModal({
           {item.project.nombre} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda} · {formatProjectPrice(item.project)}
         </button>)}
       </div>}
-      {goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
+      {isPortal ? <div className="project-evaluation-modal__actions">
+        <a href={project.url} target="_blank" rel="noopener noreferrer" className="primary-button">Ver publicación original ↗</a>
+        {project.inmobiliaria && <p className="project-evaluation-modal__context">Publicado por {project.inmobiliaria} en Portal Inmobiliario.</p>}
+      </div> : goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
         {isCurrentGoal ? <div className="project-current-goal-notice"><i className="ti ti-circle-check" aria-hidden="true" /><span>Este proyecto ya es tu preferencia de última evaluación.</span></div> : <button

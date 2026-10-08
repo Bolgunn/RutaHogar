@@ -135,7 +135,9 @@ export default function AdminPanel({ evaluations, profile }) {
         <span className="eyebrow">Administración</span>
         <h1>Panel administrativo</h1>
         <p>
-          Vista de control para el equipo que coordina captación, catálogo y resguardo operativo en RutaHogar.
+          {profile?.role === "admin_inmobiliario" 
+            ? "Vista de control para la gestión de proyectos, leads asignados y resguardo comercial de la Inmobiliaria."
+            : "Vista de control para el equipo que coordina captación, catálogo y resguardo operativo en RutaHogar."}
         </p>
       </div>
 
@@ -272,11 +274,9 @@ export default function AdminPanel({ evaluations, profile }) {
         </div>
       )}
 
-      {canSeeArco && (
-        <div className="admin-section-gap">
-          <AdminReportedLeads profile={profile} />
-        </div>
-      )}
+      <div className="admin-section-gap">
+        <AdminReportedLeads profile={profile} evaluations={evaluations} />
+      </div>
     </section>
   );
 }

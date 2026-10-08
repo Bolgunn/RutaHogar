@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeSeries, belongsToSlot, filterSeriesByPeriod, isUpdateDue,
-  projectName, projectionCauses, serializePatch, trackingProjectContext,
+  projectName, projectionCauses, projectionExplanation, serializePatch, trackingProjectContext,
 } from "../display";
 
 describe("HU13 presence-preserving updates", () => {
@@ -17,6 +17,13 @@ describe("HU13 presence-preserving updates", () => {
       deuda_mensual: 450000,
       ahorro_disponible: 0,
     });
+  });
+
+  it("parses currency inputs displayed with Chilean thousands separators", () => {
+    expect(serializePatch({
+      ingreso_mensual: { touched: true, type: "currency", value: "1.200.000" },
+      deuda_mensual: { touched: true, type: "currency", value: "40.000" },
+    })).toEqual({ ingreso_mensual: 1200000, deuda_mensual: 40000 });
   });
 
   it("keeps explicit null different from omission", () => {
@@ -81,6 +88,24 @@ describe("HU13 active history and update-due indicator", () => {
       "insufficient_data", "missing_project_goal", "incomplete_state",
       "non_projectable_blocker", "no_favorable_trend", "objective_unreachable",
     ]) expect(projectionCauses[cause]).toBeTruthy();
+  });
+
+  it("briefly states the remaining gap and incompatible profile for an unreachable objective", () => {
+    expect(projectionExplanation({
+      cause: "objective_unreachable",
+      variables: { ahorro_disponible: { status: "projected" } },
+      milestones: [{ project_fit: { main_gap: "down_payment" } }],
+    })).toBe("Brecha principal del pie aún no cerrada. Tu perfil todavía no es compatible con este proyecto.");
+  });
+
+  it("names the variables that still lack a favorable trend", () => {
+    expect(projectionExplanation({
+      cause: "no_favorable_trend",
+      variables: {
+        ahorro_disponible: { status: "not_projectable", cause: "zero_slope" },
+        deuda_mensual: { status: "not_projectable", cause: "adverse_direction" },
+      },
+    })).toBe("Aún no podemos proyectar porque ahorro no ha mostrado cambios; deuda ha evolucionado en una dirección desfavorable.");
   });
 });
 
