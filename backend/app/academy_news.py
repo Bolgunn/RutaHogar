@@ -60,6 +60,7 @@ def _cache_ttl() -> int:
     except ValueError:
         return DEFAULT_CACHE_TTL_SECONDS
 
+RUTAHOGAR_ACADEMY_NEWS_FEEDS=[{"url":"https://news.google.com/rss/search?q=credito%20hipotecario%20Chile&hl=es-419&gl=CL&ceid=CL:es-419","source":"Google News","category":"Crédito hipotecario"},{"url":"https://news.google.com/rss/search?q=subsidio%20habitacional%20Chile&hl=es-419&gl=CL&ceid=CL:es-419","source":"Google News","category":"Subsidios"}]
 
 def _configured_feeds() -> list[dict[str, str]]:
     configured = os.environ.get("RUTAHOGAR_ACADEMY_NEWS_FEEDS", None)

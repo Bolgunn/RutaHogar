@@ -34,7 +34,7 @@
 
 ### E3 - Priorización del lead
 
-**Dado** que un lead posee una evaluación general y un proyecto objetivo, **cuando** sea enviado al CRM simulado, **entonces** deben registrarse separadamente su compatibilidad por capacidad de compra con el proyecto objetivo, su compatibilidad por afinidad con el proyecto objetivo.
+**Dado** que un lead posee una evaluación general y un proyecto objetivo, **cuando** sea enviado al CRM simulado, **entonces** deben registrarse separadamente su prioridad general, compatibilidad por capacidad de compra con el proyecto objetivo, su compatibilidad por afinidad con el proyecto objetivo.
 
 ### E4 - Actualización periódica en el CRM
 

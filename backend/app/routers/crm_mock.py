@@ -8,16 +8,6 @@ import logging
 import os
 from pathlib import Path
 
-# Cargar .env de backend si existe y las variables aún no están en el entorno
-_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-if _env_path.exists():
-    with open(_env_path, encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _k, _, _v = _line.partition("=")
-                os.environ.setdefault(_k.strip(), _v.strip())
-
 # Configurar el logger en INFO para que imprima en la consola
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -26,11 +16,11 @@ router = APIRouter()
 
 # API Key Security for CRM Mock (Fix for comment 5)
 API_KEY_NAME = "X-Mock-CRM-API-Key"
-API_KEY = os.getenv("CRM_MOCK_API_KEY")
+API_KEY = os.getenv("CRM_MOCK_API_KEY", "default-mock-key")
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
 
 async def verify_api_key(api_key_header: str = Security(api_key_header)):
-    expected_api_key = os.getenv("CRM_MOCK_API_KEY", API_KEY)
+    expected_api_key = os.getenv("CRM_MOCK_API_KEY", "default-mock-key")
     if api_key_header != expected_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -143,20 +133,6 @@ async def get_lead(email: str):
     if email not in mock_crm_db:
         raise HTTPException(status_code=404, detail="Lead no encontrado")
     return mock_crm_db[email]
-
-@router.delete("/leads/{email}", dependencies=[Depends(verify_api_key)])
-async def delete_lead(email: str):
-    if email not in mock_crm_db:
-        raise HTTPException(status_code=404, detail="Lead no encontrado")
-    del mock_crm_db[email]
-    logger.info(f"Audit: Lead deleted for email={email}")
-    return {"status": "eliminado", "message": "Lead eliminado exitosamente del CRM Simulado."}
-
-@router.delete("/leads", dependencies=[Depends(verify_api_key)])
-async def delete_all_leads():
-    mock_crm_db.clear()
-    logger.info("Audit: All leads deleted from CRM Simulado")
-    return {"status": "eliminados", "message": "Todos los leads eliminados exitosamente del CRM Simulado."}
 
 
 # --- Endpoints de simulación para proveedores de la industria ---

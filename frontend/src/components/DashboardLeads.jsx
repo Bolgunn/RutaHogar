@@ -453,8 +453,9 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     getSimulatedCrmLeads().then(leads => {
       const map = {};
       leads.forEach(l => { 
-        const primaryKey = l.lead_info?.rut || l.lead_id;
-        map[primaryKey] = l; 
+        if (l.lead_info?.email) {
+          map[l.lead_info.email] = l; 
+        }
       });
       setCrmLeads(map);
     });
@@ -662,7 +663,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
             <CommercialStageBadge records={commercialRecords[lead.user_id]} />
             <small>{formatDate(lead.created_at)}</small>
-            {crmLeads[lead.id] ? (
+            {lead.email && crmLeads[lead.email] ? (
               <span className="status-pill status-pill--success" style={{marginTop: '4px'}}>En CRM Simulado</span>
             ) : (
               <button
