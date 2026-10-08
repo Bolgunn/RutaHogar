@@ -21,14 +21,16 @@ export function formattedAmountCursorPosition(formatted, digitsBeforeCursor) {
   return position;
 }
 
-export function normalizedDecimalInput(value, { maxIntegerDigits = 3, decimalPlaces = 2 } = {}) {
+export function normalizedDecimalInput(value, { maxIntegerDigits = 3, decimalPlaces = 2, maxValue } = {}) {
   const rawValue = String(value).replace(",", ".");
   const pattern = new RegExp(`^\\d{0,${maxIntegerDigits}}(?:\\.\\d{0,${decimalPlaces}})?$`);
   if (!pattern.test(rawValue)) return null;
   const parsed = Number(rawValue);
+  const numericValue = rawValue === "" || rawValue === "." ? 0 : Number.isFinite(parsed) ? parsed : null;
+  if (numericValue === null || (maxValue != null && Number.isFinite(Number(maxValue)) && numericValue > Number(maxValue))) return null;
   return {
     rawValue,
-    value: rawValue === "" || rawValue === "." ? 0 : Number.isFinite(parsed) ? parsed : null,
+    value: numericValue,
   };
 }
 
@@ -53,7 +55,7 @@ function FormattedAmountInput({ value, onChange, ...props }) {
     value={amountLabel(value)} onChange={changeValue} />;
 }
 
-function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2, ...props }) {
+function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2, maxValue, ...props }) {
   const numericValue = () => Number(String(value ?? 0).replace(",", ".")) || 0;
   const [rawValue, setRawValue] = useState(() => String(numericValue()));
   const isEditing = useRef(false);
@@ -62,7 +64,7 @@ function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2
   }, [value]);
   const maxLength = maxIntegerDigits + (decimalPlaces ? decimalPlaces + 1 : 0);
   const changeValue = (event) => {
-    const next = normalizedDecimalInput(event.target.value, { maxIntegerDigits, decimalPlaces });
+    const next = normalizedDecimalInput(event.target.value, { maxIntegerDigits, decimalPlaces, maxValue });
     if (!next) return;
     setRawValue(next.rawValue);
     if (next.value !== null) onChange(next.value);
@@ -111,7 +113,7 @@ export default function FinancingOverview({ draft, result, pendingBenefit, ufRef
     <div className="financing-summary-grid">
       <SummaryCard title="Precio de vivienda" icon="ti-home"><strong>{ufLabel(result.precio_uf)}</strong><span>{money(price)}</span></SummaryCard>
       <SummaryCard title="Tu pie" icon="ti-wallet" tone="gold"><strong>{ufLabel(uf(pie, ufValue))}</strong><span>{money(pie)} · {percentage(pie, price).toFixed(2)}% del valor</span></SummaryCard>
-      <SummaryCard title="Subsidio / beneficio" icon="ti-gift" tone="blue">{hasPendingBenefitChange ? <><strong>{benefitName}</strong><span>{isRange ? `${rangeLabel} · ` : ""}Cambio pendiente: revísalo y aplica tus cambios.</span></> : rateReduction > 0 ? <><strong>{benefitName}</strong><span>Tasa reducida {`${(rateReduction * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })} pp`} · {`${(Number(draft.tasa_anual || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`} a {`${(Number(result.tasa_anual_aplicada || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`}</span></> : benefit.selected ? <><strong>{benefitName}</strong><span>Beneficio aplicado; no descuenta el capital del financiamiento.</span></> : isRange ? <><strong>Rango referencial</strong><span>{rangeLabel}</span></> : hasSelectedRange ? <><strong>Monto simulado</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · referencia elegida dentro del rango</span></> : knownBenefit ? <><strong>{benefit.amount_kind === "base" ? "Aporte base" : "Monto informado"}</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · {money(result.subsidio_principal_clp)}</span></> : <><strong>Sin subsidio</strong><span>No se descuenta del financiamiento</span></>}</SummaryCard>
+      <SummaryCard title="Subsidio / beneficio" icon="ti-gift" tone="blue">{hasPendingBenefitChange ? <><strong>{benefitName}</strong><span>{isRange ? `${rangeLabel} · ` : ""}Cambio pendiente: revísalo y aplica tus cambios.</span></> : isRange ? <><strong>Rango referencial</strong><span>{rangeLabel}</span></> : hasSelectedRange ? <><strong>Monto simulado</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · referencia elegida dentro del rango</span></> : rateReduction > 0 ? <><strong>{benefitName}</strong><span>Tasa reducida {`${(rateReduction * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })} pp`} · {`${(Number(draft.tasa_anual || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`} a {`${(Number(result.tasa_anual_aplicada || 0) * 100).toLocaleString("es-CL", { maximumFractionDigits: 2 })}%`}</span></> : knownBenefit ? <><strong>{benefit.amount_kind === "base" ? "Aporte base" : "Monto informado"}</strong><span>{ufLabel(uf(result.subsidio_principal_clp, ufValue))} · {money(result.subsidio_principal_clp)}</span></> : displayedBenefit.selected ? <><strong>{benefitName}</strong><span>Beneficio aplicado; no descuenta el capital del financiamiento.</span></> : <><strong>Sin subsidio</strong><span>No se descuenta del financiamiento</span></>}</SummaryCard>
       <SummaryCard title="Crédito referencial" icon="ti-file-invoice" tone="navy"><strong>{ufLabel(uf(credit, ufValue))}</strong><span>{money(credit)}</span></SummaryCard>
       <SummaryCard title="Dividendo estimado" icon="ti-calendar-month"><strong>{money(result.dividendo_clp)} / mes</strong><span>Estimación referencial</span></SummaryCard>
     </div>
@@ -150,7 +152,7 @@ export function FinancingAdjustments({ sectionRef, draft, result, ufReference, t
       <header><div><h3 id="financing-adjustments-title">Ajusta tus supuestos</h3><p>{fromSuggested ? "Partiste desde la configuración referencial sugerida. Puedes modificar cualquier supuesto." : "Modifica los valores para ver cómo cambia tu financiamiento."}</p></div></header>
       <div className="financing-adjustments__grid">
         <label><span>Pie en UF <FieldTooltip text="Monto que aportarás inicialmente. Al modificarlo, RutaHogar recalcula el crédito referencial." /></span><DecimalInput maxIntegerDigits={7} decimalPlaces={1} value={oneDecimal(uf(pie, ufValue))} onWheel={preventWheel} onChange={(next) => onPieChange(next * ufValue)} /></label>
-        <label><span>Pie (% del valor) <FieldTooltip text="Proporción del precio de vivienda que cubrirás con tu aporte inicial." /></span><DecimalInput maxIntegerDigits={3} decimalPlaces={2} value={percentage(pie, price).toFixed(2)} onWheel={preventWheel} onChange={(next) => onPieChange((next / 100) * price)} /></label>
+        <label><span>Pie (% del valor) <FieldTooltip text="Proporción del precio de vivienda que cubrirás con tu aporte inicial." /></span><DecimalInput maxIntegerDigits={3} decimalPlaces={2} maxValue={100} value={percentage(pie, price).toFixed(2)} onWheel={preventWheel} onChange={(next) => onPieChange((next / 100) * price)} /></label>
         {(isRange || hasSelectedRange) ? <label ref={rangeAmountControlRef} className={`financing-adjustments__range-field${isRangeAmountHighlighted ? " is-highlighted" : ""}`}><span>Monto del subsidio a simular <FieldTooltip text="Este subsidio tiene un rango referencial. Elige el monto mínimo, intermedio o máximo que quieres usar en esta simulación. No constituye una asignación oficial." /></span><select value={hasSelectedRange ? String(benefit.selected_range_amount_clp) : ""} onFocus={onRangeAmountInteraction} onChange={(event) => { onRangeAmountInteraction(); onRangeAmountChange(event.target.value === "" ? null : Number(event.target.value)); }}><option value="">Selecciona un monto</option>{selectableRangeOptions.map((option) => <option key={`${option.kind}-${option.amount}`} value={option.amount}>{option.label} · {ufLabel(uf(option.amount, ufValue))}</option>)}</select><small className="financing-adjustments__range-help">{isRangeAmountHighlighted ? "Selecciona el monto que quieres usar en esta simulación." : "Este subsidio tiene un rango referencial. Elige el monto que quieres usar en esta simulación. No constituye una asignación oficial."}</small></label> : null}
         <label><span>Crédito referencial (CLP) <FieldTooltip text="Monto que necesitarías financiar después de tu pie y de un beneficio con monto definido. No es una aprobación bancaria." /></span><FormattedAmountInput value={credit} maxDigits={12} onWheel={preventWheel} onChange={onCreditChange} /></label>
         <label><span>Plazo <FieldTooltip text="Tiempo en años para pagar el crédito. Las opciones respetan el límite de edad de esta simulación." /></span><select value={draft.plazo_anios} onChange={(event) => onUpdate("plazo_anios", Number(event.target.value))}>{terms.map((term) => <option key={term} value={term}>{term} años</option>)}</select></label>
