@@ -30,10 +30,49 @@ function historicalCompatibility(evaluation, snapshot, frozenTarget) {
     : null;
 }
 
+function canonicalSnapshot(value) {
+  if (Array.isArray(value)) return value.map(canonicalSnapshot);
+  if (value && typeof value === "object") return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = canonicalSnapshot(value[key]);
+    return result;
+  }, {});
+  return value;
+}
+
+function sameSnapshot(left, right) {
+  return JSON.stringify(canonicalSnapshot(left)) === JSON.stringify(canonicalSnapshot(right));
+}
+
+// A correction may be followed by a server-created evaluation event. That
+// event persists the recalculated score for the same financial snapshot; it
+// is not a second user observation. Keep the corrected evaluation, but fold
+// it into the preceding observation so its tooltip compares the actual change
+// (for example, $30.000 → $40.000) rather than the duplicated snapshot.
+function observedLine(activeLine) {
+  const observations = [];
+  for (const row of Array.isArray(activeLine) ? activeLine : []) {
+    const previous = observations.at(-1);
+    const isRepeatedEvaluation = row?.slot_kind === "evaluation"
+      && row?.event_kind === "evaluation"
+      && Object.keys(row?.patch || {}).length === 0
+      && previous
+      && sameSnapshot(row?.snapshot || {}, previous?.snapshot || {});
+    if (isRepeatedEvaluation) {
+      observations[observations.length - 1] = {
+        ...previous,
+        evaluation: row.evaluation || previous.evaluation,
+      };
+    } else {
+      observations.push(row);
+    }
+  }
+  return observations;
+}
+
 // The active line has already resolved corrections. This intentionally reads only
 // each row's recorded evaluation and snapshot, never the current evaluation.
 export function evolutionSeries(activeLine, frozenTarget = null) {
-  const rows = Array.isArray(activeLine) ? activeLine : [];
+  const rows = observedLine(activeLine);
   const result = [];
 
   for (const row of rows) {
