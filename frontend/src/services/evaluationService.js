@@ -57,7 +57,7 @@ export function normalizeEvaluation(row, contactsMap = {}) {
   return {
     id: row.id,
     created_at: row.created_at || new Date().toISOString(),
-    email: row.email,
+    email: contact.email || row.email || null,
     housing_plan: row.housing_plan || null,
     plan_accepted_at: row.plan_accepted_at || null,
     full_name: contact.full_name || null,
