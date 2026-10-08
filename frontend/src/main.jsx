@@ -14,6 +14,7 @@ import "./components/user-improvement-plan.css";
 import "./components/user-academy.css";
 import "./components/user-notices.css";
 import "./components/user-exploration.css";
+import "./components/user-design-system.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
