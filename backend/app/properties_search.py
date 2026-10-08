@@ -11,6 +11,8 @@ import urllib.parse
 import urllib.request
 from typing import List, Dict, Any, Optional
 
+from .chile_places import NON_RM_PLACES, PLACE_FALSE_FRIENDS
+
 # Disclaimer legal obligatorio (Criterio E4)
 RUTAHOGAR_REFERENTIAL_DISCLAIMER = (
     "La información exhibida sobre las propiedades es de carácter referencial e informativa, "
@@ -30,6 +32,19 @@ VECTOR_DIMENSION = 384
 # Única fuente del umbral: se aplica sobre la similitud ya ajustada por intención,
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
 DEFAULT_SIMILARITY_THRESHOLD = 0.85
+# Texto libre sin comuna, tipo, números ni características: ningún filtro duro descarta
+# avisos, así que el coseno decide solo y E5 rara vez supera 0.85 (máx. ~0.85-0.87).
+# Sobre 1.056 avisos reales, con "metro" en el título como verdad: 0.80 recupera 91 % pero
+# con 37 % de precisión (y deja pasar ~97 % del catálogo con "sector tranquilo");
+# 0.82 sube la precisión a 83 %. Como se muestran los 10 mejores, importa más la precisión.
+FREE_TEXT_SIMILARITY_THRESHOLD = 0.82
+# Con filtros duros (comuna, tipo, números, características) más texto descriptivo
+# ("de lujo", "tranquilo"): los filtros ya aseguran lo esencial, el coseno solo ordena
+# y recorta lo claramente ajeno.
+FILTERED_SEMANTIC_THRESHOLD = 0.82
+# Consulta sin filtros ni vocabulario inmobiliario ("pizza con piña"): E5 da ~0.80-0.84
+# a cualquier texto, así que solo se acepta si los 5 avisos más cercanos superan esto.
+DOMAIN_GATE_MIN_TOP5 = 0.85
 SUPABASE_TIMEOUT_SECONDS = 5
 # Serverless Inference API de Hugging Face: torch no cabe en el límite de 250 MB de Vercel.
 # Sus 384 dims calzan con proyectos_rag.embedding vector(384).
@@ -60,14 +75,57 @@ RM_COMMUNES = (
     "padre hurtado", "penaflor",
 )
 _RM_COMMUNES_BY_LENGTH = sorted(RM_COMMUNES, key=len, reverse=True)
+_PLACES_BY_LENGTH = sorted(NON_RM_PLACES, key=len, reverse=True)
 
 # Las bonificaciones solo desempatan: el rango útil de E5 es ~0.78-0.92, así que
 # sumas mayores aplastan la similitud semántica contra el tope.
 ATTRIBUTE_EXACT_BOOST = 0.02
 ATTRIBUTE_ABOVE_BOOST = 0.01
-ATTRIBUTE_MISS_PENALTY = 0.10
-# Tipo o comuna distintos a los pedidos no son un resultado parcial: se descartan.
-HARD_MISMATCH_PENALTY = 2.0
+
+# Requisitos explícitos de la consulta ("con piscina"). Se aplican sobre texto sin tildes,
+# tanto a la consulta como al título y descripción del aviso.
+REQUIRED_FEATURES = {
+    "piscina": r"piscinas?",
+    "quincho": r"quinchos?",
+    "jardin": r"jardin(?:es)?",
+    "estacionamiento": r"estacionamientos?|cocheras?",
+    "bodega": r"bodegas?",
+    "terraza": r"terrazas?",
+    "balcon": r"balcon(?:es)?",
+    "gimnasio": r"gimnasio|gym",
+    "ascensor": r"ascensor(?:es)?",
+    "logia": r"logias?",
+    "vista": r"vistas?",
+    "cordillera": r"cordillera",
+    # "cerca del metro", "a 5 mins del metro", "al lado del metro"...: la distancia no se
+    # puede verificar, solo que el aviso mencione el metro.
+    "metro": r"metro",
+}
+_NEGATED_FEATURE_PREFIX = re.compile(r"\b(?:sin|lejos de(?:l)?)\s+(?:\w+\s+)?$")
+
+# Vocabulario inmobiliario (sin tildes): una consulta que lo usa es del dominio aunque
+# el embedding no lo muestre.
+_REAL_ESTATE_LEXICON = re.compile(
+    r"\b(?:casas?|depas?|deptos?|dptos?|departamentos?|propiedad(?:es)?|inmuebles?|viviendas?|hogar|"
+    r"dormitorios?|dorm|banos?|terrazas?|balcon|jardin|patio|piscina|quincho|estacionamientos?|bodegas?|"
+    r"condominios?|edificios?|barrios?|comunas?|metro|uf|arriendo|arrendar|inversion|inversionistas?|"
+    r"remodelad[oa]s?|construccion|proyectos?|inmobiliari[oa]s?|habitar|vivir|subsidios?|hipotec\w*|"
+    r"dividendos?|m2|luminos[oa]s?|amplios?|acogedor\w*|tranquil[oa]s?|colegios?|areas verdes|estudio|"
+    r"loft|parcelas?|terrenos?|townhouse)\b"
+)
+
+# Palabras que no aportan significado de búsqueda: si todo lo que sobra de la consulta
+# (tras quitar comuna, tipo, números y características) está aquí, la consulta es de
+# puros filtros y no hay nada semántico que recortar con un umbral.
+_FILTER_ONLY_WORDS = frozenset(
+    "a al algo ante bajo cerca cercano cercana cercania como con contra de del desde donde el ella en entre es "
+    "esta este estoy hay hasta la las le lo los me mi mis muy no o para pero por que quiero quisiera busco "
+    "buscando buscar necesito se si sin sobre su sus un una uno unos unas y ya tipo mas menos maximo minimo "
+    "precio valor presupuesto aprox aproximadamente ver mostrar muestrame dame encontrar venta "
+    "propiedad propiedades inmueble inmuebles vivienda viviendas hogar casa departamento comuna sector zona "
+    "barrio lugar dormitorio dormitorios dorm bano banos m2 uf pesos pasos lado junto frente minutos minuto "
+    "min mins caminando estudio studio loft lejos near close to the in with of and for".split()
+)
 
 
 def _strip_accents(text: str) -> str:
@@ -122,10 +180,79 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
             intent["req_comuna"] = comuna
             break
 
+    # 6b. Lugar sin inventario (otra región, otro país). Solo si no se nombró una comuna
+    # de la RM, y sin los topónimos de la RM que contienen un nombre de otra ciudad.
+    q_places = q_plain
+    for falso in PLACE_FALSE_FRIENDS:
+        q_places = q_places.replace(falso, " ")
+    if not intent.get("req_comuna"):
+        for lugar in _PLACES_BY_LENGTH:
+            if re.search(rf"\b{re.escape(lugar)}\b", q_places):
+                intent["req_lugar"] = lugar
+                break
+
+    # 7. Requisitos de características: "sin piscina" no exige piscina.
+    features = []
+    for feature, pattern in REQUIRED_FEATURES.items():
+        for match in re.finditer(rf"\b(?:{pattern})\b", q_plain):
+            if not _NEGATED_FEATURE_PREFIX.search(q_plain[:match.start()]):
+                features.append(feature)
+                break
+    intent["req_features"] = features
+
+    residual = _semantic_residual(q_plain, intent)
+    intent["req_residual"] = bool(residual)
+    intent["req_residual_text"] = " ".join(residual)
+
     return intent
 
+
+def _semantic_residual(q_plain: str, intent: Dict[str, Any]) -> List[str]:
+    """Palabras con significado que quedan tras quitar lo que ya son filtros."""
+    text = _normalize_terms(q_plain)
+    for lugar in (intent.get("req_comuna"), intent.get("req_lugar")):
+        if lugar:
+            text = re.sub(rf"\b{re.escape(lugar)}\b", " ", text)
+    for pattern in REQUIRED_FEATURES.values():
+        text = re.sub(rf"\b(?:{pattern})\b", " ", text)
+    return [
+        token
+        for token in re.findall(r"[a-z0-9]+", text)
+        if not token[0].isdigit() and len(token) > 1 and token not in _FILTER_ONLY_WORDS
+    ]
+
+
+def _has_hard_filters(
+    intent: Dict[str, Any],
+    commune: Optional[str],
+    max_price_uf: Optional[float],
+    property_type: Optional[str],
+) -> bool:
+    if commune or property_type or (max_price_uf is not None and max_price_uf > 0):
+        return True
+    return any(
+        intent.get(key)
+        for key in ("req_comuna", "req_lugar", "req_tipo", "req_dormitorios", "req_banos", "req_max_uf", "req_features")
+    )
+
+
+def _item_has_feature(item: Dict[str, Any], feature: str) -> bool:
+    text = _strip_accents(
+        html.unescape(
+            f"{item.get('title') or item.get('nombre') or ''} {item.get('description') or item.get('descripcion') or ''}"
+        ).lower()
+    )
+    return re.search(rf"\b(?:{REQUIRED_FEATURES[feature]})\b", text) is not None
+
+
 def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict[str, Any], query_text: str) -> float:
-    """Aplica impulsos y penalizaciones según atributos numéricos requeridos en la consulta."""
+    """Aplica impulsos y penalizaciones según la consulta; devuelve 0.0 ante un descalce duro.
+
+    Comuna, tipo de propiedad y características pedidas ("con piscina") no son un
+    resultado parcial: si el aviso no las cumple se descarta, sin importar la similitud.
+    """
+    if intent.get("req_lugar"):
+        return 0.0
     sim = base_sim
     banos = int(item.get("banos") or item.get("bathrooms") or 1)
     dormitorios = int(item.get("dormitorios") or item.get("bedrooms") or 1)
@@ -135,32 +262,32 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
     for requerido, actual in ((intent.get("req_banos"), banos), (intent.get("req_dormitorios"), dormitorios)):
         if requerido is None:
             continue
-        if actual == requerido:
-            sim += ATTRIBUTE_EXACT_BOOST
-        elif actual > requerido:
-            sim += ATTRIBUTE_ABOVE_BOOST
-        else:
-            sim -= ATTRIBUTE_MISS_PENALTY
+        if actual < requerido:
+            return 0.0
+        sim += ATTRIBUTE_EXACT_BOOST if actual == requerido else ATTRIBUTE_ABOVE_BOOST
 
     req_uf = intent.get("req_max_uf")
     if req_uf is not None and req_uf > 0:
-        if precio_uf <= req_uf:
-            sim += ATTRIBUTE_EXACT_BOOST
-        else:
-            sim -= ATTRIBUTE_MISS_PENALTY
+        # Un aviso sin precio ("consultar") no se puede afirmar que esté bajo el tope.
+        if not 0 < precio_uf <= req_uf:
+            return 0.0
+        sim += ATTRIBUTE_EXACT_BOOST
 
     req_t = intent.get("req_tipo")
     if req_t:
         item_tipo = _normalize_property_type(item.get("tipo_vivienda") or item.get("property_type"))
         if item_tipo and item_tipo != req_t:
-            sim -= HARD_MISMATCH_PENALTY
+            return 0.0
 
     req_c = intent.get("req_comuna")
     if req_c:
-        if commune == req_c:
-            sim += ATTRIBUTE_EXACT_BOOST
-        else:
-            sim -= HARD_MISMATCH_PENALTY
+        if commune != req_c:
+            return 0.0
+        sim += ATTRIBUTE_EXACT_BOOST
+
+    for feature in intent.get("req_features") or []:
+        if not _item_has_feature(item, feature):
+            return 0.0
 
     # Tope en 1.0 solo para que el porcentaje mostrado no pase de 100%.
     return max(0.0, min(1.0, float(sim)))
@@ -181,6 +308,12 @@ _TERM_SYNONYMS = {
     "depas": "departamento",
     "departamentos": "departamento",
     "casas": "casa",
+    "apartment": "departamento",
+    "apartments": "departamento",
+    "flat": "departamento",
+    "flats": "departamento",
+    "house": "casa",
+    "houses": "casa",
 }
 
 
@@ -410,7 +543,8 @@ def _query_supabase_proyectos_rag(
         "Authorization": f"Bearer {supabase_key}",
     }
 
-    req_limit = 500
+    # PostgREST devuelve como máximo 1000 filas por petición.
+    req_limit = 1000
 
     # 1. Intentar llamar a la función RPC match_proyectos_rag
     rpc_endpoint = f"{supabase_url.rstrip('/')}/rest/v1/rpc/match_proyectos_rag"
@@ -476,7 +610,60 @@ def _query_supabase_proyectos_rag(
     return None
 
 
+OFF_TOPIC_SUGGESTION = (
+    "No encontramos propiedades relacionadas con tu búsqueda. Describe el tipo de vivienda, la "
+    "comuna o alguna característica, por ejemplo: «departamento 2 dormitorios en Ñuñoa»."
+)
+
+
+def _off_topic_response(query_text: str) -> Dict[str, Any]:
+    return {
+        "query": query_text,
+        "results": [],
+        "total": 0,
+        "disclaimer": RUTAHOGAR_REFERENTIAL_DISCLAIMER,
+        "suggestion": OFF_TOPIC_SUGGESTION,
+    }
+
+
+def _is_off_topic(query_text: str, intent: Dict[str, Any], has_hard: bool, scored: List[tuple]) -> bool:
+    """Texto que no suena a propiedades: sin vocabulario inmobiliario y lejos del catálogo.
+
+    Sin filtros se evalúa toda la consulta; con filtros, solo el texto que sobra tras
+    quitarlos ("clima" en "clima en Santiago"), medido sobre los avisos que los cumplen.
+    """
+    if has_hard and not intent.get("req_residual"):
+        return False
+    text = intent.get("req_residual_text", "") if has_hard else _strip_accents(_normalize_terms(query_text))
+    if _REAL_ESTATE_LEXICON.search(text):
+        return False
+    bases = sorted((base for adj, base, _ in scored if adj > 0), reverse=True)[:5]
+    return bool(bases) and sum(bases) / len(bases) < DOMAIN_GATE_MIN_TOP5
+
+
+def _effective_threshold(similarity_threshold: float, has_hard: bool, has_residual: bool) -> float:
+    """El umbral por defecto se adapta a la consulta; uno explícito se respeta tal cual."""
+    if similarity_threshold != DEFAULT_SIMILARITY_THRESHOLD:
+        return similarity_threshold
+    if not has_hard:
+        return FREE_TEXT_SIMILARITY_THRESHOLD
+    # Solo filtros ("casa", "depto en Ñuñoa"): no queda nada semántico que recortar.
+    return FILTERED_SEMANTIC_THRESHOLD if has_residual else 0.0
+
+
 def _empty_results_suggestion(intent: Dict[str, Any]) -> str:
+    if intent.get("req_lugar"):
+        return (
+            f"Por ahora solo tenemos propiedades en la Región Metropolitana: no encontramos "
+            f"avisos en {intent['req_lugar'].title()}. Prueba con una comuna de Santiago."
+        )
+    if intent.get("req_features"):
+        pedido = ", ".join(intent["req_features"])
+        donde = f" en {intent['req_comuna'].title()}" if intent.get("req_comuna") else ""
+        return (
+            f"No hay propiedades que coincidan con tu búsqueda ({pedido}){donde}. "
+            "Prueba quitando alguna característica o ampliando la comuna."
+        )
     if intent.get("req_comuna"):
         return (
             f"Por ahora no tenemos propiedades en {intent['req_comuna'].title()}. "
@@ -524,13 +711,21 @@ def search_properties(
     # EmbeddingError se propaga (503): sin modelo no hay búsqueda semántica posible.
     query_vec = generate_text_embedding(query_text)
     query_intent = _extract_query_intent(query_text)
+    has_hard = _has_hard_filters(query_intent, commune, max_price_uf, property_type)
+    # La compuerta de dominio está calibrada para E5; un umbral explícito la desactiva.
+    gate_active = similarity_threshold == DEFAULT_SIMILARITY_THRESHOLD
+    similarity_threshold = _effective_threshold(
+        similarity_threshold, has_hard, bool(query_intent.get("req_residual"))
+    )
 
     # Intentar consulta directa a Supabase RPC sobre public.proyectos_rag
     db_rows = _query_supabase_proyectos_rag(
         query_vec=query_vec,
         commune=commune,
-        max_price_uf=max_price_uf,
-        property_type=property_type,
+        # Tipo y tope de precio del texto se empujan a la RPC para no traer de más; la
+        # comuna no: allá se compara exacta y con tildes.
+        max_price_uf=max_price_uf or query_intent.get("req_max_uf"),
+        property_type=property_type or query_intent.get("req_tipo"),
         limit=limit,
     )
 
@@ -575,10 +770,13 @@ def search_properties(
             raw_item["similarity"] = round(adj_sim, 4)
             scored_rows.append((adj_sim, base_sim, raw_item))
 
-            if adj_sim >= similarity_threshold:
+            if adj_sim > 0.0 and adj_sim >= similarity_threshold:
                 formatted_results.append(raw_item)
 
         _log_top_similarities("supabase", query_text, similarity_threshold, scored_rows)
+
+        if gate_active and _is_off_topic(query_text, query_intent, has_hard, scored_rows):
+            return _off_topic_response(query_text)
 
         # Reordenar por similitud ajustada descendente
         formatted_results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -637,7 +835,7 @@ def search_properties(
         adj_sim = _adjust_similarity_score(norm_item, base_sim, query_intent, query_text)
         scored_local.append((adj_sim, base_sim, norm_item))
 
-        if adj_sim >= similarity_threshold:
+        if adj_sim > 0.0 and adj_sim >= similarity_threshold:
             property_copy = dict(norm_item)
             property_copy["similarity"] = round(adj_sim, 4)
             property_copy["cta_text"] = _cta_text(norm_item["property_type"])
@@ -645,6 +843,9 @@ def search_properties(
             scored_items.append(property_copy)
 
     _log_top_similarities("local", query_text, similarity_threshold, scored_local)
+
+    if gate_active and _is_off_topic(query_text, query_intent, has_hard, scored_local):
+        return _off_topic_response(query_text)
 
     # Ordenar estrictamente por relevancia/similitud semántica descendente (Criterio E1)
     scored_items.sort(key=lambda x: x["similarity"], reverse=True)
