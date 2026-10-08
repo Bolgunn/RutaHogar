@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { currentTrackingEvaluation } from "../currentEvaluation";
 
 describe("HU13 current evaluation for Plan de mejora", () => {
+  it("does not copy an old plan onto a new evaluation when tracking is inactive", () => {
+    const old = { id: "a", created_at: "2026-01-01", plan_type: "acelerado" };
+    const fresh = { id: "b", created_at: "2026-02-01" };
+    for (const state of [null, { status: "not_started" }]) {
+      expect(currentTrackingEvaluation(state, [old, fresh])).toBe(fresh);
+      expect(currentTrackingEvaluation(state, [old, fresh]).plan_type).toBeUndefined();
+    }
+  });
   it("keeps the later project evaluation available after a frozen target already exists", () => {
     const baseline = { id: "evaluation-a", created_at: "2026-01-01T00:00:00Z", input: { project_goal: { id: "project-a" } } };
     const later = { id: "evaluation-b", created_at: "2026-02-01T00:00:00Z", input: { project_goal: { id: "project-b" } } };

@@ -17,11 +17,10 @@ import "./components/user-exploration.css";
 import "./components/user-design-system.css";
 import "./components/executive-leads.css";
 import "./components/staff-view-consistency.css";
-import { NotificationToastProvider } from "./components/NotificationToast";
 import "./components/notification-toast.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
-    <NotificationToastProvider><App /></NotificationToastProvider>
+    <App />
   </BrowserRouter>,
 );

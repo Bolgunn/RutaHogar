@@ -7,6 +7,16 @@ const high = { id: "high", className: "notification-toast--high-score" };
 const opportunity = { id: "opportunity", className: "notification-toast--opportunities" };
 
 describe("notification stacking", () => {
+  it("renders a shared stack without a provider and hides dismissed items", () => {
+    const items = [{ ...high, count: 2, title: "Leads altos" }, { ...opportunity, count: 3, title: "Oportunidades" }];
+    const both = renderToStaticMarkup(<NotificationToast items={items} />);
+    expect((both.match(/class="notification-stack"/g) || []).length).toBe(1);
+    expect((both.match(/role="status"/g) || []).length).toBe(2);
+    const remaining = renderToStaticMarkup(<NotificationToast items={[{ ...items[0], count: 0 }, items[1]]} />);
+    expect(remaining).not.toContain('notification-toast--high-score');
+    expect(remaining).toContain('bottom:0');
+    expect(renderToStaticMarkup(<NotificationToast items={[]} />)).toBe("");
+  });
   it("anchors either notification alone to the bottom", () => {
     expect(notificationLayout([high])[0].bottom).toBe(0);
     expect(notificationLayout([opportunity])[0].bottom).toBe(0);

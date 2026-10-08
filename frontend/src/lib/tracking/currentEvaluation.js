@@ -31,5 +31,5 @@ export function currentTrackingEvaluation(trackingState, evaluations = [], userI
     return preservePlanChoice(current, evaluations);
   }
   const latest = [...evaluations].sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0] || null;
-  return preservePlanChoice(latest, evaluations);
+  return latest;
 }

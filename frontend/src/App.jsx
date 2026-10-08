@@ -1223,9 +1223,11 @@ export default function App() {
         if (active) setEvaluations(storedEvaluations);
       } catch (err) {
         console.error(err);
-        if (active && profile?.role === roles.user)
+        if (active)
           setDataError(
-            "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde.",
+            profile?.role === roles.user
+              ? "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde."
+              : "No pudimos cargar las evaluaciones del panel. Los datos pueden estar incompletos. Recarga la página o intenta más tarde.",
           );
       }
     }
@@ -2238,12 +2240,12 @@ export default function App() {
         )}
 
         {/* Notificación para ejecutivos */}
-        <NotificationToast
+        {(page !== "leads" || !canViewStaffPage(page, profile.role)) && <NotificationToast
           count={newHighLeadsCount}
           onClick={handleNotificationClick}
           onClose={handleDismissNotification}
           className="notification-toast--high-score"
-        />
+        />}
 
         {page === "onboarding" && profile.role === roles.user ? (
           <section className="evaluation-panel home-panel">
@@ -2554,6 +2556,8 @@ export default function App() {
           />
       ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
+          highScoreNotification={{ count: newHighLeadsCount, onClick: handleNotificationClick,
+            onClose: handleDismissNotification, className: "notification-toast--high-score" }}
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}

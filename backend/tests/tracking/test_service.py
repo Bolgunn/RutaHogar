@@ -7,11 +7,18 @@ from uuid import uuid4
 import pytest
 
 from app.tracking.contracts import TrackingError
-from app.tracking.service import TrackingService, client_tracking_view
+from app.tracking.service import TrackingService, client_tracking_view, frozen_target_scoring_snapshot
 
 
 def market_snapshot():
-    return json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+    snapshot = json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+    # Synthetic test values stay fixed; provenance follows the current schema.
+    from app.market_data.snapshot import SOURCE_REQUIREMENTS, TERM_TABLE_URL
+    snapshot["source"]["plazo_referencial_anios"].update(
+        series=SOURCE_REQUIREMENTS["plazo_referencial_anios"]["series"],
+        statistic="Percentil 50", url=TERM_TABLE_URL,
+    )
+    return snapshot
 
 
 def valid_snapshot():
@@ -104,8 +111,7 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
 
 
-def test_frozen_catalogue_price_is_used_for_updates_and_projection():
-    """The card's `precio_min_uf` and tracking pie must use one target price."""
+def test_declared_price_is_used_for_evaluations_and_frozen_price_only_for_projection():
     repo, app = service()
     original_scorer = app.scorer
     scored = []
@@ -116,17 +122,19 @@ def test_frozen_catalogue_price_is_used_for_updates_and_projection():
 
     app.scorer = recording_scorer
     target = {"id": "terrazas", "nombre": "Terrazas de Maipú", "comuna": "Maipú", "precio_min_uf": 2900}
-    # This represents an old/manual property amount left in the initial score.
-    # It must not make a 2,900 UF catalogue target require the pie of a much
-    # more expensive property.
+    initial = {**valid_snapshot(), "property_value_clp": 404_000_000,
+               "comuna_objetivo": "Providencia", "project_goal": target}
     baseline = app.execute("u1", command({
-        **valid_snapshot(), "property_value_clp": 404_000_000, "project_goal": target,
+        **initial,
     }))
     app.execute("u1", command({"ahorro_disponible": 12_000_000}, baseline["event_id"], "2026-02-01T00:00:00Z"))
 
     assert len(scored) == 2
-    assert all(row["property_value_uf"] == 2900 for row in scored)
-    assert all(row["property_value_clp"] is None for row in scored)
+    assert all(row["property_value_clp"] == 404_000_000 for row in scored)
+    assert all(row["comuna_objetivo"] == "Providencia" for row in scored)
+    from app.tracking.scoring_adapter import complete_snapshot, score_snapshot
+    expected = score_snapshot(complete_snapshot(initial), market_snapshot=market_snapshot())
+    assert repo.bundle["evaluations"][0]["financial_data"]["result"] == expected
     # The original source snapshot remains immutable for audit/history.
     assert repo.bundle["evaluations"][0]["financial_data"]["input"]["property_value_clp"] == 404_000_000
 
@@ -135,6 +143,24 @@ def test_frozen_catalogue_price_is_used_for_updates_and_projection():
     assert scored
     assert all(row["property_value_uf"] == 2900 for row in scored)
     assert all(row["property_value_clp"] is None for row in scored)
+
+
+def test_projection_does_not_restore_historic_clp_when_latest_already_has_frozen_price():
+    repo, app = service()
+    target = {"id": "p1", "comuna": "Maipú", "precio_min_uf": 2900}
+    initial = {**valid_snapshot(), "project_goal": target, "property_value_clp": 404_000_000}
+    baseline = app.execute("u1", command(initial))
+    aligned = frozen_target_scoring_snapshot(initial, target)
+    app.execute("u1", command(aligned, baseline["event_id"], "2026-02-01T00:00:00Z"))
+    scored = []
+    real_scorer = app.scorer
+    app.scorer = lambda snapshot: (scored.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
+
+    app.projection("u1")
+
+    assert scored
+    assert all(row["property_value_clp"] is None and row["property_value_uf"] == 2900 for row in scored)
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["property_value_clp"] == 404_000_000
 
 
 def test_evaluations_keep_their_own_preliminary_question_snapshot():

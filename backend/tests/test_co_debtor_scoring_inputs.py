@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
+import pytest
 
 from app.scoring_engine.co_debtor_inputs import assemble_co_debtor_scoring_input
 from app.scoring_engine.indicators import calculate_financial_indicators, calculate_financial_scope
@@ -193,11 +194,12 @@ def test_repository_loads_only_latest_server_side_hu18_facts():
     assert "management_token" not in query["select"][0]
 
 
-def test_repository_prefers_a_new_pending_invitation_over_a_previous_revocation():
+@pytest.mark.parametrize("newest_status", ["revoked", "declined", "confirmed", "pending", "expired"])
+def test_repository_uses_latest_invitation_even_when_an_older_one_is_pending(newest_status):
     repository = TrackingRepository.__new__(TrackingRepository)
     repository.request = lambda *_args, **_kwargs: [
-        {"status": "revoked", "created_at": "2026-10-06T00:00:00Z", "expires_at": "2026-10-08T00:00:00Z"},
+        {"status": newest_status, "created_at": "2026-10-06T00:00:00Z", "expires_at": "2026-10-08T00:00:00Z"},
         {"status": "pending", "created_at": "2026-10-05T00:00:00Z", "expires_at": "2026-10-12T00:00:00Z"},
     ]
 
-    assert repository.load_co_debtor_consent("lead-1")["invitation_status"] == "pending"
+    assert repository.load_co_debtor_consent("lead-1")["invitation_status"] == newest_status

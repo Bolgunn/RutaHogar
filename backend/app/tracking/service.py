@@ -32,11 +32,8 @@ def valid_project_snapshot(snapshot):
 def frozen_target_scoring_snapshot(snapshot, target_project):
     """Overlay the frozen catalogue price without rewriting financial history.
 
-    Tracking saves the user-entered snapshot verbatim.  When a plan has a
-    catalogue target, though, its `precio_min_uf` is the canonical property
-    value for compatibility and pie calculations.  Historic input can contain
-    a previous/manual property value, which must not silently replace that
-    frozen target during later data updates or ALG-13 projections.
+    This is only used for ALG-13 projections. Persisted evaluations continue
+    scoring their own declared input, independently of the frozen plan target.
     """
     state = deepcopy(snapshot or {})
     target = deepcopy(target_project) if isinstance(target_project, dict) else None
@@ -320,7 +317,12 @@ class TrackingService:
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
         target_with_price = frozen_target_scoring_snapshot(latest, target)
-        if target_with_price != latest:
+        target_price = (target or {}).get("precio_min_uf") or (target or {}).get("valor_uf")
+        try:
+            has_target_price = isfinite(float(target_price)) and float(target_price) > 0
+        except (TypeError, ValueError):
+            has_target_price = False
+        if has_target_price:
             latest = target_with_price
         elif target_source:
             original = target_source["recorded_complete_snapshot"]
@@ -414,13 +416,7 @@ class TrackingService:
                 if complement_source != "co_debtor_confirmed":
                     raise TrackingError("co_debtor_confirmation_required")
             complete_input = complete_snapshot(resolved_input)
-            # A plan evaluates every later financial update against its frozen
-            # target. Keep complete_input as the immutable recorded fact, but
-            # clear any legacy property amount before scoring the catalogue UF
-            # price of that target.
-            frozen_target = (bundle.get("plan") or {}).get("target_project_snapshot") or valid_project_snapshot(complete_input)
-            scoring_input = frozen_target_scoring_snapshot(complete_input, frozen_target)
-            result = self._score(scoring_input, market_snapshot)
+            result = self._score(complete_input, market_snapshot)
             details = {
                 **provenance(result),
                 "source_event_ids": [source_event["event_id"]],

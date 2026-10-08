@@ -1,8 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./notification-toast.css";
-
-const ToastContext = createContext(null);
 
 export function notificationLayout(items, heights = {}) {
   const ordered = [...items].sort((a, b) => Number(!a.className.includes("high-score")) - Number(!b.className.includes("high-score")));
@@ -35,28 +33,13 @@ function ToastCard({ item, onMeasure }) {
   </div>;
 }
 
-export function NotificationToastProvider({ children }) {
-  const [items, setItems] = useState({});
+export default function NotificationToast({ items, count, onClick, onClose, title, message, icon, className = "" }) {
   const [heights, setHeights] = useState({});
-  const register = useCallback((id, item) => setItems((current) => ({ ...current, [id]: { ...item, id } })), []);
-  const remove = useCallback((id) => setItems((current) => { if (!current[id]) return current; const next = { ...current }; delete next[id]; return next; }), []);
   const measure = useCallback((id, height) => setHeights((current) => current[id] === height ? current : { ...current, [id]: height }), []);
-  const context = useMemo(() => ({ register, remove }), [register, remove]);
-  const layout = notificationLayout(Object.values(items), heights);
-  return <ToastContext.Provider value={context}>{children}{typeof document !== "undefined" && createPortal(
-    <div className="notification-stack" aria-label="Notificaciones">{layout.map((item) => <ToastCard key={item.id} item={item} onMeasure={measure} />)}</div>, document.body,
-  )}</ToastContext.Provider>;
-}
-
-export default function NotificationToast({ count, onClick, onClose, title, message, icon, className = "" }) {
-  const context = useContext(ToastContext);
-  const id = useId();
-  useEffect(() => {
-    if (!context) return;
-    if (count > 0) context.register(id, { count, onClick, onClose, title, message, icon, className });
-    else context.remove(id);
-  }, [context, id, count, onClick, onClose, title, message, icon, className]);
-  useEffect(() => () => context?.remove(id), [context, id]);
-  if (context || count <= 0) return null;
-  return <div className="notification-stack"><ToastCard item={{ id, count, onClick, onClose, title, message, icon, className }} /></div>;
+  const activeItems = (items || [{ id: "single", count, onClick, onClose, title, message, icon, className }])
+    .filter((item) => item.count > 0);
+  if (!activeItems.length) return null;
+  const layout = notificationLayout(activeItems, heights);
+  const stack = <div className="notification-stack" aria-label="Notificaciones">{layout.map((item) => <ToastCard key={item.id} item={item} onMeasure={measure} />)}</div>;
+  return typeof document !== "undefined" ? createPortal(stack, document.body) : stack;
 }

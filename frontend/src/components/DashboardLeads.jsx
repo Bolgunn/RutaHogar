@@ -341,7 +341,7 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role }) {
+export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role, highScoreNotification }) {
   const [classification, setClassification] = useState("Alto");
   const [commune, setCommune] = useState("todas");
   const [age, setAge] = useState(0);
@@ -756,18 +756,18 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   };
 
   return <section className="section-block leads-panel admin-leads-page executive-leads-workspace">
-    <NotificationToast
-      count={opportunityToastDismissed ? 0 : activeOpportunities.length}
-      title={`${activeOpportunities.length} oportunidad${activeOpportunities.length === 1 ? "" : "es"} nueva${activeOpportunities.length === 1 ? "" : "s"}`}
-      message="Hay leads con mejoras recientes listos para contactar."
-
-      className="notification-toast--opportunities"
-      onClick={() => {
+    <NotificationToast items={[
+      ...(highScoreNotification ? [{ ...highScoreNotification, id: "high-score" }] : []),
+      { id: "opportunities", count: opportunityToastDismissed ? 0 : activeOpportunities.length,
+      title: `${activeOpportunities.length} oportunidad${activeOpportunities.length === 1 ? "" : "es"} nueva${activeOpportunities.length === 1 ? "" : "s"}`,
+      message: "Hay leads con mejoras recientes listos para contactar.",
+      className: "notification-toast--opportunities",
+      onClick: () => {
         setShowOpportunities(true);
         setVisibleOpportunityCount(6);
-      }}
-      onClose={() => setOpportunityToastDismissed(true)}
-    />
+      },
+      onClose: () => setOpportunityToastDismissed(true) },
+    ]} />
 
     <header className="executive-leads-heading">
       <div className="section-heading">
