@@ -5,14 +5,10 @@ import { searchProperties } from "../services/propertyService";
 const loadFavoritesService = () => import("../services/favoritesService");
 import { buildSimulationContext, evaluateScenario, projectToScenario } from "../lib/simulation/compatibility";
 
-// Validadas contra el catálogo ingerido: cada una devuelve resultados pertinentes.
-// El embedding se arma con título, comuna, tipo y dormitorios (no la dirección),
-// así que solo se sugieren barrios que aparecen en los títulos. Revisar tras reingestar.
+// Máximo 3, una por tipo de criterio (metro + dormitorios, tipo + precio, comuna).
+// Son búsquedas corrientes y no dependen de un barrio o aviso puntual del catálogo.
 const POPULAR_QUERIES = [
   "Departamento 2 dormitorios cerca del metro",
-  "Departamento 1 dormitorio para inversión hasta 2500 UF",
-  "Departamento con estacionamiento y bodega",
-  "Casa patrimonial para remodelar en Barrio Yungay",
   "Casa hasta 4000 UF",
   "Departamento en Ñuñoa",
 ];
