@@ -39,7 +39,9 @@ export const BENEFIT_ESTIMATION_BASELINE = {
       identifier: "PADHI",
       name: "PADHI",
       kind: "information",
-      note: "Es acompañamiento para deudores hipotecarios; no reduce el precio de compra.",
+      source_label: "Ventanilla Única Social — PADHI",
+      source_url: "https://www.ventanillaunicasocial.gob.cl/ficha/351/programa-acompanamiento-deudores-hipotecarios",
+      note: "Acompaña a deudores hipotecarios con subsidio previo; no reduce el precio de una nueva compra.",
     },
     {
       identifier: "LEASING",
@@ -51,7 +53,7 @@ export const BENEFIT_ESTIMATION_BASELINE = {
     },
     {
       identifier: "LEY_21748",
-      name: "Ley 21.748",
+      name: "Subsidio al Dividendo — Ley N.º 21.748",
       kind: "information",
       source_label: "FOGAES MINVU",
       source_url: "https://www.minvu.gob.cl/fogaes/",

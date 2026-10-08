@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import CoDebtorSection, { CoDebtorPanel } from "./CoDebtorSection";
+import CoDebtorSection, { CoDebtorPanel, InvitationForm, pendingInvitationFromSend } from "./CoDebtorSection";
 import { runExclusive } from "../services/coDebtorService";
 
 const declaredProps = {
@@ -15,6 +15,7 @@ const declaredProps = {
   onInvite: vi.fn(),
   onResend: vi.fn(),
   onEditInvitation: vi.fn(),
+  onCancelEditInvitation: vi.fn(),
   onUpdateScore: vi.fn(),
 };
 
@@ -34,6 +35,12 @@ const confirmed = {
 
 function render(invitation, props = {}) {
   return renderToStaticMarkup(<CoDebtorPanel {...declaredProps} invitation={invitation} {...props} />);
+}
+
+function elementById(node, id) {
+  if (!React.isValidElement(node)) return null;
+  if (node.props.id === id) return node;
+  return React.Children.toArray(node.props.children).map((child) => elementById(child, id)).find(Boolean) || null;
 }
 
 describe("HU18 lead co-debtor section", () => {
@@ -69,6 +76,13 @@ describe("HU18 lead co-debtor section", () => {
     expect(html).not.toContain("RUT del co-deudor");
   });
 
+  it("lets the lead close the co-debtor correction form without sending a new invitation", () => {
+    const html = render({ status: "pending", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5" }, { editingInvitation: true });
+
+    expect(html).toContain("Cerrar");
+    expect(html).not.toContain("nombre@correo.cl");
+  });
+
   it("shows the update action and the five confirmed values only for a valid confirmation", () => {
     const html = render(confirmed, { scoreUpdateRequired: true });
     const incomplete = render({ status: "confirmed", recipientEmail: "co.deudor@correo.cl", confirmation: null });
@@ -91,10 +105,67 @@ describe("HU18 lead co-debtor section", () => {
   it("hides confirmed financial values and the update action after revocation", () => {
     const html = render({ ...confirmed, status: "revoked", token_digest: "invitation-secret", management_token: "management-secret" });
     expect(html).toContain("Consentimiento revocado");
+    expect(html).toContain("Reenviar invitación");
     expect(html).not.toContain("Actualizar score con datos confirmados");
     expect(html).not.toContain("1.400.000");
     expect(html).not.toContain("invitation-secret");
     expect(html).not.toContain("management-secret");
+  });
+
+  it("treats a declined invitation as an explicit replacement, never a resend", () => {
+    const html = render({ ...confirmed, status: "declined" }, {
+      email: "co.deudor@correo.cl", rut: "12.345.678-5",
+    });
+
+    expect(html).toContain("Participación rechazada");
+    expect(html).toContain("no autorizó el uso de sus datos");
+    expect(html).toContain("Este complemento de renta no se utilizará");
+    expect(html).not.toContain("1.400.000");
+    expect(html).not.toContain("Reenviar invitación");
+    expect(html).toContain("Enviar nueva invitación");
+    expect(html).toContain('value="12.345.678-5"');
+    expect(html).toContain('value="co.deudor@correo.cl"');
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it("returns a normal newly created invitation to pending after a declined replacement", () => {
+    expect(pendingInvitationFromSend(
+      " CO.DEUDOR@Correo.cl ", "12.345.678-5", { expires_at: "2026-10-11T12:00:00Z" }, { ingreso_mensual_complementario: 800000 },
+    )).toEqual({
+      recipientEmail: "co.deudor@correo.cl", recipientRut: "12.345.678-5", status: "pending",
+      expiresAt: "2026-10-11T12:00:00Z", declaredComplement: { ingreso_mensual_complementario: 800000 }, confirmation: null,
+    });
+  });
+
+  it("uses the normal invite submit and editable fields for a declined replacement", () => {
+    const onEmailChange = vi.fn();
+    const onRutChange = vi.fn();
+    const onInvite = vi.fn();
+    const form = InvitationForm({
+      email: "co.deudor@correo.cl", rut: "12.345.678-5", onEmailChange, onRutChange, onSubmit: onInvite,
+      busy: false, status: "declined",
+    });
+    const rutInput = elementById(form, "co-debtor-recipient-rut");
+    const emailInput = elementById(form, "co-debtor-recipient-email");
+
+    rutInput.props.onChange({ target: { value: "12.345.678-5" } });
+    emailInput.props.onChange({ target: { value: "nuevo@correo.cl" } });
+    form.props.onSubmit({ preventDefault: vi.fn() });
+
+    expect(onRutChange).toHaveBeenCalledWith("12.345.678-5");
+    expect(onEmailChange).toHaveBeenCalledWith("nuevo@correo.cl");
+    expect(onInvite).toHaveBeenCalledTimes(1);
+    expect(renderToStaticMarkup(<InvitationForm email="" rut="" onEmailChange={onEmailChange} onRutChange={onRutChange} onSubmit={onInvite} busy={false} status="none" />)).toContain("Enviar invitación");
+  });
+
+  it("keeps pending replacement and retry controls for expired, revoked, and delivery failures", () => {
+    const pending = render({ status: "pending", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5", expiresAt: "2026-10-10T12:00:00Z" });
+    const expired = render({ status: "expired", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5" });
+    const revoked = render({ status: "revoked", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5" });
+    const deliveryFailed = render({ status: "delivery_failed", recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5" });
+
+    expect(pending).toContain("Reemplazar invitación");
+    for (const html of [expired, revoked, deliveryFailed]) expect(html).toContain("Reenviar invitación");
   });
 
   it("disables the update button while a confirmed-score update is in progress", () => {

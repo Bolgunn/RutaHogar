@@ -39,6 +39,7 @@ export default function ProjectEvaluationModal({
   onToggleFavorite,
   isFavorite,
   isCurrentGoal,
+  compatibilityStatus,
 }) {
   const [interestStatus, setInterestStatus] = useState("");
   const [actionError, setActionError] = useState("");
@@ -60,19 +61,29 @@ export default function ProjectEvaluationModal({
   }, [project]);
 
   // La compatibilidad se calcula localmente con el mismo veredicto de simulación.
-  const evaluation = useMemo(
+  const localEvaluation = useMemo(
     () => evaluateScenario(context, projectToScenario(project, ufValueClp)),
     [context, project, ufValueClp],
   );
+  // El proyecto objetivo activo ya fue evaluado por el seguimiento. Su estado
+  // debe ser idéntico al de "Estado actual"; otros proyectos siguen usando la
+  // comparación local del catálogo.
+  const hasTrackingVerdict = Boolean(compatibilityStatus);
+  const evaluation = useMemo(() => (
+    hasTrackingVerdict ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
+  ), [compatibilityStatus, hasTrackingVerdict, localEvaluation]);
   const alternatives = useMemo(() => {
-    if (evaluation.status === "Compatible") return [];
+    // Tracking already decided the target project's compatibility. Its payload
+    // does not include alternative/gap details, so do not mix in local advice
+    // calculated for a potentially different verdict.
+    if (hasTrackingVerdict || evaluation.status === "Compatible") return [];
     return buildAccessibleAlternatives(
       projects.filter((item) => item.id !== project.id),
       context,
       onboarding,
       4,
     ).slice(0, 3);
-  }, [context, evaluation.status, onboarding, project.id, projects]);
+  }, [context, evaluation.status, hasTrackingVerdict, onboarding, project.id, projects]);
   const isCompatible = evaluation.status === "Compatible";
   // Los avisos del portal no están en public.proyectos: favoritos, contacto con
   // ejecutivo y meta del plan dependen de esa tabla, así que solo se enlaza el aviso.
@@ -134,6 +145,7 @@ export default function ProjectEvaluationModal({
         <span className="eyebrow">Proyecto seleccionado</span>
         <h2 id="project-evaluation-title">{project.nombre}</h2>
         <p className="project-evaluation-modal__context">{project.comuna || "Comuna sin dato"} · {propertyLabels[project.tipo_vivienda] || project.tipo_vivienda || "Vivienda"}</p>
+        {(project.descripcion || project.descripcion_corta) && <p className="project-evaluation-modal__context">{project.descripcion || project.descripcion_corta}</p>}
       </header>
       <div className={`project-evaluation-result ${isCompatible ? "is-compatible" : evaluation.status === "Cercano" ? "is-close" : "is-far"}`}>
         <div className="project-evaluation-result__heading"><span>Resultado referencial</span><strong className={`simulation-status ${statusClass[evaluation.status] || "adjust"}`}>{evaluation.status}</strong></div>

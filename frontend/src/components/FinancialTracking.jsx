@@ -19,7 +19,7 @@ function ProjectGoalSummary({ projectGoal }) {
     <div className="tracking-project-goal">
       <i className="ti ti-target-arrow" aria-hidden="true" />
       <span>
-        <strong>Proyecto meta: {projectGoal.nombre}</strong>
+        <strong>Proyecto objetivo: {projectGoal.nombre}</strong>
         {details.length ? <small>{details.join(" · ")}</small> : null}
       </span>
     </div>
@@ -165,6 +165,7 @@ const CircularProgress = ({ percentage = 0, color = "var(--color-primary)", size
 
 export default function FinancialTracking({
   evaluation,
+  trackingState,
   goals = [],
   onAcceptPlan,
   onGoalStatusChange,
@@ -179,12 +180,14 @@ export default function FinancialTracking({
 }) {
   const [planType, setPlanType] = useState(() => evaluation?.plan_type || null);
   const [acceptingPlan, setAcceptingPlan] = useState(false);
+  const [confirmPlanChange, setConfirmPlanChange] = useState(false);
 
   useEffect(() => {
     setPlanType(evaluation?.plan_type || null);
+    setConfirmPlanChange(false);
   }, [evaluation?.id, evaluation?.plan_type]);
 
-  const tracking = useMemo(() => buildFinancialTracking(evaluation), [evaluation]);
+  const tracking = useMemo(() => buildFinancialTracking(evaluation, trackingState), [evaluation, trackingState]);
   const projectGoal = getCurrentProjectGoal(evaluation);
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
 
@@ -207,7 +210,7 @@ export default function FinancialTracking({
   };
 
   const progressButton = onOpenProgress ? (
-    <button type="button" className="primary-button" onClick={onOpenProgress}>
+    <button type="button" className="primary-button tracking-progress-button" onClick={onOpenProgress}>
       <i className="ti ti-chart-line" aria-hidden="true" />
       Mi progreso
     </button>
@@ -446,13 +449,21 @@ export default function FinancialTracking({
               Explorar Proyectos y Cotizar
             </button>
           )}
-          <button
+          {confirmPlanChange ? (
+            <div className="tracking-plan-change-confirm" role="alertdialog" aria-label="Confirmar cambio de plan">
+              <p>Cambiar de plan reiniciará el avance mostrado para este plan. ¿Deseas continuar?</p>
+              <div>
+                <button type="button" className="text-button" onClick={() => setConfirmPlanChange(false)}>Cancelar</button>
+                <button type="button" className="secondary-button compact-button" onClick={() => { setConfirmPlanChange(false); setPlanType(null); }}>Cambiar plan</button>
+              </div>
+            </div>
+          ) : <button
             type="button"
-            onClick={() => setPlanType(null)}
+            onClick={() => setConfirmPlanChange(true)}
             className="text-button"
           >
             Cambiar de Plan
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -883,8 +894,12 @@ export default function FinancialTracking({
 
       {filteredGoals.length === 0 ? (
         <div className="empty-state">
-          <strong>No hay acciones que coincidan con los filtros seleccionados.</strong>
-          <p>Prueba cambiando o limpiando los filtros de prioridad o tema.</p>
+          <strong>{tracking.goals.length
+            ? "No hay acciones que coincidan con los filtros seleccionados."
+            : "Tu plan inicial no contiene pasos pendientes."}</strong>
+          <p>{tracking.goals.length
+            ? "Prueba cambiando o limpiando los filtros de prioridad o tema."
+            : "Los pasos sugeridos y las metas se conservan desde la evaluación inicial para que ambos se mantengan acordes."}</p>
         </div>
       ) : null}
 

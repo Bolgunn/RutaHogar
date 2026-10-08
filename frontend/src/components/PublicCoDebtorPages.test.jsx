@@ -14,7 +14,7 @@ const confirmation = {
 };
 
 const invitationHandlers = {
-  onChange: vi.fn(), onSubmit: vi.fn(),
+  onChange: vi.fn(), onSubmit: vi.fn(), onDecline: vi.fn(),
 };
 
 function invitation(context, props = {}) {
@@ -120,6 +120,15 @@ describe("HU18 public co-debtor invitation", () => {
     expect(confirmed).toContain("Ya registraste tus antecedentes");
     expect(replaced).toContain("No podemos usar este enlace");
     for (const html of [expired, confirmed, replaced]) expect(html).not.toContain("Confirmar mis antecedentes");
+  });
+
+  it("lets the co-debtor decline a pending invitation without granting consent", () => {
+    const html = invitation({ status: "pending", can_submit: true });
+    const declined = invitation({ status: "declined", can_submit: false });
+
+    expect(html).toContain("No autorizo el uso de mis datos");
+    expect(declined).toContain("No autorizaste el uso de tus datos");
+    expect(declined).not.toContain("Confirmar mis antecedentes");
   });
 
   it("renders a loading submission state that disables a second confirmation", () => {

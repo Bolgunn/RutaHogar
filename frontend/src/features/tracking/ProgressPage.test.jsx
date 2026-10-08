@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PointTooltip, ProgressView, TrackingHistoryView, formatHistoricalProjectGoal,
-  historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
-  tooltipPlacement,
+  activeBaselineForComparison, auditRecordLabel, buildBulkAnnulCommands, bulkAnnulSuccessMessage,
+  canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields,
+  isUpdatedField, mutateBulkCorrections, runSequentialCorrections,
+  dateTime, financialHistoryRows, tooltipPlacement,
 } from "./ProgressPage";
 
 const data = {
@@ -34,6 +36,67 @@ const data = {
 const handlers = { onConfirm: vi.fn(), onOpenHistory: vi.fn(), onUpdate: vi.fn() };
 
 describe("HU13 compact projection summary", () => {
+  it("uses the active replacement in the baseline slot for the score delta", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [{
+        event_id: "baseline-replacement", root_event_id: "baseline",
+        effective_at: "2026-01-01T00:00:00Z", snapshot: {},
+      }],
+      audit_line: [
+        { event_id: "baseline", effective_at: "2026-01-01T00:00:00Z", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline", effective_at: "2026-01-01T00:00:00Z" },
+        { event_id: "baseline-recalculation", event_kind: "evaluation", previous: "baseline-replacement", evaluation: { score: 55 } },
+      ],
+      excluded_from_metrics: ["baseline"],
+      current_evaluation: { score: 65, classification: "Medio", financial_indicators: {}, project_fit: {} },
+    };
+
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 55 });
+
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />);
+
+    expect(html).toContain("+10 puntos desde el inicio");
+    expect(html).not.toContain("+15 puntos desde el inicio");
+  });
+
+  it("falls back to the source baseline score when later updates prevent associating a recalculation", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [
+        { event_id: "baseline-replacement", root_event_id: "baseline", snapshot: {} },
+        { event_id: "latest-update", root_event_id: "latest-update", snapshot: {} },
+      ],
+      audit_line: [
+        { event_id: "baseline", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline" },
+        { event_id: "latest-update" },
+        { event_id: "later-recalculation", event_kind: "evaluation", previous: "latest-update", evaluation: { score: 65 } },
+      ],
+      excluded_from_metrics: ["baseline"],
+    };
+
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 50 });
+    expect(renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />))
+      .toContain("+15 puntos desde el inicio");
+  });
+
+  it("keeps the source baseline score when its correction does not create a recalculation", () => {
+    const correctedBaseline = {
+      ...data,
+      active_line: [{ event_id: "baseline-replacement", root_event_id: "baseline", snapshot: {} }],
+      audit_line: [
+        { event_id: "baseline", evaluation: { score: 50 } },
+        { event_id: "baseline-replacement", correction_of: "baseline" },
+      ],
+      excluded_from_metrics: ["baseline"],
+    };
+
+    expect(activeBaselineForComparison(correctedBaseline).evaluation).toEqual({ score: 50 });
+    expect(renderToStaticMarkup(<ProgressView {...handlers} data={correctedBaseline} projection={{ status: "not_projectable" }} />))
+      .toContain("+15 puntos desde el inicio");
+  });
+
   it("shows the estimated date, capacity and compatibility in the top summary", () => {
     const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{
       status: "projected", target_compatible_at: "2026-08-15T00:00:00Z",
@@ -54,6 +117,14 @@ describe("HU13 compact projection summary", () => {
     expect(html).not.toContain("Ver supuestos técnicos");
   });
 
+  it("links the frozen projection target to its project detail when navigation is available", () => {
+    const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{ status: "not_projectable" }}
+      onOpenProject={vi.fn()} />);
+
+    expect(html).toContain("progress-summary__project-link");
+    expect(html).toContain("Proyecto Norte");
+  });
+
   it("shows a simple message when a date cannot be projected", () => {
     const html = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={{
       status: "not_projectable", cause: "insufficient_data", target_compatible_at: null,
@@ -64,9 +135,134 @@ describe("HU13 compact projection summary", () => {
     expect(html).not.toContain("provenance");
     expect(html).not.toContain("variables");
   });
+
+  it("briefly explains when projection is still loading or cannot be requested", () => {
+    const loading = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={null} />);
+    const unavailable = renderToStaticMarkup(<ProgressView {...handlers} data={data} projection={null}
+      projectionError="No se pudo conectar al seguimiento." onRetryProjection={vi.fn()} />);
+
+    expect(loading).toContain("Aún no está lista porque estamos revisando tus observaciones y el objetivo del plan.");
+    expect(unavailable).toContain("La proyección no está disponible por ahora");
+    expect(unavailable).toContain("No se pudo conectar al seguimiento.");
+    expect(unavailable).toContain("Reintentar proyección");
+  });
+});
+
+describe("HU13 compact financial history", () => {
+  it("shows the latest ten rows until the person explicitly expands the history", () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({ id: `row-${index}` }));
+
+    expect(financialHistoryRows(rows).map((row) => row.id)).toEqual([
+      "row-2", "row-3", "row-4", "row-5", "row-6", "row-7", "row-8", "row-9", "row-10", "row-11",
+    ]);
+    expect(financialHistoryRows(rows, true)).toEqual(rows);
+  });
+
+  it("formats the recorded hour in the Chilean time zone", () => {
+    // 03:47 UTC is 00:47 (shown as 12:47 a. m. in es-CL) in Santiago
+    // during October daylight-saving time.
+    expect(dateTime("2026-10-07T03:47:00Z")).toMatch(/12:47/);
+  });
+
+  it("selects only current non-baseline records for bulk annulment", () => {
+    const baseline = { event_id: "baseline" };
+    const normalUpdate = { event_id: "update-2" };
+    const priorVersion = { event_id: "update-1", root_event_id: "update-1" };
+    const correctedUpdate = { event_id: "update-1-correction", root_event_id: "update-1" };
+    const audit = [baseline, normalUpdate, priorVersion, correctedUpdate];
+    const bulkRows = audit.filter((row) => canBulkAnnul(row, "baseline", audit, ["update-1"]));
+
+    expect(bulkRows.map((row) => row.event_id)).toEqual(["update-2", "update-1-correction"]);
+    expect(bulkRows).toHaveLength(2);
+  });
+
+  it("reports the number of current logical records annulled in bulk", () => {
+    expect(bulkAnnulSuccessMessage(1)).toBe("1 registro fue anulado lógicamente de tu evolución. Seguirá visible en el historial.");
+    expect(bulkAnnulSuccessMessage(2)).toBe("2 registros fueron anulados lógicamente de tu evolución. Seguirán visibles en el historial.");
+    expect(`${bulkAnnulSuccessMessage(1)} ${bulkAnnulSuccessMessage(2)}`).not.toMatch(/eliminad/i);
+  });
+
+  it("sends a bulk annulment sequentially through one visual mutation and onChanged", async () => {
+    const items = [
+      { target: { event_id: "update-1" }, command: { event_id: "command-1" } },
+      { target: { event_id: "update-2" }, command: { event_id: "command-2" } },
+    ];
+    const calls = [];
+    const onChanged = vi.fn();
+    const onCorrect = vi.fn(async (target, command) => { calls.push(`${target.event_id}:${command.event_id}`); });
+    const mutate = vi.fn(async (operation) => { await operation(); onChanged(); });
+
+    await mutateBulkCorrections(items, mutate, onCorrect);
+
+    expect(calls).toEqual(["update-1:command-1", "update-2:command-2"]);
+    expect(onCorrect).toHaveBeenCalledTimes(2);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for each bulk correction before sending the next one", async () => {
+    const pending = [];
+    const onCorrect = vi.fn(() => new Promise((resolve) => pending.push(resolve)));
+    const running = runSequentialCorrections([
+      { target: { event_id: "update-1" }, command: { event_id: "command-1" } },
+      { target: { event_id: "update-2" }, command: { event_id: "command-2" } },
+    ], onCorrect);
+
+    expect(onCorrect).toHaveBeenCalledTimes(1);
+    pending.shift()();
+    await Promise.resolve();
+    expect(onCorrect).toHaveBeenCalledTimes(2);
+    pending.shift()();
+    await running;
+  });
+
+  it("keeps generated command IDs when a failed bulk annulment is retried", () => {
+    const rows = [{ event_id: "update-1" }, { event_id: "update-2" }];
+    const createCommand = vi.fn((row) => ({ event_id: `command-for-${row.event_id}`, reason: "Datos duplicados" }));
+    const initial = buildBulkAnnulCommands(rows, "Datos duplicados", {}, createCommand);
+    const retry = buildBulkAnnulCommands(rows, "Datos duplicados", initial, createCommand);
+
+    expect(createCommand).toHaveBeenCalledTimes(2);
+    expect(retry).toEqual(initial);
+    expect(retry["update-1"].event_id).toBe("command-for-update-1");
+    expect(retry["update-2"].event_id).toBe("command-for-update-2");
+  });
+
+  it("labels current, replaced, annulled records and annulment events distinctly", () => {
+    const current = { event_id: "current" };
+    const replaced = { event_id: "replaced", root_event_id: "replaced" };
+    const annulled = { event_id: "annulled", root_event_id: "annulled" };
+    const annulment = {
+      event_id: "annulment", event_kind: "correction", correction_effect: "annul",
+      correction_of: "annulled", root_event_id: "annulled",
+    };
+    const audit = [current, replaced, annulled, annulment];
+
+    expect(auditRecordLabel(current, [current], audit, [])).toBe("Registro vigente");
+    expect(auditRecordLabel(replaced, [current], audit, ["replaced"])).toBe("Versión anterior");
+    expect(auditRecordLabel(annulled, [current], audit, ["annulled", "annulment"])).toBe("Registro anulado");
+    expect(auditRecordLabel(annulment, [current], audit, ["annulled", "annulment"])).toBe("Anulación");
+  });
+
+  it("does not allow an already annulled record to be selected again", () => {
+    const annulled = { event_id: "annulled", root_event_id: "annulled" };
+    const annulment = {
+      event_id: "annulment", correction_effect: "annul", correction_of: "annulled", root_event_id: "annulled",
+    };
+    const audit = [{ event_id: "baseline" }, annulled, annulment];
+
+    expect(canBulkAnnul(annulled, "baseline", audit, [])).toBe(false);
+    expect(canBulkAnnul(annulment, "baseline", audit, [])).toBe(false);
+  });
 });
 
 describe("HU13 goal cards and client language", () => {
+  it("explains why a plan has no goals and states that every generated goal is shown", () => {
+    expect(goalsStatusMessage([])).toContain("no detectó bloqueadores");
+    expect(goalsStatusMessage([{ goal_id: "one" }, { goal_id: "two" }, { goal_id: "three" }]))
+      .toBe("3 metas fueron generadas desde los bloqueadores de la evaluación inicial. Mostramos todas las metas de tu plan.");
+  });
+
   it("prioritizes goal status, percentage, values and temporal state without repeating the description", () => {
     const goalData = { ...data, goals: [{
       goal_id: "goal-1", action_status: "en_progreso", temporal_status: "atrasado",
@@ -295,5 +491,41 @@ describe("HU13 readable recorded history", () => {
 
     expect(html).toContain("progress-audit-record__correct");
     expect(html).toContain("Corregir registro");
+  });
+
+  it("labels a replace original as a prior version and its correction as current", () => {
+    const original = { ...historicalRecord, event_id: "original", reason: "Dato original" };
+    const replacement = { ...historicalRecord, event_id: "replacement", correction_of: "original", reason: "Dato corregido" };
+    const html = renderToStaticMarkup(<TrackingHistoryView data={{
+      ...historyData, audit_line: [original, replacement], excluded_from_metrics: ["original"],
+    }} busy={false} onCorrect={vi.fn()} />);
+
+    expect(html).toContain("Dato original");
+    expect(html).toContain("Dato corregido");
+    expect(html).toContain("Versión anterior");
+    expect(html).toContain("Registro vigente");
+  });
+
+  it("opens and closes a correction using its corresponding correction button", () => {
+    const row = historicalRecord;
+
+    expect(correctionTargetForClick(null, row)).toBe(row);
+    expect(correctionTargetForClick(row, row)).toBeNull();
+  });
+
+  it("renders the correction form inside the selected historical record", () => {
+    const first = { ...historicalRecord, event_id: "first-record" };
+    const selected = { ...historicalRecord, event_id: "selected-record", reason: "Registro seleccionado" };
+    const selectedId = "progress-audit-record-selected-record";
+    const html = renderToStaticMarkup(<TrackingHistoryView data={{ ...historyData, audit_line: [first, selected] }}
+      initialTarget={selected} busy={false} onCorrect={vi.fn()} />);
+    const selectedStart = html.indexOf(selectedId);
+    const selectedEnd = html.indexOf("</li>", selectedStart);
+    const correctionStart = html.indexOf('class="progress-correction"');
+
+    expect(selectedStart).toBeGreaterThan(-1);
+    expect(correctionStart).toBeGreaterThan(selectedStart);
+    expect(correctionStart).toBeLessThan(selectedEnd);
+    expect(html).not.toContain(">Cancelar<");
   });
 });
