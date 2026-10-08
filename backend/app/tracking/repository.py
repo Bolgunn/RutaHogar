@@ -19,6 +19,16 @@ def _shared_client(base_url):
     return client
 
 
+CO_DEBTOR_INVITATION_SELECTION_LIMIT = 10
+
+
+def select_current_co_debtor_invitation(rows):
+    """Match the lead-visible rule: prefer pending, otherwise most recent."""
+    if not isinstance(rows, list) or not rows:
+        return None
+    return next((row for row in rows if row.get("status") == "pending"), rows[0])
+
+
 class TrackingRepository:
     def __init__(self, client=None):
         self.url = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -70,12 +80,12 @@ class TrackingRepository:
                 "morosidad_complementario)"
             ),
             "order": "created_at.desc",
-            "limit": 1,
+            "limit": CO_DEBTOR_INVITATION_SELECTION_LIMIT,
         })
         rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
-        if not isinstance(rows, list) or not rows:
+        invitation = select_current_co_debtor_invitation(rows)
+        if invitation is None:
             return None
-        invitation = rows[0]
         confirmations = invitation.get("co_debtor_confirmations")
         if isinstance(confirmations, dict):
             confirmation = confirmations
@@ -153,10 +163,10 @@ class TrackingRepository:
                 "morosidad_complementario)"
             ),
             "order": "created_at.desc",
-            "limit": 1,
+            "limit": CO_DEBTOR_INVITATION_SELECTION_LIMIT,
         })
         rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
-        return rows[0] if isinstance(rows, list) and rows else None
+        return select_current_co_debtor_invitation(rows)
 
     def staff_history(self, lead_id):
         query = urlencode({

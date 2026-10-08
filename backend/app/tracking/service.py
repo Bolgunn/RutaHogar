@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from uuid import uuid4
 
 from .contracts import TrackingError, parse_time
@@ -28,6 +29,52 @@ def valid_project_snapshot(snapshot):
     return deepcopy(project_goal) if isinstance(project_goal, dict) and project_goal else None
 
 
+def frozen_target_scoring_snapshot(snapshot, target_project):
+    """Build the current frozen-target scoring input without rewriting history.
+
+    Tracking retains the recorded user snapshot verbatim.  When a frozen
+    target currently includes a catalogue UF price, this helper overlays that
+    value only for the scoring invocation.  This records the existing target
+    handling; it does not establish `precio_min_uf` as a universal financial
+    rule.  The caller persists the effective overlay in evaluation provenance.
+    """
+    state = deepcopy(snapshot or {})
+    target = deepcopy(target_project) if isinstance(target_project, dict) else None
+    try:
+        price_uf = float((target or {}).get("precio_min_uf") or (target or {}).get("valor_uf") or 0)
+    except (TypeError, ValueError):
+        price_uf = 0
+    if not isfinite(price_uf) or price_uf <= 0:
+        return state
+    state.update({
+        "property_value": price_uf,
+        "property_value_unit": "uf",
+        "property_value_uf": price_uf,
+        # The resolver gives CLP priority, so this historical value must be
+        # explicitly cleared before the target UF value is evaluated.
+        "property_value_clp": None,
+        "property_value_source": "project_selection",
+        "project_goal": target,
+    })
+    if target.get("comuna"):
+        state["comuna_objetivo"] = target["comuna"]
+    return state
+
+
+def frozen_target_scoring_override(recorded_snapshot, scoring_snapshot):
+    """Describe the property overlay actually supplied to scoring, if any."""
+    if recorded_snapshot == scoring_snapshot:
+        return None
+    return {
+        "property_value": {
+            "value": deepcopy(scoring_snapshot.get("property_value")),
+            "unit": scoring_snapshot.get("property_value_unit"),
+            "source": scoring_snapshot.get("property_value_source"),
+            "target_project": deepcopy(scoring_snapshot.get("project_goal")),
+        },
+    }
+
+
 def source_events(bundle):
     evaluations = {row["id"]: row for row in bundle["evaluations"]}
     return [
@@ -39,6 +86,45 @@ def source_events(bundle):
         }
         for row in bundle["events"]
     ]
+
+
+def client_tracking_view(view):
+    """Build the lead-safe history without collapsing replacement provenance.
+
+    The complete lineage is retained in ``view`` for repository, service and
+    staff audit use.  The lead receives that full audit timeline, including
+    replaced originals, annulled records, and annulment events.  ``active_line``
+    is deliberately left untouched: only it feeds metrics, goals, charts, and
+    projections.  Every audit-only event is marked as excluded from metrics.
+    """
+    output = deepcopy(view)
+    audit_line = view.get("audit_line", [])
+    by_id = {row.get("event_id"): row for row in audit_line if row.get("event_id")}
+
+    def root_event_id(row):
+        current = row
+        seen = set()
+        while current and current.get("correction_of") and current["event_id"] not in seen:
+            seen.add(current["event_id"])
+            current = by_id.get(current["correction_of"])
+        return (current or row).get("event_id")
+
+    active_by_id = {row["event_id"]: row for row in view.get("active_line", [])}
+    visible_audit = []
+    for row in audit_line:
+        root_id = root_event_id(row)
+        active = active_by_id.get(row.get("event_id"))
+        visible_audit.append({
+            **deepcopy(row),
+            "root_event_id": active.get("root_event_id") if active else root_id,
+        })
+    output["audit_line"] = visible_audit
+    # The client can label every historic version while keeping the complete
+    # audit-only set out of metrics and bulk-effective operations.
+    output["excluded_from_metrics"] = [
+        row["event_id"] for row in visible_audit if row["event_id"] not in active_by_id
+    ]
+    return output
 
 
 def goal_view(bundle, lineage, as_of):
@@ -231,14 +317,17 @@ class TrackingService:
         market_snapshot = self._stored_market_snapshot(view.get("active_line")) or self.market_snapshot_resolver()
         baseline = view.get("baseline") or {}
         target = baseline.get("target_project_snapshot")
-        # Project identity and value come from the evaluation that froze the target.
-        # For plans born with a target this is the root; for E3 it is the first later
-        # evaluation carrying that target. Historical rows remain untouched.
+        # Older frozen targets may not contain a catalogue price. Keep their
+        # historical source as a compatibility fallback; a target price is an
+        # existing scoring-input overlay, not a newly asserted universal rule.
         target_source = next((
             row for row in view["audit_line"]
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
-        if target_source:
+        target_with_price = frozen_target_scoring_snapshot(latest, target)
+        if target_with_price != latest:
+            latest = target_with_price
+        elif target_source:
             original = target_source["recorded_complete_snapshot"]
             for field in ("property_value", "property_value_unit", "property_value_clp", "property_value_uf",
                           "property_value_source", "comuna_objetivo"):
@@ -330,13 +419,21 @@ class TrackingService:
                 if complement_source != "co_debtor_confirmed":
                     raise TrackingError("co_debtor_confirmation_required")
             complete_input = complete_snapshot(resolved_input)
-            result = self._score(complete_input, market_snapshot)
+            # Keep complete_input as the immutable recorded fact. A frozen
+            # target can still overlay the scoring input; provenance below
+            # records that operational transformation when it occurs.
+            frozen_target = (bundle.get("plan") or {}).get("target_project_snapshot") or valid_project_snapshot(complete_input)
+            scoring_input = frozen_target_scoring_snapshot(complete_input, frozen_target)
+            scoring_override = frozen_target_scoring_override(complete_input, scoring_input)
+            result = self._score(scoring_input, market_snapshot)
             details = {
                 **provenance(result),
                 "source_event_ids": [source_event["event_id"]],
                 "cutoff_at": now,
                 "co_debtor_consent": consent_provenance,
             }
+            if scoring_override:
+                details["scoring_overrides"] = scoring_override
             if co_debtor_confirmation_id:
                 details["co_debtor_confirmation_id"] = co_debtor_confirmation_id
             evaluation = {

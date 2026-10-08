@@ -47,7 +47,7 @@ Deno.test("HU18 pending invitation context exposes exactly the five declared fie
     morosidad_complementario: "no",
   };
   if (JSON.stringify(context) !== JSON.stringify(expected)) throw new Error("public prefill contract leaked data");
-  for (const status of ["expired", "replaced", "confirmed", "revoked"] as const) {
+  for (const status of ["expired", "replaced", "confirmed", "revoked", "declined"] as const) {
     const terminal = invitationPublicContext({ ...pending, ...expected, status }, now);
     if ("ingreso_mensual_complementario" in terminal) throw new Error(`${status} leaked declared data`);
   }

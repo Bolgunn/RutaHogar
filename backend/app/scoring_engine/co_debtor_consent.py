@@ -8,7 +8,7 @@ from typing import Any, Mapping
 from .constants import CO_DEBTOR_INVITATION_TTL_DAYS
 
 
-_INVITATION_STATUSES = frozenset({"pending", "expired", "confirmed", "revoked", "replaced"})
+_INVITATION_STATUSES = frozenset({"pending", "expired", "confirmed", "revoked", "declined", "replaced"})
 _CO_DEBTOR_FINANCIAL_FIELDS = (
     "ingreso_mensual_complementario",
     "deuda_mensual_complementario",
@@ -125,13 +125,14 @@ def resolve_co_debtor_complement(
     if replacement_invitation_created:
         result.update(previous_invitation_valid=False, active_invitation_count=1)
 
-    if resolved_status == "revoked":
+    if resolved_status in {"revoked", "declined"}:
+        source = "excluded_after_revocation" if resolved_status == "revoked" else "excluded_after_decline"
         result.update(
-            complement_source="excluded_after_revocation",
-            complement_confirmation_status="revoked",
+            complement_source=source,
+            complement_confirmation_status=resolved_status,
             selected_complement=None,
-            decision_rule="R6",
-            future_complement_source="excluded_after_revocation",
+            decision_rule="R6" if resolved_status == "revoked" else "R7",
+            future_complement_source=source,
             historical_snapshots_preserved=True,
             staff_raw_values_visible=False,
         )

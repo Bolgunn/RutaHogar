@@ -2892,7 +2892,7 @@ create table if not exists public.co_debtor_invitations (
   management_token_digest text
     check (management_token_digest is null or length(trim(management_token_digest)) > 0),
   status text not null default 'pending'
-    check (status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+    check (status in ('pending', 'expired', 'confirmed', 'revoked', 'declined', 'replaced')),
   expires_at timestamptz not null,
   consumed_at timestamptz,
   replaced_at timestamptz,
@@ -2970,11 +2970,11 @@ create table if not exists public.co_debtor_consent_events (
   invitation_id uuid not null
     references public.co_debtor_invitations(id) on delete restrict,
   event_type text not null
-    check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked')),
+    check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked', 'declined')),
   actor_type text not null
     check (actor_type in ('lead', 'co_debtor', 'system')),
   invitation_status text not null
-    check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'replaced')),
+    check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'declined', 'replaced')),
   occurred_at timestamptz not null default clock_timestamp()
 );
 
@@ -3253,6 +3253,21 @@ begin
 end;
 $$;
 
+create or replace function public.hu18_decline_invitation(p_invitation_id uuid)
+returns boolean language plpgsql security definer set search_path = public
+as $$
+declare current_status text;
+begin
+  select status into current_status from public.co_debtor_invitations where id = p_invitation_id for update;
+  if not found then raise exception 'hu18_invitation_not_found' using errcode = 'P0001'; end if;
+  if current_status <> 'pending' then raise exception 'hu18_invitation_not_pending' using errcode = 'P0001'; end if;
+  update public.co_debtor_invitations set status = 'declined', consumed_at = clock_timestamp() where id = p_invitation_id;
+  insert into public.co_debtor_consent_events (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'declined', 'co_debtor', 'declined');
+  return true;
+end;
+$$;
+
 revoke all on function public.hu18_create_invitation(uuid, text, text, timestamptz) from public, anon, authenticated;
 revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz) from public, anon, authenticated;
 revoke all on function public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text) from public, anon, authenticated;
@@ -3261,12 +3276,13 @@ revoke all on function public.hu18_expire_invitation(uuid) from public, anon, au
 revoke all on function public.hu18_expire_invitations() from public, anon, authenticated;
 revoke all on function public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text) from public, anon, authenticated;
 revoke all on function public.hu18_revoke_consent(uuid) from public, anon, authenticated;
+revoke all on function public.hu18_decline_invitation(uuid) from public, anon, authenticated;
 grant execute on function public.hu18_create_invitation(uuid, text, text, timestamptz),
   public.hu18_create_invitation(uuid, text, text, text, timestamptz),
   public.hu18_create_invitation(uuid, text, text, text, timestamptz, numeric, numeric, text, text, text),
   public.hu18_revert_invitation_after_delivery_failure(uuid, uuid), public.hu18_expire_invitation(uuid),
   public.hu18_expire_invitations(), public.hu18_confirm_invitation(uuid, numeric, numeric, text, text, text, text, text),
-  public.hu18_revoke_consent(uuid) to service_role;
+  public.hu18_revoke_consent(uuid), public.hu18_decline_invitation(uuid) to service_role;
 
 -- HU18 Step 8: staff never reads raw evaluation/history snapshots directly.
 -- The backend applies consent-state redaction and the existing commercial

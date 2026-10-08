@@ -158,6 +158,17 @@ async function submitConfirmation(body: Record<string, unknown>, admin: AdminCli
   return json({ status: "confirmed", confirmation_email_sent: coDebtorEmailSent, lead_email_sent: leadEmailSent });
 }
 
+async function declineInvitation(body: Record<string, unknown>, admin: AdminClient) {
+  const token = cleanText(body.token, 512);
+  const invitation = token ? await findByToken(admin, "token_digest", token) : null;
+  if (!invitation) return json({ error: "Invitación inválida." }, 404);
+  const current = await materializeExpiry(admin, invitation);
+  if (current.status !== "pending") return json({ error: "La invitación no admite una respuesta." }, 409);
+  const { error } = await admin.rpc("hu18_decline_invitation", { p_invitation_id: current.id });
+  if (error) return json({ error: "No se pudo registrar tu decisión." }, 409);
+  return json({ status: "declined" });
+}
+
 async function inspectManagement(body: Record<string, unknown>, admin: AdminClient) {
   const token = cleanText(body.token, 512);
   const invitation = token ? await findByToken(admin, "management_token_digest", token) : null;
@@ -205,6 +216,7 @@ serve(async (req) => {
     if (action === "create_invitation") return await createInvitation(req, body, admin, anonKey, supabaseUrl);
     if (action === "inspect_invitation") return await inspectInvitation(body, admin);
     if (action === "submit_confirmation") return await submitConfirmation(body, admin);
+    if (action === "decline_invitation") return await declineInvitation(body, admin);
     if (action === "inspect_management") return await inspectManagement(body, admin);
     if (action === "revoke_management") return await revokeManagement(body, admin);
     if (action === "process_expirations") return await processExpirations(req, admin);

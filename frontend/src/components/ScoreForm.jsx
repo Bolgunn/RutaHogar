@@ -1491,7 +1491,6 @@ export default function ScoreForm({
                     name="correo_codeudor"
                     value={form.correo_codeudor}
                     onChange={handleChange}
-                    placeholder="nombre@correo.cl"
                     autoComplete="email"
                   />
                 </div>

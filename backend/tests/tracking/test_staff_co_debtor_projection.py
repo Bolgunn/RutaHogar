@@ -116,6 +116,21 @@ def test_revocation_keeps_history_but_redacts_all_co_debtor_values_everywhere():
     assert "120000" not in serialized
 
 
+def test_decline_excludes_all_co_debtor_values_from_the_staff_projection():
+    repository = StaffRepository()
+    repository.invitation = {"status": "declined", "token_digest": "never-read", "co_debtor_confirmations": [confirmed_values()]}
+
+    detail = service(repository).lead_detail("executive-token", LEAD_ID)
+
+    assert detail["co_debtor"] == {"status": "declined", "source": "excluded_after_decline"}
+    assert "confirmed" not in detail["co_debtor"]
+    serialized = str(detail)
+    for field in (*CO_DEBTOR_CONFIRMED_FIELDS, "relacion_complementario"):
+        assert field not in serialized
+    assert "1400000" not in serialized
+    assert "120000" not in serialized
+
+
 def test_refresh_after_confirmed_to_revoked_transition_removes_the_values():
     repository = StaffRepository()
     repository.invitation = {"status": "confirmed", "co_debtor_confirmations": [confirmed_values()]}
