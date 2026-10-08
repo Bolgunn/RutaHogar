@@ -1,4 +1,8 @@
 /* Shared presentation for user views; the evaluation form is excluded. */
+.prequalification-panel .tip { align-items: center; }
+.prequalification-panel .tip__icon { align-self: center; }
+.prequalification-panel .tip__text { margin: 0; }
+.prequalification-panel .tip__toggle { align-self: center; }
 :is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) {
   --rh-text-secondary: #34445a;
   --rh-text-muted: #43536a;

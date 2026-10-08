@@ -11,6 +11,8 @@ import "./components/user-view-consistency.css";
 import "./components/user-subsidies.css";
 import "./components/user-page-headers.css";
 import "./components/user-improvement-plan.css";
+import "./components/user-academy.css";
+import "./components/user-notices.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>

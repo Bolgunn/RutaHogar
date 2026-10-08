@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { buildRecommendations } from "../services/recommendationService";
-import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
+import { ACADEMY_ARTICLES, ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
+import { ArticleModal } from "./AcademiaFinanciera";
 
 function ConditionList({ items, variant }) {
   if (!items || items.length === 0) return null;
@@ -67,15 +68,15 @@ function getBenefitNotes(benefit) {
 }
 
 export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
+  const [guideArticleId, setGuideArticleId] = useState(null);
+  const activeGuide = ACADEMY_ARTICLES.find((article) => article.id === guideArticleId);
   const hasProjectGoal = evaluation?.input?.property_value_source === "project_selection";
   const data = useMemo(
     () => buildRecommendations(hasProjectGoal || focusBenefitId ? evaluation : null),
     [evaluation, hasProjectGoal, focusBenefitId],
   );
   const openBenefitCapsule = (academyModule) => {
-    const articleId = ACADEMY_BENEFIT_CAPSULES[academyModule];
-    if (articleId) onNavigate?.("academia", { articleId });
-    else onNavigate?.("academia");
+    setGuideArticleId(ACADEMY_BENEFIT_CAPSULES[academyModule] || null);
   };
   const goToRecommendations = () => onNavigate?.("recommendations");
   const goToProjects = () => onNavigate?.("projects");
@@ -149,7 +150,7 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
 
         {disclaimer && (
           <div className="simulation-disclaimer">
-            <strong>Importante</strong>
+            <span className="subsidy-notice-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg></span>
             <p>{disclaimer}</p>
           </div>
         )}
@@ -157,6 +158,8 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
         <div className="simulation-benefits-grid">
           {benefits.map((benefit) => {
             const benefitNotes = getBenefitNotes(benefit);
+            const guideId = ACADEMY_BENEFIT_CAPSULES[benefit.academy_module];
+            const guide = ACADEMY_ARTICLES.find((article) => article.id === guideId);
             return (
           <article
             key={benefit.type}
@@ -200,6 +203,7 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
                 </button>
               </div>
             )}
+
           </article>
             );
           })}
@@ -207,6 +211,7 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
 
       </> : <div className="empty-state"><strong>Esta calificación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
 
+      {activeGuide && <div className="academia-panel"><ArticleModal article={activeGuide} onClose={() => setGuideArticleId(null)} onOpenArticle={setGuideArticleId} onGoToAcademy={() => onNavigate?.("academia", { articleId: activeGuide.id })} /></div>}
       <div className="subsidios-page__navigation">
         <button type="button" className="secondary-button" onClick={goToRecommendations}>
           Volver a Resultados

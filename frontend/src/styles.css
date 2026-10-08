@@ -19773,19 +19773,19 @@ section-heading {
 
 /* Academia: los contadores del encabezado usan el mismo azul. */
 .academia-panel .academy-stats {
-  border-color: rgba(19, 43, 74, 0.18) !important;
-  background: rgba(19, 43, 74, 0.18) !important;
+  border-color: rgba(19, 43, 74, 0.18);
+  background: rgba(19, 43, 74, 0.18);
 }
 
 .academia-panel .academy-stat,
 .academia-panel .academy-stat--sources {
-  background: rgba(19, 43, 74, 0.06) !important;
-  color: var(--rh-navy) !important;
+  background: rgba(19, 43, 74, 0.06);
+  color: var(--rh-navy);
 }
 
 .academia-panel .academy-stat i,
 .academia-panel .academy-stat--sources i {
-  color: var(--rh-navy) !important;
+  color: var(--rh-navy);
 }
 
 @media (max-width: 760px) {
@@ -19801,20 +19801,20 @@ section-heading {
 
 /* Academia: stats con fondo azul consistente. */
 .academia-panel .academy-stats {
-  gap: 1px !important;
-  border-color: rgba(19, 43, 74, 0.32) !important;
-  background: rgba(19, 43, 74, 0.32) !important;
+  gap: 1px;
+  border-color: rgba(19, 43, 74, 0.32);
+  background: rgba(19, 43, 74, 0.32);
 }
 
 .academia-panel .academy-stat,
 .academia-panel .academy-stat--sources {
-  background: var(--rh-navy) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
+  background: var(--rh-navy);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .academia-panel .academy-stat i,
 .academia-panel .academy-stat--sources i {
-  color: var(--rh-gold) !important;
+  color: var(--rh-gold);
 }
 
 /* Academia: pestañas y busqueda en una misma barra, sin disclaimer intermedio. */
