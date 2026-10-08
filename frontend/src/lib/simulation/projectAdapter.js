@@ -57,6 +57,7 @@ export function portalProjectToCatalogCard(row) {
     estado: row.estado,
     inmobiliaria: row.inmobiliaria || "",
     url: row.url || "",
+    imagen_url: row.imagen_url || "",
     origen: "portal",
   };
 }

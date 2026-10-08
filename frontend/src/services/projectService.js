@@ -654,7 +654,7 @@ async function fetchAllPortalRows(columns, { priced }) {
 
 export async function getPortalProjects() {
   if (PROVIDER === "local") return [];
-  return fetchAllPortalRows("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url", { priced: true });
+  return fetchAllPortalRows("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url, imagen_url", { priced: true });
 }
 
 // Comunas con avisos en el catálogo, para el filtro del portal: la búsqueda no exige

@@ -24,6 +24,7 @@ import { createCoDebtorInvitation } from "./services/coDebtorService";
 import HousingSavingsPlan from "./components/HousingSavingsPlan";
 import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
+import UserHomeOverview from "./components/UserHomeOverview";
 import NotificationToast from "./components/NotificationToast";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
@@ -463,6 +464,7 @@ function LeadChangeDetail({ change }) {
 
 function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
   const [detailGroup, setDetailGroup] = useState(null);
+  const [expanded, setExpanded] = useState(false);
   if (loading) {
     return (
       <section className="home-change-timeline is-loading" aria-live="polite">
@@ -479,10 +481,22 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
     <>
     <section className="home-change-timeline" aria-labelledby="home-change-title">
       <div className="home-change-timeline__head">
+        <div className="home-change-timeline__heading">
         <span className="eyebrow">Cambios desde tu última visita</span>
         <h2 id="home-change-title">Hay novedades relevantes para revisar</h2>
+        </div>
+        <button
+          type="button"
+          className="secondary-button compact-button home-change-timeline__toggle"
+          aria-expanded={expanded}
+          aria-controls="home-change-content"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Ocultar novedades" : `Mostrar novedades (${changes.length})`}
+          <i className={`ti ${expanded ? "ti-chevron-up" : "ti-chevron-down"}`} aria-hidden="true" />
+        </button>
       </div>
-      <div className="home-change-timeline__rail">
+      <div id="home-change-content" className="home-change-timeline__rail" hidden={!expanded}>
         {groups.map((group, groupIndex) => {
           const highlighted = highlightedId && group.items.some((item) => String(item.id) === String(highlightedId));
           const hasMultipleItems = group.items.length > 1;
@@ -490,13 +504,14 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
           const isMultiFieldQuickUpdate = group.type === "quick_update_submitted" && Array.isArray(onlyChange?.payload?.fields) && onlyChange.payload.fields.length > 1;
           const showGroupedSummary = hasMultipleItems || isMultiFieldQuickUpdate;
           return (
-            <section className="home-change-group" key={group.type}>
+            <section className={`home-change-group home-change-group--${group.type}`} key={group.type} aria-labelledby={`home-change-group-${group.type}`}>
               <div className="home-change-group__head">
                 <span className="home-change-group__icon"><i className={`ti ${changeTypeIcons[group.type] || "ti-bell"}`} aria-hidden="true" /></span>
                 <div>
-                  <h3>{changeTypeLabels[group.type] || "Cambio detectado"}</h3>
+                  <h3 id={`home-change-group-${group.type}`}>{changeTypeLabels[group.type] || "Cambio detectado"}</h3>
                   <p>{group.items.length === 1 ? "1 novedad pendiente" : `${group.items.length} novedades pendientes`}</p>
                 </div>
+                <span className="home-change-group__count" aria-label={`${group.items.length} novedades pendientes`}>{group.items.length}</span>
               </div>
               <div className="home-change-group__items">
                 <article className={`home-change-card home-change-card--summary ${highlighted ? "is-highlighted" : ""}`}>
@@ -504,7 +519,7 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
                     <div className="home-change-card__meta">
                       <time>{formatChangeDate(onlyChange?.occurred_at)}</time>
                     </div>
-                    <h3>{showGroupedSummary ? hasMultipleItems ? `${group.items.length} novedades por revisar` : onlyChange?.title : onlyChange?.title}</h3>
+                    <h4>{showGroupedSummary ? hasMultipleItems ? `${group.items.length} novedades por revisar` : onlyChange?.title : onlyChange?.title}</h4>
                     <p>{showGroupedSummary ? leadChangeGroupSummary[group.type] || "Hay cambios pendientes asociados a tu seguimiento." : onlyChange?.summary}</p>
                     {!showGroupedSummary && <LeadChangeDetail change={onlyChange} />}
                     <div className="home-change-card__actions">
@@ -514,7 +529,7 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
                         className="secondary-button compact-button"
                         onClick={() => hasMultipleItems ? Promise.all(group.items.map((item) => onMarkSeen(item.id))) : onMarkSeen(onlyChange.id)}
                       >
-                        Entendido
+                        {hasMultipleItems ? "Marcar todas como vistas" : "Marcar como vista"}
                       </button>
                     </div>
                   </div>
@@ -527,7 +542,7 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
       </div>
     </section>
     {detailGroup && createPortal(
-      <div className="home-change-detail-modal" role="dialog" aria-modal="true" aria-labelledby="home-change-detail-title" onClick={() => setDetailGroup(null)}>
+      <div className="home-change-detail-modal home-change-detail-modal--compact" role="dialog" aria-modal="true" aria-labelledby="home-change-detail-title" onClick={() => setDetailGroup(null)}>
         <div className="home-change-detail-modal__card" onClick={(event) => event.stopPropagation()}>
           <div className="home-change-detail-modal__head">
             <div>
@@ -545,7 +560,7 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
                 <p>{change.summary}</p>
                 <LeadChangeDetail change={change} />
                 <div className="home-change-card__actions">
-                  <button type="button" className="secondary-button compact-button" onClick={() => onMarkSeen(change.id)}>Entendido</button>
+                  <button type="button" className="secondary-button compact-button" onClick={() => onMarkSeen(change.id)}>Marcar como vista</button>
                 </div>
               </article>
             ))}
@@ -621,9 +636,9 @@ function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
   return (
     <section className="home-quick-update" aria-labelledby="home-quick-update-title">
       <div>
-        <span className="eyebrow">Actualización en un dato</span>
-        <h2 id="home-quick-update-title">Reporta tu avance sin repetir el formulario completo</h2>
-        <p>Usaremos tu última evaluación como base, cambiaremos solo este dato y recalcularemos tu situación.</p>
+        <span className="eyebrow">Actualiza tu situación</span>
+        <h2 id="home-quick-update-title">¿Qué datos cambiaron?</h2>
+        <p>Selecciona los datos que quieres actualizar. Usaremos tu última evaluación como base para recalcular tu situación.</p>
       </div>
       <div className="home-quick-update__picker">
         {quickUpdateStages.map((stage) => (
@@ -644,6 +659,7 @@ function QuickUpdatePanel({ event, baseInput, saving, onCancel, onSave }) {
         ))}
       </div>
       <div className="home-quick-update__actions">
+        <span className="home-quick-update__selection" role="status" aria-live="polite">{selectedFields.length ? `${selectedFields.length} ${selectedFields.length === 1 ? "dato seleccionado" : "datos seleccionados"}` : "Selecciona al menos un dato para continuar"}</span>
         <button type="button" className="primary-button compact-button" onClick={() => setEditing(true)} disabled={!selectedFields.length}>Modificar seleccionados</button>
         <button type="button" className="secondary-button compact-button" onClick={onCancel} disabled={saving}>Cancelar</button>
       </div>
@@ -1209,7 +1225,9 @@ export default function App() {
         console.error(err);
         if (active)
           setDataError(
-            "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde.",
+            profile?.role === roles.user
+              ? "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde."
+              : "No pudimos cargar las evaluaciones del panel. Los datos pueden estar incompletos. Recarga la página o intenta más tarde.",
           );
       }
     }
@@ -2238,12 +2256,12 @@ export default function App() {
         )}
 
         {/* Notificación para ejecutivos */}
-        <NotificationToast
+        {(page !== "leads" || !canViewStaffPage(page, profile.role)) && <NotificationToast
           count={newHighLeadsCount}
           onClick={handleNotificationClick}
           onClose={handleDismissNotification}
           className="notification-toast--high-score"
-        />
+        />}
 
         {page === "onboarding" && profile.role === roles.user ? (
           <section className="evaluation-panel home-panel">
@@ -2279,17 +2297,17 @@ export default function App() {
             onNavigate={navigateToPage}
           />
         ) : page === "admin-reports" && canViewStaffPage(page, profile.role) ? (
-          <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
+          <AdminReportHistory profile={profile} evaluations={evaluations} />
         ) : page === "admin-profile" && canViewStaffPage(page, profile.role) ? (
-          <AdminProfile profile={profile} />
+          <AdminProfile profile={profile} onNavigate={navigateToPage} />
         ) : page === "home" ? (
-          <section className="evaluation-panel home-panel">
+          <section className="evaluation-panel home-panel home-panel--guided">
             <div className="section-heading">
               <span className="eyebrow">Mi preparación financiera</span>
               <h1>
                 Hola{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}
               </h1>
-              <p>Este es tu resumen de preparación para comprar vivienda.</p>
+              <p>Tu camino hacia una vivienda, paso a paso. Revisa dónde estás y cómo seguir.</p>
             </div>
 
             {result && (
@@ -2308,28 +2326,23 @@ export default function App() {
 
             {currentEvaluation ? (
               <>
-                <section className="home-profile-brief" aria-labelledby="home-profile-title">
-                  <div className="home-profile-brief__status">
-                    <span className="eyebrow">Tu perfil hoy</span>
-                    <strong id="home-profile-title">{currentScore ? formatScore(currentScore.score, "Sin score") : "Pendiente"}</strong>
-                    <span>{currentScore ? `Score orientativo · ${currentScore.classification || "Sin clasificación"}` : "Aún no has calculado tu score"}</span>
-                  </div>
-                  <dl className="home-profile-brief__details">
-                    <div><dt>Proyecto objetivo</dt><dd>{homeProfileSummary.project}</dd></div>
-                    <div><dt>Capacidad estimada</dt><dd>{homeProfileSummary.capacity}</dd></div>
-                    <div><dt>Brecha principal</dt><dd>{homeProfileSummary.gap}</dd></div>
-                    <div><dt>Última evaluación</dt><dd>{homeProfileSummary.lastEvaluation}</dd></div>
-                  </dl>
-                </section>
+                <UserHomeOverview evaluation={currentEvaluation} score={currentScore} summary={homeProfileSummary} onNavigate={navigateToPage} onStartEvaluation={startEvaluation} />
+                <LeadChangeTimeline
+                  changes={leadChanges}
+                  loading={leadChangesLoading}
+                  highlightedId={highlightedChangeId}
+                  onMarkSeen={handleLeadChangeSeen}
+                  onDisableType={handleDisableLeadChangeType}
+                />
 
                 {!quickUpdateEvent && (
                   <section className="home-update-entry">
                     <div>
                       <span className="eyebrow">Actualizar mi perfil</span>
                       <h2>¿Cambió algo en tus datos?</h2>
-                      <p>Actualiza un solo dato financiero, laboral o de vivienda y recalcularemos tu situación sin pasar por el formulario completo.</p>
+                      <p>Reporta cambios en tus finanzas, trabajo o vivienda sin repetir la precalificación completa.</p>
                     </div>
-                    <button type="button" className="primary-button" onClick={() => setQuickUpdateEvent({ source: "manual" })}>Actualizar un dato</button>
+                    <button type="button" className="secondary-button" onClick={() => setQuickUpdateEvent({ source: "manual" })}>Actualizar un dato</button>
                   </section>
                 )}
 
@@ -2343,26 +2356,9 @@ export default function App() {
                   />
                 )}
 
-                <LeadChangeTimeline
-                  changes={leadChanges}
-                  loading={leadChangesLoading}
-                  highlightedId={highlightedChangeId}
-                  onMarkSeen={handleLeadChangeSeen}
-                  onDisableType={handleDisableLeadChangeType}
-                />
               </>
             ) : (
-              <section className="home-purpose" aria-labelledby="home-purpose-title">
-                <div className="home-purpose__intro">
-                  <h2 id="home-purpose-title">Prepara tu compra con información clara</h2>
-                  <p>RutaHogar ordena tu situación financiera para ayudarte a entender qué preparar antes de conversar con una institución financiera.</p>
-                </div>
-                <ol className="home-purpose__steps">
-                  <li><span>01</span><div><strong>Conoce tu punto de partida</strong><p>Revisa un score y los factores que influyen en tu preparación.</p></div></li>
-                  <li><span>02</span><div><strong>Identifica qué puedes mejorar</strong><p>Prioriza ahorro, deudas y antecedentes según tu perfil.</p></div></li>
-                  <li><span>03</span><div><strong>Toma decisiones con contexto</strong><p>Explora alternativas de vivienda y beneficios habitacionales de forma referencial.</p></div></li>
-                </ol>
-              </section>
+              <UserHomeOverview evaluation={null} summary={homeProfileSummary} onNavigate={navigateToPage} onStartEvaluation={startEvaluation} />
             )}
 
             <p className="hero-note">
@@ -2370,13 +2366,14 @@ export default function App() {
             </p>
           </section>
         ) : page === "evaluate" ? (
-          <section className="evaluation-panel prequalification-panel">
+          <section className={`evaluation-panel prequalification-panel ${currentEvaluation && !startingNewEvaluation ? "prequalification-panel--review" : ""}`}>
             <div className="section-heading compact">
-              <span className="eyebrow">Disponible</span>
+              <span className="eyebrow">{currentEvaluation && !startingNewEvaluation ? "Tu evaluación guardada" : "Disponible"}</span>
               <h1>Precalificación financiera</h1>
               <p>
-                Completa todos los campos para calcular un score orientativo. El
-                resultado no equivale a aprobación bancaria.
+                {currentEvaluation && !startingNewEvaluation
+                  ? "Revisa tus datos y decide si necesitas actualizar tu precalificación. Tu resultado es orientativo y no equivale a aprobación bancaria."
+                  : "Completa todos los campos para calcular un score orientativo. El resultado no equivale a aprobación bancaria."}
               </p>
             </div>
             {currentEvaluation && !startingNewEvaluation ? (
@@ -2491,6 +2488,7 @@ export default function App() {
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
+          onRetryExplanation={handleRetryAiExplanation}
           evaluation={currentEvaluation}
           trackingState={trackingState}
           onAcceptPlan={handleAcceptPlan}
@@ -2578,6 +2576,8 @@ export default function App() {
           />
       ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
+          highScoreNotification={{ count: newHighLeadsCount, onClick: handleNotificationClick,
+            onClose: handleDismissNotification, className: "notification-toast--high-score" }}
           evaluations={evaluations}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}

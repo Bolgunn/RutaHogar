@@ -161,7 +161,9 @@ export function FinancingAdjustments({ sectionRef, draft, result, ufReference, t
         <label className="financing-adjustments__toggle"><input type="checkbox" checked={complementaryEnabled} onChange={(event) => onUpdate("usar_renta_complementaria", event.target.checked)} />Complementar renta <FieldTooltip text="Incluye otro ingreso mensual en la referencia. No representa una evaluación crediticia de otra persona." /></label>
         {complementaryEnabled ? <label><span>Renta complementaria <FieldTooltip text="Monto mensual que se suma al ingreso considerado solo mientras mantengas activada la complementación de renta." /></span><FormattedAmountInput value={draft.renta_complementaria_clp ?? 0} maxDigits={10} onWheel={preventWheel} onChange={(value) => onUpdate("renta_complementaria_clp", value)} /></label> : null}
       </div>
-      <div className="financing-income-composition"><strong>Renta considerada: {money(result.renta_total_clp)}</strong><span>{money(draft.renta_propia_clp)} propia + {money(complementaryEnabled ? draft.renta_complementaria_clp : 0)} complementaria</span></div>
-      <footer className="financing-adjustments__footer"><div>{hasDraftChanges && <button type="button" className="secondary-button compact-button" onClick={onCancel}>Cancelar</button>}<button type="button" className="primary-button compact-button" onClick={onApply} disabled={!hasDraftChanges}>Aplicar cambios</button></div></footer>
+      <footer className="financing-adjustments__footer">
+        <div className="financing-income-composition"><strong>Renta considerada: {money(result.renta_total_clp)}</strong><span>{money(draft.renta_propia_clp)} propia + {money(complementaryEnabled ? draft.renta_complementaria_clp : 0)} complementaria</span></div>
+        <div className="financing-adjustments__actions">{hasDraftChanges && <button type="button" className="secondary-button compact-button" onClick={onCancel}>Cancelar</button>}<button type="button" className="primary-button compact-button" onClick={onApply} disabled={!hasDraftChanges}>Aplicar cambios</button></div>
+      </footer>
     </section>;
 }

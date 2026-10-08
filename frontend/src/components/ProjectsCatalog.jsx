@@ -10,12 +10,12 @@ import { getCurrentProjectGoal, isCurrentProjectGoal, projectCompatibilityLabel 
 
 export function initialCatalogProject(projects, projectId) {
   if (!projectId) return { project: null, unavailable: false };
-  const project = (Array.isArray(projects) ? projects : []).find((item) => item.id === projectId) || null;
+  const project = (Array.isArray(projects) ? projects : []).find((item) => String(item.id) === String(projectId)) || null;
   return { project, unavailable: !project };
 }
 
 export function initialProjectNavigation({ projectId, projects, catalogLoading, portalLoading, consumedProjectId }) {
-  if (!projectId || catalogLoading || consumedProjectId === projectId) {
+  if (!projectId || catalogLoading || (consumedProjectId != null && String(consumedProjectId) === String(projectId))) {
     return { project: null, unavailable: false, consume: false };
   }
   const initial = initialCatalogProject(projects, projectId);
@@ -320,6 +320,13 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
             </button>
           )}
           <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}</div>
+          <div className={`project-catalog-card__media ${isPortal && project.imagen_url ? "has-image" : "is-placeholder"}`}>
+            {isPortal && project.imagen_url ? (
+              <img src={project.imagen_url} alt={`Imagen de ${project.nombre}`} loading="lazy" />
+            ) : (
+              <span aria-hidden="true">Imagen referencial no disponible</span>
+            )}
+          </div>
           <div className="project-catalog-card__body">
             <p className="project-catalog-card__location">{project.comuna || "Comuna sin dato"}</p>
             <h2>{project.nombre}</h2>

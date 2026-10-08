@@ -5,7 +5,7 @@ import { formatFormValue } from "../../constants";
 import { calculateAge } from "../../utils/helpers";
 import { calculateMortgageDividend, roundCurrency } from "../../lib/mortgage";
 
-const mortgageTerms = [5, 10, 15, 20, 25, 30];
+const mortgageTerms = [10, 15, 20, 25, 30];
 
 const primaryFields = [
   { name: "ingreso_mensual", label: "Ingreso mensual", type: "currency", maxDigits: 10 },
@@ -18,7 +18,8 @@ const primaryFields = [
   { name: "continuidad_laboral", label: "Continuidad laboral", type: "select", options: [
     "menos_6_meses", "entre_6_y_12_meses", "entre_1_y_3_anios", "mas_3_anios",
   ] },
-  { name: "plazo_credito_hipotecario", label: "Plazo del crédito", type: "select", options: mortgageTerms },
+  { name: "edad", label: "Edad", type: "number" },
+  { name: "plazo_credito_hipotecario", label: "Plazo del crédito", type: "select", numeric: true, options: mortgageTerms },
 ];
 
 const currencyMaxLength = (digits) => digits + Math.floor((digits - 1) / 3);
@@ -38,7 +39,8 @@ export function cursorAfterDigits(value, digitCount) {
 }
 
 export function formatTrackingCurrency(value, maxDigits = Number.POSITIVE_INFINITY) {
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, maxDigits);
+  const wholeValue = typeof value === "number" ? (Number.isFinite(value) ? Math.round(value) : "") : value;
+  const digits = String(wholeValue ?? "").replace(/\D/g, "").slice(0, maxDigits);
   // Do not coerce while the person is editing. In particular, deleting the
   // leading 5 from 50.000 leaves 0000: Number(0000) used to collapse that to
   // 0, which made the remaining input appear to disappear. Grouping the raw
@@ -47,6 +49,7 @@ export function formatTrackingCurrency(value, maxDigits = Number.POSITIVE_INFINI
 }
 
 function sameFieldValue(value, snapshotValue, type) {
+  if (value === null) return snapshotValue == null;
   if (type === "currency" || type === "number") {
     const rawValue = type === "currency" ? String(value).replaceAll(".", "") : String(value);
     if (!rawValue.trim()) return snapshotValue == null || snapshotValue === "";
@@ -57,7 +60,7 @@ function sameFieldValue(value, snapshotValue, type) {
 
 export function hasUnsavedTrackingChanges(controls, snapshot) {
   return Object.entries(controls).some(([name, control]) => control.touched
-    && !sameFieldValue(control.value, snapshot?.[name], control.type));
+    && !sameFieldValue(control.clear ? null : control.value, snapshot?.[name], control.type));
 }
 
 export function effectiveTrackingPatch(controls, snapshot) {
@@ -129,7 +132,7 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
     const digitCount = digitsBeforeCursor(event.target.value, event.target.selectionStart);
     const value = formatTrackingCurrency(event.target.value, field.maxDigits);
     const cursor = cursorAfterDigits(value, digitCount);
-    change(field.name, { value, type: field.type, nullable: Boolean(field.nullable), clear: value === "" });
+    change(field.name, { value, type: field.type, nullable: Boolean(field.nullable), clear: false });
     requestAnimationFrame(() => {
       const input = currencyRefs.current[field.name];
       if (input && document.activeElement === input) input.setSelectionRange(cursor, cursor);
@@ -159,10 +162,9 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
     try {
       const patch = effectiveTrackingPatch(controls, snapshot);
       if (!Object.keys(patch).length) throw new Error("Modifica al menos un campo.");
-      // Age remains derived from the saved birth date in ordinary updates. A
-      // historical correction deliberately preserves the historical age.
+      // An explicit age edit (including historical corrections) takes priority.
       const currentAge = correction || !snapshot?.birth_date ? null : calculateAge(snapshot.birth_date);
-      if (Number.isInteger(currentAge) && currentAge !== Number(snapshot?.edad)) patch.edad = currentAge;
+      if (!("edad" in patch) && Number.isInteger(currentAge) && currentAge !== Number(snapshot?.edad)) patch.edad = currentAge;
       if (!reason.trim()) throw new Error("Indica el motivo de la actualización.");
       if (!pending.current) pending.current = { ...newTrackingCommand(patch, previous), reason };
       setBusy(true);
@@ -183,22 +185,32 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
         const snapshotValue = snapshot?.[field.name];
         const value = controls[field.name]?.touched
           ? controls[field.name].value
-          : snapshotValue === undefined ? (field.type === "currency" ? 0 : "") : snapshotValue;
+          : snapshotValue === undefined ? (field.type === "currency" && !field.nullable ? 0 : "") : snapshotValue;
+        const readOnlyDividend = field.name === "dividendo_estimado" && calculatedDividend;
+        const options = field.options && (value !== "" && value != null && !field.options.some((option) => String(option) === String(value))
+          ? [...field.options, value] : field.options);
         return <label key={field.name}>{field.label}
-          {field.name === "dividendo_estimado" && calculatedDividend ? <input
+          {readOnlyDividend ? <input
             aria-label={field.label} type="text" readOnly value={formatTrackingCurrency(displayedDividend)} />
-            : field.type === "select" ? <select aria-label={field.label} value={value}
-            onChange={(event) => change(field.name, { value: event.target.value, type: field.type, nullable: false, clear: false })}>
+            : field.type === "select" ? <select aria-label={field.label} value={value ?? ""}
+            onChange={(event) => change(field.name, { value: event.target.value, type: field.numeric ? "number" : field.type, nullable: false, clear: false })}>
             <option value="" disabled>Selecciona</option>
-            {field.options.map((option) => <option key={option} value={option}>{field.name === "plazo_credito_hipotecario" ? `${option} años` : formatFormValue(option)}</option>)}
-          </select> : <input aria-label={field.label} type="text" inputMode="numeric" autoComplete="off"
+            {options.map((option) => <option key={option} value={option}>{field.name === "plazo_credito_hipotecario" ? `${option} años` : formatFormValue(option)}</option>)}
+          </select> : field.type === "number" ? <input aria-label={field.label} type="number" step="1" value={value ?? ""}
+            onChange={(event) => change(field.name, { value: event.target.value, type: field.type, nullable: false, clear: false })} />
+          : <input aria-label={field.label} type="text" inputMode="numeric" autoComplete="off"
+            disabled={Boolean(controls[field.name]?.clear)}
             maxLength={currencyMaxLength(field.maxDigits)}
             ref={(input) => { currencyRefs.current[field.name] = input; }}
             value={formatTrackingCurrency(value, field.maxDigits)}
             onChange={(event) => changeCurrency(field, event)} />}
+          {field.nullable && !readOnlyDividend && <span className="tracking-update__clear"><input type="checkbox"
+            aria-label={`Borrar valor declarado: ${field.label}`} checked={Boolean(controls[field.name]?.clear)}
+            onChange={(event) => change(field.name, { clear: event.target.checked, type: field.type,
+              nullable: true, value: snapshot?.[field.name] ?? "" })} />Borrar valor declarado</span>}
         </label>;
       })}</div>
-      <label>Motivo<textarea required rows="6" maxLength="500" value={reason} aria-describedby={reasonHelpId}
+      <label>Motivo<textarea required rows="3" placeholder="Describe qué cambió en tus antecedentes." maxLength="500" value={reason} aria-describedby={reasonHelpId}
         onChange={(event) => { pending.current = null; setReason(event.target.value); }} /></label>
       <small id={reasonHelpId} className="tracking-update__reason-help">{reason.length}/500 caracteres</small>
       <div className="tracking-update__actions">

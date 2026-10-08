@@ -1,0 +1,186 @@
+/* Final shared geometry and typography for the reviewed customer views.
+   Internal columns, reading measures and dialog widths remain component-owned. */
+:root {
+  --rh-ui-page-title: clamp(1.75rem, 3vw, 2.1rem);
+  --rh-ui-section-title: 1.2rem;
+  --rh-ui-card-title: 1.05rem;
+  --rh-ui-body: .95rem;
+  --rh-ui-section-gap: 18px;
+}
+
+.content-inner { max-width: var(--rh-page-content-max); }
+
+/* Override the legacy catalogue skin and two-color header decorations. */
+.content-inner > :is(.section-block.simulation-panel.projects-catalog-page, .section-block.simulation-page) >
+  :is(.projects-catalog-hero, .section-heading, .page-head) {
+  border: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--rh-navy);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-surface);
+  background-image: none;
+  box-shadow: var(--rh-shadow-sm);
+}
+
+.content-inner > :is(.section-block.simulation-panel.projects-catalog-page, .section-block.simulation-page) >
+  :is(.projects-catalog-hero, .section-heading, .page-head)::before,
+.content-inner > :is(.section-block.simulation-panel.projects-catalog-page, .section-block.simulation-page) >
+  :is(.projects-catalog-hero, .section-heading, .page-head)::after {
+  content: none;
+  display: none;
+}
+
+.content-inner > :is(.evaluation-panel.home-panel--guided, .evaluation-panel.prequalification-panel,
+  .section-block.profile-page--guided, .section-block.results-panel--guided, .section-block.subsidios-page,
+  .section-block.tracking-panel, .section-block.progress-page, .section-block.academia-panel, .section-block.simulation-page,
+  .section-block.simulation-panel.projects-catalog-page, .portal-page) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--rh-ui-section-gap);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--rh-page-content-max);
+  margin-inline: 0;
+  padding: 0;
+  font-family: var(--rh-font-body);
+}
+
+.content-inner > :is(.home-panel--guided, .prequalification-panel,
+  .profile-page--guided, .results-panel--guided, .subsidios-page,
+  .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+  .projects-catalog-page, .portal-page) > :is(header, section, article, form) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin-inline: 0;
+}
+
+/* Legacy home/form rules add margins on top of the grid gap. */
+.content-inner > :is(.home-panel--guided, .prequalification-panel) >
+  :is(.home-profile-brief, .home-purpose, .hero-note, .home-change-timeline,
+      .context-summary, .evaluation-review-gate, .score-form, .pre-wizard, .onboarding-panel) {
+  margin-top: 0 !important;
+}
+
+.content-inner > :is(.home-panel--guided, .prequalification-panel,
+  .profile-page--guided, .results-panel--guided, .subsidios-page,
+  .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+  .projects-catalog-page, .portal-page) >
+  :is(.section-heading, .page-head, .academy-intro, .projects-catalog-hero, .portal-page__header) {
+  min-height: 148px;
+  padding: 22px;
+  border: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--rh-navy);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-surface);
+  background-image: none;
+  box-shadow: var(--rh-shadow-sm);
+}
+
+.content-inner > :is(.home-panel--guided, .prequalification-panel,
+  .profile-page--guided, .results-panel--guided, .subsidios-page,
+  .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+  .projects-catalog-page, .portal-page) >
+  :is(.section-heading, .page-head, .academy-intro, .projects-catalog-hero, .portal-page__header) h1 {
+  margin: 12px 0 10px;
+  max-width: none;
+  font-family: var(--rh-font-display);
+  font-size: var(--rh-ui-page-title);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  color: var(--rh-navy);
+}
+
+.content-inner > :is(.home-panel--guided, .prequalification-panel,
+  .profile-page--guided, .results-panel--guided, .subsidios-page,
+  .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+  .projects-catalog-page, .portal-page) >
+  :is(.section-heading, .page-head, .academy-intro, .projects-catalog-hero, .portal-page__header) p {
+  margin: 0;
+  font-family: var(--rh-font-body);
+  font-size: var(--rh-ui-body);
+  line-height: 1.6;
+  color: var(--rh-text-secondary);
+}
+
+.content-inner :is(.results-section-head h2, .profile-section-title,
+  .progress-section-heading h2, .progress-summary h2, .tracking-update h3,
+  .tracking-improvement-heading h2, .banking-checklist-heading-card h2,
+  .simulation-panel-heading h2, .projects-catalog-results__heading h2,
+  .academy-directory-heading, .academy-articles-section > h3,
+  .academy-topic-capsules > h3, .financing-hero h2, .financing-step h3,
+  .financing-adjustments header h3, .suggested-alternatives > h3,
+  .financing-saved > h3, .tracking-plan-option h2, .portal-results-title) {
+  font-family: var(--rh-font-body);
+  font-size: var(--rh-ui-section-title);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--rh-navy);
+}
+
+.content-inner :is(.simulation-alternative__heading h3,
+  .project-catalog-card__body h2, .portal-card-title,
+  .progress-goal-card__head h3, .tracking-plan-card h3,
+  .academy-card h3, .route-stop-body h3, .academy-current-card h4,
+  .suggested-alternatives h4) {
+  font-family: var(--rh-font-body);
+  font-size: var(--rh-ui-card-title);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Financing uses the page canvas instead of a second inset container. */
+.content-inner .simulation-page .financing-panel {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.content-inner :is(.tracking-panel .tracking-checklist-section,
+  .academia-panel .academy-nav-search-row, .academia-panel .academy-tab-content,
+  .simulation-page .simulation-layout, .subsidios-page .simulation-benefits-grid) {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.content-inner :is(.home-panel--guided, .prequalification-panel,
+  .profile-page--guided, .results-panel--guided, .subsidios-page,
+  .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+  .projects-catalog-page, .portal-page) :is(input, select, textarea, button) {
+  font-family: var(--rh-font-body);
+}
+
+/* Dialogs retain their responsive widths, with the same title hierarchy. */
+.academy-modal h2,
+.project-evaluation-modal__card h2,
+.portal-modal-content .portal-modal-title {
+  font-family: var(--rh-font-display);
+  font-size: clamp(1.45rem, 2.5vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--rh-navy);
+}
+
+.academy-modal,
+.project-evaluation-modal__card,
+.portal-modal-content,
+.financing-confirmation {
+  font-family: var(--rh-font-body);
+}
+
+@media (max-width: 600px) {
+  .content-inner > :is(.home-panel--guided, .prequalification-panel,
+    .profile-page--guided, .results-panel--guided, .subsidios-page,
+    .tracking-panel, .progress-page, .academia-panel, .simulation-page,
+    .projects-catalog-page, .portal-page) >
+    :is(.section-heading, .page-head, .academy-intro, .projects-catalog-hero, .portal-page__header) {
+    min-height: 0;
+    padding: 18px;
+  }
+}

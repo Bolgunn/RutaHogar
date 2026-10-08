@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import useModalFocus from "./useModalFocus";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getEvaluations } from "../services/evaluationService";
 import { getStaffLeadDetail } from "../services/trackingService";
@@ -407,14 +408,7 @@ export default function LeadDetailModal({
     };
   }, [commercialRecords, activeLead?.user_id, activeLead?.id]);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useModalFocus(true, onClose);
 
   const selectedResult = activeLead?.result || {};
   const selectedInput = activeLead?.input || {};
@@ -514,11 +508,12 @@ export default function LeadDetailModal({
 
   return (
     <div className="admin-modal" onClick={onClose}>
-      <div className="admin-modal-card admin-modal-card--xl executive-lead-detail" onClick={(event) => event.stopPropagation()}>
+      <div className="admin-modal-card admin-modal-card--xl executive-lead-detail" role="dialog" aria-modal="true" aria-labelledby="executive-lead-detail-title" onClick={(event) => event.stopPropagation()}>
+        <div className="executive-lead-detail__sticky">
         <div className="admin-modal-header">
           <div className="admin-modal-heading">
             <span className="eyebrow">Ficha comercial {getReliabilityBadgeCard(activeLead.reliability_status || "normal")}</span>
-            <h2>{activeLead.full_name || activeLead.email || "Lead sin nombre"}</h2>
+            <h2 id="executive-lead-detail-title">{activeLead.full_name || activeLead.email || "Lead sin nombre"}</h2>
             <p>{selectedInput.comuna_objetivo || selectedOnboarding.comuna_interes || "Comuna sin dato"} · Evaluado el {formatDate(activeLead.created_at)}</p>
           </div>
           <button
@@ -532,6 +527,19 @@ export default function LeadDetailModal({
           >
             Cerrar ficha
           </button>
+        </div>
+
+        <nav className="executive-lead-detail__nav" aria-label="Secciones de la ficha">
+          {[["Resumen", ".executive-lead-brief"], ["Perfil y encaje", ".executive-lead-snapshot"], ["Contacto", ".executive-contact-questions"], ["Historial", ".executive-lead-detail__history"]].map(([label, target]) => (
+            <button type="button" key={target} onClick={(event) => {
+              const card = event.currentTarget.closest(".executive-lead-detail");
+              const section = card?.querySelector(target);
+              if (!section) return;
+              const headerHeight = card.querySelector(".executive-lead-detail__sticky")?.getBoundingClientRect().height || 0;
+              card.scrollTo({ top: card.scrollTop + section.getBoundingClientRect().top - card.getBoundingClientRect().top - headerHeight - 14, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+            }}>{label}</button>
+          ))}
+        </nav>
         </div>
 
         {/* Administration Status Controls for Admin */}

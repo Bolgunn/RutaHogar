@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getLeadsInReview, resolveLeadStatus } from "../services/leadManagementService";
 import LeadDetailModal from "./LeadDetailModal";
 import { getClassificationClass } from "../utils/helpers";
+import "./admin-reported-leads.css";
 
 function formatDate(value) {
   if (!value) return "Sin fecha";
@@ -157,12 +158,13 @@ export default function AdminReportedLeads({ profile, evaluations = [] }) {
             const enrichedLead = getEnrichedLead(lead);
             return (
               <article
-                className="executive-lead-card"
+                className={`executive-lead-card admin-reported-lead ${activeAction?.leadId === lead.id ? "is-editing" : ""}`}
                 key={lead.id}
                 role="button"
                 tabIndex="0"
                 onClick={() => setSelectedLead(enrichedLead)}
                 onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     setSelectedLead(enrichedLead);
@@ -203,7 +205,7 @@ export default function AdminReportedLeads({ profile, evaluations = [] }) {
                     </div>
                   )}
                   {lead.fraud_score_probability >= 80 && (
-                    <div className="executive-lead-card__fact--wide" style={{ background: "#fdeded", border: "1px solid #ef5350", borderRadius: "6px", padding: "6px 10px" }}>
+                    <div className="executive-lead-card__fact--wide admin-reported-lead__alert">
                       <dt style={{ color: "#d32f2f", margin: 0 }}>
                         <i className="ti ti-robot" /> Alerta de Inconsistencia (Riesgo {lead.fraud_score_probability}%)
                       </dt>
@@ -220,7 +222,7 @@ export default function AdminReportedLeads({ profile, evaluations = [] }) {
 
                 <div className="executive-lead-card__actions" onClick={(e) => e.stopPropagation()}>
                   {activeAction?.leadId === lead.id ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '260px' }}>
+                    <div className="admin-reported-lead__edit">
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", color: "var(--rh-navy, #1e293b)" }}>
                         <span>Cambiar a: <strong>{STATUS_LABELS[activeAction.status] || activeAction.status}</strong></span>
                         <button
@@ -253,7 +255,7 @@ export default function AdminReportedLeads({ profile, evaluations = [] }) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <div className="admin-reported-lead__controls">
                       <select
                         value=""
                         onChange={(e) => {

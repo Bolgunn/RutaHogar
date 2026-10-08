@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.tracking.contracts import TrackingError
-from app.tracking.service import TrackingService, client_tracking_view
+from app.tracking.service import TrackingService, client_tracking_view, frozen_target_scoring_snapshot
 
 
 def market_snapshot():
@@ -624,3 +624,21 @@ def test_projection_reuses_one_persisted_snapshot_across_all_milestones(monkeypa
     assert all(snapshot == stable for snapshot in received)
     assert external_source["snapshot"] == changed
     assert len(resolutions) == 1
+
+
+def test_projection_does_not_restore_historic_clp_when_latest_already_has_frozen_price():
+    repo, app = service()
+    target = {"id": "p1", "comuna": "Maipú", "precio_min_uf": 2900}
+    initial = {**valid_snapshot(), "project_goal": target, "property_value_clp": 404_000_000}
+    baseline = app.execute("u1", command(initial))
+    aligned = frozen_target_scoring_snapshot(initial, target)
+    app.execute("u1", command(aligned, baseline["event_id"], "2026-02-01T00:00:00Z"))
+    scored = []
+    real_scorer = app.scorer
+    app.scorer = lambda snapshot: (scored.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
+
+    app.projection("u1")
+
+    assert scored
+    assert all(row["property_value_clp"] is None and row["property_value_uf"] == 2900 for row in scored)
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["property_value_clp"] == 404_000_000
