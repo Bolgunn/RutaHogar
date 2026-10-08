@@ -27,7 +27,18 @@ Como lead, quiero buscar opciones de vivienda utilizando descripciones naturales
 | Barra, tarjetas, modal de detalle, disclaimer y estado vacío | `frontend/src/components/PropertySearch.jsx` |
 | CTA → precalificación con la propiedad precargada | `startEvaluation` en `frontend/src/App.jsx` |
 
-Embeddings: `intfloat/multilingual-e5-small` (384 dims) vía Hugging Face Inference API (`HUGGINGFACE_API_KEY`); torch no cabe en el límite de Vercel. Umbral `DEFAULT_SIMILARITY_THRESHOLD = 0.85`, aplicado sobre la similitud ajustada por intención.
+Embeddings: `intfloat/multilingual-e5-small` (384 dims) vía Hugging Face Inference API (`HUGGINGFACE_API_KEY`); torch no cabe en el límite de Vercel. Umbral `DEFAULT_SIMILARITY_THRESHOLD = 0.85` como valor por defecto, que se adapta a la consulta (política en `properties_search.py`):
+
+| Consulta | Qué ocurre |
+|---|---|
+| Comuna, tipo, dormitorios, baños, tope en UF o característica pedida ("piscina", "metro") | Filtro **duro**: el aviso que no lo cumple se descarta, sin importar su similitud. |
+| Solo filtros ("casa", "depto en Ñuñoa", "cerca del metro") | Sin umbral: se devuelven todos los que cumplen, ordenados por similitud. |
+| Filtros más texto descriptivo ("de lujo", "tranquilo") | Umbral 0.82 sobre el texto sobrante. |
+| Texto libre sin filtros ("sector residencial tranquilo") | Umbral 0.82. |
+| Lugar sin inventario (otra región o país, `chile_places.py`) | Vacío con el mensaje de "solo tenemos la Región Metropolitana". |
+| Texto sin relación ("pizza con piña") | Compuerta de dominio: se acepta con vocabulario inmobiliario o si los 5 avisos más cercanos superan 0.85 de similitud media; si no, vacío. |
+
+Un umbral explícito distinto del por defecto se respeta tal cual y desactiva la compuerta. "Cerca del metro" no se puede verificar como distancia: se exige que el aviso mencione el metro.
 
 ## 3. E2 y E3 según el estado del lead
 
@@ -58,3 +69,4 @@ La IA no participa: el veredicto sale de `lib/simulation/compatibility.js`.
 
 - El 98% del catálogo actual es de la comuna de Santiago: buscar otra comuna devuelve el mensaje de E5 con la sugerencia de cambiarla. Ampliar a otras comunas de la RM queda para una HU propia (ver `docs/ADR_HU19_Ingesta_Hibrida.md`).
 - Los avisos scrapeados traen solo el título como descripción, así que la búsqueda semántica trabaja sobre títulos.
+- PostgREST entrega como máximo 1000 filas por petición: la RPC `match_proyectos_rag` se pide con `match_count = 1000` y el tipo y el tope en UF del texto se empujan como filtros para no perder avisos cuando el catálogo supere esa cifra.

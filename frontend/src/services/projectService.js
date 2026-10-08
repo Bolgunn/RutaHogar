@@ -629,22 +629,38 @@ export async function unassignExecutive(projectId, email) {
 // Avisos de Portal Inmobiliario (HU 19) para la sección Proyectos
 // ---------------------------------------------------------------
 
-// Solo los que informan inmobiliaria y precio: sin ellos la tarjeta no tendría el
-// mismo formato que un proyecto del catálogo. No forman parte del contrato
-// congelado de arriba: viven en public.proyectos_rag y no tienen ejecutivos.
+// Todos los avisos con precio, informen o no inmobiliaria: así el total coincide con el
+// catálogo que busca el portal. No forman parte del contrato congelado de arriba: viven
+// en public.proyectos_rag y no tienen ejecutivos. PostgREST entrega como máximo 1000
+// filas por petición, por eso se pagina.
+const PORTAL_PAGE_SIZE = 1000;
+
+async function fetchAllPortalRows(columns, { priced }) {
+  const rows = [];
+  for (let from = 0; ; from += PORTAL_PAGE_SIZE) {
+    let query = supabase.from("proyectos_rag").select(columns);
+    if (priced) query = query.gt("valor_uf", 0);
+    const { data, error } = await query.order("comuna").order("id").range(from, from + PORTAL_PAGE_SIZE - 1);
+
+    if (error) {
+      logSupabaseError(error);
+      throw new Error("No se pudieron cargar los proyectos del portal.");
+    }
+    rows.push(...(data || []));
+    if ((data || []).length < PORTAL_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export async function getPortalProjects() {
   if (PROVIDER === "local") return [];
+  return fetchAllPortalRows("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url", { priced: true });
+}
 
-  const { data, error } = await supabase
-    .from("proyectos_rag")
-    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
-    .not("inmobiliaria", "is", null)
-    .gt("valor_uf", 0)
-    .order("comuna");
-
-  if (error) {
-    logSupabaseError(error);
-    throw new Error("No se pudieron cargar los proyectos del portal.");
-  }
-  return data || [];
+// Comunas con avisos en el catálogo, para el filtro del portal: la búsqueda no exige
+// precio, así que aquí tampoco.
+export async function getPortalCommunes() {
+  if (PROVIDER === "local") return [];
+  const rows = await fetchAllPortalRows("comuna", { priced: false });
+  return [...new Set(rows.map((row) => row.comuna).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
 }

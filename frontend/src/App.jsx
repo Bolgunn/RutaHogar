@@ -2558,6 +2558,7 @@ export default function App() {
           <PropertySearch
             evaluation={currentEvaluation}
             onboarding={userOnboarding}
+            userId={userId}
             onStartEvaluation={startEvaluation}
             onNavigate={navigateToPage}
           />
