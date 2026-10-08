@@ -464,6 +464,7 @@ function LeadChangeDetail({ change }) {
 
 function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
   const [detailGroup, setDetailGroup] = useState(null);
+  const [expanded, setExpanded] = useState(false);
   if (loading) {
     return (
       <section className="home-change-timeline is-loading" aria-live="polite">
@@ -480,10 +481,22 @@ function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highl
     <>
     <section className="home-change-timeline" aria-labelledby="home-change-title">
       <div className="home-change-timeline__head">
+        <div className="home-change-timeline__heading">
         <span className="eyebrow">Cambios desde tu última visita</span>
         <h2 id="home-change-title">Hay novedades relevantes para revisar</h2>
+        </div>
+        <button
+          type="button"
+          className="secondary-button compact-button home-change-timeline__toggle"
+          aria-expanded={expanded}
+          aria-controls="home-change-content"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Ocultar novedades" : `Mostrar novedades (${changes.length})`}
+          <i className={`ti ${expanded ? "ti-chevron-up" : "ti-chevron-down"}`} aria-hidden="true" />
+        </button>
       </div>
-      <div className="home-change-timeline__rail">
+      <div id="home-change-content" className="home-change-timeline__rail" hidden={!expanded}>
         {groups.map((group, groupIndex) => {
           const highlighted = highlightedId && group.items.some((item) => String(item.id) === String(highlightedId));
           const hasMultipleItems = group.items.length > 1;
@@ -2335,13 +2348,14 @@ export default function App() {
             </p>
           </section>
         ) : page === "evaluate" ? (
-          <section className="evaluation-panel prequalification-panel">
+          <section className={`evaluation-panel prequalification-panel ${currentEvaluation && !startingNewEvaluation ? "prequalification-panel--review" : ""}`}>
             <div className="section-heading compact">
-              <span className="eyebrow">Disponible</span>
+              <span className="eyebrow">{currentEvaluation && !startingNewEvaluation ? "Tu evaluación guardada" : "Disponible"}</span>
               <h1>Precalificación financiera</h1>
               <p>
-                Completa todos los campos para calcular un score orientativo. El
-                resultado no equivale a aprobación bancaria.
+                {currentEvaluation && !startingNewEvaluation
+                  ? "Revisa tus datos y decide si necesitas actualizar tu precalificación. Tu resultado es orientativo y no equivale a aprobación bancaria."
+                  : "Completa todos los campos para calcular un score orientativo. El resultado no equivale a aprobación bancaria."}
               </p>
             </div>
             {currentEvaluation && !startingNewEvaluation ? (

@@ -6,6 +6,8 @@ import "./styles.css";
 import "./components/user-home.css";
 import "./components/home-news.css";
 import "./components/user-results.css";
+import "./components/user-profile.css";
+import "./components/user-view-consistency.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>

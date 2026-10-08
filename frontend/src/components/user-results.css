@@ -15,9 +15,9 @@
 .recommendations-panel.results-panel--guided .recommendation-score-ai-card__explanation { max-width: none; }
 .recommendations-panel.results-panel--guided .recommendation-icon { color: var(--rh-navy); }
 .section-block.recommendations-panel.results-panel--guided { display: grid; gap: 22px; width: 100%; min-width: 0; }
-.recommendations-panel.results-panel--guided > .page-head { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.recommendations-panel.results-panel--guided > .page-head { margin: 0; padding: 22px 24px; border: 1px solid var(--rh-border-strong); border-top: 4px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
 .recommendations-panel.results-panel--guided > .page-head::before, .recommendations-panel.results-panel--guided > .page-head::after { display: none; }
-.recommendations-panel.results-panel--guided > .page-head h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); margin: 8px 0; }
+.recommendations-panel.results-panel--guided > .page-head h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); margin: 8px 0; max-width: none; }
 .recommendations-panel.results-panel--guided > .page-head p { max-width: 70ch; font-size: 1rem; line-height: 1.55; }
 .recommendations-panel.results-panel--guided .recommendation-hero-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin: 0; scroll-margin-top: 24px; }
 .recommendations-panel.results-panel--guided .recommendation-score-ai-card { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px 24px; padding: 0 24px 22px; border: 1px solid var(--rh-border-strong); border-top: 4px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
