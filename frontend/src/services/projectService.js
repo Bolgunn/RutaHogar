@@ -629,22 +629,31 @@ export async function unassignExecutive(projectId, email) {
 // Avisos de Portal Inmobiliario (HU 19) para la sección Proyectos
 // ---------------------------------------------------------------
 
-// Solo los que informan inmobiliaria y precio: sin ellos la tarjeta no tendría el
-// mismo formato que un proyecto del catálogo. No forman parte del contrato
-// congelado de arriba: viven en public.proyectos_rag y no tienen ejecutivos.
+// Todos los avisos con precio, informen o no inmobiliaria: así el total coincide con el
+// catálogo que busca el portal. No forman parte del contrato congelado de arriba: viven
+// en public.proyectos_rag y no tienen ejecutivos. PostgREST entrega como máximo 1000
+// filas por petición, por eso se pagina.
+const PORTAL_PAGE_SIZE = 1000;
+
 export async function getPortalProjects() {
   if (PROVIDER === "local") return [];
 
-  const { data, error } = await supabase
-    .from("proyectos_rag")
-    .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
-    .not("inmobiliaria", "is", null)
-    .gt("valor_uf", 0)
-    .order("comuna");
+  const rows = [];
+  for (let from = 0; ; from += PORTAL_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("proyectos_rag")
+      .select("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url")
+      .gt("valor_uf", 0)
+      .order("comuna")
+      .order("id")
+      .range(from, from + PORTAL_PAGE_SIZE - 1);
 
-  if (error) {
-    logSupabaseError(error);
-    throw new Error("No se pudieron cargar los proyectos del portal.");
+    if (error) {
+      logSupabaseError(error);
+      throw new Error("No se pudieron cargar los proyectos del portal.");
+    }
+    rows.push(...(data || []));
+    if ((data || []).length < PORTAL_PAGE_SIZE) break;
   }
-  return data || [];
+  return rows;
 }
