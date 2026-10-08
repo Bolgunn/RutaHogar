@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { searchProperties } from "../services/propertyService";
+// Carga diferida: favoritesService trae el cliente de Supabase, que no hace falta
+// para buscar y que rompe los tests de este componente en Node 20 (sin WebSocket).
+const loadFavoritesService = () => import("../services/favoritesService");
 import { buildSimulationContext, evaluateScenario, projectToScenario } from "../lib/simulation/compatibility";
 
 // Validadas contra el catálogo ingerido: cada una devuelve resultados pertinentes.
@@ -46,7 +49,7 @@ export function getPropertyCompatibility(context, property) {
   );
 }
 
-export default function PropertySearch({ evaluation, onboarding, onStartEvaluation, onNavigate }) {
+export default function PropertySearch({ evaluation, onboarding, userId, onStartEvaluation, onNavigate }) {
   // Con precalificación previa, E3 se responde al instante; sin ella, el CTA la inicia.
   const compatibilityContext = useMemo(
     () => (evaluation?.result ? buildSimulationContext(evaluation, onboarding) : null),
@@ -63,6 +66,34 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
   const [selectedProperty, setSelectedProperty] = useState(null);
   const selectedCompatibility = getPropertyCompatibility(compatibilityContext, selectedProperty);
   const searchControllerRef = useRef(null);
+  const [favorites, setFavorites] = useState([]);
+  const [favoritesError, setFavoritesError] = useState("");
+  useEffect(() => {
+    let active = true;
+    setFavorites([]);
+    setFavoritesError("");
+    if (!userId) return undefined;
+    loadFavoritesService().then(({ getFavorites }) => getFavorites(userId)).then((ids) => { if (active) setFavorites(ids); }).catch((cause) => {
+      if (active) setFavoritesError(cause.message || "No se pudieron cargar tus favoritos.");
+    });
+    return () => { active = false; };
+  }, [userId]);
+
+  // Optimista, como en Proyectos: si falla el guardado se revierte la estrella.
+  const toggleFavorite = async (propertyId) => {
+    if (!userId || !propertyId) return;
+    const wasFavorite = favorites.includes(propertyId);
+    setFavoritesError("");
+    setFavorites((current) => wasFavorite ? current.filter((id) => id !== propertyId) : current.includes(propertyId) ? current : [...current, propertyId]);
+    try {
+      const { addFavorite, removeFavorite } = await loadFavoritesService();
+      if (wasFavorite) await removeFavorite(userId, propertyId);
+      else await addFavorite(userId, propertyId);
+    } catch (cause) {
+      setFavorites((current) => wasFavorite ? current.includes(propertyId) ? current : [...current, propertyId] : current.filter((id) => id !== propertyId));
+      setFavoritesError(cause.message || "No se pudo actualizar tus favoritos.");
+    }
+  };
 
   const handleSearch = async (
     overrideQuery = null,
@@ -298,17 +329,19 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
               <span className="portal-results-tag">Ordenados por relevancia semantica</span>
             </div>
 
+            {favoritesError && <div className="warning-note">{favoritesError}</div>}
             <div className="portal-properties-grid">
               {resultsData.results.map((prop) => {
                 const compatibility = getPropertyCompatibility(compatibilityContext, prop);
                 const simPercent = Math.round((prop.similarity || 0.8) * 100);
+                const isFavorite = favorites.includes(prop.id);
                 return (
                   <article 
                     key={prop.id} 
                     className="portal-property-card" 
                     id={`property-card-${prop.id}`}
                     onClick={(e) => {
-                      if (!e.target.closest('.portal-card-actions')) {
+                      if (!e.target.closest('.portal-card-actions, .portal-favorite-button')) {
                         setSelectedProperty(prop);
                       }
                     }}
@@ -327,6 +360,18 @@ export default function PropertySearch({ evaluation, onboarding, onStartEvaluati
                     <div className="portal-card-body">
                       <div className="portal-card-meta-row">
                         <span className="portal-commune-label">{prop.commune}</span>
+                        {userId && (
+                          <button
+                            type="button"
+                            className={`portal-favorite-button ${isFavorite ? "is-active" : ""}`}
+                            aria-label={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+                            aria-pressed={isFavorite}
+                            title={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
+                            onClick={() => toggleFavorite(prop.id)}
+                          >
+                            <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
 
                       <h3 className="portal-card-title">{prop.title}</h3>

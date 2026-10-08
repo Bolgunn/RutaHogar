@@ -20661,6 +20661,10 @@ section-heading {
 
 .portal-card-meta-row { display: flex; justify-content: space-between; align-items: center; }
 .portal-commune-label { color: var(--rh-navy); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.portal-favorite-button { display: grid; place-items: center; width: 28px; height: 28px; margin: -4px -4px -4px 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: rgba(19, 43, 74, 0.42); box-shadow: none; cursor: pointer; }
+.portal-favorite-button:hover, .portal-favorite-button:focus-visible { background: transparent; color: var(--rh-gold-dark); }
+.portal-favorite-button.is-active { color: var(--rh-gold); }
+.portal-favorite-button i { font-size: 1.3rem; }
 .portal-source-label { color: var(--rh-text-muted); font-size: 0.72rem; }
 
 .portal-card-title { margin: 0; color: var(--rh-navy); font-family: var(--rh-font-display); font-size: 1.2rem; line-height: 1.2; }
