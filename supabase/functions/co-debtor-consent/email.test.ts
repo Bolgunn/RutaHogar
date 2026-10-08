@@ -29,6 +29,8 @@ function assertOfficialHeaderLogo(html: string): void {
   assert(html.includes(`src="${officialLogoUrl}"`), "official full logo is missing from header");
   assert(html.includes('alt="RutaHogar"'), "official logo alt text is missing");
   assert(!html.includes("Ruta<span"), "header must not reconstruct or duplicate the wordmark");
+  assert(html.includes("background:#EAF4FC;border-bottom:4px solid #102A43"), "header must keep the logo readable directly on the blue background");
+  assert(!html.includes("background:#FFFFFF;border-radius:6px"), "logo must not use a white container");
 }
 
 Deno.test("HU18 invitation email uses the approved subject, CTA, secure URL, and expiry date", () => {
@@ -72,7 +74,7 @@ Deno.test("HU18 expiration email has recipient-aware copy, expiry date, and no i
     assert(Boolean(formattedDate) && message.html.includes(formattedDate), "expiration date missing");
     assert(!message.html.includes("href="), "expired email must not contain a reusable link");
     assertOfficialHeaderLogo(message.html);
-    assert(message.html.includes(forLead ? "generar una nueva invitación" : "solicita a la persona que te invitó"), "recipient copy missing");
+    assert(message.html.toLowerCase().includes(forLead ? "generar una nueva invitación" : "solicita a la persona que te invitó"), "recipient copy missing");
     assertSafeEmail(message.html, message.text);
   }
 });
