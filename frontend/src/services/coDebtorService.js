@@ -101,6 +101,10 @@ export async function submitCoDebtorConfirmation(token, values = {}) {
   });
 }
 
+export function declineCoDebtorInvitation(token) {
+  return invokePublicCoDebtor("decline_invitation", token);
+}
+
 export async function inspectCoDebtorManagement(token) {
   try {
     return await invokePublicCoDebtor("inspect_management", token);
@@ -156,10 +160,10 @@ export async function getLeadCoDebtorInvitation() {
     .from("co_debtor_invitations")
     .select(invitationFields)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(10);
   if (error) throw new Error("No pudimos cargar el estado de tu co-deudor. Intenta nuevamente.");
-  return normalizeLeadCoDebtorInvitation(data);
+  const invitations = (data || []).map((item) => normalizeLeadCoDebtorInvitation(item));
+  return invitations.find((item) => item.status === "pending") || invitations[0] || null;
 }
 
 export function validateCoDebtorEmail(value) {

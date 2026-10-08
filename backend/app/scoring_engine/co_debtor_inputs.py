@@ -105,7 +105,7 @@ def assemble_co_debtor_scoring_input(
         # ``confirmed`` has all five fields or the resolver status was made
         # unavailable above. Never fall back field-by-field to the lead.
         assembled.update(resolution["selected_complement"] or {})
-    elif source == "excluded_after_revocation":
+    elif source in {"excluded_after_revocation", "excluded_after_decline"}:
         assembled["complemento_renta"] = False
         for field in _COMPLEMENT_FIELDS:
             assembled[field] = None
