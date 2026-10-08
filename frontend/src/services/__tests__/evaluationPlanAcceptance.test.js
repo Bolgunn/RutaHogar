@@ -153,4 +153,24 @@ describe("HU13 — aceptación del plan", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("list_lead_contacts", { p_user_ids: ["user-1"] });
     expect(mocks.from).not.toHaveBeenCalled();
   });
+
+  it("shares one in-flight staff request between concurrent loaders", async () => {
+    let release;
+    mocks.getStaffEvaluations.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+
+    const first = getEvaluations("executive-1", "ejecutivo");
+    const second = getEvaluations("executive-1", "ejecutivo");
+    await vi.waitFor(() => expect(mocks.getStaffEvaluations).toHaveBeenCalled());
+    release({ items: [evaluation] });
+
+    const [a, b] = await Promise.all([first, second]);
+    expect(mocks.getStaffEvaluations).toHaveBeenCalledOnce();
+    expect(a.map((row) => row.id)).toEqual(["evaluation-1"]);
+    expect(b.map((row) => row.id)).toEqual(["evaluation-1"]);
+
+    mocks.getStaffEvaluations.mockResolvedValue({ items: [] });
+    await getEvaluations("executive-1", "ejecutivo");
+    expect(mocks.getStaffEvaluations).toHaveBeenCalledTimes(2);
+  });
 });

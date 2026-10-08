@@ -221,6 +221,17 @@ export function evaluationAnnotationOwner(role, userId) {
   return isStaffRole(role) ? null : userId;
 }
 
+// App.jsx y useLeads cargan la misma lista staff al iniciar sesión; compartir la
+// petición en vuelo evita duplicar la consulta más pesada del backend.
+let staffEvaluationsInFlight = null;
+
+function loadStaffEvaluations() {
+  staffEvaluationsInFlight ??= getStaffEvaluations().finally(() => {
+    staffEvaluationsInFlight = null;
+  });
+  return staffEvaluationsInFlight;
+}
+
 export async function getEvaluations(userId, role) {
   requireConnection();
   const user = await getAuthenticatedUser();
@@ -229,7 +240,7 @@ export async function getEvaluations(userId, role) {
   const isSales = isStaffRole(role);
   if (isSales) {
     // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
-    const projection = await getStaffEvaluations();
+    const projection = await loadStaffEvaluations();
     const rows = projection.items || [];
     const contactsMap = await listLeadContacts(rows);
     return rows.map((row) => normalizeEvaluation(row, contactsMap));
