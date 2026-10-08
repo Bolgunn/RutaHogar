@@ -54,8 +54,8 @@ class StaffRepository:
     def staff_can_access(self, _actor, lead_id):
         return lead_id == LEAD_ID
 
-    def staff_evaluations(self):
-        return deepcopy(self.rows)
+    def staff_evaluations(self, actor):
+        return [deepcopy(row) for row in self.rows if self.staff_can_access(actor, row["user_id"])]
 
     def staff_contacts(self, lead_ids):
         return {lead_id: {"full_name": "Lead autorizado", "phone": "+56912345678"} for lead_id in lead_ids}
@@ -156,17 +156,20 @@ def test_scope_denial_never_returns_another_leads_hu18_data():
     assert all(row["user_id"] == LEAD_ID for row in service(repository).evaluations("executive-token")["items"])
 
 
-def test_list_checks_each_lead_scope_once_and_keeps_newest_first_order():
+def test_list_resolves_scope_in_one_repository_call_and_keeps_newest_first_order():
     repository = StaffRepository()
     allowed_leads = {f"lead-{index}" for index in range(0, 40, 3)}
     repository.rows = [
         {**evaluation(), "id": f"evaluation-{index}-{copy}", "user_id": f"lead-{index}"}
         for index in range(40) for copy in range(2)
     ]
-    checked = []
-    repository.staff_can_access = lambda _actor, lead_id: checked.append(lead_id) or lead_id in allowed_leads
+    scoped_calls = []
+    repository.staff_can_access = lambda _actor, lead_id: lead_id in allowed_leads
+    original = repository.staff_evaluations
+    repository.staff_evaluations = lambda actor: scoped_calls.append(actor) or original(actor)
 
     items = service(repository).evaluations("executive-token")["items"]
 
-    assert sorted(checked) == sorted(f"lead-{index}" for index in range(40))
+    assert len(scoped_calls) == 1
+    assert scoped_calls[0]["inmobiliaria_id"] == "tenant-1"
     assert [row["id"] for row in items] == [row["id"] for row in repository.rows if row["user_id"] in allowed_leads]

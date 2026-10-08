@@ -60,7 +60,7 @@ import { fetchJsonWithTimeout } from "./services/httpRequest";
 
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
-import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
+import { clearStoredAuth, getStoredAuth, onSessionEnded, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
@@ -1997,6 +1997,10 @@ export default function App() {
 
   const handleLogout = async () => {
     await signOut();
+    resetSession();
+  };
+
+  const resetSession = () => {
     setAuth({ session: null, profile: null });
     setEvaluations([]);
     setTrackingState(null);
@@ -2012,6 +2016,18 @@ export default function App() {
     sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
     navigateToPage("auth", { replace: true });
   };
+
+  // Sin esto, una sesión revocada en el servidor dejaba la app con un token muerto:
+  // Supabase seguía respondiendo, pero el backend devolvía 401 y el panel mostraba
+  // "No pudimos cargar tu historial". Solo actúa si la app tenía sesión (SetPassword
+  // cierra la sesión de recuperación sin pasar por el login de la app).
+  const sessionEndedRef = useRef(null);
+  sessionEndedRef.current = () => {
+    if (!auth.session) return;
+    clearStoredAuth();
+    resetSession();
+  };
+  useEffect(() => onSessionEnded(() => sessionEndedRef.current()), []);
 
   const handleNotificationClick = () => navigateToPage("leads");
 

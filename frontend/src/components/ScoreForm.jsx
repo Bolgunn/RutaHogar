@@ -987,7 +987,13 @@ export default function ScoreForm({
       if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
         setError("La petición tardó demasiado, por favor intenta nuevamente.");
       } else if (err.response?.status === 409) {
-        setError("La referencia UF se actualizó mientras completabas el formulario. Recarga la página antes de calcular.");
+        try {
+          const newRef = await getMarketReference({ apiBase: resolveApiBase() });
+          setMarketReference(newRef);
+          setError("La referencia UF se actualizó. Hemos cargado el nuevo valor referencial. Por favor, revisa tus montos y vuelve a hacer clic en Continuar.");
+        } catch (refreshErr) {
+          setError("La referencia UF se actualizó mientras completabas el formulario. Recarga la página antes de calcular.");
+        }
       } else if (import.meta.env.DEV && err.response?.status) {
         setError(
           `No se pudo calcular el score. El backend respondió ${err.response.status}. Revisa la consola para ver el detalle.`,

@@ -31,7 +31,13 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   }
   if (!response.ok) {
     const code = payload?.detail?.code || "invalid_request";
+    if (code === "unauthenticated") {
+      // El token aún firma bien para Supabase, pero el backend valida la sesión
+      // contra Auth y esta ya no existe: cerrarla localmente devuelve al login.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    }
     const messages = {
+      unauthenticated: "Tu sesión expiró. Inicia sesión nuevamente.",
       idempotency_conflict: "Este envío ya existe con otros datos.",
       lineage_conflict: "Hay una actualización más reciente. Recarga antes de guardar.",
       invalid_patch: "Revisa los datos enviados; no cumplen el contrato financiero.",
