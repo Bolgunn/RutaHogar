@@ -310,6 +310,16 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         res = self._search_rows(rows, "a no más de 10 minutos del metro")
         self.assertEqual([item["id"] for item in res["results"]], ["con"])
 
+    def test_hu_example_query_requires_sunset_and_integrated_kitchen(self):
+        from app.properties_search import _extract_query_intent
+        consulta = "departamento con vista al atardecer, cocina integrada, cerca del metro"
+        self.assertEqual(
+            set(_extract_query_intent(consulta)["req_features"]),
+            {"vista", "atardecer", "cocina_integrada", "metro"},
+        )
+        rows = [self._row("solo_vista", nombre="Depto con vista despejada a pasos del metro", sim=0.95)]
+        self.assertEqual(self._search_rows(rows, consulta)["total"], 0)
+
     def test_numeric_requirements_are_hard(self):
         rows = [
             self._row("ok", dorm=3, uf=1900), self._row("pocas", dorm=2, uf=1900),
