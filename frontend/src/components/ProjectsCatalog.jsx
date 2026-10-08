@@ -69,6 +69,10 @@ function ProjectsCarousel({ children }) {
   );
 }
 
+// Los avisos del portal se listan como "portal-<uuid>", pero proyecto_favoritos
+// guarda el uuid de proyectos_rag tal cual (el mismo que usa la estrella del portal).
+const favoriteIdOf = (project) => (project.origen === "portal" ? project.id.replace(/^portal-/, "") : project.id);
+
 export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, onboarding, userId, contactEmail, onBack, onSetGoal, onStartEvaluation, onNavigate }) {
   const [projects, setProjects] = useState([]);
   const [portalProjects, setPortalProjects] = useState([]);
@@ -147,10 +151,10 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   }, [frozenTrackingTarget, projects]);
   const hasDifferentCurrentGoal = Boolean(frozenGoalProject && currentGoalProject
     && frozenGoalProject.id !== currentGoalProject.id);
-  const catalogFavorites = useMemo(() => projects.filter((project) => favorites.includes(project.id)), [favorites, projects]);
-  // Favoritos, meta y compatibilidad se apoyan en public.proyectos, así que solo
-  // listado y filtros incluyen los avisos del portal.
+  // Meta y compatibilidad se apoyan en public.proyectos; los avisos del portal solo
+  // entran al listado, a los filtros y a los favoritos.
   const listedProjects = useMemo(() => [...projects, ...portalProjects], [portalProjects, projects]);
+  const catalogFavorites = useMemo(() => listedProjects.filter((project) => favorites.includes(favoriteIdOf(project))), [favorites, listedProjects]);
   const communes = useMemo(() => [...new Set(listedProjects.map((project) => project.comuna).filter(Boolean))].sort(), [listedProjects]);
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("es-CL");
@@ -158,7 +162,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       const matchesType = propertyType === "todos" || project.tipo_vivienda === propertyType;
       const matchesCommune = !commune || project.comuna === commune;
       const matchesAvailability = availability === "todos" || project.estado === availability;
-      const matchesFavorite = !showFavoritesOnly || favorites.includes(project.id);
+      const matchesFavorite = !showFavoritesOnly || favorites.includes(favoriteIdOf(project));
       const searchable = `${project.nombre} ${project.comuna || ""}`.toLocaleLowerCase("es-CL");
       return matchesType && matchesCommune && matchesAvailability && matchesFavorite && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
@@ -248,18 +252,18 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
              const isPortal = project.origen === "portal";
-             const isFavorite = favorites.includes(project.id);
+             const isFavorite = favorites.includes(favoriteIdOf(project));
              const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
-          {userId && !isPortal && (
+          {userId && (
             <button
               type="button"
               className={`project-catalog-favorite-button ${isFavorite ? "is-active" : ""}`}
               aria-label={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
               aria-pressed={isFavorite}
               title={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
-              onClick={() => toggleFavorite(project.id)}
+              onClick={() => toggleFavorite(favoriteIdOf(project))}
             >
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
