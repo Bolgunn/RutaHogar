@@ -11,12 +11,13 @@
   margin: 0;
   padding: 22px 24px;
   border: 1px solid var(--rh-border-strong);
-  border-top: 4px solid var(--rh-navy);
+  border-top: 3px solid var(--rh-navy);
   border-radius: var(--rh-radius-lg);
   background: var(--rh-surface);
   box-shadow: var(--rh-shadow-sm);
   text-align: left;
 }
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head) .eyebrow { color: var(--rh-yellow-dark); }
 :is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head)::before,
 :is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head)::after { display: none; }
 :is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) h1 {

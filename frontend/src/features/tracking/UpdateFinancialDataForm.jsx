@@ -138,7 +138,7 @@ export default function UpdateFinancialDataForm({ snapshot, previous, onSubmit, 
             onChange={(event) => changeCurrency(field, event)} />}
         </label>;
       })}</div>
-      <label>Motivo<textarea required rows="6" maxLength="500" value={reason} aria-describedby={reasonHelpId}
+      <label>Motivo<textarea required rows="3" placeholder="Describe qué cambió en tus antecedentes." maxLength="500" value={reason} aria-describedby={reasonHelpId}
         onChange={(event) => { pending.current = null; setReason(event.target.value); }} /></label>
       <small id={reasonHelpId} className="tracking-update__reason-help">{reason.length}/500 caracteres</small>
       <div className="tracking-update__actions">

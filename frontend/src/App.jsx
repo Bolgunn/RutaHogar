@@ -2467,6 +2467,7 @@ export default function App() {
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
+          onRetryExplanation={handleRetryAiExplanation}
           evaluation={currentEvaluation}
           trackingState={trackingState}
           onAcceptPlan={handleAcceptPlan}

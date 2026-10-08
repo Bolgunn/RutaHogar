@@ -65,7 +65,7 @@ describe("HU13 update form presentation", () => {
     expect(html).toContain('maxLength="500"');
     expect(html).toContain('autoComplete="off"');
     expect(html).toContain('<textarea');
-    expect(html).toContain('rows="6"');
+    expect(html).toContain('rows="3"');
   });
 
   it("only enables a save for a real valid change and can restore the original value", () => {

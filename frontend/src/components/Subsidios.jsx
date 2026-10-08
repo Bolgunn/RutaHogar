@@ -22,7 +22,6 @@ function ConditionGroup({ items, variant, label }) {
     <details className={`benefit-condition-group benefit-condition-group--${variant}`}>
       <summary>
         <strong className={`benefit-detail-label benefit-detail-label--${variant}`}>{label}</strong>
-        <span>{items.length}</span>
       </summary>
       <ConditionList items={items} variant={variant} />
     </details>
@@ -208,7 +207,7 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
 
       </> : <div className="empty-state"><strong>Esta calificación no incluye el análisis de subsidios.</strong><p>Realiza una nueva precalificación para generar el detalle de beneficios habitacionales.</p><button type="button" onClick={() => onNavigate?.("evaluate")}>Realizar nueva precalificación</button></div>}
 
-      <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+      <div className="subsidios-page__navigation">
         <button type="button" className="secondary-button" onClick={goToRecommendations}>
           Volver a Resultados
         </button>

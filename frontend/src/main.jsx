@@ -8,6 +8,9 @@ import "./components/home-news.css";
 import "./components/user-results.css";
 import "./components/user-profile.css";
 import "./components/user-view-consistency.css";
+import "./components/user-subsidies.css";
+import "./components/user-page-headers.css";
+import "./components/user-improvement-plan.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
