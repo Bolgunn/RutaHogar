@@ -36,7 +36,7 @@ function emailShell(preheader: string, content: string): string {
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:${COLORS.page};">
       <tr><td align="center" style="padding:32px 16px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid ${COLORS.navy};border-radius:12px;overflow:hidden;">
+        <table role="presentation" width="720" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:720px;background:#FFFFFF;border:1px solid ${COLORS.navy};border-radius:12px;overflow:hidden;">
           <tr><td style="padding:24px 28px;background:${COLORS.info};border-bottom:4px solid ${COLORS.navy};">
               <img src="${RUTAHOGAR_LOGO_URL}" alt="RutaHogar" width="172" style="display:block;width:172px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
           </td></tr>

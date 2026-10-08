@@ -144,7 +144,17 @@ def _group_events(events):
 
 def _render_group(event_type, items):
     label = _event_type_label(event_type)
-    cards = "".join(_render_event(event) for event in items)
+    if len(items) > 1:
+        summary = {
+            "project_compatible_unlocked": "Hay nuevas alternativas compatibles con tus datos disponibles.",
+            "score_band_improved": "Registramos cambios favorables en tu perfil referencial.",
+            "monthly_plan_summary": "Tienes nuevos resúmenes para revisar el avance de tu plan.",
+            "uf_reachability_crossed": "Registramos cambios en el alcance referencial de tu objetivo.",
+            "quick_update_submitted": "Registramos actualizaciones de tus datos.",
+        }.get(event_type, "Registramos nuevas novedades para tu proceso de vivienda.")
+        cards = _render_template("grupo_resumen", summary=_safe(summary))
+    else:
+        cards = "".join(_render_event(event) for event in items)
     count_text = "1 novedad" if len(items) == 1 else f"{len(items)} novedades"
     return _render_template('grupo', label=label, count=count_text, cards=cards)
 
