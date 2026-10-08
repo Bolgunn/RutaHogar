@@ -1223,7 +1223,7 @@ export default function App() {
         if (active) setEvaluations(storedEvaluations);
       } catch (err) {
         console.error(err);
-        if (active)
+        if (active && profile?.role === roles.user)
           setDataError(
             "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde.",
           );
@@ -2279,9 +2279,9 @@ export default function App() {
             onNavigate={navigateToPage}
           />
         ) : page === "admin-reports" && canViewStaffPage(page, profile.role) ? (
-          <AdminReportHistory profile={profile} onNavigate={navigateToPage} />
+          <AdminReportHistory profile={profile} evaluations={evaluations} />
         ) : page === "admin-profile" && canViewStaffPage(page, profile.role) ? (
-          <AdminProfile profile={profile} />
+          <AdminProfile profile={profile} onNavigate={navigateToPage} />
         ) : page === "home" ? (
           <section className="evaluation-panel home-panel home-panel--guided">
             <div className="section-heading">

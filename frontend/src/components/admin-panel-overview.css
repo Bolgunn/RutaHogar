@@ -1,0 +1,13 @@
+.content-inner > .section-block.admin-panel-page > .admin-panel-overview { margin-top: 18px; }
+.admin-panel-page .admin-panel-overview { display: grid; gap: 10px; padding: 18px 20px; border: 1px solid var(--rh-border-strong); border-top: 3px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
+.admin-panel-page .admin-panel-overview .admin-panel-topbar__intro { display: grid; gap: 6px; max-width: none; margin: 0; }
+.admin-panel-page .admin-panel-overview .admin-panel-topbar__intro h2 { margin: 0; font-family: var(--rh-font-body); font-size: 1.2rem; line-height: 1.4; letter-spacing: 0; color: var(--rh-navy); }
+.admin-panel-page .admin-panel-overview .admin-panel-topbar__intro p { margin: 0; max-width: 85ch; font-family: var(--rh-font-body); font-size: .9rem; line-height: 1.6; }
+.admin-panel-page .admin-panel-overview .admin-panel-metric-strip { margin: 0; border: 0; border-top: 1px solid var(--rh-border); border-radius: 0; background: transparent; box-shadow: none; }
+.admin-panel-page .admin-panel-overview .admin-panel-metric { padding: 12px 18px 0; gap: 4px; background: transparent; }
+.admin-panel-page .admin-panel-overview .admin-panel-metric:first-child { padding-left: 0; }
+.admin-panel-page .admin-panel-overview .admin-panel-metric strong { font-family: var(--rh-font-body); font-size: 1.9rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 650px) {
+  .admin-panel-page .admin-panel-overview { padding: 16px; }
+  .admin-panel-page .admin-panel-overview .admin-panel-metric { padding: 14px 0; }
+}

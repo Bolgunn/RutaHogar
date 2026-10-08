@@ -15,9 +15,13 @@ import "./components/user-academy.css";
 import "./components/user-notices.css";
 import "./components/user-exploration.css";
 import "./components/user-design-system.css";
+import "./components/executive-leads.css";
+import "./components/staff-view-consistency.css";
+import { NotificationToastProvider } from "./components/NotificationToast";
+import "./components/notification-toast.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
-    <App />
+    <NotificationToastProvider><App /></NotificationToastProvider>
   </BrowserRouter>,
 );
