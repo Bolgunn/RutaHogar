@@ -4,9 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import logging
-
 import os
-from pathlib import Path
 
 # Configurar el logger en INFO para que imprima en la consola
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
@@ -32,6 +30,7 @@ async def verify_api_key(api_key_header: str = Security(api_key_header)):
 mock_crm_db: Dict[str, Any] = {}
 
 class CommercialPriority(BaseModel):
+    prioridad_general: str
     nivel_accion: str
     motivo: str
     send_to_crm: bool
