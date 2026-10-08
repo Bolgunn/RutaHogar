@@ -83,9 +83,8 @@ Cuando Antigravity tome este sprint o tareas relacionadas con HU 12, debe seguir
 - **Dado** que un lead posee una evaluación general y un proyecto objetivo,
 - **cuando** sea enviado al CRM simulado,
 - **entonces** deben registrarse y presentarse de manera **separada**:
-  1. **Prioridad general** (`commercial_priority`: nivel de acción, motivo y sugerencia de contacto emitida por `scoring_engine/commercial_priority.py`).
-  2. **Compatibilidad por capacidad de compra** con el proyecto objetivo (si el dividendo y pie cubren el valor de la vivienda según reglas financieras).
-  3. **Compatibilidad por afinidad** con el proyecto objetivo (puntaje o coincidencia en comuna, tipología o preferencias declaradas).
+  1. **Compatibilidad por capacidad de compra** con el proyecto objetivo (si el dividendo y pie cubren el valor de la vivienda según reglas financieras).
+  2. **Compatibilidad por afinidad** con el proyecto objetivo (puntaje o coincidencia en comuna, tipología o preferencias declaradas).
 
 #### E4 — Actualización periódica en el CRM
 - **Dado** que un lead ya existe en el CRM simulado,
@@ -151,7 +150,6 @@ El payload debe ser estructurado y tipado (TypeScript/JSDoc o Pydantic):
     "scoring_version": "1.1.0"
   },
   "priorizacion_comercial": {
-    "prioridad_general": "contact_now",
     "nivel_accion": "Contactar de inmediato",
     "motivo": "Lead con alta preparación financiera y compatible con el objetivo inmobiliario.",
     "send_to_crm": true

@@ -70,7 +70,6 @@ export async function buildCrmPayload(lead, projectData, matchData) {
       scoring_version: result?.scoring_version || "1.0"
     },
     priorizacion_comercial: {
-      prioridad_general: commercialPriority.priority || "not_defined",
       nivel_accion: commercialPriority.action || commercialPriority.level || "Sin acción",
       motivo: commercialPriority.reason || "Sin información.",
       send_to_crm: true
