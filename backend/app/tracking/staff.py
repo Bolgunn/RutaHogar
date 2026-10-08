@@ -93,6 +93,8 @@ def co_debtor_staff_projection(invitation, latest_input, now=None):
         return {"status": "not_confirmed", "source": "lead_declared"}
     if status == "revoked":
         return {"status": "revoked", "source": "excluded_after_revocation"}
+    if status == "declined":
+        return {"status": "declined", "source": "excluded_after_decline"}
     if status == "pending":
         return {"status": "pending", "source": "lead_declared"}
     if status == "expired":

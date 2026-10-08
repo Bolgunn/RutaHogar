@@ -201,3 +201,47 @@ def test_repository_prefers_a_new_pending_invitation_over_a_previous_revocation(
     ]
 
     assert repository.load_co_debtor_consent("lead-1")["invitation_status"] == "pending"
+
+
+def test_staff_repository_prefers_an_older_pending_invitation_over_the_newest_revocation():
+    repository = TrackingRepository.__new__(TrackingRepository)
+    rows = [
+        {"status": "revoked", "created_at": "2026-10-06T00:00:00Z"},
+        {"status": "pending", "created_at": "2026-10-05T00:00:00Z"},
+    ]
+    calls = []
+    repository.request = lambda *args, **kwargs: calls.append((args, kwargs)) or rows
+
+    assert repository.staff_co_debtor_invitation("lead-1") == rows[1]
+    query = parse_qs(urlsplit(calls[0][0][1]).query)
+    assert query["order"] == ["created_at.desc"]
+    assert query["limit"] == ["10"]
+
+
+def test_staff_repository_prefers_an_older_pending_invitation_over_the_newest_decline():
+    repository = TrackingRepository.__new__(TrackingRepository)
+    rows = [
+        {"status": "declined", "created_at": "2026-10-06T00:00:00Z"},
+        {"status": "pending", "created_at": "2026-10-05T00:00:00Z"},
+    ]
+    repository.request = lambda *_args, **_kwargs: rows
+
+    assert repository.staff_co_debtor_invitation("lead-1") == rows[1]
+
+
+def test_staff_repository_uses_the_newest_invitation_when_none_is_pending():
+    repository = TrackingRepository.__new__(TrackingRepository)
+    rows = [
+        {"status": "declined", "created_at": "2026-10-06T00:00:00Z"},
+        {"status": "revoked", "created_at": "2026-10-05T00:00:00Z"},
+    ]
+    repository.request = lambda *_args, **_kwargs: rows
+
+    assert repository.staff_co_debtor_invitation("lead-1") == rows[0]
+
+
+def test_staff_repository_returns_none_without_invitations():
+    repository = TrackingRepository.__new__(TrackingRepository)
+    repository.request = lambda *_args, **_kwargs: []
+
+    assert repository.staff_co_debtor_invitation("lead-1") is None
