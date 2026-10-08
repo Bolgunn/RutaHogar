@@ -529,6 +529,55 @@ def test_goal_regression_preserves_completion_evidence():
     assert goal["evidence"]["currently_regressed"]
 
 
+def test_calculated_dividend_partial_updates_preserve_history_and_frozen_goal():
+    repo, app = service()
+    # Values produced by frontend mortgage.js for 108M CLP, 20 years, 4.9%.
+    # HU13 persists the supplied partial patch; no backend mortgage formula.
+    baseline_snapshot = {
+        **valid_snapshot(), "property_value_clp": 108_000_000,
+        "ingreso_mensual": 1_500_000, "deuda_mensual": 0,
+        "ahorro_disponible": 10_000_000, "dividendo_estimado": 641_355,
+        "dividendo_estimado_origen": "calculado_referencial",
+        "dividendo_estimado_calculado": 641_355,
+        "dividendo_esperado": 641_355, "dividendo_tasa_anual_referencial": 0.049,
+        "dividendo_monto_credito_estimado_clp": 98_000_000,
+    }
+    first = app.execute("u1", command(baseline_snapshot))
+    frozen_plan, frozen_goals = deepcopy(repo.bundle["plan"]), deepcopy(repo.bundle["goals"])
+    historical_event, historical_evaluation = deepcopy(repo.bundle["events"][0]), deepcopy(repo.bundle["evaluations"][0])
+
+    def dividend_goal():
+        return next(goal for goal in app.read("u1")["goals"]
+                    if goal["definition"]["source_action_type"] == "adjust_property_goal")
+
+    previous = first["event_id"]
+    for at, savings, dividend, principal, status in [
+        ("2026-01-15T00:00:00Z", 30_000_000, 510_466, 78_000_000, "en_progreso"),
+        ("2026-02-01T00:00:00Z", 60_000_000, 314_133, 48_000_000, "cumplida"),
+        ("2026-02-15T00:00:00Z", 10_000_000, 641_355, 98_000_000, "pendiente"),
+    ]:
+        result = app.execute("u1", command({
+            "ahorro_disponible": savings, "dividendo_estimado": dividend,
+            "dividendo_estimado_calculado": dividend, "dividendo_esperado": dividend,
+            "dividendo_monto_credito_estimado_clp": principal,
+        }, previous, at))
+        previous = result["event_id"]
+        goal = dividend_goal()
+        assert goal["action_status"] == status
+        assert goal["progress"]["current_value"] == dividend
+        if status == "en_progreso":
+            assert 0 < goal["progress"]["percentage"] < 100
+        assert repo.bundle["events"][-1]["recorded_complete_snapshot"]["dividendo_estimado"] == dividend
+        assert repo.bundle["evaluations"][-1]["financial_data"]["input"]["dividendo_estimado"] == dividend
+        assert repo.bundle["evaluations"][-1]["financial_data"]["result"]["financial_indicators"]["dividendo_estimado"] == dividend
+
+    assert dividend_goal()["evidence"]["currently_regressed"]
+    assert repo.bundle["plan"] == frozen_plan
+    assert repo.bundle["goals"] == frozen_goals
+    assert repo.bundle["events"][0] == historical_event
+    assert repo.bundle["evaluations"][0] == historical_evaluation
+
+
 def test_projection_reuses_one_persisted_snapshot_across_all_milestones(monkeypatch):
     from app.market_data import bcch
 
