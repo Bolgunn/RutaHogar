@@ -173,7 +173,7 @@ class TestPropertiesSearchRAG(unittest.TestCase):
         self.assertEqual(res["results"][0]["cta_text"], "Ver si califico para este departamento")
 
     def test_cta_text_follows_property_type(self):
-        rows = [{"id": "c", "nombre": "Casa", "tipo_vivienda": "casa", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.9}]
+        rows = [{"id": "c", "nombre": "Casa", "descripcion": "Casa con jardin", "tipo_vivienda": "casa", "comuna": "Santiago", "valor_uf": 5000, "similarity": 0.9}]
         with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
             res = search_properties(query="casa con jardin")
         self.assertEqual(res["results"][0]["cta_text"], "Ver si califico para esta casa")
@@ -202,6 +202,75 @@ class TestPropertiesSearchRAG(unittest.TestCase):
             res = search_properties(query="casa con jardín en Puente Alto")
         self.assertEqual(res["total"], 0)
         self.assertIn("Puente Alto", res["suggestion"])
+
+    def test_required_feature_missing_in_commune_returns_empty_list(self):
+        res = search_properties(query="departamento con piscina en Ñuñoa", similarity_threshold=FAKE_ENCODER_THRESHOLD)
+        self.assertEqual(res["results"], [])
+        self.assertEqual(res["total"], 0)
+        self.assertIn("piscina", res["suggestion"])
+        self.assertIn("Nunoa", res["suggestion"])
+
+    def test_required_feature_present_is_returned(self):
+        res = search_properties(query="casa con piscina en Las Condes", similarity_threshold=FAKE_ENCODER_THRESHOLD)
+        self.assertEqual([item["commune"] for item in res["results"]], ["Las Condes"])
+
+    def test_negated_feature_is_not_required(self):
+        res = search_properties(query="departamento sin piscina en Ñuñoa", similarity_threshold=FAKE_ENCODER_THRESHOLD)
+        self.assertEqual([item["commune"] for item in res["results"]], ["Ñuñoa"])
+
+    def test_hard_mismatch_is_discarded_even_without_threshold(self):
+        res = search_properties(query="casa en Las Condes", similarity_threshold=0.0)
+        self.assertEqual([item["commune"] for item in res["results"]], ["Las Condes"])
+
+    def test_hard_mismatch_scores_zero(self):
+        item = {"comuna": "Santiago", "tipo_vivienda": "departamento", "nombre": "Depto con piscina"}
+        intent = {"req_comuna": "providencia"}
+        self.assertEqual(properties_search_module._adjust_similarity_score(item, 0.95, intent, ""), 0.0)
+        intent = {"req_features": ["quincho"]}
+        self.assertEqual(properties_search_module._adjust_similarity_score(item, 0.95, intent, ""), 0.0)
+
+    def test_database_rows_without_requested_feature_are_discarded(self):
+        rows = [
+            {"id": "sin", "nombre": "Casa", "descripcion": "Casa con jardin", "tipo_vivienda": "casa", "comuna": "Las Condes", "valor_uf": 9000, "similarity": 0.95},
+            {"id": "con", "nombre": "Casa", "descripcion": "Casa con Piscina y quincho", "tipo_vivienda": "casa", "comuna": "Las Condes", "valor_uf": 9000, "similarity": 0.90},
+        ]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query="casa con piscina en Las Condes")
+        self.assertEqual([item["id"] for item in res["results"]], ["con"])
+
+    def test_free_text_query_uses_lower_threshold(self):
+        rows = [{"id": "m", "nombre": "Depto a pasos del metro", "tipo_vivienda": "departamento", "comuna": "Santiago", "valor_uf": 2500, "similarity": 0.83}]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            libre = search_properties(query="estudio cerca de metro")
+            explicito = search_properties(query="estudio cerca de metro", similarity_threshold=0.9)
+        self.assertEqual([item["id"] for item in libre["results"]], ["m"])
+        self.assertEqual(explicito["results"], [])
+
+    def test_hard_filters_keep_strict_threshold(self):
+        rows = [{"id": "m", "nombre": "Depto con piscina", "tipo_vivienda": "departamento", "comuna": "Santiago", "valor_uf": 2500, "similarity": 0.81}]
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            for consulta, kwargs in (
+                ("departamento cerca de metro", {}),
+                ("cerca de metro con piscina", {}),
+                ("cerca de metro hasta 3000 uf", {}),
+                ("cerca de metro en Santiago", {}),
+                ("cerca de metro", {"commune": "Santiago"}),
+            ):
+                with self.subTest(consulta=consulta, kwargs=kwargs):
+                    self.assertEqual(search_properties(query=consulta, **kwargs)["results"], [])
+
+    def test_view_requirements_discard_listings_that_do_not_mention_them(self):
+        rows = [
+            {"id": f"c{i}", "nombre": "Casa En Calle Cerrada, Con Gran Jardín Y Piscina.", "tipo_vivienda": "casa", "comuna": "Peñalolén", "valor_uf": 14000, "similarity": 0.95}
+            for i in range(2)
+        ]
+        consulta = "casa con jardín con piscina con vista a la cordillera desde la pieza principal"
+        with patch.object(properties_search_module, "_query_supabase_proyectos_rag", return_value=rows):
+            res = search_properties(query=consulta)
+            con_vista = search_properties(query="casa con jardín con piscina")
+        self.assertEqual(res["results"], [])
+        self.assertIn("cordillera", res["suggestion"])
+        self.assertEqual(len(con_vista["results"]), 2)
 
     def test_commune_match_ignores_accents(self):
         rows = [{"id": "n", "nombre": "Depto", "tipo_vivienda": "departamento", "comuna": "Ñuñoa", "valor_uf": 3000, "similarity": 0.88}]

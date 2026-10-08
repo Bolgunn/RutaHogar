@@ -30,6 +30,12 @@ VECTOR_DIMENSION = 384
 # Única fuente del umbral: se aplica sobre la similitud ya ajustada por intención,
 # por eso la RPC recupera candidatos sin umbral (match_threshold = 0).
 DEFAULT_SIMILARITY_THRESHOLD = 0.85
+# Texto libre sin comuna, tipo, números ni características: ningún filtro duro descarta
+# avisos, así que el coseno decide solo y E5 rara vez supera 0.85 (máx. ~0.85-0.87).
+# Sobre 1.056 avisos reales, con "metro" en el título como verdad: 0.80 recupera 91 % pero
+# con 37 % de precisión (y deja pasar ~97 % del catálogo con "sector tranquilo");
+# 0.82 sube la precisión a 83 %. Como se muestran los 10 mejores, importa más la precisión.
+FREE_TEXT_SIMILARITY_THRESHOLD = 0.82
 SUPABASE_TIMEOUT_SECONDS = 5
 # Serverless Inference API de Hugging Face: torch no cabe en el límite de 250 MB de Vercel.
 # Sus 384 dims calzan con proyectos_rag.embedding vector(384).
@@ -66,8 +72,24 @@ _RM_COMMUNES_BY_LENGTH = sorted(RM_COMMUNES, key=len, reverse=True)
 ATTRIBUTE_EXACT_BOOST = 0.02
 ATTRIBUTE_ABOVE_BOOST = 0.01
 ATTRIBUTE_MISS_PENALTY = 0.10
-# Tipo o comuna distintos a los pedidos no son un resultado parcial: se descartan.
-HARD_MISMATCH_PENALTY = 2.0
+
+# Requisitos explícitos de la consulta ("con piscina"). Se aplican sobre texto sin tildes,
+# tanto a la consulta como al título y descripción del aviso.
+REQUIRED_FEATURES = {
+    "piscina": r"piscinas?",
+    "quincho": r"quinchos?",
+    "jardin": r"jardin(?:es)?",
+    "estacionamiento": r"estacionamientos?|cocheras?",
+    "bodega": r"bodegas?",
+    "terraza": r"terrazas?",
+    "balcon": r"balcon(?:es)?",
+    "gimnasio": r"gimnasio|gym",
+    "ascensor": r"ascensor(?:es)?",
+    "logia": r"logias?",
+    "vista": r"vistas?",
+    "cordillera": r"cordillera",
+}
+_NEGATED_FEATURE_PREFIX = re.compile(r"\bsin\s+(?:\w+\s+)?$")
 
 
 def _strip_accents(text: str) -> str:
@@ -122,10 +144,47 @@ def _extract_query_intent(query_text: str) -> Dict[str, Any]:
             intent["req_comuna"] = comuna
             break
 
+    # 7. Requisitos de características: "sin piscina" no exige piscina.
+    features = []
+    for feature, pattern in REQUIRED_FEATURES.items():
+        for match in re.finditer(rf"\b(?:{pattern})\b", q_plain):
+            if not _NEGATED_FEATURE_PREFIX.search(q_plain[:match.start()]):
+                features.append(feature)
+                break
+    intent["req_features"] = features
+
     return intent
 
+
+def _has_hard_filters(
+    intent: Dict[str, Any],
+    commune: Optional[str],
+    max_price_uf: Optional[float],
+    property_type: Optional[str],
+) -> bool:
+    if commune or property_type or (max_price_uf is not None and max_price_uf > 0):
+        return True
+    return any(
+        intent.get(key)
+        for key in ("req_comuna", "req_tipo", "req_dormitorios", "req_banos", "req_max_uf", "req_features")
+    )
+
+
+def _item_has_feature(item: Dict[str, Any], feature: str) -> bool:
+    text = _strip_accents(
+        html.unescape(
+            f"{item.get('title') or item.get('nombre') or ''} {item.get('description') or item.get('descripcion') or ''}"
+        ).lower()
+    )
+    return re.search(rf"\b(?:{REQUIRED_FEATURES[feature]})\b", text) is not None
+
+
 def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict[str, Any], query_text: str) -> float:
-    """Aplica impulsos y penalizaciones según atributos numéricos requeridos en la consulta."""
+    """Aplica impulsos y penalizaciones según la consulta; devuelve 0.0 ante un descalce duro.
+
+    Comuna, tipo de propiedad y características pedidas ("con piscina") no son un
+    resultado parcial: si el aviso no las cumple se descarta, sin importar la similitud.
+    """
     sim = base_sim
     banos = int(item.get("banos") or item.get("bathrooms") or 1)
     dormitorios = int(item.get("dormitorios") or item.get("bedrooms") or 1)
@@ -153,14 +212,17 @@ def _adjust_similarity_score(item: Dict[str, Any], base_sim: float, intent: Dict
     if req_t:
         item_tipo = _normalize_property_type(item.get("tipo_vivienda") or item.get("property_type"))
         if item_tipo and item_tipo != req_t:
-            sim -= HARD_MISMATCH_PENALTY
+            return 0.0
 
     req_c = intent.get("req_comuna")
     if req_c:
-        if commune == req_c:
-            sim += ATTRIBUTE_EXACT_BOOST
-        else:
-            sim -= HARD_MISMATCH_PENALTY
+        if commune != req_c:
+            return 0.0
+        sim += ATTRIBUTE_EXACT_BOOST
+
+    for feature in intent.get("req_features") or []:
+        if not _item_has_feature(item, feature):
+            return 0.0
 
     # Tope en 1.0 solo para que el porcentaje mostrado no pase de 100%.
     return max(0.0, min(1.0, float(sim)))
@@ -477,6 +539,13 @@ def _query_supabase_proyectos_rag(
 
 
 def _empty_results_suggestion(intent: Dict[str, Any]) -> str:
+    if intent.get("req_features"):
+        pedido = ", ".join(intent["req_features"])
+        donde = f" en {intent['req_comuna'].title()}" if intent.get("req_comuna") else ""
+        return (
+            f"No hay propiedades que coincidan con tu búsqueda ({pedido}){donde}. "
+            "Prueba quitando alguna característica o ampliando la comuna."
+        )
     if intent.get("req_comuna"):
         return (
             f"Por ahora no tenemos propiedades en {intent['req_comuna'].title()}. "
@@ -524,6 +593,11 @@ def search_properties(
     # EmbeddingError se propaga (503): sin modelo no hay búsqueda semántica posible.
     query_vec = generate_text_embedding(query_text)
     query_intent = _extract_query_intent(query_text)
+    # Un umbral distinto del por defecto lo fijó quien llama: no se toca.
+    if similarity_threshold == DEFAULT_SIMILARITY_THRESHOLD and not _has_hard_filters(
+        query_intent, commune, max_price_uf, property_type
+    ):
+        similarity_threshold = FREE_TEXT_SIMILARITY_THRESHOLD
 
     # Intentar consulta directa a Supabase RPC sobre public.proyectos_rag
     db_rows = _query_supabase_proyectos_rag(
@@ -575,7 +649,7 @@ def search_properties(
             raw_item["similarity"] = round(adj_sim, 4)
             scored_rows.append((adj_sim, base_sim, raw_item))
 
-            if adj_sim >= similarity_threshold:
+            if adj_sim > 0.0 and adj_sim >= similarity_threshold:
                 formatted_results.append(raw_item)
 
         _log_top_similarities("supabase", query_text, similarity_threshold, scored_rows)
@@ -637,7 +711,7 @@ def search_properties(
         adj_sim = _adjust_similarity_score(norm_item, base_sim, query_intent, query_text)
         scored_local.append((adj_sim, base_sim, norm_item))
 
-        if adj_sim >= similarity_threshold:
+        if adj_sim > 0.0 and adj_sim >= similarity_threshold:
             property_copy = dict(norm_item)
             property_copy["similarity"] = round(adj_sim, 4)
             property_copy["cta_text"] = _cta_text(norm_item["property_type"])
