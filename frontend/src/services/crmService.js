@@ -58,7 +58,7 @@ export async function buildCrmPayload(lead, projectData, matchData) {
       apellido_paterno: lead?.profile?.apellido_paterno || "",
       apellido_materno: lead?.profile?.apellido_materno || "",
       full_name: lead?.full_name || lead?.email || "Usuario",
-      rut: lead?.profile?.rut || lead?.rut || null,
+      rut: lead?.profile?.rut || lead?.rut || lead?.input?.rut || "SIN-RUT",
       email: lead?.email || null,
       telefono: lead?.phone || lead?.profile?.phone || null,
       fecha_evaluacion: lead?.created_at || new Date().toISOString(),
@@ -70,7 +70,6 @@ export async function buildCrmPayload(lead, projectData, matchData) {
       scoring_version: result?.scoring_version || "1.0"
     },
     priorizacion_comercial: {
-      prioridad_general: commercialPriority.priority || "not_defined",
       nivel_accion: commercialPriority.action || commercialPriority.level || "Sin acción",
       motivo: commercialPriority.reason || "Sin información.",
       send_to_crm: true
@@ -123,7 +122,7 @@ export async function syncLeadToSimulatedCrm(lead, projectData, matchData) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Mock-CRM-API-Key': 'rutahogar-crm-mock-secret-key-2026'
+        'X-Mock-CRM-API-Key': import.meta.env.VITE_CRM_MOCK_API_KEY || 'rutahogar-crm-mock-secret-key-2026'
       },
       body: JSON.stringify(payload)
     });
@@ -150,7 +149,7 @@ export async function getSimulatedCrmLeads() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/crm-mock/leads`, {
       headers: {
-        'X-Mock-CRM-API-Key': 'rutahogar-crm-mock-secret-key-2026'
+        'X-Mock-CRM-API-Key': import.meta.env.VITE_CRM_MOCK_API_KEY || 'rutahogar-crm-mock-secret-key-2026'
       }
     });
     if (response.ok) {
@@ -173,20 +172,22 @@ function saveToLocalStorageFallback(payload) {
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
   const db = stored ? JSON.parse(stored) : {};
   const lead_id = payload.lead_id;
+  const email = payload.lead_info?.email;
+  const primary_key = email ? email : lead_id;
   
   const now_str = new Date().toISOString();
   
-  if (db[lead_id]) {
-    const existing_hash = db[lead_id].sincronizacion?.version_hash;
+  if (db[primary_key]) {
+    const existing_hash = db[primary_key].sincronizacion?.version_hash;
     if (existing_hash === payload.sincronizacion.version_hash) {
       return { status: "sin_cambios", message: "Registro ya se encuentra actualizado (Offline)." };
     }
     
     payload.sincronizacion.estado_sync = "actualizado";
     payload.sincronizacion.actualizado_el = now_str;
-    payload.sincronizacion.sincronizado_el = db[lead_id].sincronizacion?.sincronizado_el || now_str;
+    payload.sincronizacion.sincronizado_el = db[primary_key].sincronizacion?.sincronizado_el || now_str;
     
-    db[lead_id] = payload;
+    db[primary_key] = payload;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
     return { status: "actualizado", message: "Actualizado en fallback local." };
   } else {
@@ -194,7 +195,7 @@ function saveToLocalStorageFallback(payload) {
     payload.sincronizacion.actualizado_el = now_str;
     payload.sincronizacion.sincronizado_el = now_str;
     
-    db[lead_id] = payload;
+    db[primary_key] = payload;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(db));
     return { status: "creado", message: "Creado en fallback local." };
   }

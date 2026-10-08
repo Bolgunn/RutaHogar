@@ -501,7 +501,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const loadCrmLeads = () => {
     getSimulatedCrmLeads().then(leads => {
       const map = {};
-      leads.forEach(l => { map[l.lead_id] = l; });
+      leads.forEach(l => { 
+        const primaryKey = l.lead_info?.rut || l.lead_id;
+        map[primaryKey] = l; 
+      });
       setCrmLeads(map);
     });
   };
@@ -704,7 +707,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
           <CommercialStageBadge records={commercialRecords[lead.user_id]} />
           <small>{formatDate(lead.created_at)}</small>
-          {crmLeads[lead.id] ? (
+          {crmLeads[lead.profile?.rut || lead.id] ? (
             <span className="status-pill status-pill--success" style={{marginTop: '4px'}}>En CRM Simulado</span>
           ) : (
             <button
@@ -1068,7 +1071,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
                   disabled={syncing || selectedLead.input?.consentimiento === false}
                   title={selectedLead.input?.consentimiento === false ? "El lead no otorgó consentimiento de datos" : "Derivar a CRM Simulado"}
                 >
-                  {syncing ? "Sincronizando..." : (crmLeads[selectedLead.id] ? "Actualizar en CRM" : "Derivar a CRM Simulado")}
+                  {syncing ? "Sincronizando..." : (crmLeads[selectedLead.profile?.rut || selectedLead.id] ? "Actualizar en CRM" : "Derivar a CRM Simulado")}
                 </button>
                 {(!isReporting && (selectedLead.reliability_status === "normal" || selectedLead.reliability_status === "reactivado")) && (
                   <button 

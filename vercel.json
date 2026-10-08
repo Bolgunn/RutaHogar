@@ -32,6 +32,10 @@
       "destination": "/api/score"
     },
     {
+      "source": "/api/v1/crm-mock/(.*)",
+      "destination": "/api/score"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

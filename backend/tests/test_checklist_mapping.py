@@ -11,7 +11,7 @@ import app.main as main
 import app.scoring as scoring_module
 from app.main import ScoreRequest, score_endpoint
 
-SNAPSHOT = json.loads((Path(__file__).resolve().parents[2] / "docs" / "algorithms" / "ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+SNAPSHOT = json.loads((Path(__file__).resolve().parents[2] / "docs" / "algorithms" / "ALG-9-cases.json").read_text(encoding='utf-8'))["cases"][0]["input"]["market_snapshot"]
 main.resolve_market_snapshot = lambda: SNAPSHOT
 async def _inline_thread(callable, *args, **kwargs): return callable(*args, **kwargs)
 main.asyncio.to_thread = _inline_thread

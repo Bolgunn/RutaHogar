@@ -5,6 +5,19 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import logging
 
+import os
+from pathlib import Path
+
+# Cargar .env de backend si existe y las variables aún no están en el entorno
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+if _env_path.exists():
+    with open(_env_path, encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 # Configurar el logger en INFO para que imprima en la consola
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -13,11 +26,12 @@ router = APIRouter()
 
 # API Key Security for CRM Mock (Fix for comment 5)
 API_KEY_NAME = "X-Mock-CRM-API-Key"
-API_KEY = "rutahogar-crm-mock-secret-key-2026"
+API_KEY = os.getenv("CRM_MOCK_API_KEY")
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
 
 async def verify_api_key(api_key_header: str = Security(api_key_header)):
-    if api_key_header != API_KEY:
+    expected_api_key = os.getenv("CRM_MOCK_API_KEY", API_KEY)
+    if api_key_header != expected_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API Key",
@@ -27,25 +41,30 @@ async def verify_api_key(api_key_header: str = Security(api_key_header)):
 # In-memory database for the CRM mock
 mock_crm_db: Dict[str, Any] = {}
 
+class CommercialPriority(BaseModel):
+    nivel_accion: str
+    motivo: str
+    send_to_crm: bool
+
 class CRMSyncPayload(BaseModel):
     lead_id: str
     lead_info: Dict[str, Any]
     evaluacion_general: Dict[str, Any]
-    priorizacion_comercial: Dict[str, Any]
+    priorizacion_comercial: CommercialPriority
     proyecto_objetivo: Optional[Dict[str, Any]] = None
     sincronizacion: Dict[str, Any]
 
 # --- Modelos extendidos para la industria chilena ---
 
 class PlanOKPayload(BaseModel):
-    rut: str # Obligatorio para evitar duplicados en sala de ventas
+    email: str # Obligatorio para evitar duplicados en sala de ventas
     nombres: str # Separado
     apellidos: str # Separado
-    email: Optional[str] = None
     telefono: Optional[str] = None
     id_proyecto: str
     comentarios: Optional[str] = None # RutaHogar concatenará el score financiero aquí
     origen: str = "RutaHogar"
+
 
 class HubSpotPayload(BaseModel):
     email: str
@@ -64,6 +83,11 @@ class SalesforcePayload(BaseModel):
 @router.post("/sync", status_code=status.HTTP_200_OK, dependencies=[Depends(verify_api_key)])
 async def sync_lead(payload: CRMSyncPayload):
     lead_id = payload.lead_id
+    email = payload.lead_info.get("email")
+    
+    # Usar email como primary key, fallback a lead_id si el lead no tiene email
+    primary_key = email if email else lead_id
+    
     incoming_hash = payload.sincronizacion.get("version_hash")
     
     if not incoming_hash:
@@ -71,14 +95,14 @@ async def sync_lead(payload: CRMSyncPayload):
 
     now_str = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     
-    logger.info(f"Audit: Sync requested for lead_id={lead_id}, hash={incoming_hash}")
+    logger.info(f"Audit: Sync requested for pk={primary_key} (lead_id={lead_id}), hash={incoming_hash}")
 
-    if lead_id in mock_crm_db:
-        existing_record = mock_crm_db[lead_id]
+    if primary_key in mock_crm_db:
+        existing_record = mock_crm_db[primary_key]
         existing_hash = existing_record["sincronizacion"].get("version_hash")
         
         if existing_hash == incoming_hash:
-            logger.info(f"Audit: Sync unchanged for lead_id={lead_id}")
+            logger.info(f"Audit: Sync unchanged for pk={primary_key}")
             return {"status": "sin_cambios", "message": "El registro ya se encuentra actualizado."}
         
         # Update
@@ -87,8 +111,8 @@ async def sync_lead(payload: CRMSyncPayload):
         payload_dict["sincronizacion"]["actualizado_el"] = now_str
         payload_dict["sincronizacion"]["sincronizado_el"] = existing_record["sincronizacion"].get("sincronizado_el", now_str)
         
-        logger.info(f"Audit: Sync updated for lead_id={lead_id}")
-        mock_crm_db[lead_id] = payload_dict
+        logger.info(f"Audit: Sync updated for pk={primary_key}")
+        mock_crm_db[primary_key] = payload_dict
         return {"status": "actualizado", "message": "Registro actualizado exitosamente en CRM Simulado."}
     else:
         # Create
@@ -97,13 +121,43 @@ async def sync_lead(payload: CRMSyncPayload):
         payload_dict["sincronizacion"]["sincronizado_el"] = now_str
         payload_dict["sincronizacion"]["actualizado_el"] = now_str
         
-        logger.info(f"Audit: Sync created for lead_id={lead_id}")
-        mock_crm_db[lead_id] = payload_dict
+        logger.info(f"Audit: Sync created for pk={primary_key}")
+        mock_crm_db[primary_key] = payload_dict
         return {"status": "creado", "message": "Registro creado exitosamente en CRM Simulado."}
 
 @router.get("/leads", dependencies=[Depends(verify_api_key)])
-async def get_leads():
+async def get_leads(crm: Optional[str] = None):
+    if crm == "planok":
+        return {"leads": [v for k, v in mock_crm_db.items() if str(k).startswith("planok_")]}
+    elif crm == "hubspot":
+        return {"leads": [v for k, v in mock_crm_db.items() if str(k).startswith("hubspot_")]}
+    elif crm == "salesforce":
+        return {"leads": [v for k, v in mock_crm_db.items() if str(k).startswith("sf_")]}
+    elif crm == "rutahogar":
+        return {"leads": [v for k, v in mock_crm_db.items() if not str(k).startswith(("planok_", "hubspot_", "sf_"))]}
     return {"leads": list(mock_crm_db.values())}
+
+# --- Endpoints CRUD para leads en el CRM Simulado ---
+@router.get("/leads/{email}", dependencies=[Depends(verify_api_key)])
+async def get_lead(email: str):
+    if email not in mock_crm_db:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    return mock_crm_db[email]
+
+@router.delete("/leads/{email}", dependencies=[Depends(verify_api_key)])
+async def delete_lead(email: str):
+    if email not in mock_crm_db:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+    del mock_crm_db[email]
+    logger.info(f"Audit: Lead deleted for email={email}")
+    return {"status": "eliminado", "message": "Lead eliminado exitosamente del CRM Simulado."}
+
+@router.delete("/leads", dependencies=[Depends(verify_api_key)])
+async def delete_all_leads():
+    mock_crm_db.clear()
+    logger.info("Audit: All leads deleted from CRM Simulado")
+    return {"status": "eliminados", "message": "Todos los leads eliminados exitosamente del CRM Simulado."}
+
 
 # --- Endpoints de simulación para proveedores de la industria ---
 
@@ -111,8 +165,8 @@ async def get_leads():
 @router.post("/sync/planok", status_code=status.HTTP_200_OK, dependencies=[Depends(verify_api_key)])
 async def sync_planok(payload: PlanOKPayload):
     # Simula la recepción en PlanOK
-    logger.info(f"Audit: Syncing to PlanOK for rut={payload.rut}")
-    mock_crm_db[f"planok_{payload.rut}"] = payload.model_dump()
+    logger.info(f"Audit: Syncing to PlanOK for email={payload.email}")
+    mock_crm_db[f"planok_{payload.email}"] = payload.model_dump()
     return {"status": "ok", "message": "Recibido en PlanOK simulado"}
 
 @router.post("/sync/hubspot", status_code=status.HTTP_200_OK, dependencies=[Depends(verify_api_key)])

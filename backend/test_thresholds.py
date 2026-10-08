@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from app.scoring import calculate_score
 
-MARKET_SNAPSHOT = json.loads((Path(__file__).resolve().parents[1] / "docs" / "algorithms" / "ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+MARKET_SNAPSHOT = json.loads((Path(__file__).resolve().parents[1] / "docs" / "algorithms" / "ALG-9-cases.json").read_text(encoding="utf-8"))["cases"][0]["input"]["market_snapshot"]
 
 
 def base_payload(**overrides):
