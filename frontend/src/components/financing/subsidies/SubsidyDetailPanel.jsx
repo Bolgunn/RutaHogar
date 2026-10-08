@@ -12,7 +12,7 @@ const summaryCards = [
   ["link", "Compatibilidad", "compatibility"],
 ];
 
-export default function SubsidyDetailPanel({ subsidy, compatibility, isApplied, onApply, onClose }) {
+export default function SubsidyDetailPanel({ subsidy, compatibility, isSelected, isApplied, onApply, onClear, onClose }) {
   if (!subsidy) return null;
   return <aside className="subsidy-detail" aria-live="polite">
     <button type="button" className="subsidy-detail__close" aria-label="Cerrar detalle del subsidio" onClick={onClose}>×</button>
@@ -26,6 +26,6 @@ export default function SubsidyDetailPanel({ subsidy, compatibility, isApplied, 
       const value = isCompatibility ? (compatibility?.compatible ? "Compatible" : "Revisar requisitos") : subsidy.summary[field];
       return <article key={field}><SubsidyIcon kind={icon} size={19} /><small>{label}</small><strong className={isCompatibility && compatibility?.compatible ? "is-compatible" : isCompatibility ? "is-incompatible" : ""}>{value}</strong></article>;
     })}</div>
-    <div className="subsidy-detail__actions"><button type="button" className="primary-button" onClick={() => onApply(subsidy)}>{isApplied ? "Aplicado a esta simulación" : compatibility?.compatible ? "Seleccionar este subsidio" : "Explorar como supuesto"} <span aria-hidden="true">→</span></button>{isApplied ? <p className="subsidy-detail__applied">El resultado de crédito se actualizó.</p> : null}</div>
+    <div className="subsidy-detail__actions">{isApplied && isSelected ? <button type="button" className="secondary-button" onClick={onClear}>Cancelar subsidio</button> : isApplied ? <button type="button" className="secondary-button" disabled>Cancelación pendiente de aplicar</button> : isSelected ? <button type="button" className="primary-button" disabled>Seleccionado como cambio pendiente</button> : <button type="button" className="primary-button" onClick={() => onApply(subsidy)}>{compatibility?.compatible ? "Seleccionar este subsidio" : "Explorar como supuesto"} <span aria-hidden="true">→</span></button>}{isApplied && isSelected ? <p className="subsidy-detail__applied">El beneficio está aplicado a esta simulación.</p> : null}</div>
   </aside>;
 }
