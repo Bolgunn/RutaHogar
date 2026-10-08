@@ -13,6 +13,7 @@ import "./components/user-page-headers.css";
 import "./components/user-improvement-plan.css";
 import "./components/user-academy.css";
 import "./components/user-notices.css";
+import "./components/user-exploration.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>
