@@ -32,6 +32,7 @@ async def verify_api_key(api_key_header: str = Security(api_key_header)):
 mock_crm_db: Dict[str, Any] = {}
 
 class CommercialPriority(BaseModel):
+    prioridad_general: str
     nivel_accion: str
     motivo: str
     send_to_crm: bool
