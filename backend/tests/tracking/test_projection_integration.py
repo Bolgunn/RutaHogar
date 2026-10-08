@@ -13,7 +13,7 @@ from test_service import valid_snapshot
 
 
 def market_snapshot():
-    return json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+    return json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text(encoding="utf-8"))["cases"][0]["input"]["market_snapshot"]
 
 
 def projection(latest=None, rows=None):

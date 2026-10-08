@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
+import { BarsChart, RateChart } from "./CommercialCharts";
 import { computeFunnelMetrics } from "../lib/commercial/funnelMetrics";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
 import { STAGES } from "../lib/commercial/stageRules";
@@ -78,7 +79,7 @@ function percent(rate) {
 
 // Una tasa nula nunca es "0 %": no hay datos (ALG-18, obligaciones de la interfaz).
 function Rate({ rate, n }) {
-  return <span className="cm-rate">{rate == null ? `— sin datos (n = ${n})` : percent(rate)}</span>;
+  return <span className="cm-rate">{rate == null ? `— sin datos (n = ${n})` : `(${percent(rate)})`}</span>;
 }
 
 function asOf(now) {
@@ -141,11 +142,11 @@ function HBars({ rows, total, fill = "", onPick }) {
           onClick={onPick ? () => onPick(row.key) : undefined}
           role={onPick ? "button" : undefined}
           tabIndex={onPick ? 0 : undefined}
-          onKeyDown={onPick ? (event) => { if (event.key === "Enter") onPick(row.key); } : undefined}
+          onKeyDown={onPick ? (event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onPick(row.key); } } : undefined}
         >
           <span className="cm-hbar__label">{row.label}<FieldTooltip text={row.help} /></span>
           <span className="cm-hbar__track"><span className={`cm-hbar__fill ${row.fill || fill}`} style={{ width: `${(100 * row.value) / max}%` }} /></span>
-          <span className="cm-hbar__val">{row.value} <small>{total ? percent(row.value / total) : "—"}</small></span>
+          <span className="cm-hbar__val">{row.value} <small>({total ? percent(row.value / total) : "—"})</small></span>
         </div>
       ))}
     </div>
@@ -287,7 +288,7 @@ function BetweenTable({ rows }) {
 }
 
 function DesgloseTable({ rows, labelOf }) {
-  const cell = (count, tasa) => <>{count} <span className="cm-muted">{percent(tasa)}</span></>;
+  const cell = (count, tasa) => <span className="cm-count-rate"><strong>{count}</strong><span className="cm-muted">({percent(tasa)})</span></span>;
   return (
     <table className="cm-table">
       <thead>
@@ -313,123 +314,6 @@ function DesgloseTable({ rows, labelOf }) {
         ))}
       </tbody>
     </table>
-  );
-}
-
-// Tasas (0–1) por período como líneas; null corta la línea (sin datos).
-function RateChart({ periods, series, width, height, label }) {
-  const left = 40, right = 12, top = 18, bottom = 44;
-  const groupWidth = (width - left - right) / Math.max(1, periods.length);
-  const x = (i) => left + groupWidth * i + groupWidth / 2;
-  const y = (value) => top + (height - top - bottom) * (1 - value);
-  const showValues = periods.length <= 8;
-  return (
-    <svg className="cm-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-      {[0, 0.5, 1].map((fraction) => (
-        <g key={fraction}>
-          <line x1={left} x2={width - right} y1={y(fraction)} y2={y(fraction)} stroke="#E8E5DF" />
-          <text x="2" y={y(fraction) + 4}>{`${Math.round(fraction * 100)} %`}</text>
-        </g>
-      ))}
-      {periods.map((period, i) => (
-        <g key={period.clave}>
-          {period.en_curso && (
-            <rect x={left + groupWidth * i + 3} y={top} width={groupWidth - 6} height={height - top - bottom} rx="8" fill="none" stroke="#D4A843" strokeDasharray="5 4" />
-          )}
-          {(showValues || i % 3 === 0) && <text x={x(i)} y={height - 10} textAnchor="middle">{period.label}</text>}
-        </g>
-      ))}
-      {series.map((serie, j) => {
-        const points = periods.map((period, i) => ({ i, value: serie.value(period), period }));
-        const segments = [];
-        let current = [];
-        for (const point of points) {
-          if (point.value == null) { if (current.length) segments.push(current); current = []; } else current.push(point);
-        }
-        if (current.length) segments.push(current);
-        return (
-          <g key={serie.key}>
-            {segments.map((segment) => (
-              <polyline key={segment[0].i} fill="none" stroke={serie.color} strokeWidth="2.5" points={segment.map((p) => `${x(p.i)},${y(p.value)}`).join(" ")} />
-            ))}
-            {points.filter((p) => p.value != null).map((p) => (
-              <g key={p.i}>
-                <circle cx={x(p.i)} cy={y(p.value)} r="3.5" fill={serie.color}>
-                  <title>{`${p.period.label} · ${serie.name}: ${percent(p.value)} (${serie.detail(p.period)})`}</title>
-                </circle>
-                {showValues && <text x={x(p.i)} y={j % 2 ? y(p.value) + 15 : y(p.value) - 7} textAnchor="middle" className="cm-chart__value">{percent(p.value)}</text>}
-              </g>
-            ))}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function axis(max, width, left, right, y) {
-  return [0, 0.5, 1].map((fraction) => {
-    const yy = y(max * fraction);
-    return (
-      <g key={fraction}>
-        <line x1={left} x2={width - right} y1={yy} y2={yy} stroke="#E8E5DF" />
-        <text x="2" y={yy + 4}>{Math.round(max * fraction)}</text>
-      </g>
-    );
-  });
-}
-
-// Barras agrupadas por período; null se dibuja como "—" (sin datos).
-function BarsChart({ periods, series, width, height, label, format = (value) => value, rateLine = null }) {
-  const left = 34, right = rateLine ? 40 : 12, top = 18, bottom = 30;
-  const max = Math.max(1, ...periods.flatMap((period) => series.map((serie) => serie.value(period) ?? 0)));
-  const groupWidth = (width - left - right) / Math.max(1, periods.length);
-  const barWidth = (groupWidth * 0.7) / series.length;
-  const y = (value) => top + (height - top - bottom) * (1 - value / max);
-  const showValues = periods.length <= 8;
-  return (
-    <svg className="cm-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-      {axis(max, width, left, right, y)}
-      {periods.map((period, i) => (
-        <g key={period.clave}>
-          {period.en_curso && (
-            <rect x={left + groupWidth * i + 3} y={top} width={groupWidth - 6} height={height - top - bottom} rx="8" fill="none" stroke="#D4A843" strokeDasharray="5 4" />
-          )}
-          {series.map((serie, j) => {
-            const value = serie.value(period);
-            const x = left + groupWidth * i + groupWidth * 0.15 + j * barWidth;
-            if (value == null) return <text key={serie.key} x={x + barWidth / 2} y={height - bottom - 4} textAnchor="middle">—</text>;
-            return (
-              <g key={serie.key}>
-                <rect x={x} y={y(value)} width={Math.max(1, barWidth - 3)} height={height - bottom - y(value)} rx="4" fill={serie.color}>
-                  <title>{`${period.label} · ${serie.name}: ${format(value, period)}`}</title>
-                </rect>
-                {showValues && <text x={x + (barWidth - 3) / 2} y={y(value) - 5} textAnchor="middle" className="cm-chart__value">{format(value, period)}</text>}
-              </g>
-            );
-          })}
-          {(showValues || i % 3 === 0) && <text x={left + groupWidth * i + groupWidth / 2} y={height - 10} textAnchor="middle">{period.label}</text>}
-        </g>
-      ))}
-      {rateLine && (() => {
-        const rateY = (value) => top + (height - top - bottom) * (1 - value);
-        const points = periods
-          .map((period, i) => ({ i, value: rateLine.value(period), period }))
-          .filter((point) => point.value != null);
-        const cx = (i) => left + groupWidth * i + groupWidth / 2;
-        return (
-          <g>
-            {[0, 1].map((fraction) => <text key={fraction} x={width - right + 4} y={rateY(fraction) + 4}>{`${Math.round(fraction * 100)} %`}</text>)}
-            <polyline fill="none" stroke={rateLine.color} strokeWidth="2" strokeDasharray="4 3" points={points.map((p) => `${cx(p.i)},${rateY(p.value)}`).join(" ")} />
-            {points.map((p) => (
-              <circle key={p.i} cx={cx(p.i)} cy={rateY(p.value)} r="3" fill={rateLine.color}>
-                <title>{`${p.period.label} · ${rateLine.name}: ${percent(p.value)}`}</title>
-              </circle>
-            ))}
-          </g>
-        );
-      })()}
-    </svg>
   );
 }
 
@@ -520,11 +404,10 @@ export default function CommercialMetrics({ role, onNavigate }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const activeLabels = [
-    ...(filtros.proyecto_id ? [proyectoNombre(filtros.proyecto_id)] : []),
-    ...(sinCatalogo ? [] : AFINIDAD.filter(([key]) => filtros.afinidad.includes(key)).map(([, label]) => label)),
-    ...(sinCatalogo ? [] : CAPACIDAD.filter(([key]) => filtros.capacidad.includes(key)).map(([, label]) => label)),
-    ...PRIORIDAD.filter(([key]) => filtros.prioridad.includes(key)).map(([, label]) => label),
+  const activeFilters = [
+    ...(filtros.proyecto_id ? [{ dimension: "proyecto_id", key: filtros.proyecto_id, label: `Proyecto: ${proyectoNombre(filtros.proyecto_id)}` }] : []),
+    ...[["afinidad", "Afinidad", AFINIDAD], ["capacidad", "Capacidad", CAPACIDAD], ["prioridad", "Prioridad", PRIORIDAD]].flatMap(([dimension, title, options]) =>
+      sinCatalogo && dimension !== "prioridad" ? [] : options.filter(([key]) => filtros[dimension].includes(key)).map(([key, label]) => ({ dimension, key, label: `${title}: ${label}` }))),
   ];
 
   const chips = (dimension, options, disabled = false) => (
@@ -535,8 +418,9 @@ export default function CommercialMetrics({ role, onNavigate }) {
           type="button"
           className={`cm-chip ${filtros[dimension].includes(key) ? "is-active" : ""}`}
           disabled={disabled}
+          aria-pressed={filtros[dimension].includes(key)}
           onClick={() => toggle(dimension, key)}
-        >{label}</button>
+        ><i className={`ti ${filtros[dimension].includes(key) ? "ti-check" : "ti-plus"}`} aria-hidden="true" />{label}</button>
       ))}
     </div>
   );
@@ -551,10 +435,11 @@ export default function CommercialMetrics({ role, onNavigate }) {
     <section className="section-block cm-page">
       {heading}
 
-      <article className="admin-surface cm-filters" aria-label="Filtros">
-        <div className="cm-filters__row">
-          <div className="cm-filters__group">
-            <span className="cm-label">Proyecto</span>
+      <article className="admin-surface cm-filters" aria-label="Filtros de métricas">
+        <div className="cm-filters__scope">
+          <div><h2>Acota las métricas</h2><p>Elige un proyecto y filtra los leads que quieres analizar.</p></div>
+          <label className="cm-filters__project">
+            <span><i className="ti ti-building-estate" aria-hidden="true" />Proyecto a analizar</span>
             <select
               value={filtros.proyecto_id || ""}
               onChange={(event) => setFiltros((current) => ({ ...current, proyecto_id: event.target.value || null }))}
@@ -564,32 +449,41 @@ export default function CommercialMetrics({ role, onNavigate }) {
                 <option key={proyecto.id} value={proyecto.id}>{proyecto.nombre}{proyecto.estado === "agotado" ? " (agotado)" : ""}</option>
               ))}
             </select>
-          </div>
-          <div className="cm-filters__group">
-            <span className="cm-label">Afinidad</span>
-            {chips("afinidad", AFINIDAD, sinCatalogo)}
-          </div>
+          </label>
         </div>
-        <div className="cm-filters__row">
-          <div className="cm-filters__group">
-            <span className="cm-label">Capacidad de compra</span>
+        <p className="cm-filters__instructions">Puedes elegir varias opciones por grupo. Sin selección, se incluyen todas.</p>
+        <div className="cm-filters__criteria">
+          <fieldset className="cm-filters__group" disabled={sinCatalogo}>
+            <legend>Afinidad con el proyecto</legend>
+            <p>Qué tan bien coincide el perfil con la vivienda.</p>
+            {chips("afinidad", AFINIDAD, sinCatalogo)}
+          </fieldset>
+          <fieldset className="cm-filters__group" disabled={sinCatalogo}>
+            <legend>Capacidad de compra</legend>
+            <p>Si la capacidad estimada alcanza el precio.</p>
             {chips("capacidad", CAPACIDAD, sinCatalogo)}
-          </div>
-          <div className="cm-filters__group">
-            <span className="cm-label">Prioridad comercial</span>
+          </fieldset>
+          <fieldset className="cm-filters__group cm-filters__priority">
+            <legend>Prioridad comercial</legend>
+            <p>Qué acción de seguimiento corresponde al lead.</p>
             {chips("prioridad", PRIORIDAD)}
-          </div>
+          </fieldset>
         </div>
         {sinCatalogo && (
           <p className="cm-hint">Afinidad y capacidad no están disponibles: todos tus proyectos están agotados, así que no hay con qué compararlos. Elige un proyecto para verlas contra él.</p>
         )}
         <div className="cm-filters__foot">
-          <span className="cm-summary">
-            Mostrando <strong>{m.n} de {facts.length} leads</strong> · {activeLabels.length ? activeLabels.join(" · ") : "sin filtros"}
+          <span className="cm-summary" role="status">
+            Mostrando <strong>{m.n} de {facts.length} leads</strong> · {activeFilters.length ? `${activeFilters.length} filtro${activeFilters.length === 1 ? "" : "s"} activo${activeFilters.length === 1 ? "" : "s"}` : "Sin filtros activos"}
             {m.prioridad_no_reconocida > 0 && ` · ${m.prioridad_no_reconocida} con una prioridad que no se reconoce (cuentan como sin prioridad)`}
           </span>
-          <button className="secondary-button compact-button" type="button" onClick={() => setFiltros(EMPTY_FILTERS)}>Limpiar filtros</button>
+          <button className="secondary-button compact-button" type="button" disabled={!activeFilters.length} onClick={() => setFiltros(EMPTY_FILTERS)}>Limpiar filtros</button>
         </div>
+        {activeFilters.length > 0 && <div className="cm-filters__active" aria-label="Filtros activos">
+          {activeFilters.map(({ dimension, key, label }) => <button type="button" key={`${dimension}-${key}`} aria-label={`Quitar filtro ${label}`} onClick={() => dimension === "proyecto_id" ? setFiltros((current) => ({ ...current, proyecto_id: null })) : toggle(dimension, key)}>
+            {label}<i className="ti ti-x" aria-hidden="true" />
+          </button>)}
+        </div>}
       </article>
 
       <div className="cm-tabs" role="tablist">
@@ -729,7 +623,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
                       <tr key={row.proyecto_id}>
                         <td>{proyecto?.nombre} {proyecto?.estado === "agotado" && <span className="cm-pill cm-pill--agotado">Agotado</span>}</td>
                         <td className="num">{row.leads}</td>
-                        <td className="num">{row.postulan} <span className="cm-muted">{row.leads ? percent(row.postulan / row.leads) : "—"}</span></td>
+                        <td className="num"><span className="cm-count-rate"><strong>{row.postulan}</strong><span className="cm-muted">({row.leads ? percent(row.postulan / row.leads) : "—"})</span></span></td>
                         <td className="num">{row.ventas}</td>
                         <td className="num">{row.sin_contactar}</td>
                       </tr>
@@ -872,7 +766,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
                         <tr key={p.clave}>
                           <td>{p.label}</td>
                           <td className="num">{p.embudo.n}</td>
-                          <td className="num">{p.captura.postulan} <span className="cm-muted">{percent(p.captura.tasa)}</span></td>
+                          <td className="num"><span className="cm-count-rate"><strong>{p.captura.postulan}</strong><span className="cm-muted">({percent(p.captura.tasa)})</span></span></td>
                           <td className="num">{ventas(p.embudo)}</td>
                           <td className="num">{p.embudo.abiertos} de {p.embudo.n}</td>
                           <td>{p.en_curso && <span className="cm-pill cm-pill--curso">En curso</span>}</td>

@@ -11,6 +11,13 @@ describe("HU13 projection-target catalog navigation", () => {
     });
   });
 
+  it("matches numeric and string IDs and does not reopen a consumed target", () => {
+    const projects = [{ id: 7 }];
+    expect(initialCatalogProject(projects, "7")).toEqual({ project: projects[0], unavailable: false });
+    expect(initialCatalogProject([{ id: "7" }], 7).unavailable).toBe(false);
+    expect(initialProjectNavigation({ projects, projectId: "7", consumedProjectId: 7, catalogLoading: false, portalLoading: false }).consume).toBe(false);
+  });
+
   it("returns a safe unavailable state when the frozen target left the catalog", () => {
     expect(initialCatalogProject(projects, "removed-target")).toEqual({
       project: null, unavailable: true,

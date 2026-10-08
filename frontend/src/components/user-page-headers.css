@@ -1,0 +1,55 @@
+/* One header treatment, with enough specificity to replace legacy page skins. */
+.content-inner > :is(.evaluation-panel.home-panel--guided, .section-block.profile-page--guided, .section-block.results-panel--guided, .evaluation-panel.prequalification-panel, .section-block.subsidios-page, .section-block.tracking-panel, .section-block.progress-page) > :is(.section-heading, .page-head) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  min-height: 148px;
+  margin: 0;
+  padding: 22px;
+  border: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--rh-navy);
+  border-radius: var(--rh-radius-lg);
+  background: #fff;
+  background-image: none;
+  box-shadow: var(--rh-shadow-sm);
+  text-align: left;
+}
+.content-inner > :is(.evaluation-panel.home-panel--guided, .section-block.profile-page--guided, .section-block.results-panel--guided, .evaluation-panel.prequalification-panel, .section-block.subsidios-page, .section-block.tracking-panel, .section-block.progress-page) > :is(.section-heading, .page-head) :is(h1, .eyebrow, p) {
+  max-width: none;
+  width: auto;
+}
+.content-inner > :is(.evaluation-panel.home-panel--guided, .section-block.profile-page--guided, .section-block.results-panel--guided, .evaluation-panel.prequalification-panel, .section-block.subsidios-page, .section-block.tracking-panel, .section-block.progress-page) > :is(.section-heading, .page-head) h1 {
+  margin: 12px 0 10px;
+  font-family: var(--rh-font-display);
+  font-size: clamp(1.75rem, 3vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  color: var(--rh-navy);
+}
+.content-inner > :is(.evaluation-panel.home-panel--guided, .section-block.profile-page--guided, .section-block.results-panel--guided, .evaluation-panel.prequalification-panel, .section-block.subsidios-page, .section-block.tracking-panel, .section-block.progress-page) > :is(.section-heading, .page-head) .eyebrow {
+  margin: 0;
+  font-family: var(--rh-font-body);
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--rh-yellow-dark);
+}
+.content-inner > :is(.evaluation-panel.home-panel--guided, .section-block.profile-page--guided, .section-block.results-panel--guided, .evaluation-panel.prequalification-panel, .section-block.subsidios-page, .section-block.tracking-panel, .section-block.progress-page) > :is(.section-heading, .page-head) p {
+  margin: 0;
+  font-family: var(--rh-font-body);
+  font-size: .95rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #34445a;
+}
+
+.content-inner > .evaluation-panel.prequalification-panel > .section-heading::before,
+.content-inner > .evaluation-panel.prequalification-panel > .section-heading::after { display: none; }
+.content-inner > .section-block.progress-page > .progress-page__head::before,
+.content-inner > .section-block.progress-page > .progress-page__head::after { display: none; }
+.content-inner > .section-block.progress-page > .progress-page__head { border-top: 3px solid var(--rh-navy); background-image: none; }

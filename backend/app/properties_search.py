@@ -97,6 +97,8 @@ REQUIRED_FEATURES = {
     "logia": r"logias?",
     "vista": r"vistas?",
     "cordillera": r"cordillera",
+    "atardecer": r"atardecer(?:es)?|puesta de sol",
+    "cocina_integrada": r"cocina\s+(?:integrada|americana)",
     # "cerca del metro", "a 5 mins del metro", "al lado del metro"...: la distancia no se
     # puede verificar, solo que el aviso mencione el metro.
     "metro": r"metro",

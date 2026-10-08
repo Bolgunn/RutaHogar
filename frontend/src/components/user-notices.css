@@ -1,0 +1,47 @@
+/* Keep existing notice icons; unify the informational banner, not error alerts. */
+.content-inner :is(.simulation-disclaimer, .tip, .academy-current-note, .academy-score-disclaimer, .academy-cases-disclaimer, .minimal-disclaimer-banner, .portal-disclaimer) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid var(--rh-border-strong);
+  border-left: 3px solid var(--rh-yellow-dark);
+  border-radius: var(--rh-radius-md);
+  background: var(--rh-yellow-light);
+  background-image: none;
+  box-shadow: none;
+  color: var(--rh-navy);
+  font-family: var(--rh-font-body);
+  font-size: .9rem;
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1.55;
+  text-align: left;
+}
+.content-inner :is(.simulation-disclaimer, .tip, .academy-current-note, .academy-score-disclaimer, .academy-cases-disclaimer, .minimal-disclaimer-banner, .portal-disclaimer) :is(p, .tip__text, .disclaimer-body, .disclaimer-body span) {
+  margin: 0;
+  font-family: var(--rh-font-body);
+  font-size: .9rem;
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1.55;
+  color: var(--rh-navy);
+  text-align: left;
+}
+.content-inner :is(.simulation-disclaimer, .tip, .academy-current-note, .academy-score-disclaimer, .academy-cases-disclaimer, .portal-disclaimer) > :is(i, .tip__icon, .subsidy-notice-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #79501d;
+  font-size: 16px;
+}
+.content-inner .tip__text { flex: 1; }
+.content-inner .tip__toggle { align-self: center; }

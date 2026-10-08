@@ -4,6 +4,7 @@ import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
 import AdminReportedLeads from "./AdminReportedLeads";
+import "./admin-panel-overview.css";
 
 function formatFecha(value) {
   if (!value) return "Sin fecha";
@@ -34,7 +35,7 @@ function DistributionRow({ label, count, total, tone }) {
 }
 
 export default function AdminPanel({ evaluations, profile }) {
-  const [tenant, setTenant] = useState(null);
+
   const [canSeeArco, setCanSeeArco] = useState(false);
 
   useEffect(() => {
@@ -43,12 +44,12 @@ export default function AdminPanel({ evaluations, profile }) {
     getTenantContext()
       .then((context) => {
         if (!active) return;
-        setTenant(context);
+
         setCanSeeArco(PROVIDER === "local" || isGlobalAdmin(profile?.role, context.inmobiliaria_id));
       })
       .catch(() => {
         if (!active) return;
-        setTenant(null);
+
         setCanSeeArco(PROVIDER === "local");
       });
 
@@ -114,21 +115,6 @@ export default function AdminPanel({ evaluations, profile }) {
     },
   ];
 
-  const contextRows = [
-    {
-      label: "Cobertura",
-      value: tenant?.isGlobalAdmin ? "Todas las inmobiliarias" : tenant?.inmobiliaria_nombre || "Contexto en carga",
-    },
-    {
-      label: "Sesión",
-      value: roleLabels[profile?.role] || profile?.role || "Admin",
-    },
-    {
-      label: "Solicitudes ARCO",
-      value: canSeeArco ? "Visibles en esta sesión" : "Restringidas por alcance",
-    },
-  ];
-
   return (
     <section className="section-block admin-panel-page">
       <div className="section-heading">
@@ -141,7 +127,7 @@ export default function AdminPanel({ evaluations, profile }) {
         </p>
       </div>
 
-      <section className="admin-panel-topbar admin-section-gap">
+      <section className="admin-panel-overview admin-section-gap">
         <div className="admin-panel-topbar__intro">
           <h2>La operación se lee mejor cuando el contexto no compite con el contenido.</h2>
           <p>
@@ -149,17 +135,7 @@ export default function AdminPanel({ evaluations, profile }) {
           </p>
         </div>
 
-        <dl className="admin-panel-context-strip">
-          {contextRows.map((item) => (
-            <div className="admin-panel-context-strip__item" key={item.label}>
-              <dt>{item.label}</dt>
-              <dd>{item.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <section className="admin-panel-metric-strip admin-section-gap" aria-label="Resumen administrativo">
+      <section className="admin-panel-metric-strip" aria-label="Resumen administrativo">
         <article className="admin-panel-metric">
           <span>Calificaciones</span>
           <strong>{counts.total}</strong>
@@ -180,6 +156,8 @@ export default function AdminPanel({ evaluations, profile }) {
           <strong>{counts.bajo}</strong>
           <small>Leads todavía inmaduros.</small>
         </article>
+      </section>
+
       </section>
 
       <div className="admin-panel-board admin-panel-board--primary admin-section-gap">

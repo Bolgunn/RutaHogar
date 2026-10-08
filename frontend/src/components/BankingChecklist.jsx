@@ -106,6 +106,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
           <button
             type="button"
             className={workRegime === "dependiente" ? "is-active" : ""}
+            aria-pressed={workRegime === "dependiente"}
             onClick={() => setWorkRegime("dependiente")}
           >
             Dependiente
@@ -113,6 +114,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
           <button
             type="button"
             className={workRegime === "independiente" ? "is-active" : ""}
+            aria-pressed={workRegime === "independiente"}
             onClick={() => setWorkRegime("independiente")}
           >
             Independiente / Honorarios
@@ -131,7 +133,7 @@ export default function BankingChecklist({ evaluation, input: propInput, result:
       <div className="minimal-checklist-group">
         <h4 className="group-title">Antecedentes generales y laborales</h4>
         {priorityItems.length > 0 && <p className="minimal-checklist-priority-note">Los elementos marcados como prioritarios responden a antecedentes que conviene preparar primero según tu calificación.</p>}
-        <ul className="checklist-minimal-rows">
+        <ul className="checklist-minimal-rows" key={workRegime}>
           {currentList.map((item) => {
             const isPrio = item.mitigatesRisks.some((r) => activeRiskCodes.has(r)) ||
               item.mitigatesFactors.some((f) => activeFactors.has(f));

@@ -639,7 +639,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
   };
 
   return (
-    <section className="section-block profile-page">
+    <section className="section-block profile-page profile-page--guided">
       <div className="page-head">
         <div>
           <span className="eyebrow">Mi perfil</span>
@@ -675,7 +675,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <section className="profile-card profile-card--contact">
           <div className="profile-card-header-row">
             <div>
-              <strong>Contacto</strong>
+              <h2 className="profile-section-title">Contacto</h2>
               <p>Datos usados para comunicarnos contigo.</p>
             </div>
             {!contactEditing && (
@@ -758,7 +758,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <section className="profile-card profile-card--preferences">
           <div className="profile-card-header-row">
             <div>
-              <strong>Preferencias de búsqueda</strong>
+              <h2 className="profile-section-title">Preferencias de búsqueda</h2>
               <p>Información declarada para tus calificaciones.</p>
             </div>
             {!onboardingEditing ? (
@@ -886,7 +886,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         <section className="profile-card profile-card--lead-changes">
           <div className="profile-card-header-row">
             <div>
-              <strong>Novedades desde tu última visita</strong>
+              <h2 className="profile-section-title">Novedades desde tu última visita</h2>
               <p>Activa o desactiva qué tipos de cambios verás en Inicio y cuáles podrán enviarse por correo.</p>
             </div>
           </div>
@@ -932,7 +932,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       <section className="profile-card profile-card--history">
         <div className="profile-card-header-row">
           <div>
-            <strong>Historial de precalificaciones</strong>
+            <h2 className="profile-section-title">Historial de precalificaciones</h2>
             <p>{evaluations.length} registro{evaluations.length === 1 ? "" : "s"}</p>
           </div>
         </div>
