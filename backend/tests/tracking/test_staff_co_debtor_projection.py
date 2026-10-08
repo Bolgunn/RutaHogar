@@ -54,8 +54,8 @@ class StaffRepository:
     def staff_can_access(self, _actor, lead_id):
         return lead_id == LEAD_ID
 
-    def staff_evaluations(self):
-        return deepcopy(self.rows)
+    def staff_evaluations(self, actor):
+        return [deepcopy(row) for row in self.rows if self.staff_can_access(actor, row["user_id"])]
 
     def staff_contacts(self, lead_ids):
         return {lead_id: {"full_name": "Lead autorizado", "phone": "+56912345678"} for lead_id in lead_ids}
@@ -116,6 +116,21 @@ def test_revocation_keeps_history_but_redacts_all_co_debtor_values_everywhere():
     assert "120000" not in serialized
 
 
+def test_decline_excludes_all_co_debtor_values_from_the_staff_projection():
+    repository = StaffRepository()
+    repository.invitation = {"status": "declined", "token_digest": "never-read", "co_debtor_confirmations": [confirmed_values()]}
+
+    detail = service(repository).lead_detail("executive-token", LEAD_ID)
+
+    assert detail["co_debtor"] == {"status": "declined", "source": "excluded_after_decline"}
+    assert "confirmed" not in detail["co_debtor"]
+    serialized = str(detail)
+    for field in (*CO_DEBTOR_CONFIRMED_FIELDS, "relacion_complementario"):
+        assert field not in serialized
+    assert "1400000" not in serialized
+    assert "120000" not in serialized
+
+
 def test_refresh_after_confirmed_to_revoked_transition_removes_the_values():
     repository = StaffRepository()
     repository.invitation = {"status": "confirmed", "co_debtor_confirmations": [confirmed_values()]}
@@ -141,17 +156,20 @@ def test_scope_denial_never_returns_another_leads_hu18_data():
     assert all(row["user_id"] == LEAD_ID for row in service(repository).evaluations("executive-token")["items"])
 
 
-def test_list_checks_each_lead_scope_once_and_keeps_newest_first_order():
+def test_list_resolves_scope_in_one_repository_call_and_keeps_newest_first_order():
     repository = StaffRepository()
     allowed_leads = {f"lead-{index}" for index in range(0, 40, 3)}
     repository.rows = [
         {**evaluation(), "id": f"evaluation-{index}-{copy}", "user_id": f"lead-{index}"}
         for index in range(40) for copy in range(2)
     ]
-    checked = []
-    repository.staff_can_access = lambda _actor, lead_id: checked.append(lead_id) or lead_id in allowed_leads
+    scoped_calls = []
+    repository.staff_can_access = lambda _actor, lead_id: lead_id in allowed_leads
+    original = repository.staff_evaluations
+    repository.staff_evaluations = lambda actor: scoped_calls.append(actor) or original(actor)
 
     items = service(repository).evaluations("executive-token")["items"]
 
-    assert sorted(checked) == sorted(f"lead-{index}" for index in range(40))
+    assert len(scoped_calls) == 1
+    assert scoped_calls[0]["inmobiliaria_id"] == "tenant-1"
     assert [row["id"] for row in items] == [row["id"] for row in repository.rows if row["user_id"] in allowed_leads]

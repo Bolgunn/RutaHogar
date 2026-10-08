@@ -1,15 +1,18 @@
 import { calculateMortgageDividendFromPrincipal } from "../mortgage";
 import { displayStatus } from "./benefitScenario";
 
-const HEALTHY = 0.25;
-const DIVIDEND_MAX = 0.30;
-const BURDEN_MAX = 0.45;
+export const HEALTHY_DIVIDEND_RATIO = 0.25;
+export const MAX_DIVIDEND_RATIO = 0.30;
+export const MAX_TOTAL_BURDEN_RATIO = 0.45;
 const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
 
 function appliedAnnualRate(draft, benefit) {
   const annualRate = Math.max(0, Number(draft?.tasa_anual || 0));
   if (benefit?.selected !== "LEY_21748" || !benefit?.eligible) return { annualRate, reduction: 0 };
-  const reduction = Math.max(0, Number(benefit?.entry?.rate_reduction_percentage_points || 0) / 100);
+  // A rate effect exists only when the reviewed catalogue entry explicitly
+  // supplies it. The informational baseline must never invent a reduction.
+  const reviewedPoints = finite(benefit?.entry?.rate_reduction_percentage_points);
+  const reduction = reviewedPoints && reviewedPoints > 0 ? reviewedPoints / 100 : 0;
   return { annualRate: Math.max(0, annualRate - reduction), reduction };
 }
 
@@ -23,11 +26,11 @@ export function classifyFinancialScenario({ precio_clp, credito_clp, dividendo_c
   const burdenRatio = (debt + dividend) / income;
   const ltvRatio = credit / price;
   let financial_status = "Requiere ajuste";
-  if (dividendRatio <= HEALTHY && burdenRatio <= BURDEN_MAX && ltvRatio <= ltvLimit) financial_status = "Compatible";
-  else if (dividendRatio <= DIVIDEND_MAX && burdenRatio <= BURDEN_MAX && ltvRatio <= ltvLimit) financial_status = "Cercano";
+  if (dividendRatio <= HEALTHY_DIVIDEND_RATIO && burdenRatio <= MAX_TOTAL_BURDEN_RATIO && ltvRatio <= ltvLimit) financial_status = "Compatible";
+  else if (dividendRatio <= MAX_DIVIDEND_RATIO && burdenRatio <= MAX_TOTAL_BURDEN_RATIO && ltvRatio <= ltvLimit) financial_status = "Cercano";
   const reasons = [];
-  if (dividendRatio > DIVIDEND_MAX) reasons.push("El dividendo supera la referencia máxima.");
-  if (burdenRatio > BURDEN_MAX) reasons.push("La carga total supera la referencia.");
+  if (dividendRatio > MAX_DIVIDEND_RATIO) reasons.push("El dividendo supera la referencia máxima.");
+  if (burdenRatio > MAX_TOTAL_BURDEN_RATIO) reasons.push("La carga total supera la referencia.");
   if (ltvRatio > ltvLimit) reasons.push("El financiamiento supera la referencia LTV.");
   return { financial_status, reasons, ratios: { dividend_ratio: dividendRatio, total_burden_ratio: burdenRatio, ltv_ratio: ltvRatio } };
 }
@@ -36,8 +39,8 @@ export function buildReferenceAdjustment(result, draft, ltvLimit) {
   if (!result || !["Cercano", "Requiere ajuste"].includes(result.financial_status)) return null;
   const income = Number(draft.renta_propia_clp) + (draft.usar_renta_complementaria !== false ? Number(draft.renta_complementaria_clp) : 0);
   const debt = Number(draft.deuda_mensual_clp);
-  const byDividend = income * HEALTHY;
-  const byBurden = income * BURDEN_MAX - debt;
+  const byDividend = income * HEALTHY_DIVIDEND_RATIO;
+  const byBurden = income * MAX_TOTAL_BURDEN_RATIO - debt;
   const principal = Number(result.credito_clp);
   const payment = Number(result.dividendo_clp);
   const ratioLimit = Math.max(0, Math.min(byDividend, byBurden));

@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def test_frontend_deployment_routes_tracking_to_the_fastapi_function():
-    config = json.loads((Path(__file__).parents[2] / "vercel.json").read_text())
+    config = json.loads((Path(__file__).parents[2] / "vercel.json").read_text(encoding='utf-8'))
     rewrites = {(row["source"], row["destination"]) for row in config["rewrites"]}
 
     assert ("/tracking", "/api/score") in rewrites
@@ -16,7 +16,7 @@ def test_every_backend_route_is_rewritten_before_the_spa_fallback():
 
     from app.main import app
 
-    config = json.loads((Path(__file__).parents[2] / "vercel.json").read_text())
+    config = json.loads((Path(__file__).parents[2] / "vercel.json").read_text(encoding='utf-8'))
     backend_sources = [
         re.compile("^" + row["source"].replace("(.*)", ".*") + "$")
         for row in config["rewrites"]

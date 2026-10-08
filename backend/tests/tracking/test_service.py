@@ -1,6 +1,4 @@
-import json
 from copy import deepcopy
-from pathlib import Path
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -11,14 +9,35 @@ from app.tracking.service import TrackingService, client_tracking_view, frozen_t
 
 
 def market_snapshot():
-    snapshot = json.loads((Path(__file__).resolve().parents[3] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
-    # Synthetic test values stay fixed; provenance follows the current schema.
-    from app.market_data.snapshot import SOURCE_REQUIREMENTS, TERM_TABLE_URL
-    snapshot["source"]["plazo_referencial_anios"].update(
-        series=SOURCE_REQUIREMENTS["plazo_referencial_anios"]["series"],
-        statistic="Percentil 50", url=TERM_TABLE_URL,
-    )
-    return snapshot
+    return {
+        "uf_value_clp": 40695,
+        "tasa_anual_uf": 0.04,
+        "ltv_referencial": 0.8,
+        "plazo_referencial_anios": 30,
+        "effective_date": "2026-09-18",
+        "fetched_at": "2026-09-18T12:00:00Z",
+        "source": {
+            "uf_value_clp": {
+                "provider": "BCCh BDE", "series": "F073.UFF.PRE.Z.D", "unit": "CLP/UF",
+                "effective_date": "2026-09-18", "fetched_at": "2026-09-18T12:00:00Z", "raw_value": 40695,
+            },
+            "tasa_anual_uf": {
+                "provider": "BCCh BDE", "series": "F022.VIV.TIP.MA03.UF.Z.M", "unit": "annual_percent",
+                "effective_date": "2026-08-31", "fetched_at": "2026-09-18T12:00:00Z", "raw_value": 4.0,
+            },
+            "ltv_referencial": {
+                "provider": "BCCh BDE", "series": "F034.RPV.PPO.BCCH.Z.Z.T", "unit": "percent",
+                "effective_date": "2026-06-30", "fetched_at": "2026-09-18T12:00:00Z", "raw_value": 80.0,
+                "statistic": "Promedio ponderado", "period": "II.2026",
+            },
+            "plazo_referencial_anios": {
+                "provider": "BCCh BDE", "series": "F022.PZCHV.PER50.Z.Z.Z.D", "unit": "months",
+                "effective_date": "2026-09-17", "fetched_at": "2026-09-18T12:00:00Z", "raw_value": 360,
+                "statistic": "Percentil 50",
+                "url": "https://si3.bcentral.cl/Siete/ES/Siete/Cuadro/CAP_IND_VIVIENDA/MN_IND_VIVIENDA/IVM_ECRED_01/638290046022543847",
+            },
+        },
+    }
 
 
 def valid_snapshot():
@@ -57,7 +76,10 @@ class MemoryRepository:
             })
         for row in records["evaluations"]:
             self.bundle["evaluations"].append({
-                "id": row["id"], "financial_data": {"input": row["snapshot"], "result": row["result"]},
+                "id": row["id"],
+                "financial_data": {
+                    "input": row["snapshot"], "result": row["result"], "provenance": row["provenance"],
+                },
             })
         if records["plan"]:
             self.bundle["plan"] = deepcopy(records["plan"])
@@ -111,7 +133,8 @@ def test_partial_worsening_and_retry_preserve_baseline_and_project():
         app.execute("u1", {**second, "patch": {"ahorro_disponible": 10}})
 
 
-def test_declared_price_is_used_for_evaluations_and_frozen_price_only_for_projection():
+def test_frozen_catalogue_price_overlay_is_persisted_in_scoring_provenance():
+    """The recorded fact and scoring input remain distinct and auditable."""
     repo, app = service()
     original_scorer = app.scorer
     scored = []
@@ -122,21 +145,30 @@ def test_declared_price_is_used_for_evaluations_and_frozen_price_only_for_projec
 
     app.scorer = recording_scorer
     target = {"id": "terrazas", "nombre": "Terrazas de Maipú", "comuna": "Maipú", "precio_min_uf": 2900}
-    initial = {**valid_snapshot(), "property_value_clp": 404_000_000,
-               "comuna_objetivo": "Providencia", "project_goal": target}
+    # This represents an old/manual property amount left in the initial score.
+    # It must not make a 2,900 UF catalogue target require the pie of a much
+    # more expensive property.
     baseline = app.execute("u1", command({
-        **initial,
+        **valid_snapshot(), "property_value_clp": 404_000_000, "project_goal": target,
     }))
     app.execute("u1", command({"ahorro_disponible": 12_000_000}, baseline["event_id"], "2026-02-01T00:00:00Z"))
 
     assert len(scored) == 2
-    assert all(row["property_value_clp"] == 404_000_000 for row in scored)
-    assert all(row["comuna_objetivo"] == "Providencia" for row in scored)
-    from app.tracking.scoring_adapter import complete_snapshot, score_snapshot
-    expected = score_snapshot(complete_snapshot(initial), market_snapshot=market_snapshot())
-    assert repo.bundle["evaluations"][0]["financial_data"]["result"] == expected
-    # The original source snapshot remains immutable for audit/history.
-    assert repo.bundle["evaluations"][0]["financial_data"]["input"]["property_value_clp"] == 404_000_000
+    assert all(row["property_value_uf"] == 2900 for row in scored)
+    assert all(row["property_value_clp"] is None for row in scored)
+    persisted = repo.bundle["evaluations"][0]["financial_data"]
+    # The original source snapshot remains immutable for audit/history and is
+    # intentionally not the same object supplied to the scorer.
+    assert persisted["input"]["property_value_clp"] == 404_000_000
+    assert persisted["input"] != scored[0]
+    assert persisted["provenance"]["scoring_overrides"] == {
+        "property_value": {
+            "value": 2900.0,
+            "unit": "uf",
+            "source": "project_selection",
+            "target_project": target,
+        },
+    }
 
     scored.clear()
     app.projection("u1")
@@ -145,22 +177,13 @@ def test_declared_price_is_used_for_evaluations_and_frozen_price_only_for_projec
     assert all(row["property_value_clp"] is None for row in scored)
 
 
-def test_projection_does_not_restore_historic_clp_when_latest_already_has_frozen_price():
+def test_scoring_provenance_does_not_invent_a_target_override():
     repo, app = service()
-    target = {"id": "p1", "comuna": "Maipú", "precio_min_uf": 2900}
-    initial = {**valid_snapshot(), "project_goal": target, "property_value_clp": 404_000_000}
-    baseline = app.execute("u1", command(initial))
-    aligned = frozen_target_scoring_snapshot(initial, target)
-    app.execute("u1", command(aligned, baseline["event_id"], "2026-02-01T00:00:00Z"))
-    scored = []
-    real_scorer = app.scorer
-    app.scorer = lambda snapshot: (scored.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
 
-    app.projection("u1")
+    result = app.execute("u1", command(valid_snapshot()))
 
-    assert scored
-    assert all(row["property_value_clp"] is None and row["property_value_uf"] == 2900 for row in scored)
-    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["property_value_clp"] == 404_000_000
+    assert "scoring_overrides" not in result["evaluation"]["provenance"]
+    assert "scoring_overrides" not in repo.bundle["evaluations"][0]["financial_data"]["provenance"]
 
 
 def test_evaluations_keep_their_own_preliminary_question_snapshot():
@@ -321,11 +344,12 @@ def test_replace_keeps_the_original_visible_as_audit_only_version():
     assert correction["event_id"] in [row["event_id"] for row in lead_view["active_line"]]
     assert second["event_id"] in lead_view["excluded_from_metrics"]
     assert correction["event_id"] not in lead_view["excluded_from_metrics"]
+    assert second["event_id"] not in [row["event_id"] for row in lead_view["active_line"]]
     assert next(row for row in lead_view["audit_line"] if row["event_id"] == second["event_id"])["root_event_id"] == second["event_id"]
     assert next(row for row in lead_view["audit_line"] if row["event_id"] == correction["event_id"])["root_event_id"] == second["event_id"]
 
 
-def test_annul_hides_its_slot_from_lead_but_keeps_the_internal_audit():
+def test_annul_keeps_the_audit_timeline_but_excludes_its_slot_from_active_line():
     repo, app = service()
     first = app.execute("u1", command(valid_snapshot()))
     update = app.execute("u1", command({"ahorro_disponible": 2_000_000}, first["event_id"], "2026-02-01T00:00:00Z"))
@@ -342,11 +366,14 @@ def test_annul_hides_its_slot_from_lead_but_keeps_the_internal_audit():
 
     assert update["event_id"] in internal_ids
     assert annul["event_id"] in internal_ids
-    assert update["event_id"] not in lead_ids
-    assert annul["event_id"] not in lead_ids
-    assert update["event_id"] not in lead["excluded_from_metrics"]
-    assert annul["event_id"] not in lead["excluded_from_metrics"]
+    assert update["event_id"] in lead_ids
+    assert annul["event_id"] in lead_ids
+    assert update["event_id"] in lead["excluded_from_metrics"]
+    assert annul["event_id"] in lead["excluded_from_metrics"]
     assert update["event_id"] not in [row["event_id"] for row in lead["active_line"]]
+    assert annul["event_id"] not in [row["event_id"] for row in lead["active_line"]]
+    assert next(row for row in lead["audit_line"] if row["event_id"] == update["event_id"])["root_event_id"] == update["event_id"]
+    assert next(row for row in lead["audit_line"] if row["event_id"] == annul["event_id"])["root_event_id"] == update["event_id"]
 
 
 def test_sole_baseline_cannot_be_annulled_or_leave_tracking_empty():
@@ -502,6 +529,55 @@ def test_goal_regression_preserves_completion_evidence():
     assert goal["evidence"]["currently_regressed"]
 
 
+def test_calculated_dividend_partial_updates_preserve_history_and_frozen_goal():
+    repo, app = service()
+    # Values produced by frontend mortgage.js for 108M CLP, 20 years, 4.9%.
+    # HU13 persists the supplied partial patch; no backend mortgage formula.
+    baseline_snapshot = {
+        **valid_snapshot(), "property_value_clp": 108_000_000,
+        "ingreso_mensual": 1_500_000, "deuda_mensual": 0,
+        "ahorro_disponible": 10_000_000, "dividendo_estimado": 641_355,
+        "dividendo_estimado_origen": "calculado_referencial",
+        "dividendo_estimado_calculado": 641_355,
+        "dividendo_esperado": 641_355, "dividendo_tasa_anual_referencial": 0.049,
+        "dividendo_monto_credito_estimado_clp": 98_000_000,
+    }
+    first = app.execute("u1", command(baseline_snapshot))
+    frozen_plan, frozen_goals = deepcopy(repo.bundle["plan"]), deepcopy(repo.bundle["goals"])
+    historical_event, historical_evaluation = deepcopy(repo.bundle["events"][0]), deepcopy(repo.bundle["evaluations"][0])
+
+    def dividend_goal():
+        return next(goal for goal in app.read("u1")["goals"]
+                    if goal["definition"]["source_action_type"] == "adjust_property_goal")
+
+    previous = first["event_id"]
+    for at, savings, dividend, principal, status in [
+        ("2026-01-15T00:00:00Z", 30_000_000, 510_466, 78_000_000, "en_progreso"),
+        ("2026-02-01T00:00:00Z", 60_000_000, 314_133, 48_000_000, "cumplida"),
+        ("2026-02-15T00:00:00Z", 10_000_000, 641_355, 98_000_000, "pendiente"),
+    ]:
+        result = app.execute("u1", command({
+            "ahorro_disponible": savings, "dividendo_estimado": dividend,
+            "dividendo_estimado_calculado": dividend, "dividendo_esperado": dividend,
+            "dividendo_monto_credito_estimado_clp": principal,
+        }, previous, at))
+        previous = result["event_id"]
+        goal = dividend_goal()
+        assert goal["action_status"] == status
+        assert goal["progress"]["current_value"] == dividend
+        if status == "en_progreso":
+            assert 0 < goal["progress"]["percentage"] < 100
+        assert repo.bundle["events"][-1]["recorded_complete_snapshot"]["dividendo_estimado"] == dividend
+        assert repo.bundle["evaluations"][-1]["financial_data"]["input"]["dividendo_estimado"] == dividend
+        assert repo.bundle["evaluations"][-1]["financial_data"]["result"]["financial_indicators"]["dividendo_estimado"] == dividend
+
+    assert dividend_goal()["evidence"]["currently_regressed"]
+    assert repo.bundle["plan"] == frozen_plan
+    assert repo.bundle["goals"] == frozen_goals
+    assert repo.bundle["events"][0] == historical_event
+    assert repo.bundle["evaluations"][0] == historical_evaluation
+
+
 def test_projection_reuses_one_persisted_snapshot_across_all_milestones(monkeypatch):
     from app.market_data import bcch
 
@@ -548,3 +624,21 @@ def test_projection_reuses_one_persisted_snapshot_across_all_milestones(monkeypa
     assert all(snapshot == stable for snapshot in received)
     assert external_source["snapshot"] == changed
     assert len(resolutions) == 1
+
+
+def test_projection_does_not_restore_historic_clp_when_latest_already_has_frozen_price():
+    repo, app = service()
+    target = {"id": "p1", "comuna": "Maipú", "precio_min_uf": 2900}
+    initial = {**valid_snapshot(), "project_goal": target, "property_value_clp": 404_000_000}
+    baseline = app.execute("u1", command(initial))
+    aligned = frozen_target_scoring_snapshot(initial, target)
+    app.execute("u1", command(aligned, baseline["event_id"], "2026-02-01T00:00:00Z"))
+    scored = []
+    real_scorer = app.scorer
+    app.scorer = lambda snapshot: (scored.append(deepcopy(snapshot)) or real_scorer(snapshot, market_snapshot=market_snapshot()))
+
+    app.projection("u1")
+
+    assert scored
+    assert all(row["property_value_clp"] is None and row["property_value_uf"] == 2900 for row in scored)
+    assert repo.bundle["events"][0]["recorded_complete_snapshot"]["property_value_clp"] == 404_000_000

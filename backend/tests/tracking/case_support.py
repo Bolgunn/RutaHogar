@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def cases(number):
-    data = json.loads((ROOT / "docs" / "algorithms" / f"ALG-{number}-cases.json").read_text())
+    data = json.loads((ROOT / "docs" / "algorithms" / f"ALG-{number}-cases.json").read_text(encoding="utf-8"))
     assert len({case["name"] for case in data["cases"]}) == len(data["cases"])
     return data["cases"]
 

@@ -13,6 +13,12 @@ alter table public.co_debtor_consent_events
   add constraint co_debtor_consent_events_event_type_check
   check (event_type in ('invited', 'replaced', 'expired', 'consent_granted', 'confirmed', 'revoked', 'declined'));
 
+alter table public.co_debtor_consent_events
+  drop constraint if exists co_debtor_consent_events_invitation_status_check;
+alter table public.co_debtor_consent_events
+  add constraint co_debtor_consent_events_invitation_status_check
+  check (invitation_status in ('pending', 'expired', 'confirmed', 'revoked', 'declined', 'replaced'));
+
 create or replace function public.hu18_decline_invitation(p_invitation_id uuid)
 returns boolean
 language plpgsql

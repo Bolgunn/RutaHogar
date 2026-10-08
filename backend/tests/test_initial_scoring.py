@@ -11,7 +11,7 @@ from app.scoring import _apply_caps, _final_classification, _weighted
 from app.scoring_engine.components import calculate_component_scores
 from app.scoring_engine.indicators import calculate_financial_scope
 
-DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-1-cases.json").read_text())
+DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-1-cases.json").read_text(encoding='utf-8'))
 
 
 def scenarios():

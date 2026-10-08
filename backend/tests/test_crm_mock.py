@@ -1,9 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.routers import crm_mock
 
 client = TestClient(app)
-API_KEY = "rutahogar-crm-mock-secret-key-2026"
+API_KEY = crm_mock.API_KEY
 HEADERS = {"X-Mock-CRM-API-Key": API_KEY}
 
 def test_sync_lead_new():
@@ -11,7 +12,7 @@ def test_sync_lead_new():
         "lead_id": "test_lead_1",
         "lead_info": {"nombre": "Test", "consentimiento": True},
         "evaluacion_general": {"score": 80, "clasificacion": "Alto"},
-        "priorizacion_comercial": {"nivel_accion": "Contactar"},
+        "priorizacion_comercial": {"nivel_accion": "Contactar", "motivo": "Test", "send_to_crm": True},
         "proyecto_objetivo": None,
         "sincronizacion": {"version_hash": "hash_v1"}
     }
@@ -26,7 +27,7 @@ def test_sync_lead_no_changes():
         "lead_id": "test_lead_1",
         "lead_info": {"nombre": "Test", "consentimiento": True},
         "evaluacion_general": {"score": 80, "clasificacion": "Alto"},
-        "priorizacion_comercial": {"nivel_accion": "Contactar"},
+        "priorizacion_comercial": {"nivel_accion": "Contactar", "motivo": "Test", "send_to_crm": True},
         "proyecto_objetivo": None,
         "sincronizacion": {"version_hash": "hash_v1"}
     }
@@ -41,7 +42,7 @@ def test_sync_lead_update():
         "lead_id": "test_lead_1",
         "lead_info": {"nombre": "Test Modificado", "consentimiento": True},
         "evaluacion_general": {"score": 85, "clasificacion": "Alto"},
-        "priorizacion_comercial": {"nivel_accion": "Contactar rápido"},
+        "priorizacion_comercial": {"nivel_accion": "Contactar rápido", "motivo": "Test", "send_to_crm": True},
         "proyecto_objetivo": None,
         "sincronizacion": {"version_hash": "hash_v2"}
     }

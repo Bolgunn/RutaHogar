@@ -53,10 +53,6 @@ export function hasEffectiveScenarioChanges(draft, activeDraft) {
   return JSON.stringify(normalize(draft)) !== JSON.stringify(normalize(activeDraft));
 }
 
-export function requiresScenarioDecision(hasUnsavedChanges) {
-  return hasUnsavedChanges;
-}
-
 export function savedSuggestedScenarioState(savedScenario, suggestedDraft) {
   return {
     activeScenarioId: savedScenario.id,
@@ -224,7 +220,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
   const comparisonScenarios = saved.filter((scenario) => comparisonIds.includes(scenario.id));
   const visibleSaved = showAllSaved ? saved : saved.slice(0, 10);
   const requestSuggestedDraft = (nextDraft, { suggested = true } = {}) => {
-    setPendingAction({ type: "suggested", draft: nextDraft, suggested, requiresScenarioDecision: requiresScenarioDecision(hasUnsavedChanges) });
+    setPendingAction({ type: "suggested", draft: nextDraft, suggested, requiresScenarioDecision: hasUnsavedChanges });
   };
   const applySuggestedDraft = (nextDraft, { suggested = false } = {}) => {
     const next = synchronizeScenario(nextDraft);

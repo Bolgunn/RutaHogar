@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { subsidyCompatibility } from "../subsidyCompatibility";
 import { SUBSIDY_DASHBOARD_ITEMS } from "../subsidyDashboardData";
 
-const ds1TramoOne = { id: "ds1-tramo-1", benefitIdentifier: "DS1", tramo: "I" };
-const ds1TramoTwo = { id: "ds1-tramo-2", benefitIdentifier: "DS1", tramo: "II" };
+const ds1 = { id: "ds1", benefitIdentifier: "DS1" };
 
 describe("subsidyCompatibility", () => {
   const evaluation = {
@@ -13,14 +12,8 @@ describe("subsidyCompatibility", () => {
       },
     },
   };
-  const states = { DS1: { eligible: true, reasons: [] } };
-
-  it("marks only the DS1 tramo detected for the profile as compatible", () => {
-    expect(subsidyCompatibility(ds1TramoOne, evaluation, states).compatible).toBe(true);
-    expect(subsidyCompatibility(ds1TramoTwo, evaluation, states)).toMatchObject({
-      compatible: false,
-      reasons: [expect.stringContaining("Tramo I")],
-    });
+  it("uses the general DS1 assessment regardless of notes about a tramo", () => {
+    expect(subsidyCompatibility(ds1, evaluation)).toEqual({ compatible: true, reasons: [] });
   });
 
   it("shows the evaluated reasons for a benefit that is not applicable", () => {
@@ -32,7 +25,7 @@ describe("subsidyCompatibility", () => {
       },
     };
 
-    expect(subsidyCompatibility(ds1TramoOne, ineligibleEvaluation))
+    expect(subsidyCompatibility(ds1, ineligibleEvaluation))
       .toEqual({ compatible: false, reasons: ["No cumple el tramo de vulnerabilidad."] });
   });
 

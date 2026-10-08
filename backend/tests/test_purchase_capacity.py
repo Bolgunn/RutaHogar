@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.scoring_engine.indicators import calculate_financial_scope
 from app.scoring_engine.purchase_capacity import capacity_limits, capacity_rule_margins, calculate_purchase_capacity
 
-DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text())
+DOCUMENT = json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text(encoding='utf-8'))
 
 
 def scenarios():
