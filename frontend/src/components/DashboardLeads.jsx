@@ -681,30 +681,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             )}
           </div>
         </div>
-<<<<<<< HEAD
-        <div className="executive-lead-card__status">
-          {getReliabilityBadgeCard(lead.reliability_status || "normal")}
-          <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
-          <CommercialStageBadge records={commercialRecords[lead.user_id]} />
-          <small>{formatDate(lead.created_at)}</small>
-          {crmLeads[lead.profile?.rut || lead.id] ? (
-            <span className="status-pill status-pill--success" style={{marginTop: '4px'}}>En CRM Simulado</span>
-          ) : (
-            <button
-              type="button"
-              className="secondary-button compact-button"
-              style={{marginTop: '4px', fontSize: '0.75rem', padding: '2px 8px'}}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSyncLead(lead, match);
-              }}
-              disabled={syncing || lead.input?.consentimiento === false}
-              title={lead.input?.consentimiento === false ? "Sin consentimiento" : "Derivar al CRM Simulado"}
-            >
-              {syncing ? "..." : "Derivar a CRM"}
-            </button>
-          )}
-=======
         <dl className="executive-lead-card__facts">
           <div><dt>Comuna</dt><dd>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</dd></div>
           {selectedProject ? <>
@@ -717,7 +693,6 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         <div className="executive-lead-card__actions">
           {selectedProject && <button type="button" className={`secondary-button compact-button executive-compare-toggle ${isComparisonSelected ? "is-active" : ""}`} onClick={(event) => { event.stopPropagation(); toggleComparisonLead(lead); }}>{isComparisonSelected ? "Seleccionado" : "Comparar"}</button>}
           <span className="executive-lead-card__action">Ver detalle <i className="ti ti-chevron-right" aria-hidden="true" /></span>
->>>>>>> 9f00f86f635258031d3dc746a67b7214b9d9ac6f
         </div>
       </article>
     );
