@@ -426,7 +426,6 @@ export default function AdminProjectCatalog() {
   const openExecutiveModal = () => {
     setExecutiveModalError("");
     setExecutiveSubmitAttempted(false);
-    setNewExecutiveCredentials(null);
     setExecutiveForm({
       ...emptyExecutiveForm,
       inmobiliaria_id: isGlobalAdmin
@@ -755,17 +754,17 @@ export default function AdminProjectCatalog() {
                   const { total, vinculados, pendientes } = countExecutives(project);
                   return (
                     <tr key={project.id} className="admin-project-table__row">
-                      {isGlobalAdmin && <td>{project.inmobiliaria_nombre || "-"}</td>}
-                      <td className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
-                      <td>{project.comuna}</td>
-                      <td>{tipoProyectoLabels[project.tipo] || project.tipo}</td>
-                      <td><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
-                      <td>
+                      {isGlobalAdmin && <td data-label="Inmobiliaria">{project.inmobiliaria_nombre || "-"}</td>}
+                      <td data-label="Proyecto" className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
+                      <td data-label="Comuna">{project.comuna}</td>
+                      <td data-label="Tipo">{tipoProyectoLabels[project.tipo] || project.tipo}</td>
+                      <td data-label="Rango UF"><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
+                      <td data-label="Estado">
                         <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
                           {estadoProyectoLabels[project.estado] || project.estado}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Ejecutivos">
                         <span className="admin-coverage-count"><i className="ti ti-users" aria-hidden="true" />{vinculados}</span>
                         {pendientes > 0 && <small>{pendientes} pendientes</small>}
                       </td>
@@ -961,10 +960,10 @@ export default function AdminProjectCatalog() {
               <tbody>
                 {teamPagination.rows.map((executive) => (
                   <tr key={executive.id}>
-                    {isGlobalAdmin && <td>{executive.inmobiliaria_nombre || "-"}</td>}
-                    <td><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className="ti ti-user" /></span><strong>{executive.full_name || "Sin nombre"}</strong></div></td>
-                    <td><a href={`mailto:${executive.email}`}>{executive.email}</a></td>
-                    <td><span className="admin-coverage-count"><i className="ti ti-building" aria-hidden="true" />{executive.proyectos_asignados}</span></td>
+                    {isGlobalAdmin && <td data-label="Inmobiliaria">{executive.inmobiliaria_nombre || "-"}</td>}
+                    <td data-label="Nombre"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className="ti ti-user" /></span><strong>{executive.full_name || "Sin nombre"}</strong></div></td>
+                    <td data-label="Correo"><a href={`mailto:${executive.email}`}>{executive.email}</a></td>
+                    <td data-label="Proyectos asignados"><span className="admin-coverage-count"><i className="ti ti-building" aria-hidden="true" />{executive.proyectos_asignados}</span></td>
                   </tr>
                 ))}
               </tbody>
