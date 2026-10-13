@@ -132,6 +132,29 @@
   .home-change-detail-modal--compact .home-change-detail-modal__list { min-width: 0; }
   .home-change-detail-modal--compact .home-change-detail-modal__item { min-width: 0; grid-template-columns: minmax(0, 1fr); }
   .home-change-detail-modal--compact .home-change-detail-modal__item > .home-change-card__actions { grid-column: 1; grid-row: auto; }
+
+  .profile-page--guided .profile-overview { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 18px; min-height: 0; }
+  .profile-page--guided .profile-overview__identity { flex: 0 0 auto; width: 100%; }
+  .profile-page--guided .profile-stats { width: 100%; }
+  .profile-page--guided .profile-stat { flex: 1; min-width: 0; }
+  .profile-page--guided .lead-change-preferences__head { display: none; }
+  .profile-page--guided .lead-change-preference-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 0; }
+  .profile-page--guided .lead-change-preference-row > div { grid-column: 1 / -1; min-width: 0; }
+  .profile-page--guided .lead-change-preference-row .rh-switch { grid-column: auto; position: relative; min-height: 60px; min-width: 60px; margin: 0; }
+  .profile-page--guided .lead-change-preference-row .rh-switch small { display: block; }
+  .profile-page--guided .rh-switch input { inset: 0; width: 100%; height: 100%; margin: 0; }
+
+  .sidebar .mobile-navigation-close { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rh-white, #fff); box-shadow: none; }
+  .sidebar .mobile-navigation-close:focus-visible { outline: 2px solid var(--rh-yellow); outline-offset: 2px; }
+  .sidebar .sidebar-brand { width: calc(100% - 56px); flex-shrink: 0; margin: 0; padding: 0; border-bottom: 0; }
+  .sidebar .sidebar-brand__pill { height: 44px; min-height: 44px; padding: 8px; }
+  .sidebar .sidebar-brand__logo { width: 100%; height: 28px; max-height: 28px; object-fit: contain; }
+  .sidebar .sidebar-user { width: 100%; justify-content: flex-start; gap: 10px; padding: 12px; flex-shrink: 0; }
+  .sidebar .sidebar-user .avatar,
+  .sidebar .sidebar-user > svg { flex-shrink: 0; }
+  .sidebar .sidebar-user__meta { display: flex; flex-direction: column; gap: 3px; }
+  .sidebar .sidebar-user__meta strong { font-size: .9375rem; line-height: 1.35; white-space: normal; overflow: visible; }
+  .sidebar .sidebar-user__meta > span:not(.sidebar-user__role) { font-size: .8125rem; line-height: 1.45; color: #cbd5e1; white-space: normal; overflow: visible; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
