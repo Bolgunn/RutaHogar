@@ -2,7 +2,7 @@
 
 Demo data to show `/metricas` working end to end: one inmobiliaria with projects, staff and about
 150 leads with a year of history, written by `backend/scripts/seed_hu15_demo.py`, removed by
-`backend/scripts/seed_hu15_demo_teardown.sql`. Decided in the HU 15 demo grill (2026-10-05).
+`backend/scripts/seed_demo_teardown.py` (which renders `seed_hu15_demo_teardown.sql`). Decided in the HU 15 demo grill (2026-10-05).
 
 ## What it creates
 
@@ -20,11 +20,11 @@ one of those comunas, the demo leads would appear there too: run the teardown.
 | Parque Providencia | Providencia | departamento | 4,500–6,000 | disponible |
 | Villa Maipú | Maipú | casa | 2,200–2,900 | disponible |
 | Condominio Maipú | Maipú | casa | 2,700–3,500 | disponible |
-| Mirador Maipú | Maipú | departamento | 1,800–2,400 | disponible |
+| Mirador Maipú | Maipú | departamento | 1,900–2,400 | disponible |
 
-**Accounts** (`@example.com`, created confirmed, so no email is ever sent). All of them, leads
-included, use the password set in `SEED_DEMO_PASSWORD` when the seed ran. **The password is not in
-the repository** (it is public): ask whoever ran the seed.
+**Accounts** (`@example.com`, created confirmed, so no email is ever sent). A lead's password is its
+email's local part; a staff account's is its local part plus the `SEED_STAFF_PASSWORD_SUFFIX` set when
+the seed ran. **The suffix is not in the repository** (it is public): ask whoever ran the seed.
 
 | Account | Role | Sees on /metricas |
 | :------ | :--- | :---------------- |
@@ -35,7 +35,7 @@ the repository** (it is public): ask whoever ran the seed.
 | `demo-hu15-ejecutivo-4` | ejecutivo | Villa Maipú (shared with ejecutivo-3), Condominio Maipú, Mirador Maipú |
 | `demo-hu15-ejecutivo-5` | ejecutivo | Mirador Maipú; its link to Mirador Ñuñoa is **pendiente** and must not count |
 | `demo-hu15-ejecutivo-6` | ejecutivo | nothing: only a pendiente link, so the page shows the empty state |
-| `demo-hu15-lead-001` … `lead-150` | usuario | — (each lead can sign in and see its own evaluations and plan) |
+| `demo-hu15-<nombre>.<apellido>.001` … `.150` | usuario | — (each lead can sign in and see its own evaluations and plan) |
 
 **Leads.** About 150, arriving over the 12 months before the run (slightly more in recent months),
 so the year view shows two years. Random, from a fixed seed:
@@ -87,7 +87,7 @@ cd backend
 The dry run generates everything, runs the coverage check, prints the totals and writes the SQL files
 to `.seed_hu15_demo/` with placeholder account ids. Nothing is created or written to the database.
 Then the real run, with `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) and
-`SEED_DEMO_PASSWORD` (8+ characters) in the environment:
+`SEED_STAFF_PASSWORD_SUFFIX` (4+ characters) in the environment:
 
 ```bash
 .venv/Scripts/python.exe scripts/seed_hu15_demo.py
@@ -105,15 +105,18 @@ Re-seed (teardown, then seed) before a demo if you want "this month" to look cur
 ## Removing it
 
 ```bash
-supabase db query --linked -f backend/scripts/seed_hu15_demo_teardown.sql
+cd backend
+python scripts/seed_demo_teardown.py --email-prefix demo-hu15- --tenant "Inmobiliaria Demo Métricas" --check   # reports, rolls back
+python scripts/seed_demo_teardown.py --email-prefix demo-hu15- --tenant "Inmobiliaria Demo Métricas"
 ```
 
 One transaction. It deletes only the demo inmobiliaria (projects, assignments, stage history) and the
 `demo-hu15-*@example.com` accounts with every row that belongs to them, and aborts without changing
 anything if the demo inmobiliaria has a non-demo account or demo leads have history in another
 tenant. The history tables are immutable, so it disables their triggers for that transaction only,
-as table owner, and enables them again before committing; the last query prints how many demo
-accounts and tenants are left (both 0).
+as table owner, and enables them again before committing. It also removes what the app or the HU 20
+cron wrote after seeding, and before committing it checks every public user, tenant and project
+column: if any row still points at the demo set, it rolls back. It prints the rows removed per table.
 
 ## How it was verified (2026-10-05, local `supabase start` stack)
 
@@ -121,7 +124,7 @@ accounts and tenants are left (both 0).
   the seed printed (150 leads, funnel 150/77/43/38/26/18, 17 lost of which 1 by agotamiento, 13 months,
   53 weeks, 2 years; ejecutivo-6 empty).
 - The HU 13 `TrackingService` reads all 150 leads' history back (174 goals reconstructed).
-- Sign-in with `SEED_DEMO_PASSWORD` as an admin, an ejecutivo and a lead; `/metricas` as
+- Sign-in with the shared password (the scheme at the time) as an admin, an ejecutivo and a lead; `/metricas` as
   admin-1 shows the same numbers.
 - Teardown removes every demo row and leaves the triggers enabled; a seed after a teardown works.
 

@@ -11,8 +11,9 @@ Everything is generated in memory first, with a fixed random seed:
     sell-out and restock jobs;
   * before anything is written, ALG-18 (frontend/src/lib/commercial/funnelMetrics.js) runs on the
     generated facts and the run stops if a dashboard section would be empty.
-Then the accounts are created through the Supabase Admin API (confirmed, so no email is sent), all
-with the password in SEED_DEMO_PASSWORD (never committed: the repository is public), and
+Then the accounts are created through the Supabase Admin API (confirmed, so no email is sent). A lead's
+password is its email's local part; a staff account's is its local part plus SEED_STAFF_PASSWORD_SUFFIX
+(never committed: the repository is public, and staff roles can read more than demo data). Then
 the rows are written as SQL files, one transaction per batch, applied with `supabase db query`.
 The tracking tables reference each other with a deferred foreign key, so they cannot be written
 through the REST API one table at a time.
@@ -24,8 +25,10 @@ import argparse
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
+import unicodedata
 import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -46,7 +49,14 @@ TENANT = "Inmobiliaria Demo Métricas"
 EMAIL_DOMAIN = "example.com"
 EMAIL_PREFIX = "demo-hu15-"
 LEADS = 150
+PROJECT_SUFFIX = ""
+# Synthetic RUT block: personal RUTs top out around 28-29 million and company RUTs start around 50
+# million, so this block should not belong to anyone. Staff first, then leads by number, then heroes.
+RUT_START = 40_000_001
 HISTORY_DAYS = 365
+# PostgREST returns at most this many rows per request, and the staff dashboard reads every evaluation
+# in one request (StaffTrackingRepository.staff_evaluations): past it, real tenants' leads drop out.
+ROW_CAP = 1000
 BATCH = 5  # leads per SQL file / transaction; keeps each Management API request near 0.6 MB
 
 # Projects: (key, nombre, comuna, tipo, precio_min_uf, precio_max_uf, final estado).
@@ -58,7 +68,9 @@ PROJECTS = [
     ("P5", "Parque Providencia", "Providencia", "departamento", 4500, 6000, "disponible"),
     ("P6", "Villa Maipú", "Maipú", "casa", 2200, 2900, "disponible"),
     ("P7", "Condominio Maipú", "Maipú", "casa", 2700, 3500, "disponible"),
-    ("P8", "Mirador Maipú", "Maipú", "departamento", 1800, 2400, "disponible"),
+    # 1900, not 1800: prod already has a 1800 UF project (Parque Lo Espejo); a demo project at or below
+    # it would become real leads' cheapest reachable project and trigger HU 20 events and emails about it.
+    ("P8", "Mirador Maipú", "Maipú", "departamento", 1900, 2400, "disponible"),
 ]
 COMUNAS = ["Ñuñoa", "Providencia", "Maipú"]
 # P3 sells out about 6 months into the history and is restocked 2 months later; P4 sells out
@@ -104,8 +116,54 @@ PRIORITY_QUALITY = {"Contactar ahora": 0.9, "Contactar con revisión": 0.7, "Reo
                     "Nutrir con plan de mejora": 0.35, "Solicitar antecedentes": 0.3, "No derivar todavía": 0.12}
 
 
+def configure(*, email_prefix=None, tenant=None, leads=None, project_suffix=None, rut_start=None):
+    """Sets the run's naming and size; seed_sprint_heroes.py calls it too, so both write the same set."""
+    global EMAIL_PREFIX, TENANT, LEADS, PROJECT_SUFFIX, RUT_START
+    EMAIL_PREFIX = EMAIL_PREFIX if email_prefix is None else email_prefix
+    TENANT = TENANT if tenant is None else tenant
+    LEADS = LEADS if leads is None else leads
+    PROJECT_SUFFIX = PROJECT_SUFFIX if project_suffix is None else project_suffix
+    RUT_START = RUT_START if rut_start is None else rut_start
+
+
 def email(local: str) -> str:
     return f"{EMAIL_PREFIX}{local}@{EMAIL_DOMAIN}"
+
+
+def slug(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower().replace(" ", ".")
+
+
+def rut(index: int) -> str:
+    """The index-th RUT of the block, stored plain like the signup does ('40000001-K')."""
+    number = RUT_START + index
+    total, factor = 0, 2
+    for digit in reversed(str(number)):
+        total += int(digit) * factor
+        factor = 2 if factor == 7 else factor + 1
+    check = 11 - total % 11
+    return f"{number}-{'0' if check == 11 else 'K' if check == 10 else check}"
+
+
+def phone(index: int) -> str:
+    """+56 9 0000 NNNN: shaped like a Chilean mobile, in a block not handed out to subscribers."""
+    return f"+5690000{index + 1:04d}"
+
+
+def identity(index: int, nombre: str, paterno: str, materno: str) -> dict:
+    """The profile fields a signup fills in, for the index-th account of the run."""
+    return {"full_name": f"{nombre} {paterno} {materno}", "nombre": nombre, "apellido_paterno": paterno,
+            "apellido_materno": materno, "rut": rut(index), "phone": phone(index)}
+
+
+def password_for(local: str, staff_suffix: str) -> str:
+    """Leads sign in with their email's local part; staff add a secret suffix (see the docstring)."""
+    local_part = email(local).split("@")[0]
+    return local_part + staff_suffix if local in STAFF_NAMES else local_part
+
+
+def staff_count() -> int:
+    return len(ADMINS) + len(ASSIGNMENTS)
 
 
 def placeholder_id(local: str) -> str:
@@ -196,6 +254,8 @@ class MemoryRepository:
 class Generator:
     def __init__(self, seed: int, anchor: datetime, market_snapshot: dict):
         self.rng = random.Random(seed)
+        # Second surnames come from their own stream, so adding them did not change any seed's data.
+        self.id_rng = random.Random(seed + 1_000_003)
         random.seed(seed)  # MemoryRepository's scoring_history ids
         self.anchor = anchor
         self.start = anchor - timedelta(days=HISTORY_DAYS)
@@ -203,15 +263,16 @@ class Generator:
         self.repo = MemoryRepository()
         self.service = TrackingService(self.repo, clock=lambda: self.repo.clock, new_id=self.new_id,
                                        market_snapshot_resolver=lambda: self.market)
-        self.projects = {key: {"id": self.new_id(), "key": key, "nombre": nombre, "comuna": comuna, "tipo": tipo,
+        self.projects = {key: {"id": self.new_id(), "key": key, "nombre": nombre + PROJECT_SUFFIX, "comuna": comuna, "tipo": tipo,
                                "precio_min_uf": pmin, "precio_max_uf": pmax, "estado": estado}
                          for key, nombre, comuna, tipo, pmin, pmax, estado in PROJECTS}
         self.sell_outs = {key: (self.start + timedelta(days=down, hours=3),
                                 self.start + timedelta(days=up, hours=3) if up else None)
                           for key, (down, up) in SELL_OUTS.items()}
-        self.staff = {local: {"local": local, "id": placeholder_id(local), "email": email(local), "full_name": STAFF_NAMES[local],
+        self.staff = {local: {"local": local, "id": placeholder_id(local), "email": email(local),
+                              **identity(index, *STAFF_NAMES[local].split(" "), self.id_rng.choice(LAST_NAMES)),
                               "role": "admin_inmobiliario" if local in ADMINS else "ejecutivo"}
-                      for local in [*ADMINS, *ASSIGNMENTS]}
+                      for index, local in enumerate([*ADMINS, *ASSIGNMENTS])}
         self.leads: list[dict] = []
         self.stage_events: list[dict] = []
         self.favoritos: list[dict] = []
@@ -307,9 +368,11 @@ class Generator:
             comuna = rng.choice(COMUNAS)
             alternativa = rng.choice([c for c in COMUNAS if c != comuna]) if rng.random() < 0.25 else None
             own = [p for p in self.projects.values() if p["comuna"] in {comuna, alternativa}]
-            local = f"lead-{number:03d}"
+            nombre, paterno = rng.choice(FIRST_NAMES), rng.choice(LAST_NAMES)
+            local = f"{slug(nombre)}.{slug(paterno)}.{number:03d}"
             lead = {"id": None, "local": local, "email": email(local), "t0": t0, "comuna": comuna,
-                    "alternativa": alternativa, "full_name": f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}",
+                    "alternativa": alternativa,
+                    **identity(staff_count() + number - 1, nombre, paterno, self.id_rng.choice(LAST_NAMES)),
                     "tipo": rng.choice(["departamento", "casa"]),
                     "objetivo": rng.choice(["comprar_ahora", "prepararme", "evaluar_capacidad", "conocer_propiedad"])}
             lead["id"] = placeholder_id(local)
@@ -681,9 +744,15 @@ class Supabase:
 
     def request(self, method, path, **kwargs):
         response = httpx.request(method, self.url + path, headers=self.headers, timeout=30, **kwargs)
-        if response.status_code >= 400:
+        if not response.is_success:  # PostgREST answers an ambiguous embed with 300, not an error code
             raise RuntimeError(f"{method} {path}: {response.status_code} {response.text[:300]}")
         return response.json() if response.content else None
+
+    def count(self, table: str) -> int:
+        response = httpx.get(f"{self.url}/rest/v1/{table}", params={"select": "id", "limit": "1"},
+                             headers={**self.headers, "Prefer": "count=exact"}, timeout=60)
+        response.raise_for_status()
+        return int(response.headers["content-range"].rsplit("/", 1)[1])
 
     def tenant_exists(self) -> bool:
         rows = self.request("GET", "/rest/v1/inmobiliarias", params={"select": "id", "nombre": f"eq.{TENANT}"})
@@ -723,12 +792,26 @@ def lit(value) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def insert(table: str, rows: list[dict]) -> str:
+def insert(table: str, rows: list[dict], upsert_on: str | None = None) -> str:
     if not rows:
         return ""
     columns = list(rows[0])
     values = ",\n".join("(" + ", ".join(lit(row[c]) for c in columns) + ")" for row in rows)
-    return f"insert into public.{table} ({', '.join(columns)}) values\n{values};\n"
+    conflict = ""
+    if upsert_on:
+        updates = ", ".join(f"{c} = excluded.{c}" for c in columns if c != upsert_on)
+        conflict = f"\non conflict ({upsert_on}) do update set {updates}"
+    return f"insert into public.{table} ({', '.join(columns)}) values\n{values}{conflict};\n"
+
+
+def upsert_profiles(rows: list[dict]) -> str:
+    # Creating an auth user fires on_auth_user_created (handle_new_user), which already inserted a
+    # bare profile (role usuario, full_name = email): overwrite it.
+    return insert("profiles", rows, upsert_on="id")
+
+
+def profile_identity(account: dict) -> dict:
+    return {key: account[key] for key in ("full_name", "nombre", "apellido_paterno", "apellido_materno", "rut", "phone")}
 
 
 def write_sql(gen: Generator, remap: dict[str, str], tenant_id: str, outdir: Path) -> list[Path]:
@@ -747,7 +830,7 @@ def write_sql(gen: Generator, remap: dict[str, str], tenant_id: str, outdir: Pat
                                   "tipo": p["tipo"], "precio_min_uf": p["precio_min_uf"], "precio_max_uf": p["precio_max_uf"],
                                   "estado": p["estado"], "created_at": iso(gen.start - timedelta(days=30))}
                                  for p in gen.projects.values()]),
-            insert("profiles", [{"id": staff_ids[local], "full_name": s["full_name"], "role": s["role"],
+            upsert_profiles([{"id": staff_ids[local], **profile_identity(s), "role": s["role"],
                                  "inmobiliaria_id": tenant_id, "created_at": iso(gen.start - timedelta(days=30))}
                                 for local, s in gen.staff.items()]),
             insert("proyecto_ejecutivos", [{"proyecto_id": gen.projects[key]["id"],
@@ -762,7 +845,7 @@ def write_sql(gen: Generator, remap: dict[str, str], tenant_id: str, outdir: Pat
         leads = gen.leads[start:start + BATCH]
         lead_ids = {lead["id"] for lead in leads}
         parts = ["begin;\n"]
-        parts.append(insert("profiles", [{"id": lead["id"], "full_name": lead["full_name"], "role": "usuario",
+        parts.append(upsert_profiles([{"id": lead["id"], **profile_identity(lead), "role": "usuario",
                                           "onboarding_data": gen.onboarding(lead),
                                           "consent_data": {"granted": True, "version": "1.0", "timestamp": iso(lead["t0"] - timedelta(minutes=4))},
                                           "created_at": iso(lead["t0"] - timedelta(minutes=5))} for lead in leads]))
@@ -800,6 +883,26 @@ def write_sql(gen: Generator, remap: dict[str, str], tenant_id: str, outdir: Pat
     return files
 
 
+def evaluation_budget(existing: int, new: int, leads: int, margin: int) -> tuple[bool, str]:
+    """Whether the seed keeps the evaluations table under ROW_CAP with `margin` left for real activity."""
+    limit = ROW_CAP - margin
+    if existing + new <= limit:
+        return True, f"evaluations: {existing} existing + {new} new = {existing + new} ≤ {limit} (cap {ROW_CAP} − margin {margin})"
+    per_lead = new / leads if leads else 1
+    fits = max(0, int((limit - existing) / per_lead))
+    return False, (f"evaluations: {existing} existing + {new} new = {existing + new} > {limit} (cap {ROW_CAP} − margin {margin}). "
+                   f"About --leads {fits} would fit; dry-run that number and check the totals.")
+
+
+def supabase_cli() -> str:
+    """The CLI's full path: on Windows it is an npm shim (supabase.cmd), which subprocess cannot run by
+    its bare name."""
+    path = shutil.which("supabase")
+    if not path:
+        sys.exit("the Supabase CLI is not on PATH.")
+    return path
+
+
 def apply_sql(files: list[Path], target: str, workdir: str | None):
     """linked: `supabase db query --linked` (Management API, runs a multi-statement file as one batch).
     local: psql inside the local stack's database container, because `supabase db query --local`
@@ -817,7 +920,7 @@ def apply_sql(files: list[Path], target: str, workdir: str | None):
                 subprocess.run(["docker", "exec", "-i", container, "psql", "-q", "-v", "ON_ERROR_STOP=1",
                                 "-U", "postgres", "-d", "postgres"], stdin=handle, check=True)
             continue
-        command = ["supabase", "db", "query", "--linked", "-f", str(path)]
+        command = [supabase_cli(), "db", "query", "--linked", "-f", str(path)]
         if workdir:
             command += ["--workdir", workdir]
         subprocess.run(command, check=True, cwd=str(REPO), stdout=subprocess.DEVNULL)
@@ -844,6 +947,8 @@ def summarize(summary: dict, gen: Generator) -> str:
 
 
 def main():
+    sys.stderr.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # the summary prints arrows; the Windows console default is cp1252
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--seed", type=int, default=15, help="first random seed to try (default 15)")
     parser.add_argument("--attempts", type=int, default=20,
@@ -854,12 +959,33 @@ def main():
     parser.add_argument("--workdir", help="passed to `supabase db query --workdir`")
     parser.add_argument("--dry-run", action="store_true", help="generate and check only; write SQL with placeholder ids")
     parser.add_argument("--out", default=str(REPO / ".seed_hu15_demo"), help="directory for the SQL files")
+    parser.add_argument("--leads", type=int, default=LEADS, help=f"number of leads (default {LEADS})")
+    parser.add_argument("--email-prefix", default=EMAIL_PREFIX, help=f"prefix of every account's email (default {EMAIL_PREFIX})")
+    parser.add_argument("--tenant", default=TENANT, help=f"name of the demo inmobiliaria (default '{TENANT}')")
+    parser.add_argument("--project-suffix", default=PROJECT_SUFFIX, help="appended to every project name, e.g. ' (demo)'")
+    parser.add_argument("--heroes", action="store_true",
+                        help="also create the sprint-review hero personas (seed_sprint_heroes.py)")
+    parser.add_argument("--margin", type=int, default=100,
+                        help=f"evaluations left free under the {ROW_CAP}-row REST cap for real activity (default 100)")
+    parser.add_argument("--rut-start", type=int, default=RUT_START, help=f"first RUT of the account block (default {RUT_START})")
     args = parser.parse_args()
+    configure(email_prefix=args.email_prefix, tenant=args.tenant, leads=args.leads,
+              project_suffix=args.project_suffix, rut_start=args.rut_start)
 
     anchor = datetime.fromisoformat(args.anchor).replace(tzinfo=timezone.utc, hour=12) if args.anchor \
         else datetime.now(timezone.utc).replace(microsecond=0)
     outdir = Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    supabase = None
+    if not args.dry_run:
+        staff_suffix = os.environ.get("SEED_STAFF_PASSWORD_SUFFIX", "")
+        if len(staff_suffix) < 4:
+            sys.exit("Set SEED_STAFF_PASSWORD_SUFFIX (at least 4 characters): staff passwords are their email's local "
+                     "part plus it. It is never stored in the repo.")
+        supabase = Supabase()
+        if supabase.tenant_exists():
+            sys.exit(f"'{TENANT}' already exists. Run the teardown (DEMO.md) before seeding again.")
 
     market = resolve_market_snapshot_from_environment()
     print(f"market snapshot {market.get('effective_date')} · UF {market['uf_value_clp']} · anchor {iso(anchor)}")
@@ -879,27 +1005,49 @@ def main():
         print(f"  {email(local)}: {len(gen.scope_of(local))} projects, {s['mes']['n']} leads, "
               f"contactados por mí {s['mes']['contacto']['contactados_por_mi']['total']}")
 
+    bulk_leads = len(gen.leads)
+    hero_events = []
+    if args.heroes:
+        # The heroes module imports this one by name; when run as a script this module is __main__, and a
+        # second import would get a fresh copy without configure()'s prefix, tenant and RUT block.
+        sys.modules.setdefault("seed_hu15_demo", sys.modules[__name__])
+        import seed_sprint_heroes as heroes  # noqa: PLC0415 — only needed for the sprint review run
+        demo_projects = [{**{k: p[k] for k in ("id", "nombre", "comuna", "tipo", "precio_min_uf", "precio_max_uf", "estado")},
+                          "inmobiliaria_id": None, "demo": True} for p in gen.projects.values() if p["estado"] != "agotado"]
+        history = heroes.snapshot_history(supabase) if supabase else []
+        catalog = (heroes.available_projects(supabase) if supabase else []) + demo_projects
+        try:
+            outcome = heroes.add_heroes(gen, history, catalog, outdir)
+        except heroes.StoryError as exc:
+            sys.exit(f"hero check failed: {exc}; nothing written.")
+        hero_events = outcome["events"]
+        print("heroes:\n" + "\n".join(outcome["summary"]))
+
+    new_evaluations = sum(len(gen.repo.bundle(lead["id"])["evaluations"]) for lead in gen.leads)
+    print(f"adds {new_evaluations} evaluations ({bulk_leads} leads + {len(gen.leads) - bulk_leads} heroes)")
+
     if args.dry_run:
         files = write_sql(gen, {}, gen.new_id(), outdir)
         print(f"dry run: coverage ok, {len(files)} SQL files in {outdir} (placeholder account ids), nothing applied.")
         return
 
-    password = os.environ.get("SEED_DEMO_PASSWORD", "")
-    if len(password) < 8:
-        sys.exit("Set SEED_DEMO_PASSWORD (at least 8 characters): every demo account gets it. It is never stored in the repo.")
-    supabase = Supabase()
-    if supabase.tenant_exists():
-        sys.exit(f"'{TENANT}' already exists. Run the teardown (DEMO.md) before seeding again.")
+    fits, message = evaluation_budget(supabase.count("evaluations"), new_evaluations, bulk_leads, args.margin)
+    print(message)
+    if not fits:
+        sys.exit("nothing written.")
     remap = {}
     accounts = [(staff["local"], staff["id"]) for staff in gen.staff.values()] + [(lead["local"], lead["id"]) for lead in gen.leads]
     for number, (local, placeholder) in enumerate(accounts, start=1):
-        real = supabase.ensure_user(email(local), password)
+        real = supabase.ensure_user(email(local), password_for(local, staff_suffix))
         if real != placeholder:
             remap[placeholder] = real
         if number % 25 == 0:
             print(f"  accounts: {number}/{len(accounts)}", flush=True)
     files = write_sql(gen, remap, gen.new_id(), outdir)
     apply_sql(files, args.target, args.workdir)
+    if hero_events:
+        heroes.record_events(supabase, hero_events, remap)
+        print(f"recorded {len(hero_events)} HU 20 events for the heroes")
     print(f"done: {TENANT} seeded with {len(gen.leads)} leads.")
 
 
