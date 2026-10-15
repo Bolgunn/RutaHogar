@@ -41,6 +41,12 @@ describe("HU13 presence-preserving updates", () => {
       ingreso_mensual: { touched: true, type: "number", nullable: false, clear: true },
     })).toThrow("no permite un valor vacío");
   });
+
+  it("treats an emptied optional amount as clearing it", () => {
+    expect(serializePatch({
+      monto_morosidad: { touched: true, type: "currency", value: "", nullable: true, clear: false },
+    })).toEqual({ monto_morosidad: null });
+  });
 });
 
 describe("HU13 active history and update-due indicator", () => {

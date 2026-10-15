@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 from string import Template
@@ -14,9 +15,13 @@ DISCLAIMER = "La informacion es referencial: no constituye aprobacion bancaria n
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
+@lru_cache(maxsize=None)
+def _load_template(name):
+    return Template((TEMPLATE_DIR / f"{name}.html").read_text(encoding="utf-8"))
+
+
 def _render_template(name, **values):
-    template = (TEMPLATE_DIR / f"{name}.html").read_text(encoding="utf-8")
-    return Template(template).substitute(values)
+    return _load_template(name).substitute(values)
 
 
 def _email_shell(content):

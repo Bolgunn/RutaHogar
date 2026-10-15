@@ -35,7 +35,6 @@ function DistributionRow({ label, count, total, tone }) {
 }
 
 export default function AdminPanel({ evaluations, profile }) {
-
   const [canSeeArco, setCanSeeArco] = useState(false);
 
   useEffect(() => {
@@ -44,12 +43,10 @@ export default function AdminPanel({ evaluations, profile }) {
     getTenantContext()
       .then((context) => {
         if (!active) return;
-
         setCanSeeArco(PROVIDER === "local" || isGlobalAdmin(profile?.role, context.inmobiliaria_id));
       })
       .catch(() => {
         if (!active) return;
-
         setCanSeeArco(PROVIDER === "local");
       });
 

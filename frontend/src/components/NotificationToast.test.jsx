@@ -39,4 +39,8 @@ describe("notification stacking", () => {
     expect(html).toContain('Revisar oportunidades');
     expect((html.match(/type="button"/g) || []).length).toBe(2);
   });
+  it("renders items that omit className", () => {
+    const html = renderToStaticMarkup(<NotificationToast items={[{ id: "plain", count: 1 }, { ...opportunity, count: 1 }]} />);
+    expect((html.match(/role="status"/g) || []).length).toBe(2);
+  });
 });
