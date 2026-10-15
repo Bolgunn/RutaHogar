@@ -16,6 +16,12 @@ const RELIABILITY_LABELS = {
   silenciado: "Silenciado", descartado: "Descartado",
 };
 
+// formatScore turns null into "0", so a missing score is handled before formatting.
+function formatLeadScore(lead) {
+  const score = lead.result?.adjusted_score ?? lead.result?.score;
+  return score == null ? "—" : formatScore(score, "—");
+}
+
 function formatDateTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short", timeZone: "America/Santiago" });
@@ -121,7 +127,7 @@ export default function ExecutiveHome({ profile, evaluations, inmobiliariaId, on
                   </div>
                   <div className="executive-home-recent-score">
                     <small>Score</small>
-                    <strong>{(lead.result?.adjusted_score ?? lead.result?.score) == null ? "—" : formatScore(lead.result?.adjusted_score ?? lead.result?.score) ?? "—"}</strong>
+                    <strong>{formatLeadScore(lead)}</strong>
                   </div>
                   <div className="admin-list-item__meta">
                     <span>{formatDateTime(lead.created_at)}</span>

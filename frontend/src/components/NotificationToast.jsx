@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import "./notification-toast.css";
 
 export function notificationLayout(items, heights = {}) {
-  const ordered = [...items].sort((a, b) => Number(!a.className.includes("high-score")) - Number(!b.className.includes("high-score")));
+  const isHighScore = (item) => (item.className || "").includes("high-score");
+  const ordered = [...items].sort((a, b) => Number(!isHighScore(a)) - Number(!isHighScore(b)));
   let bottom = 0;
   return ordered.map((item) => {
     const entry = { ...item, bottom };
@@ -23,7 +24,7 @@ function ToastCard({ item, onMeasure }) {
     observer?.observe(node);
     return () => observer?.disconnect();
   }, [item.id, onMeasure]);
-  const opportunity = item.className.includes("opportunities");
+  const opportunity = (item.className || "").includes("opportunities");
   return <div ref={ref} className={`notification-toast ${item.className}`} style={{ bottom: item.bottom || 0 }} role="status">
     <button type="button" className="notification-content" onClick={item.onClick}>
       <span className="notification-icon" aria-hidden="true">{item.icon || <i className={`ti ${opportunity ? "ti-trending-up" : "ti-user-check"}`} />}</span>

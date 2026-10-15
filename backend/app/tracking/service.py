@@ -29,6 +29,16 @@ def valid_project_snapshot(snapshot):
     return deepcopy(project_goal) if isinstance(project_goal, dict) and project_goal else None
 
 
+def target_price_uf(target_project):
+    """Return the frozen target's positive catalogue UF price, or None."""
+    target = target_project if isinstance(target_project, dict) else {}
+    try:
+        price_uf = float(target.get("precio_min_uf") or target.get("valor_uf") or 0)
+    except (TypeError, ValueError):
+        return None
+    return price_uf if isfinite(price_uf) and price_uf > 0 else None
+
+
 def frozen_target_scoring_snapshot(snapshot, target_project):
     """Build the current frozen-target scoring input without rewriting history.
 
@@ -40,11 +50,8 @@ def frozen_target_scoring_snapshot(snapshot, target_project):
     """
     state = deepcopy(snapshot or {})
     target = deepcopy(target_project) if isinstance(target_project, dict) else None
-    try:
-        price_uf = float((target or {}).get("precio_min_uf") or (target or {}).get("valor_uf") or 0)
-    except (TypeError, ValueError):
-        price_uf = 0
-    if not isfinite(price_uf) or price_uf <= 0:
+    price_uf = target_price_uf(target)
+    if price_uf is None:
         return state
     state.update({
         "property_value": price_uf,
@@ -324,14 +331,8 @@ class TrackingService:
             row for row in view["audit_line"]
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
-        target_with_price = frozen_target_scoring_snapshot(latest, target)
-        target_price = (target or {}).get("precio_min_uf") or (target or {}).get("valor_uf")
-        try:
-            has_target_price = isfinite(float(target_price)) and float(target_price) > 0
-        except (TypeError, ValueError):
-            has_target_price = False
-        if has_target_price:
-            latest = target_with_price
+        if target_price_uf(target) is not None:
+            latest = frozen_target_scoring_snapshot(latest, target)
         elif target_source:
             original = target_source["recorded_complete_snapshot"]
             for field in ("property_value", "property_value_unit", "property_value_clp", "property_value_uf",
