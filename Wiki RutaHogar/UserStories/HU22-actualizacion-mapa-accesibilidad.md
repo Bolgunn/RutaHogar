@@ -1,6 +1,8 @@
-# HU 22 - Actualización dinamica del mapa de accesibilidad
+# ~~HU 22~~ (retirada) - Actualización dinamica del mapa de accesibilidad
 
-> **🗓 Planificada - Sprint 3.** Refresca automáticamente el mapa de accesibilidad cuando el lead cambia sus condiciones financieras o sus preferencias de compra.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Refresca automáticamente el mapa de accesibilidad cuando el lead cambia sus condiciones financieras o sus preferencias de compra.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

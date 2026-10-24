@@ -1,6 +1,8 @@
-# HU 31 - Visualización de mapa de accesibilidad inmobiliaria
+# ~~HU 31~~ (retirada) - Visualización de mapa de accesibilidad inmobiliaria
 
-> **🗓 Planificada - Sprint 3.** Mapa de la Región Metropolitana con proyectos y sectores clasificados según la capacidad financiera del lead, con explicación de por qué cada uno queda accesible, cercano o fuera de alcance.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Mapa de la Región Metropolitana con proyectos y sectores clasificados según la capacidad financiera del lead, con explicación de por qué cada uno queda accesible, cercano o fuera de alcance.
 
 > ⚠️ **Atención:** esta historia es idéntica a [[HU31-mapa-accesibilidad|HU 31]] (Sprint 2) en el documento fuente del backlog. Ambas se documentan tal como aparecen y ninguna suma o resta SP a su sprint. Pendiente de confirmación del equipo.
 
@@ -14,7 +16,7 @@
 | **Puntos de Historia** | *(sin definir en el documento)* |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

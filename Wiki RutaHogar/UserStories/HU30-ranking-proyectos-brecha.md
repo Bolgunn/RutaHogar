@@ -1,6 +1,8 @@
-# HU 30 - Ranking de proyectos por brecha mínima
+# ~~HU 30~~ (retirada) - Ranking de proyectos por brecha mínima
 
-> **🗓 Planificada - Sprint 3.** Ordena los proyectos alternativos según qué tan cerca están de la capacidad actual del lead, mostrando la brecha principal de cada uno.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Ordena los proyectos alternativos según qué tan cerca están de la capacidad actual del lead, mostrando la brecha principal de cada uno.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | *(sin definir en el documento)* |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 
