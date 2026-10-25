@@ -2483,6 +2483,8 @@ export default function App() {
             onboarding={userOnboarding}
             evaluations={userEvaluations}
             onSaveOnboarding={handleProfileOnboardingSave}
+            onDocumentConfirmed={refreshTracking}
+            onDocumentScoreUpdated={refreshEvaluationView}
             onProfileUpdate={handleProfileUpdate}
             onRetryExplanation={handleRetryAiExplanation}
           />

@@ -5,6 +5,9 @@ import { updateStoredProfile } from "../services/auth";
 import { upsertProfile } from "../services/profileService";
 import { getLeadNotificationPreferences, setLeadNotificationPreference } from "../services/leadChangeService";
 import { isStaffRole } from "../lib/roles";
+import DocumentBacking from "./documents/DocumentBacking";
+import DocumentScoreUpdate from "./documents/DocumentScoreUpdate";
+import DocumentUpload from "./documents/DocumentUpload";
 import AiExplanationBlock from "./AiExplanationBlock";
 import {
   formatScore,
@@ -399,9 +402,15 @@ function ProfessionalEvaluationDetails({ result }) {
   );
 }
 
-export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation }) {
+export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation, onDocumentConfirmed, onDocumentScoreUpdated }) {
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
   const canSeeTechnicalScoring = isStaffRole(profile?.role);
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [documentScoreRevision, setDocumentScoreRevision] = useState(0);
+  const documentConfirmed = async () => {
+    setDocumentScoreRevision((value) => value + 1);
+    await onDocumentConfirmed?.();
+  };
   const [form, setForm] = useState(savedOnboarding);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -985,6 +994,20 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
           </div>
         )}
       </section>
+
+      {profile?.role === "usuario" && (
+        <section className="profile-card">
+          <DocumentBacking key={profile?.id || profile?.user_id || 'owner'} refreshKey={documentScoreRevision + ':' + (latestEvaluation?.id || 'legacy')} />
+          {evaluations.length > 0 && <>
+            <DocumentScoreUpdate refreshKey={documentScoreRevision} onUpdated={onDocumentScoreUpdated} />
+            <button type="button" className="secondary-button" aria-expanded={showDocumentUpload}
+              onClick={() => setShowDocumentUpload((value) => !value)}>
+              Cargar documento respaldatorio
+            </button>
+            {showDocumentUpload && <DocumentUpload onConfirmed={documentConfirmed} />}
+          </>}
+        </section>
+      )}
 
       {selectedEvaluation && (
         <div
