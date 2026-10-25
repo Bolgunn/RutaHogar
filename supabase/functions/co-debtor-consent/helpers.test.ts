@@ -20,12 +20,12 @@ Deno.test("HU18 invitation tokens are random and only their digest is persistabl
 
 Deno.test("HU18 public invitation context contains no invitation id or values without a declared complement", () => {
   const context = invitationPublicContext(pending, now);
-  if ("id" in context || "ingreso_mensual" in context || context.status !== "pending" || !context.can_submit) {
+  if ("id" in context || "ingreso_mensual" in context || context.status !== "pending" || context.can_submit || !context.authentication_required) {
     throw new Error("public invitation context leaks data");
   }
 });
 
-Deno.test("HU18 pending invitation context exposes exactly the five declared fields", () => {
+Deno.test("HU30 pending public inspection exposes no declared financial fields", () => {
   const context = invitationPublicContext({
     ...pending,
     lead_id: "lead-id",
@@ -37,14 +37,7 @@ Deno.test("HU18 pending invitation context exposes exactly the five declared fie
     morosidad_complementario: "no",
   }, now);
   const expected = {
-    status: "pending",
-    expires_at: pending.expires_at,
-    can_submit: true,
-    ingreso_mensual_complementario: 900000,
-    deuda_mensual_complementario: 100000,
-    tipo_contrato_complementario: "indefinido",
-    continuidad_laboral_complementario: "mas_3_anios",
-    morosidad_complementario: "no",
+    status: "pending", expires_at: pending.expires_at, can_submit: false, authentication_required: true,
   };
   if (JSON.stringify(context) !== JSON.stringify(expected)) throw new Error("public prefill contract leaked data");
   for (const status of ["expired", "replaced", "confirmed", "revoked", "declined"] as const) {

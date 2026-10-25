@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getEvaluations, normalizeEvaluation } from "../services/evaluationService";
+import { getEvaluations } from "../services/evaluationService";
 import { isUUID, updateLastLeadSeenAt } from "../services/profileService";
 import { updateStoredProfile } from "../services/auth";
 import { isStaffRole } from "../lib/roles";
@@ -55,33 +55,35 @@ export function useLeads({ userId, profile }) {
 
     load();
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, profile?.role]);
 
   useEffect(() => {
     // Sin Supabase configurada no hay realtime: el flujo local debe seguir funcionando.
     if (!isStaff || !supabase) return;
 
-    const channel = supabase
-      .channel("evaluations-feed")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "evaluations" },
-        (payload) => {
-          const raw = payload.new;
-          if (!raw?.classification) return;
-
-          const ev = normalizeEvaluation(raw);
-          setEvaluations((prev) => sortEvaluations([ev, ...prev.filter((item) => item.id !== ev.id)]).slice(0, 25));
-
-          if (raw.classification === "Alto") {
-            setNewHighLeadsCount((n) => n + 1);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [profile?.role]);
+    let active = true;
+    // Raw Postgres INSERT payloads bypass consent redaction. Refresh the authorized feed.
+    const refresh = async () => {
+      try {
+        const list = await getEvaluations(null, profile?.role);
+        if (!active) return;
+        const sorted = sortEvaluations(list);
+        setEvaluations(sorted);
+        setNewHighLeadsCount(sorted.filter((ev) => ev.result.classification === "Alto"
+          && ev.user_id !== userId
+          && (!profile?.last_lead_seen_at || ev.created_at > profile.last_lead_seen_at)).length);
+      } catch {
+        // Keep the last authorized view; never fall back to raw table reads.
+      }
+    };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [userId, profile?.role, profile?.last_lead_seen_at]);
 
   const counts = useMemo(() => {
     const c = { Alto: 0, Medio: 0, Bajo: 0 };

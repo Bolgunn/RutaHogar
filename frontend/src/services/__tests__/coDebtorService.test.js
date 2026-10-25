@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), invoke: vi.fn() }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), invoke: vi.fn(), read: vi.fn() }));
 
 vi.mock("../../utils/supabase", () => ({
   supabase: { from: mocks.from, functions: { invoke: mocks.invoke } },
 }));
+
+vi.mock("../trackingService", () => ({ trackingRequest: mocks.read }));
 
 import {
   CO_DEBTOR_TREATMENT_CONSENT_VERSION,
@@ -36,9 +38,15 @@ function invitationQuery(result) {
 }
 
 describe("HU18 lead co-debtor service", () => {
+  it("carries the owner's declared relation for a replacement without a financial snapshot", () => {
+    const invitation = normalizeLeadCoDebtorInvitation({ status: "pending", expires_at: "2099-01-01T00:00:00Z", declared_relation: "conyuge", ...declaredComplement });
+    expect(invitation.declaredRelation).toBe("conyuge");
+    expect(invitation.declaredComplement).toEqual(declaredComplement);
+  });
   beforeEach(() => {
     mocks.from.mockReset();
     mocks.invoke.mockReset();
+    mocks.read.mockReset();
   });
 
   it("reads only the lead-visible invitation fields and normalizes an expired pending invitation", async () => {
@@ -46,13 +54,12 @@ describe("HU18 lead co-debtor service", () => {
       recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending",
       expires_at: "2026-10-03T12:00:00Z", created_at: "2026-09-26T12:00:00Z",
     }], error: null });
-    mocks.from.mockReturnValue(query);
+    mocks.read.mockResolvedValue({ items: query.data });
 
     const invitation = await getLeadCoDebtorInvitation();
 
-    expect(mocks.from).toHaveBeenCalledWith("co_debtor_invitations");
-    expect(query.select.mock.calls[0][0]).not.toContain("token");
-    expect(query.select.mock.calls[0][0]).not.toContain("digest");
+    expect(mocks.read).toHaveBeenCalledWith("/owner/co-debtor");
+    expect(mocks.from).not.toHaveBeenCalled();
     expect(invitation).toEqual({
       recipientEmail: "co.deudor@correo.cl", recipientRut: "12345678-5", status: "expired",
       expiresAt: "2026-10-03T12:00:00Z", declaredComplement: null, confirmation: null,
@@ -78,7 +85,7 @@ describe("HU18 lead co-debtor service", () => {
       { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "revoked", created_at: "2026-10-06T12:00:00Z" },
       { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending", expires_at: "2026-10-12T12:00:00Z", created_at: "2026-10-05T12:00:00Z" },
     ], error: null });
-    mocks.from.mockReturnValue(query);
+    mocks.read.mockResolvedValue({ items: query.data });
 
     await expect(getLeadCoDebtorInvitation()).resolves.toEqual(expect.objectContaining({ status: "pending" }));
   });
@@ -101,6 +108,22 @@ describe("HU18 lead co-debtor service", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
       body: { action: "create_invitation", recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", ...declaredComplement },
     });
+  });
+
+  it("preserves the declared relation required by HU30", async () => {
+    mocks.invoke.mockResolvedValue({ data: { status: "pending", expires_at: "2026-10-30T12:00:00Z", email_sent: true }, error: null });
+    await createCoDebtorInvitation("co.deudor@correo.cl", "12345678-5", declaredComplement, "conyuge");
+    expect(mocks.invoke).toHaveBeenCalledWith("co-debtor-consent", {
+      body: { action: "create_invitation", recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5",
+        relacion_complementario: "conyuge", ...declaredComplement },
+    });
+  });
+
+  it.each([422, 503])("propagates an invitation failure (%s) without inventing pending state", async (status) => {
+    const payload = { error: "No se pudo crear o enviar la invitación." };
+    mocks.invoke.mockResolvedValue({ data: null, error: { context: { status, clone: () => ({ json: async () => payload }) } } });
+    await expect(createCoDebtorInvitation("co.deudor@correo.cl", "12345678-5", declaredComplement, "conyuge"))
+      .rejects.toMatchObject({ message: payload.error, status, payload });
   });
 
   it("uses public invitation inspection without requiring an authenticated session", async () => {

@@ -787,8 +787,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
-  // These token-gated pages belong to the co-debtor, never to a RutaHogar
-  // account. Resolve them before any profile or session redirect.
+  // Keep invitation context ahead of profile redirects, including Auth callbacks.
+  // The invitation page validates the recipient session before allowing access.
   if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
   if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
     return { page: "co-debtor-management" };
@@ -1019,22 +1019,20 @@ export default function App() {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const evaluationOwnerRef = useRef(userId);
+  const evaluationReadRef = useRef(0);
+  evaluationOwnerRef.current = userId;
   const refreshEvaluationView = async () => {
+    const requestedOwner = userId;
+    const requestRevision = ++evaluationReadRef.current;
     const [nextTracking, nextEvaluations] = await Promise.all([
       getTracking(),
       getEvaluations(userId, profile?.role),
     ]);
+    if (evaluationOwnerRef.current !== requestedOwner || requestRevision !== evaluationReadRef.current) throw new Error("La sesión cambió. Vuelve a cargar tu evaluación.");
     setTrackingState(nextTracking);
     setEvaluations(nextEvaluations);
     return { tracking: nextTracking, evaluations: nextEvaluations };
-  };
-  const refreshScoreAfterCoDebtorConfirmation = async () => {
-    try {
-      return await refreshEvaluationView();
-    } catch {
-      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
-      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
-    }
   };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
@@ -1477,8 +1475,11 @@ export default function App() {
             continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
             morosidad_complementario: pendingInput?.morosidad_complementario,
           },
+          pendingCoDebtorInvitation.declaredRelation || pendingInput?.relacion_complementario,
         );
-      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
+      } catch (failure) {
+        setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
+      }
     }
 
     clearAnonSession();
@@ -1540,6 +1541,10 @@ export default function App() {
         birth_date,
         role: roles.user,
       });
+      if (nextAuth.emailConfirmationRequired) {
+        setSignupOfferError("Revisa tu correo para confirmar la cuenta. Después inicia sesión para continuar.");
+        return;
+      }
       trackSignUp({ method: "signup_offer" });
 
       const newProfile = nextAuth.profile;
@@ -1772,9 +1777,11 @@ export default function App() {
             metadata.coDebtorInvitation.recipientEmail,
             metadata.coDebtorInvitation.recipientRut,
             metadata.coDebtorInvitation.declaredComplement,
+            metadata.coDebtorInvitation.declaredRelation || financialInput.relacion_complementario,
           );
-        } catch {
+        } catch (failure) {
           // A delivery failure must never roll back or hide the saved score.
+          setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
         }
       }
 
@@ -2526,11 +2533,13 @@ export default function App() {
         />
       ) : page === "recommendations" && profile.role === roles.user ? (
         <Recommendations
+          key={userId || "preview"}
+          ownerId={userId}
+          onRefreshEvaluation={refreshEvaluationView}
           evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
-          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
           trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
@@ -2576,6 +2585,8 @@ export default function App() {
           />
       ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
+          key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
+          staffScopeKey={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
           highScoreNotification={{ count: newHighLeadsCount, onClick: handleNotificationClick,
             onClose: handleDismissNotification, className: "notification-toast--high-score" }}
           evaluations={evaluations}

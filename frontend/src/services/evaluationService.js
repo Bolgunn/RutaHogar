@@ -2,7 +2,7 @@ import { supabase } from "../utils/supabase";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
 import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
 import { isStaffRole } from "../lib/roles";
-import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand } from "./trackingService";
+import { annotateEvaluation, appendTrackingEvent, getStaffEvaluations, getTracking, newTrackingCommand, trackingRequest } from "./trackingService";
 
 function cloneJson(value, fallback) {
   if (value === undefined || value === null) return fallback;
@@ -71,8 +71,10 @@ export function normalizeEvaluation(row, contactsMap = {}) {
       phone: contact.phone || null,
     },
     user_id: row.user_id,
+    co_debtor: cloneJson(row.co_debtor, null),
     onboarding,
     input,
+    provenance: financialData.provenance || {},
     result: {
       ...storedResult,
       score: storedResult.score ?? row.score,
@@ -223,13 +225,16 @@ export function evaluationAnnotationOwner(role, userId) {
 
 // App.jsx y useLeads cargan la misma lista staff al iniciar sesión; compartir la
 // petición en vuelo evita duplicar la consulta más pesada del backend.
-let staffEvaluationsInFlight = null;
+const staffEvaluationsInFlight = new Map();
 
-function loadStaffEvaluations() {
-  staffEvaluationsInFlight ??= getStaffEvaluations().finally(() => {
-    staffEvaluationsInFlight = null;
-  });
-  return staffEvaluationsInFlight;
+function loadStaffEvaluations(userId) {
+  if (!staffEvaluationsInFlight.has(userId)) {
+    const pending = getStaffEvaluations({ expectedUserId: userId }).finally(() => {
+      if (staffEvaluationsInFlight.get(userId) === pending) staffEvaluationsInFlight.delete(userId);
+    });
+    staffEvaluationsInFlight.set(userId, pending);
+  }
+  return staffEvaluationsInFlight.get(userId);
 }
 
 export async function getEvaluations(userId, role) {
@@ -240,24 +245,14 @@ export async function getEvaluations(userId, role) {
   const isSales = isStaffRole(role);
   if (isSales) {
     // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
-    const projection = await loadStaffEvaluations();
+    const projection = await loadStaffEvaluations(user.id);
     const rows = projection.items || [];
     const contactsMap = await listLeadContacts(rows);
     return rows.map((row) => normalizeEvaluation(row, contactsMap));
   }
-  const { data, error } = await supabase.from("evaluations").select("*")
-    .eq("user_id", user.id).order("created_at", { ascending: false });
-  if (error) throw error;
-  if (!data?.length) return [];
-  let annotationQuery = supabase.from("evaluation_events").select("*")
-    .in("evaluation_id", data.map((row) => row.id));
-  const annotationOwner = evaluationAnnotationOwner(role, user.id);
-  if (annotationOwner) annotationQuery = annotationQuery.eq("user_id", annotationOwner);
-  const { data: annotations, error: annotationError } = await annotationQuery
-    .order("recorded_at", { ascending: true });
-  if (annotationError) throw annotationError;
-  return data.map((row) => normalizeEvaluation(
-    applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), {}));
+  const projection = await trackingRequest("/owner/evaluations");
+  return (projection.items || []).map((row) => normalizeEvaluation(
+    applyEvaluationAnnotations(row, row.annotations || []), {}));
 }
 
 // OVERLAP: HU12/HU16 leen nombre, RUT y reliability_status de list_lead_contacts; HU18 trae solo

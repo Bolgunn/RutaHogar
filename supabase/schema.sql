@@ -29,7 +29,10 @@ add column if not exists onboarding_data jsonb,
 add column if not exists last_lead_seen_at timestamptz,
 add column if not exists phone text,
 add column if not exists rut text,
-add column if not exists birth_date date;
+add column if not exists birth_date date,
+add column if not exists nombre text,
+add column if not exists apellido_paterno text,
+add column if not exists apellido_materno text;
 
 alter table public.profiles
 add column if not exists consent_data jsonb,
@@ -3533,3 +3536,1141 @@ CREATE TRIGGER trg_check_ml_fraud_on_insert
 BEFORE INSERT ON public.evaluations
 FOR EACH ROW
 EXECUTE FUNCTION public.check_ml_fraud_on_insert();
+
+-- HU30 T3 — accumulated persistence and authorization state
+-- HU30 T3. Deploy with the authenticated participant adapter (T4), not alone.
+-- Existing rows retain identity/consent facts; only the ordinal is backfilled.
+begin;
+
+alter table public.co_debtor_invitations
+  add column if not exists participant_user_id uuid references public.profiles(id) on delete restrict;
+create unique index if not exists hu30_invitation_account_key
+  on public.co_debtor_invitations(id, participant_user_id);
+create index if not exists hu30_participant_status_idx
+  on public.co_debtor_invitations(participant_user_id, status);
+
+alter table public.co_debtor_confirmations
+  add column if not exists revision_number integer,
+  add column if not exists participant_user_id uuid,
+  add column if not exists accepted_relation_event_id uuid,
+  add column if not exists request_id uuid;
+update public.co_debtor_confirmations set revision_number = 1 where revision_number is null;
+alter table public.co_debtor_confirmations alter column revision_number set not null;
+create unique index if not exists hu30_confirmation_revision_key
+  on public.co_debtor_confirmations(invitation_id, revision_number);
+create unique index if not exists hu30_confirmation_request_key
+  on public.co_debtor_confirmations(invitation_id, request_id);
+create unique index if not exists hu30_confirmation_invitation_key
+  on public.co_debtor_confirmations(id, invitation_id);
+alter table public.co_debtor_confirmations
+  drop constraint if exists co_debtor_confirmations_invitation_id_key,
+  drop constraint if exists hu30_revision_positive,
+  add constraint hu30_revision_positive check (revision_number > 0),
+  drop constraint if exists hu30_confirmation_account_fk,
+  add constraint hu30_confirmation_account_fk foreign key (invitation_id, participant_user_id)
+    references public.co_debtor_invitations(id, participant_user_id) on delete restrict;
+
+alter table public.co_debtor_consent_events
+  add column if not exists actor_user_id uuid references public.profiles(id) on delete restrict,
+  add column if not exists confirmation_id uuid,
+  add column if not exists relation_value text,
+  add column if not exists relation_revision integer;
+create unique index if not exists hu30_event_invitation_key
+  on public.co_debtor_consent_events(id, invitation_id);
+create unique index if not exists hu30_relation_revision_key
+  on public.co_debtor_consent_events(invitation_id, relation_revision)
+  where relation_revision is not null;
+alter table public.co_debtor_consent_events
+  drop constraint if exists co_debtor_consent_events_event_type_check,
+  add constraint co_debtor_consent_events_event_type_check check (event_type in (
+    'invited','replaced','expired','consent_granted','confirmed','revoked','declined',
+    'relation_declared','relation_changed')),
+  drop constraint if exists hu30_event_confirmation_fk,
+  add constraint hu30_event_confirmation_fk foreign key (confirmation_id, invitation_id)
+    references public.co_debtor_confirmations(id, invitation_id) on delete restrict,
+  drop constraint if exists hu30_relation_event_check,
+  add constraint hu30_relation_event_check check (
+    (event_type in ('relation_declared','relation_changed') and relation_revision > 0
+      and relation_revision is not null and actor_type = 'lead' and actor_user_id is not null
+      and confirmation_id is null and relation_value is not null and relation_value in (
+        'conyuge','pareja_conviviente','pareja_hijos_comun','padre_madre','hijo_hija',
+        'hermano_hermana','otro_familiar','amigo','otro'))
+    or (event_type not in ('relation_declared','relation_changed')
+      and relation_value is null and relation_revision is null));
+alter table public.co_debtor_confirmations
+  drop constraint if exists hu30_accepted_relation_fk,
+  add constraint hu30_accepted_relation_fk foreign key (accepted_relation_event_id, invitation_id)
+    references public.co_debtor_consent_events(id, invitation_id) on delete restrict;
+
+create or replace function public.hu30_normalize_rut(value text)
+returns text language plpgsql immutable set search_path = public as $$
+declare compact text := regexp_replace(upper(coalesce(value,'')), '[^0-9K]', '', 'g');
+  digits text; total integer := 0; multiplier integer := 2; i integer; remainder integer; dv text;
+begin
+  if compact !~ '^[0-9]{7,8}[0-9K]$' then return null; end if;
+  digits := left(compact,length(compact)-1);
+  for i in reverse length(digits)..1 loop
+    total := total + substring(digits,i,1)::integer * multiplier;
+    multiplier := case when multiplier = 7 then 2 else multiplier + 1 end;
+  end loop;
+  remainder := 11 - total % 11;
+  dv := case remainder when 11 then '0' when 10 then 'K' else remainder::text end;
+  if right(compact,1) <> dv then return null; end if;
+  return digits || '-' || dv;
+end;
+$$;
+
+create or replace function public.hu30_lock_participation(p_id uuid)
+returns public.co_debtor_invitations language plpgsql security definer set search_path = public as $$
+declare item public.co_debtor_invitations;
+begin
+  select * into item from public.co_debtor_invitations where id = p_id;
+  if not found then raise exception 'not_found'; end if;
+  perform 1 from public.profiles where id = item.lead_id for update;
+  select * into item from public.co_debtor_invitations where id = p_id for update;
+  return item;
+end;
+$$;
+
+create or replace function public.hu30_guard_participation()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if old.participant_user_id is not null and (
+      new.participant_user_id is distinct from old.participant_user_id
+      or new.lead_id is distinct from old.lead_id
+      or new.recipient_email is distinct from old.recipient_email
+      or new.recipient_rut is distinct from old.recipient_rut) then
+    raise exception 'immutable_participant_identity' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists hu30_participation_identity on public.co_debtor_invitations;
+create trigger hu30_participation_identity before update on public.co_debtor_invitations
+  for each row execute function public.hu30_guard_participation();
+
+create or replace function public.hu30_guard_confirmation()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare item public.co_debtor_invitations; profile_row public.profiles;
+  auth_row auth.users; previous integer; relation_id uuid;
+begin
+  if tg_op <> 'INSERT' then raise exception 'immutable_confirmation' using errcode = '23514'; end if;
+  item := public.hu30_lock_participation(new.invitation_id);
+  select coalesce(max(revision_number),0) into previous
+    from public.co_debtor_confirmations where invitation_id = item.id;
+  if new.participant_user_id is null or new.request_id is null
+      or new.revision_number <> previous + 1
+      or new.ingreso_mensual_complementario >= 'Infinity'::numeric
+      or new.deuda_mensual_complementario >= 'Infinity'::numeric then
+    raise exception 'co_debtor_revision_conflict' using errcode = '23514';
+  end if;
+  if item.status not in ('pending','confirmed')
+      or (item.status = 'pending' and item.expires_at <= clock_timestamp())
+      or public.hu30_closure_at(item.id) is not null then
+    raise exception 'co_debtor_participation_closed' using errcode = '23514';
+  end if;
+  select * into profile_row from public.profiles where id = new.participant_user_id;
+  select * into auth_row from auth.users where id = new.participant_user_id;
+  if item.participant_user_id is distinct from new.participant_user_id
+      or profile_row.role is distinct from 'usuario'
+      or auth_row.email_confirmed_at is null
+      or lower(trim(auth_row.email)) is distinct from lower(trim(item.recipient_email))
+      or public.hu30_normalize_rut(profile_row.rut) is null
+      or public.hu30_normalize_rut(profile_row.rut) is distinct from public.hu30_normalize_rut(item.recipient_rut) then
+    raise exception 'owner_mismatch' using errcode = '23514';
+  end if;
+  select id into relation_id from public.co_debtor_consent_events
+    where invitation_id = item.id and relation_revision is not null
+    order by relation_revision desc limit 1;
+  if relation_id is null or (new.accepted_relation_event_id is not null
+      and new.accepted_relation_event_id <> relation_id)
+      or (not exists (select 1 from public.co_debtor_confirmations
+          where invitation_id = item.id and participant_user_id is not null)
+        and new.accepted_relation_event_id is distinct from relation_id) then
+    raise exception 'co_debtor_relation_conflict' using errcode = '23514';
+  end if;
+  new.confirmed_at := clock_timestamp();
+  new.treatment_consented_at := new.confirmed_at;
+  return new;
+end;
+$$;
+drop trigger if exists hu30_confirmation_integrity on public.co_debtor_confirmations;
+create trigger hu30_confirmation_integrity before insert or update or delete on public.co_debtor_confirmations
+  for each row execute function public.hu30_guard_confirmation();
+
+create or replace function public.hu30_guard_event()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare item public.co_debtor_invitations; previous integer;
+begin
+  item := public.hu30_lock_participation(new.invitation_id);
+  if new.relation_revision is not null then
+    select coalesce(max(relation_revision),0) into previous
+      from public.co_debtor_consent_events where invitation_id = item.id;
+    if new.actor_user_id is distinct from item.lead_id or new.relation_revision <> previous + 1
+      or item.status not in ('pending','confirmed')
+      or new.event_type is distinct from (case when previous=0 then 'relation_declared' else 'relation_changed' end) then
+      raise exception 'co_debtor_relation_conflict' using errcode = '23514';
+    end if;
+  end if;
+  if new.confirmation_id is not null and not exists (
+    select 1 from public.co_debtor_confirmations c where c.id = new.confirmation_id
+      and c.invitation_id = item.id and c.participant_user_id = new.actor_user_id
+      and new.actor_type = 'co_debtor' and new.event_type in ('confirmed','consent_granted')) then
+    raise exception 'owner_mismatch' using errcode = '23514';
+  end if;
+  if new.event_type in ('confirmed','consent_granted') and new.confirmation_id is null then
+    raise exception 'confirmation_reference_required' using errcode = '23514';
+  end if;
+  new.occurred_at := clock_timestamp();
+  return new;
+end;
+$$;
+drop trigger if exists hu30_event_integrity on public.co_debtor_consent_events;
+create trigger hu30_event_integrity before insert on public.co_debtor_consent_events
+  for each row execute function public.hu30_guard_event();
+
+-- Service-only persistence contracts. Actor IDs come from a validated Auth session.
+-- T4 owns their HTTP/auth flow, not this migration.
+create or replace function public.hu30_declare_relation(p_invitation_id uuid, p_actor uuid,
+  p_value text, p_expected_revision integer)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare item public.co_debtor_invitations; previous integer; current_value text; result uuid;
+begin
+  item := public.hu30_lock_participation(p_invitation_id);
+  if item.lead_id is distinct from p_actor then raise exception 'owner_mismatch'; end if;
+  select relation_revision, relation_value, id into previous, current_value, result
+    from public.co_debtor_consent_events where invitation_id = item.id
+      and relation_revision is not null order by relation_revision desc limit 1;
+  if coalesce(previous,0) is distinct from p_expected_revision then raise exception 'lineage_conflict'; end if;
+  if current_value = p_value then return result; end if;
+  insert into public.co_debtor_consent_events(invitation_id,event_type,actor_type,
+    invitation_status,actor_user_id,relation_value,relation_revision)
+    values(item.id,case when previous is null then 'relation_declared' else 'relation_changed' end,
+      'lead',item.status,p_actor,p_value,coalesce(previous,0)+1) returning id into result;
+  return result;
+end;
+$$;
+
+create or replace function public.hu30_append_confirmation(p_invitation_id uuid, p_actor uuid,
+  p_request_id uuid, p_expected_revision integer, p_accepted_relation_event_id uuid,
+  p_values jsonb, p_consent_version text)
+returns public.co_debtor_confirmations language plpgsql security definer set search_path = public as $$
+declare item public.co_debtor_invitations; result public.co_debtor_confirmations; previous integer;
+begin
+  item := public.hu30_lock_participation(p_invitation_id);
+  if p_actor is null or p_request_id is null then raise exception 'unauthenticated'; end if;
+  select * into result from public.co_debtor_confirmations
+    where invitation_id = item.id and request_id = p_request_id;
+  if found then
+    if result.participant_user_id is distinct from p_actor then raise exception 'owner_mismatch'; end if;
+    if jsonb_build_object(
+      'ingreso_mensual_complementario',result.ingreso_mensual_complementario,
+      'deuda_mensual_complementario',result.deuda_mensual_complementario,
+      'tipo_contrato_complementario',result.tipo_contrato_complementario,
+      'continuidad_laboral_complementario',result.continuidad_laboral_complementario,
+      'morosidad_complementario',result.morosidad_complementario) <> p_values
+      or result.treatment_consent_version is distinct from p_consent_version
+      or result.accepted_relation_event_id is distinct from p_accepted_relation_event_id then
+      raise exception 'idempotency_conflict';
+    end if;
+    return result;
+  end if;
+  select coalesce(max(revision_number),0) into previous from public.co_debtor_confirmations where invitation_id = item.id;
+  if previous is distinct from p_expected_revision then raise exception 'co_debtor_revision_conflict'; end if;
+  if item.participant_user_id is null then
+    update public.co_debtor_invitations set participant_user_id = p_actor where id = item.id;
+  elsif item.participant_user_id <> p_actor then raise exception 'owner_mismatch'; end if;
+  insert into public.co_debtor_confirmations(invitation_id,revision_number,participant_user_id,
+    request_id,accepted_relation_event_id,ingreso_mensual_complementario,deuda_mensual_complementario,
+    tipo_contrato_complementario,continuidad_laboral_complementario,morosidad_complementario,
+    treatment_consent_version,treatment_consented_at)
+    values(item.id,previous+1,p_actor,p_request_id,p_accepted_relation_event_id,
+      (p_values->>'ingreso_mensual_complementario')::numeric,
+      (p_values->>'deuda_mensual_complementario')::numeric,
+      p_values->>'tipo_contrato_complementario',p_values->>'continuidad_laboral_complementario',
+      p_values->>'morosidad_complementario',p_consent_version,clock_timestamp()) returning * into result;
+  update public.co_debtor_invitations set status = 'confirmed', consumed_at = coalesce(consumed_at,result.confirmed_at)
+    where id = item.id;
+  insert into public.co_debtor_consent_events(invitation_id,event_type,actor_type,invitation_status,actor_user_id,confirmation_id)
+    values(item.id,'consent_granted','co_debtor','confirmed',p_actor,result.id),
+          (item.id,'confirmed','co_debtor','confirmed',p_actor,result.id);
+  return result;
+end;
+$$;
+
+create or replace function public.hu30_closure_at(p_invitation_id uuid)
+returns timestamptz language sql stable security definer set search_path = public as $$
+  select min(occurred_at) from public.co_debtor_consent_events
+    where invitation_id = p_invitation_id and (event_type = 'revoked'
+      or (event_type = 'replaced' and exists (select 1 from public.co_debtor_confirmations c
+        where c.invitation_id=p_invitation_id and c.confirmed_at <= occurred_at)));
+$$;
+
+create or replace function public.hu30_guard_evaluation()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ref text := new.financial_data->'provenance'->>'co_debtor_confirmation_id';
+  source text := new.financial_data->'provenance'->'co_debtor_consent'->>'complement_source';
+  item public.co_debtor_invitations; confirmation public.co_debtor_confirmations;
+  latest integer; relation_row public.co_debtor_consent_events;
+begin
+  if source is distinct from 'co_debtor_confirmed' and ref is null then return new; end if;
+  if ref is null or source is distinct from 'co_debtor_confirmed' then raise exception 'confirmation_reference_required' using errcode='23514'; end if;
+  select * into confirmation from public.co_debtor_confirmations where id = ref::uuid;
+  if not found then raise exception 'invalid_confirmation_reference' using errcode='23514'; end if;
+  item := public.hu30_lock_participation(confirmation.invitation_id);
+  select max(revision_number) into latest from public.co_debtor_confirmations where invitation_id = item.id;
+  select * into relation_row from public.co_debtor_consent_events where invitation_id = item.id
+    and relation_revision is not null order by relation_revision desc limit 1;
+  if item.lead_id is distinct from new.user_id or item.status <> 'confirmed'
+      or public.hu30_closure_at(item.id) is not null
+      or confirmation.participant_user_id is null
+      or confirmation.participant_user_id is distinct from item.participant_user_id
+      or confirmation.revision_number <> latest
+      or (new.financial_data->'provenance'->'co_debtor_consent'->>'revision_number')::integer
+        is distinct from confirmation.revision_number
+      or new.financial_data->'provenance'->'co_debtor_consent'->>'relation_declaration_event_id'
+        is distinct from relation_row.id::text
+      or relation_row.id is null then
+    raise exception 'co_debtor_revision_conflict' using errcode='23514';
+  end if;
+  if new.financial_data->'input'->>'relacion_complementario' is distinct from relation_row.relation_value
+      or new.financial_data->'input'->'ingreso_mensual_complementario' is distinct from to_jsonb(confirmation.ingreso_mensual_complementario)
+      or new.financial_data->'input'->'deuda_mensual_complementario' is distinct from to_jsonb(confirmation.deuda_mensual_complementario)
+      or new.financial_data->'input'->>'tipo_contrato_complementario' is distinct from confirmation.tipo_contrato_complementario
+      or new.financial_data->'input'->>'continuidad_laboral_complementario' is distinct from confirmation.continuidad_laboral_complementario
+      or new.financial_data->'input'->>'morosidad_complementario' is distinct from confirmation.morosidad_complementario then
+    raise exception 'confirmation_snapshot_mismatch' using errcode='23514';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists hu30_evaluation_reference on public.evaluations;
+create trigger hu30_evaluation_reference before insert on public.evaluations
+  for each row execute function public.hu30_guard_evaluation();
+
+-- No anonymous caller can create modern confirmations through an old overload.
+-- These guards deliberately require coordinated deployment with T4.
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname like 'hu30_%' loop
+    execute format('revoke all on function %s from public, anon, authenticated',f.signature);
+    execute format('grant execute on function %s to service_role',f.signature);
+  end loop;
+end;
+$$;
+commit;
+
+-- HU30: replacement closes confirmed participation at creation, with no resurrection.
+begin;
+
+create or replace function public.hu18_create_invitation(
+  p_lead_id uuid,
+  p_recipient_email text,
+  p_token_digest text,
+  p_expires_at timestamptz
+)
+returns table (invitation_id uuid, previous_invitation_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  existing_invitation public.co_debtor_invitations%rowtype;
+  created_id uuid;
+begin
+  perform 1 from public.profiles where id = p_lead_id for update;
+  if not found then
+    raise exception 'hu18_lead_not_found' using errcode = 'P0001';
+  end if;
+
+  select * into existing_invitation
+  from public.co_debtor_invitations
+  where lead_id = p_lead_id
+  order by (status = 'pending') desc, created_at desc, id desc limit 1
+  for update;
+
+  if found and existing_invitation.status = 'pending' and existing_invitation.expires_at <= clock_timestamp() then
+    update public.co_debtor_invitations
+      set status = 'expired'
+      where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events
+      (invitation_id, event_type, actor_type, invitation_status)
+      values (existing_invitation.id, 'expired', 'system', 'expired');
+    existing_invitation := null;
+  elsif found and existing_invitation.status in ('pending','confirmed') then
+    update public.co_debtor_invitations
+      set status = 'replaced', replaced_at = clock_timestamp()
+      where id = existing_invitation.id;
+    insert into public.co_debtor_consent_events
+      (invitation_id, event_type, actor_type, invitation_status, actor_user_id)
+      values (existing_invitation.id, 'replaced', 'lead', 'replaced', p_lead_id);
+    update public.co_debtor_invitations set replaced_at = coalesce(public.hu30_closure_at(existing_invitation.id),
+      (select min(occurred_at) from public.co_debtor_consent_events ev where ev.invitation_id=existing_invitation.id and ev.event_type='replaced'))
+      where id = existing_invitation.id;
+  end if;
+
+  insert into public.co_debtor_invitations
+    (lead_id, recipient_email, token_digest, expires_at, replacement_of_invitation_id)
+  values (
+    p_lead_id,
+    lower(trim(p_recipient_email)),
+    p_token_digest,
+    p_expires_at,
+    case when existing_invitation.id is null then null else existing_invitation.id end
+  )
+  returning id into created_id;
+
+  insert into public.co_debtor_consent_events
+    (invitation_id, event_type, actor_type, invitation_status, actor_user_id)
+    values (created_id, 'invited', 'lead', 'pending', p_lead_id);
+
+  return query select created_id, existing_invitation.id;
+end;
+$$;
+
+create or replace function public.hu18_revert_invitation_after_delivery_failure(
+  p_invitation_id uuid,
+  p_previous_invitation_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+  item public.co_debtor_invitations;
+begin
+  item := public.hu30_lock_participation(p_invitation_id);
+  current_status := item.status;
+  if p_previous_invitation_id is not null and p_previous_invitation_id is distinct from item.replacement_of_invitation_id then
+    raise exception 'owner_mismatch';
+  end if;
+
+  if current_status is distinct from 'pending' then
+    return false;
+  end if;
+
+  update public.co_debtor_invitations
+    set status = 'replaced', replaced_at = clock_timestamp()
+    where id = p_invitation_id;
+  insert into public.co_debtor_consent_events
+    (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'replaced', 'system', 'replaced');
+
+  if p_previous_invitation_id is not null then
+    update public.co_debtor_invitations
+      set status = 'pending', replaced_at = null
+      where id = p_previous_invitation_id and lead_id=item.lead_id and status = 'replaced'
+        and not exists (select 1 from public.co_debtor_confirmations where invitation_id = p_previous_invitation_id);
+  end if;
+
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_revoke_consent(p_invitation_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+begin
+  current_status := (public.hu30_lock_participation(p_invitation_id)).status;
+  if current_status = 'revoked' then
+    return false;
+  end if;
+  if current_status not in ('confirmed','replaced') or not exists (
+    select 1 from public.co_debtor_confirmations where invitation_id = p_invitation_id) then
+    raise exception 'hu18_consent_not_confirmed' using errcode = 'P0001';
+  end if;
+
+  update public.co_debtor_invitations set status = 'revoked' where id = p_invitation_id;
+  insert into public.co_debtor_consent_events
+    (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'revoked', 'co_debtor', 'revoked');
+  return true;
+end;
+$$;
+
+-- All legacy state transitions follow profile -> participation lock order.
+create or replace function public.hu18_expire_invitation(p_invitation_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invitation public.co_debtor_invitations%rowtype;
+begin
+  invitation := public.hu30_lock_participation(p_invitation_id);
+
+  if invitation.status <> 'pending' or invitation.expires_at > clock_timestamp() then
+    return false;
+  end if;
+
+  update public.co_debtor_invitations set status = 'expired' where id = invitation.id;
+  insert into public.co_debtor_consent_events
+    (invitation_id, event_type, actor_type, invitation_status)
+    values (invitation.id, 'expired', 'system', 'expired');
+  return true;
+end;
+$$;
+
+create or replace function public.hu18_expire_invitations()
+returns table (invitation_id uuid, recipient_email text, lead_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invitation public.co_debtor_invitations%rowtype;
+begin
+  for invitation in
+    select * from public.co_debtor_invitations
+    where status = 'pending' and expires_at <= clock_timestamp()
+    order by co_debtor_invitations.lead_id, id
+  loop
+    if not public.hu18_expire_invitation(invitation.id) then continue; end if;
+    invitation_id := invitation.id;
+    recipient_email := invitation.recipient_email;
+    lead_id := invitation.lead_id;
+    return next;
+  end loop;
+end;
+$$;
+
+create or replace function public.hu18_decline_invitation(p_invitation_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_status text;
+begin
+  current_status := (public.hu30_lock_participation(p_invitation_id)).status;
+  if current_status <> 'pending' then
+    raise exception 'hu18_invitation_not_pending' using errcode = 'P0001';
+  end if;
+
+  update public.co_debtor_invitations
+    set status = 'declined', consumed_at = clock_timestamp()
+    where id = p_invitation_id;
+  insert into public.co_debtor_consent_events
+    (invitation_id, event_type, actor_type, invitation_status)
+    values (p_invitation_id, 'declined', 'co_debtor', 'declined');
+  return true;
+end;
+$$;
+
+-- Activation requires T4; never accept an anonymous confirmation via this overload.
+create or replace function public.hu18_confirm_invitation(
+  p_invitation_id uuid,
+  p_ingreso_mensual_complementario numeric,
+  p_deuda_mensual_complementario numeric,
+  p_tipo_contrato_complementario text,
+  p_continuidad_laboral_complementario text,
+  p_morosidad_complementario text,
+  p_treatment_consent_version text,
+  p_management_token_digest text
+)
+returns table (recipient_email text, lead_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  raise exception 'authenticated_confirmation_required' using errcode = 'P0001';
+end;
+$$;
+
+commit;
+
+-- Raw co-debtor snapshots must be read through authenticated projections.
+begin;
+
+create or replace function public.hu30_has_complement(value jsonb)
+returns boolean language sql immutable set search_path = public as $$
+  select coalesce(value->'input'->>'complemento_renta','false') = 'true'
+    or value->'provenance'->>'co_debtor_confirmation_id' is not null
+    or coalesce(value->'input_snapshot'->>'complemento_renta','false') = 'true'
+    or coalesce(value->>'complemento_renta','false') = 'true'
+    or coalesce(value->'result'->'financial_indicators'->>'ingreso_complementario_considerado','0') <> '0'
+    or coalesce(value->'result_snapshot'->'financial_indicators'->>'ingreso_complementario_considerado','0') <> '0'
+    or exists (select 1 from jsonb_each(coalesce(value->'input',value->'input_snapshot',value,'{}'::jsonb)) f
+      where f.key in ('ingreso_mensual_complementario','deuda_mensual_complementario',
+        'tipo_contrato_complementario','continuidad_laboral_complementario','morosidad_complementario',
+        'relacion_complementario') and f.value <> 'null'::jsonb);
+$$;
+
+drop policy if exists "Evaluations select own" on public.evaluations;
+drop policy if exists "Evaluations select sales" on public.evaluations;
+create policy "Evaluations select own" on public.evaluations for select to authenticated
+  using (auth.uid() = user_id and not public.hu30_has_complement(financial_data));
+drop policy if exists "Scoring history select staff" on public.scoring_history;
+drop policy if exists "Scoring history select own" on public.scoring_history;
+create policy "Scoring history select own" on public.scoring_history for select to authenticated
+  using (auth.uid() = user_id and not public.hu30_has_complement(snapshot));
+drop policy if exists "Evaluation events select staff" on public.evaluation_events;
+-- Annotation payloads can contain financial narratives. Only the projection reads them.
+revoke select on public.evaluation_events, public.tracking_events, public.tracking_plans from authenticated, anon;
+revoke insert, update, delete on public.evaluations, public.scoring_history from authenticated, anon;
+revoke all on public.co_debtor_invitations, public.co_debtor_confirmations,
+  public.co_debtor_consent_events from authenticated, anon;
+grant execute on function public.hu30_has_complement(jsonb) to authenticated;
+
+-- HU17 persists another financial snapshot. Its owner-only reads must honor
+-- the same closure, without depending on visibility of the raw evaluations table.
+create or replace function public.hu30_owner_can_view_evaluation(p_evaluation_id uuid)
+returns boolean language sql stable security definer set search_path=public as $$
+  select exists (select 1 from public.evaluations e where e.id=p_evaluation_id and e.user_id=auth.uid()
+    and (not public.hu30_has_complement(e.financial_data) or exists (
+      select 1 from public.co_debtor_confirmations c join public.co_debtor_invitations i on i.id=c.invitation_id
+      where c.id::text=e.financial_data->'provenance'->>'co_debtor_confirmation_id'
+        and i.lead_id=e.user_id and (
+          (i.status='confirmed' and public.hu30_closure_at(i.id) is null)
+          or public.hu30_closure_at(i.id)+interval '30 days' > clock_timestamp())
+    )));
+$$;
+revoke all on function public.hu30_owner_can_view_evaluation(uuid) from public,anon;
+grant execute on function public.hu30_owner_can_view_evaluation(uuid) to authenticated,service_role;
+drop policy if exists "Mortgage scenarios select own" on public.mortgage_scenarios;
+create policy "Mortgage scenarios select own" on public.mortgage_scenarios for select to authenticated
+  using (auth.uid()=user_id and public.hu30_owner_can_view_evaluation(evaluation_id));
+create or replace function public.hu30_owner_has_evaluation_consent(p_evaluation_id uuid)
+returns boolean language sql stable security definer set search_path=public as $$
+  select exists(select 1 from public.evaluations where id=p_evaluation_id and user_id=auth.uid()
+    and coalesce(financial_data->'input'->>'consentimiento','false')='true');
+$$;
+revoke all on function public.hu30_owner_has_evaluation_consent(uuid) from public,anon;
+grant execute on function public.hu30_owner_has_evaluation_consent(uuid) to authenticated;
+drop policy if exists "Mortgage scenarios insert own consented evaluation" on public.mortgage_scenarios;
+create policy "Mortgage scenarios insert own consented evaluation" on public.mortgage_scenarios for insert to authenticated
+  with check (auth.uid()=user_id and public.hu30_owner_can_view_evaluation(evaluation_id)
+    and public.hu30_owner_has_evaluation_consent(evaluation_id));
+create or replace function public.hu30_list_mortgage_scenarios(p_evaluation_id uuid)
+returns setof public.mortgage_scenarios language sql stable security definer set search_path=public as $$
+  select (jsonb_populate_record(null::public.mortgage_scenarios,
+    to_jsonb(s) || case when public.hu30_owner_can_view_evaluation(s.evaluation_id) then '{}'::jsonb
+    else jsonb_build_object('input_snapshot','{}'::jsonb,'result_snapshot',
+      jsonb_build_object('financial_status','Histórico no disponible')) end)).*
+  from public.mortgage_scenarios s where s.user_id=auth.uid() and s.evaluation_id=p_evaluation_id
+  order by s.created_at desc;
+$$;
+revoke all on function public.hu30_list_mortgage_scenarios(uuid) from public,anon;
+grant execute on function public.hu30_list_mortgage_scenarios(uuid) to authenticated;
+
+-- Generated goals can contain financial narratives from their source evaluation.
+drop policy if exists "Improvement goals select own" on public.improvement_goals;
+create policy "Improvement goals select own" on public.improvement_goals for select to authenticated
+  using (auth.uid()=user_id and (tracking_plan_id is null or public.hu30_owner_can_view_evaluation(evaluation_id)));
+create or replace function public.hu30_list_owner_goals()
+returns setof public.improvement_goals language sql stable security definer set search_path=public as $$
+  select (jsonb_populate_record(null::public.improvement_goals,to_jsonb(g) ||
+    case when g.tracking_plan_id is null or public.hu30_owner_can_view_evaluation(g.evaluation_id) then '{}'::jsonb
+    else jsonb_build_object('title','Meta histórica','description','','progress_data','{"hu30_visibility":"hidden"}'::jsonb) end)).*
+    from public.improvement_goals g where g.user_id=auth.uid() order by g.created_at;
+$$;
+revoke all on function public.hu30_list_owner_goals() from public,anon;
+grant execute on function public.hu30_list_owner_goals() to authenticated;
+
+create or replace function public.hu30_guard_profile_privileges()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare actor_role text; actor_tenant uuid;
+begin
+  -- PostgREST SET ROLE survives SECURITY DEFINER; current_user would not.
+  if current_setting('role',true) in ('service_role','postgres','none')
+      and (current_setting('role',true) <> 'none' or session_user = 'postgres') then return new; end if;
+  if tg_op = 'INSERT' then
+    if new.role <> 'usuario' or new.inmobiliaria_id is not null then
+      raise exception 'profile_privilege_change_forbidden' using errcode='42501';
+    end if;
+    return new;
+  end if;
+  if new.role is not distinct from old.role and new.inmobiliaria_id is not distinct from old.inmobiliaria_id then
+    return new;
+  end if;
+  select role,inmobiliaria_id into actor_role,actor_tenant from public.profiles where id=auth.uid();
+  if auth.uid() is distinct from old.id and actor_role = 'admin' and actor_tenant is null then return new; end if;
+  -- Existing tenant admins may manage executive assignments inside their tenant,
+  -- but cannot mint a role or move a profile out of its organization.
+  if auth.uid() is distinct from old.id and actor_role in ('admin','admin_inmobiliario')
+      and actor_tenant is not null and old.role='ejecutivo' and new.role='ejecutivo'
+      and (old.inmobiliaria_id is null or old.inmobiliaria_id=actor_tenant)
+      and new.inmobiliaria_id=actor_tenant then return new; end if;
+  -- resolve_pending_executives may attach an existing executive (including
+  -- the caller) to an administrator-created pending assignment. It cannot
+  -- promote a lead or grant membership in an arbitrary tenant.
+  if old.role='ejecutivo' and new.role='ejecutivo' and old.inmobiliaria_id is null
+      and new.inmobiliaria_id is not null and actor_role in ('admin','ejecutivo')
+      and exists (select 1 from public.proyecto_ejecutivos pe
+        join public.proyectos pr on pr.id=pe.proyecto_id join auth.users u on u.id=old.id
+        where pe.estado='pendiente' and lower(u.email)=lower(pe.ejecutivo_email)
+          and pr.inmobiliaria_id=new.inmobiliaria_id
+          and (actor_tenant is null or actor_tenant=new.inmobiliaria_id)) then return new; end if;
+  raise exception 'profile_privilege_change_forbidden' using errcode='42501';
+end;
+$$;
+drop trigger if exists hu30_profile_privileges on public.profiles;
+create trigger hu30_profile_privileges before insert or update on public.profiles
+  for each row execute function public.hu30_guard_profile_privileges();
+revoke all on function public.hu30_guard_profile_privileges() from public,anon,authenticated;
+
+commit;
+
+-- HU30 T4A — authenticated access, without financial confirmation
+-- T4A: link an authenticated recipient without granting financial consent.
+-- Actor comes only from Auth.getUser in the service-only Edge adapter.
+begin;
+create or replace function public.hu30_authorize_invitation(p_token_digest text, p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare item public.co_debtor_invitations; account public.profiles; auth_account auth.users;
+begin
+ select * into item from public.co_debtor_invitations where token_digest=p_token_digest;
+ if not found then raise exception 'invitation_unavailable'; end if;
+ item := public.hu30_lock_participation(item.id);
+ -- Revalidate under the same locks used by replacement, revocation and confirmation.
+ if item.token_digest is distinct from p_token_digest or item.status <> 'pending'
+   or item.expires_at <= clock_timestamp() or item.consumed_at is not null
+   or public.hu30_closure_at(item.id) is not null then
+   raise exception 'invitation_unavailable';
+ end if;
+ select * into account from public.profiles where id=p_actor;
+ select * into auth_account from auth.users where id=p_actor;
+ if p_actor is null or account.role is distinct from 'usuario'
+   or auth_account.email is null
+   or lower(trim(auth_account.email)) is distinct from lower(trim(item.recipient_email))
+   or public.hu30_normalize_rut(account.rut) is null
+   or public.hu30_normalize_rut(account.rut) is distinct from public.hu30_normalize_rut(item.recipient_rut)
+   or (item.participant_user_id is not null and item.participant_user_id <> p_actor) then
+   raise exception 'participant_identity_mismatch';
+ end if;
+ if auth_account.email_confirmed_at is null then raise exception 'email_confirmation_required'; end if;
+ if item.participant_user_id is null then
+   update public.co_debtor_invitations set participant_user_id=p_actor where id=item.id;
+ end if;
+ return jsonb_build_object('status','pending','authorized',true,'participation_id',item.id,'expires_at',item.expires_at);
+end;
+$$;
+revoke all on function public.hu30_authorize_invitation(text,uuid) from public,anon,authenticated;
+grant execute on function public.hu30_authorize_invitation(text,uuid) to service_role;
+commit;
+
+-- HU30 T4B — authenticated review and consent commands
+-- T4B: scoped reads and consent commands. Reuses the T3 tables and append RPC.
+begin;
+create or replace function public.hu30_financial_values(value jsonb)
+returns jsonb language sql immutable set search_path=public as $$
+ select jsonb_strip_nulls(jsonb_build_object(
+  'ingreso_mensual_complementario',value->'ingreso_mensual_complementario',
+  'deuda_mensual_complementario',value->'deuda_mensual_complementario',
+  'tipo_contrato_complementario',value->'tipo_contrato_complementario',
+  'continuidad_laboral_complementario',value->'continuidad_laboral_complementario',
+  'morosidad_complementario',value->'morosidad_complementario'));
+$$;
+create or replace function public.hu30_safe_amount(value jsonb)
+returns boolean language sql immutable set search_path=public as $$
+ select case when jsonb_typeof(value)='number' then
+  (value#>>'{}')::numeric between 0 and 9007199254740991 else false end;
+$$;
+create or replace function public.hu30_valid_financial_values(value jsonb)
+returns boolean language plpgsql immutable set search_path=public as $$
+begin
+ if jsonb_typeof(value) is distinct from 'object' then return false; end if;
+ return coalesce((select count(*)=5 from jsonb_object_keys(value))
+  and value=public.hu30_financial_values(value)
+  and public.hu30_safe_amount(value->'ingreso_mensual_complementario')
+  and public.hu30_safe_amount(value->'deuda_mensual_complementario')
+  and value->>'tipo_contrato_complementario' in ('indefinido','plazo_fijo','independiente','honorarios_variable')
+  and value->>'continuidad_laboral_complementario' in ('menos_6_meses','entre_6_y_12_meses','entre_1_y_3_anios','mas_3_anios')
+  and value->>'morosidad_complementario' in ('si','no'),false);
+end; $$;
+
+create or replace function public.hu30_participant_access(p_id uuid,p_actor uuid,p_revocation boolean default false)
+returns public.co_debtor_invitations language plpgsql security definer set search_path=public as $$
+declare item public.co_debtor_invitations; account public.profiles; identity auth.users;
+begin
+ item := public.hu30_lock_participation(p_id);
+ select * into account from public.profiles where id=p_actor;
+ select * into identity from auth.users where id=p_actor;
+ if p_actor is null or item.participant_user_id is distinct from p_actor
+  or account.role is distinct from 'usuario' or identity.email_confirmed_at is null
+  or lower(trim(identity.email)) is distinct from lower(trim(item.recipient_email))
+  or public.hu30_normalize_rut(account.rut) is null
+  or public.hu30_normalize_rut(account.rut) is distinct from public.hu30_normalize_rut(item.recipient_rut) then
+  raise exception 'participant_identity_mismatch';
+ end if;
+ if p_revocation then
+  if item.status not in ('confirmed','replaced','revoked') or not exists (
+    select 1 from public.co_debtor_confirmations where invitation_id=item.id) then
+   raise exception 'invitation_unavailable';
+  end if;
+ elsif item.status not in ('pending','confirmed')
+  or (item.status='pending' and (item.expires_at<=clock_timestamp() or item.consumed_at is not null))
+  or public.hu30_closure_at(item.id) is not null then raise exception 'invitation_unavailable';
+ end if;
+ return item;
+end; $$;
+
+-- Equality of the five selected values only; never calculates score/capacity.
+create or replace function public.hu30_matches_evaluated(p_id uuid,p_values jsonb)
+returns boolean language plpgsql stable security definer set search_path=public as $$
+declare used jsonb;
+begin
+ select coalesce(e.financial_data->'input',e.financial_data->'input_snapshot') into used
+ from public.evaluations e join public.co_debtor_invitations i on i.lead_id=e.user_id
+ where i.id=p_id order by e.created_at desc,e.id desc limit 1;
+ if used is null then return null; end if;
+ if coalesce(used->>'complemento_renta','false')<>'true' then return false; end if;
+ if not public.hu30_valid_financial_values(public.hu30_financial_values(used)) then return null; end if;
+ return public.hu30_financial_values(used)=p_values;
+end; $$;
+
+create or replace function public.hu30_review_participation(p_id uuid,p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare item public.co_debtor_invitations; current_row public.co_debtor_confirmations;
+ relation_row public.co_debtor_consent_events; accepted public.co_debtor_consent_events;
+ personal jsonb; own_values jsonb; values_to_review jsonb;
+begin
+ item := public.hu30_participant_access(p_id,p_actor);
+ select * into current_row from public.co_debtor_confirmations where invitation_id=item.id order by revision_number desc limit 1;
+ select * into relation_row from public.co_debtor_consent_events where invitation_id=item.id and relation_revision is not null order by relation_revision desc limit 1;
+ select e.* into accepted from public.co_debtor_confirmations c join public.co_debtor_consent_events e on e.id=c.accepted_relation_event_id
+ where c.invitation_id=item.id and c.participant_user_id=p_actor order by c.revision_number limit 1;
+ -- Only this account's principal input fields; never another participation or totals.
+ select coalesce(financial_data->'input',financial_data->'input_snapshot') into personal
+ from public.evaluations where user_id=p_actor order by created_at desc,id desc limit 1;
+ own_values := jsonb_strip_nulls(jsonb_build_object(
+  'ingreso_mensual_complementario',case when public.hu30_safe_amount(personal->'ingreso_mensual') then personal->'ingreso_mensual' end,
+  'deuda_mensual_complementario',case when public.hu30_safe_amount(personal->'deuda_mensual') then personal->'deuda_mensual' end,
+  'tipo_contrato_complementario',case when personal->>'tipo_contrato' in ('indefinido','plazo_fijo','independiente','honorarios_variable') then personal->'tipo_contrato' end,
+  'continuidad_laboral_complementario',case when personal->>'continuidad_laboral' in ('menos_6_meses','entre_6_y_12_meses','entre_1_y_3_anios','mas_3_anios') then personal->'continuidad_laboral' end,
+  'morosidad_complementario',case when personal->>'morosidad_actual' in ('si','no') then personal->'morosidad_actual' end));
+ values_to_review := case when current_row.id is not null then public.hu30_financial_values(to_jsonb(current_row))
+  else public.hu30_financial_values(to_jsonb(item)) || own_values end;
+ return jsonb_build_object('participation_id',item.id,'status',item.status,
+  'expires_at',case when item.status='pending' then item.expires_at end,
+  'revision_number',coalesce(current_row.revision_number,0),'values',values_to_review,
+  'prefill_source',case when current_row.id is not null then 'participation' when own_values<>'{}'::jsonb then 'personal_and_declared' else 'declared' end,
+  'personal_prefill',own_values,'relation',jsonb_build_object('event_id',relation_row.id,'value',relation_row.relation_value,
+    'revision',relation_row.relation_revision,'initial_accepted_value',accepted.relation_value,'initial_accepted_event_id',accepted.id),
+  'requires_relation_acceptance',accepted.id is null,
+  'matches_evaluated',case when current_row.id is not null then public.hu30_matches_evaluated(item.id,values_to_review) end);
+end; $$;
+
+create or replace function public.hu30_confirm_participation(p_id uuid,p_actor uuid,p_request_id uuid,
+ p_expected_revision integer,p_relation_event_id uuid,p_accept_relation boolean,p_values jsonb,p_consent boolean)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare item public.co_debtor_invitations; result public.co_debtor_confirmations;
+ previous public.co_debtor_confirmations; relation_id uuid; accepted_id uuid; replayed boolean;
+begin
+ item := public.hu30_participant_access(p_id,p_actor);
+ if p_consent is distinct from true then raise exception 'participation_consent_required'; end if;
+ if not public.hu30_valid_financial_values(p_values) or p_request_id is null
+  or p_expected_revision is null or p_expected_revision<0 or p_accept_relation is null then raise exception 'invalid_confirmation'; end if;
+ accepted_id := case when p_accept_relation then p_relation_event_id end;
+ select * into result from public.co_debtor_confirmations where invitation_id=item.id and request_id=p_request_id;
+ replayed := found;
+ if replayed and result.revision_number<>p_expected_revision+1 then raise exception 'idempotency_conflict'; end if;
+ if not replayed then
+  select id into relation_id from public.co_debtor_consent_events where invitation_id=item.id and relation_revision is not null order by relation_revision desc limit 1;
+  if relation_id is null or p_relation_event_id is distinct from relation_id then raise exception 'co_debtor_relation_conflict'; end if;
+  if not exists(select 1 from public.co_debtor_confirmations where invitation_id=item.id and participant_user_id=p_actor and accepted_relation_event_id is not null)
+   and p_accept_relation is distinct from true then raise exception 'relation_acceptance_required'; end if;
+ end if;
+ select * into previous from public.co_debtor_confirmations where invitation_id=item.id
+  and revision_number=case when replayed then result.revision_number-1 else p_expected_revision end;
+ result := public.hu30_append_confirmation(item.id,p_actor,p_request_id,p_expected_revision,accepted_id,p_values,'hu30-participation-v1');
+ return jsonb_build_object('status','confirmed','participation_id',item.id,'confirmation_id',result.id,
+  'revision_number',result.revision_number,'confirmed_at',result.confirmed_at,'replayed',replayed,
+  'matches_previous',case when previous.id is not null then public.hu30_financial_values(to_jsonb(previous))=p_values end,
+  'matches_evaluated',public.hu30_matches_evaluated(item.id,p_values));
+end; $$;
+
+create or replace function public.hu30_participant_decision(p_id uuid,p_actor uuid,p_decision text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare item public.co_debtor_invitations;
+begin
+ item := public.hu30_participant_access(p_id,p_actor,p_decision='revoke');
+ if p_decision='decline' then
+  if item.status<>'pending' then raise exception 'invitation_unavailable'; end if;
+  update public.co_debtor_invitations set status='declined',consumed_at=clock_timestamp() where id=item.id;
+  insert into public.co_debtor_consent_events(invitation_id,event_type,actor_type,invitation_status,actor_user_id)
+   values(item.id,'declined','co_debtor','declined',p_actor);
+  return jsonb_build_object('status','declined');
+ elsif p_decision='revoke' then
+  if item.status<>'revoked' then
+   update public.co_debtor_invitations set status='revoked' where id=item.id;
+   insert into public.co_debtor_consent_events(invitation_id,event_type,actor_type,invitation_status,actor_user_id)
+    values(item.id,'revoked','co_debtor','revoked',p_actor);
+  end if;
+  return jsonb_build_object('status','revoked');
+ end if;
+ raise exception 'invalid_confirmation';
+end; $$;
+
+create or replace function public.hu30_list_participations(p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+begin
+ if not exists(select 1 from public.profiles p join auth.users u on u.id=p.id where p.id=p_actor and p.role='usuario' and u.email_confirmed_at is not null) then
+  raise exception 'participant_identity_mismatch'; end if;
+ return jsonb_build_object('items',coalesce((select jsonb_agg(jsonb_build_object('participation_id',i.id,'status',i.status,'created_at',i.created_at) order by i.created_at desc,i.id desc)
+  from public.co_debtor_invitations i where i.participant_user_id=p_actor),'[]'::jsonb));
+end; $$;
+
+-- Explicit titular declaration, atomically with HU18 invitation creation; no inference/backfill.
+create or replace function public.hu30_create_invitation(p_lead_id uuid,p_recipient_email text,p_recipient_rut text,
+ p_token_digest text,p_expires_at timestamptz,p_values jsonb,p_relation text)
+returns table(invitation_id uuid,previous_invitation_id uuid) language plpgsql security definer set search_path=public as $$
+declare created record;
+begin
+ if not public.hu30_valid_financial_values(p_values) then raise exception 'invalid_confirmation'; end if;
+ select * into created from public.hu18_create_invitation(p_lead_id,p_recipient_email,p_recipient_rut,p_token_digest,p_expires_at,
+  (p_values->>'ingreso_mensual_complementario')::numeric,(p_values->>'deuda_mensual_complementario')::numeric,
+  p_values->>'tipo_contrato_complementario',p_values->>'continuidad_laboral_complementario',p_values->>'morosidad_complementario');
+ perform public.hu30_declare_relation(created.invitation_id,p_lead_id,p_relation,0);
+ return query select created.invitation_id,created.previous_invitation_id;
+end; $$;
+
+do $$ declare f record; begin
+ for f in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.proname in ('hu30_financial_values','hu30_safe_amount','hu30_valid_financial_values',
+   'hu30_participant_access','hu30_matches_evaluated','hu30_review_participation','hu30_confirm_participation',
+   'hu30_participant_decision','hu30_list_participations','hu30_create_invitation') loop
+  execute format('revoke all on function %s from public,anon,authenticated',f.signature);
+  execute format('grant execute on function %s to service_role',f.signature);
+ end loop;
+end; $$;
+commit;
+
+-- HU30 T6 — legacy snapshot detection
+-- HU30 T6: legacy aliases/partial snapshots must not bypass safe projections.
+begin;
+create or replace function public.hu30_has_complement(value jsonb)
+returns boolean language plpgsql immutable set search_path=public as $$
+declare field text; child jsonb;
+begin
+ if jsonb_typeof(value)='array' then
+  for child in select jsonb_array_elements(value) loop
+   if public.hu30_has_complement(child) then return true; end if;
+  end loop;
+ elsif jsonb_typeof(value)='object' then
+  for field,child in select * from jsonb_each(value) loop
+   if child<>'null'::jsonb then
+    if field='complemento_renta' and lower(child#>>'{}') in ('true','1','si','sí','yes') then return true; end if;
+    if field<>'complemento_renta' and (field like 'complemento\_%' escape '\' or field in (
+      'ingreso_mensual_complementario','deuda_mensual_complementario','tipo_contrato_complementario',
+      'continuidad_laboral_complementario','morosidad_complementario','relacion_complementario',
+      'co_debtor_confirmation_id','participant_user_id','recipient_rut','recipient_email','relation_value')) then return true; end if;
+    if field='ingreso_complementario_considerado' and child not in ('0'::jsonb,'"0"'::jsonb) then return true; end if;
+    if field='complement_source' and child#>>'{}' in ('co_debtor_confirmed','lead_declared','excluded_after_revocation','excluded_after_decline') then return true; end if;
+    if field='evaluation_type' and child#>>'{}' in ('bipersonal_confirmed','declared_complement','unverifiable_origin') then return true; end if;
+    if jsonb_typeof(child) in ('object','array') and public.hu30_has_complement(child) then return true; end if;
+   end if;
+  end loop;
+ end if;
+ return false;
+end; $$;
+-- Restore the established own-individual read path, including forward replay
+-- after the conservative rollback. Existing RLS continues to deny staff/raw HU30.
+grant select on public.evaluations,public.scoring_history to authenticated;
+commit;
+
+-- HU30 T9B — staff contact/history isolation
+-- HU30 T9B: one server-side scope for contact and related history readers.
+create or replace function public.hu30_staff_can_read_lead(p_lead uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles target
+    where target.id = p_lead and target.role = 'usuario'
+      and (
+        (public.get_my_role() = 'admin' and public.get_my_inmobiliaria() is null)
+        or (public.get_my_role() in ('ejecutivo','admin','admin_inmobiliario')
+          and public.get_my_inmobiliaria() is not null
+          and public.lead_belongs_to_inmobiliaria(target.id, public.get_my_inmobiliaria()))
+      )
+  );
+$$;
+revoke all on function public.hu30_staff_can_read_lead(uuid) from public,anon;
+grant execute on function public.hu30_staff_can_read_lead(uuid) to authenticated;
+
+drop function if exists public.list_lead_contacts(uuid[]);
+
+create or replace function public.list_lead_contacts(p_user_ids uuid[])
+returns table (
+  id uuid,
+  nombre text,
+  apellido_paterno text,
+  apellido_materno text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  email text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('response.headers', '[{"Cache-Control":"private, no-store"},{"Pragma":"no-cache"},{"Vary":"Authorization"}]', true);
+  return query
+  select p.id, p.nombre, p.apellido_paterno, p.apellido_materno, p.full_name, p.phone, p.rut,
+         coalesce(p.reliability_status, 'normal') as reliability_status,
+         u.email::text as email
+  from public.profiles p
+  left join auth.users u on u.id = p.id
+  where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
+    and p.role = 'usuario'
+    and public.hu30_staff_can_read_lead(p.id);
+end;
+$$;
+
+revoke all on function public.list_lead_contacts(uuid[]) from public;
+grant execute on function public.list_lead_contacts(uuid[]) to authenticated;
+
+
+-- changed_by identifies the actor, never the tenant of the subject lead.
+drop policy if exists "Staff select lead_status_history" on public.lead_status_history;
+create policy "Staff select lead_status_history"
+  on public.lead_status_history for select to authenticated
+  using (public.hu30_staff_can_read_lead(profile_id));
+grant select on public.lead_status_history to authenticated;
+
+-- Keep existing admin-only contracts, also constrained by the subject lead.
+create or replace function public.get_reported_leads_for_admin()
+returns table (
+  id uuid,
+  email text,
+  full_name text,
+  phone text,
+  rut text,
+  reliability_status text,
+  created_at timestamptz,
+  fraud_score_probability numeric,
+  shap_top_factors jsonb
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('response.headers', '[{"Cache-Control":"private, no-store"},{"Pragma":"no-cache"},{"Vary":"Authorization"}]', true);
+  return query
+  select distinct on (p.id)
+    p.id,
+    u.email::text as email,
+    p.full_name,
+    p.phone,
+    p.rut,
+    p.reliability_status,
+    e.created_at,
+    case when public.hu30_has_complement(e.financial_data) then null else e.fraud_score_probability end,
+    case when public.hu30_has_complement(e.financial_data) then null else e.shap_top_factors end
+  from public.profiles p
+  join auth.users u on u.id = p.id
+  join public.evaluations e on e.user_id = p.id
+  where public.hu30_staff_can_read_lead(p.id)
+    and p.reliability_status in ('en_revision', 'silenciado', 'descartado', 'sospechoso')
+    and (
+      public.get_my_role() = 'admin'
+      or (
+        public.get_my_role() = 'admin_inmobiliario'
+        and (
+          exists (
+            select 1 from public.proyectos pr
+            where pr.inmobiliaria_id = public.get_my_inmobiliaria()
+            and (
+              pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+              or pr.comuna = p.onboarding_data->>'comuna_interes'
+              or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+            )
+          )
+          or exists (
+            select 1 from public.lead_status_history lsh
+            join public.profiles exec_p on exec_p.id = lsh.changed_by
+            where lsh.profile_id = p.id
+            and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+          )
+        )
+      )
+    )
+  order by p.id, e.created_at desc;
+end;
+$$;
+
+create or replace function public.get_lead_status_history_for_admin()
+returns table (
+  history_id uuid,
+  profile_id uuid,
+  lead_name text,
+  lead_email text,
+  changed_by_name text,
+  changed_by_email text,
+  old_status text,
+  new_status text,
+  reason text,
+  created_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('response.headers', '[{"Cache-Control":"private, no-store"},{"Pragma":"no-cache"},{"Vary":"Authorization"}]', true);
+  return query
+  select 
+    h.id as history_id,
+    p.id as profile_id,
+    p.full_name as lead_name,
+    u_lead.email::text as lead_email,
+    p_changer.full_name as changed_by_name,
+    u_changer.email::text as changed_by_email,
+    h.old_status,
+    h.new_status,
+    h.reason,
+    h.created_at
+  from public.lead_status_history h
+  join public.profiles p on p.id = h.profile_id
+  join auth.users u_lead on u_lead.id = p.id
+  left join public.profiles p_changer on p_changer.id = h.changed_by
+  left join auth.users u_changer on u_changer.id = h.changed_by
+  where public.hu30_staff_can_read_lead(p.id) and (
+    public.get_my_role() = 'admin'
+    or (
+      public.get_my_role() = 'admin_inmobiliario'
+      and (
+        exists (
+          select 1 from public.evaluations e
+          join public.proyectos pr on pr.inmobiliaria_id = public.get_my_inmobiliaria()
+          where e.user_id = p.id
+          and (
+            pr.comuna = coalesce(e.target_commune, e.financial_data->'input'->>'comuna_objetivo')
+            or pr.comuna = p.onboarding_data->>'comuna_interes'
+            or pr.comuna = p.onboarding_data->>'comuna_alternativa'
+          )
+        )
+        or exists (
+          select 1 from public.lead_status_history lsh
+          join public.profiles exec_p on exec_p.id = lsh.changed_by
+          where lsh.profile_id = p.id
+          and exec_p.inmobiliaria_id = public.get_my_inmobiliaria()
+        )
+      )
+    )
+  )
+  order by h.created_at desc;
+end;
+$$;
+
+revoke all on function public.get_reported_leads_for_admin(),public.get_lead_status_history_for_admin() from public,anon;
+grant execute on function public.get_reported_leads_for_admin(),public.get_lead_status_history_for_admin() to authenticated;
+
