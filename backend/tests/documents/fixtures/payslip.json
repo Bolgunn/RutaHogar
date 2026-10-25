@@ -1,0 +1,31 @@
+{
+  "content": "LIQUIDACIÓN DE SUELDO\nNombre: PERSONA_SINTETICA_NO_GUARDAR\nTotal haberes: $1.500.000\nRenta imponible: $1.350.000\nDescuento de salud: UF 3,2\n LÍQUIDO   A   PAGAR : CLP $ 1.200.000,00 \nDirección: DIRECCION_SINTETICA_NO_GUARDAR",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "lines": [
+        {
+          "content": "LIQUIDACIÓN DE SUELDO"
+        },
+        {
+          "content": "Nombre: PERSONA_SINTETICA_NO_GUARDAR"
+        },
+        {
+          "content": "Total haberes: $1.500.000"
+        },
+        {
+          "content": "Renta imponible: $1.350.000"
+        },
+        {
+          "content": "Descuento de salud: UF 3,2"
+        },
+        {
+          "content": " LÍQUIDO   A   PAGAR : CLP $ 1.200.000,00 "
+        },
+        {
+          "content": "Dirección: DIRECCION_SINTETICA_NO_GUARDAR"
+        }
+      ]
+    }
+  ]
+}

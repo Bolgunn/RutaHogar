@@ -1,0 +1,22 @@
+{
+  "content": "CERTIFICADO DE AHORRO\nCuenta N°: CUENTA_SINTETICA_NO_GUARDAR\nSaldo contable: $5.500.000\nSaldo disponible para giro: $4.000.000.-",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "lines": [
+        {
+          "content": "CERTIFICADO DE AHORRO"
+        },
+        {
+          "content": "Cuenta N°: CUENTA_SINTETICA_NO_GUARDAR"
+        },
+        {
+          "content": "Saldo contable: $5.500.000"
+        },
+        {
+          "content": "Saldo disponible para giro: $4.000.000.-"
+        }
+      ]
+    }
+  ]
+}
