@@ -1,5 +1,7 @@
 # PLAN — HU30: Participación y consentimiento de co-deudor
 
+> **Auditoría de integración 2026-10-25:** el diff productivo fue separado del tooling local. El despliegue de BD/Edge HU30 manteniendo el frontend/backend antiguo de `main` es **incompatible y está bloqueado**; el workflow existente también despliega Edge al integrar en `develop`. Ver [AUDITORIA-INTEGRACION.md](AUDITORIA-INTEGRACION.md) antes de merge o despliegue. El cierre local no certifica esa transición.
+
 - **Sprint:** 3. **Estimación del backlog:** 3 SP; la ampliación acordada debe hacerse visible en la planificación del Sprint, sin cambiar unilateralmente sus puntos.
 - **Responsable:** Persona A. **Método:** Scrum con SDD acotado para consentimiento, procedencia, privacidad y comparación financiera.
 - **Estado:** T1–T9B y cierre técnico/documental final completos localmente. Lista para PR/revisión; revisión por otra persona, homologación hospedada y aplicación coordinada de migraciones pendientes. No equivale a aprobación de producción. Ver [HU30-CIERRE.md](HU30-CIERRE.md).

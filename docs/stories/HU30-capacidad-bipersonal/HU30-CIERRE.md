@@ -1,5 +1,7 @@
 # HU30 — cierre técnico y preparación para revisión
 
+> **Auditoría de integración 2026-10-25:** el diff productivo fue separado del tooling local. El despliegue de BD/Edge HU30 manteniendo el frontend/backend antiguo de `main` es **incompatible y está bloqueado**; el workflow existente también despliega Edge al integrar en `develop`. Ver [AUDITORIA-INTEGRACION.md](AUDITORIA-INTEGRACION.md) antes de merge o despliegue. El cierre local no certifica esa transición.
+
 Fecha: 2026-10-23. Branch: `feat/hu30-capacidad-bipersonal`. Base de develop: `14738e185c4d77794d4fa2c9e57dcbeffc47dcca`. Implementación revisada hasta `9d98b12` (cierre T9B).
 
 **Estado final: implementación, validación integrada local y cierre documental completos; lista para PR/revisión.** La revisión de otra persona, homologación hospedada y aplicación coordinada de migraciones siguen pendientes. Esta entrega no declara producción certificada ni autorización de despliegue. Sólo modifica documentación; no aplica SQL remoto, hace push, abre PR, merge ni avanza a HU23.
