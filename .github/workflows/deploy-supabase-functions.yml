@@ -12,6 +12,12 @@ on:
       - "supabase/functions/**"
       - ".github/workflows/deploy-supabase-functions.yml"
   workflow_dispatch:
+    inputs:
+      deploy_co_debtor_consent:
+        description: "Deploy co-debtor-consent to production (main only; coordinate DB/frontend)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -86,6 +92,11 @@ jobs:
           supabase functions deploy submit-feedback --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Deploy co-debtor-consent function
+        # Requires coordinated DB/frontend rollout: incompatible with the previous client.
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs.deploy_co_debtor_consent))
         shell: bash
         run: |
           set -euo pipefail
