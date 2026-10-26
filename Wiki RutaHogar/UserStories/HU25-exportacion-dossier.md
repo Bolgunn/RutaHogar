@@ -1,6 +1,8 @@
-# HU 25 - Exportación de dossier para evaluación bancaria
+# ~~HU 25~~ (retirada) - Exportación de dossier para evaluación bancaria
 
-> **🗓 Planificada - Sprint 3.** Genera un expediente digital consolidado con el perfil del lead y sus documentos, para agilizar una derivación posterior a un banco.
+> **⛔ Reemplazada.** Esta historia ya no está en el backlog: el tablero del Sprint 3 (octubre 2026) renumeró el sprint y su alcance pasó a [[HU22-centro-exportacion-dossier|HU 22]]. Se conserva como antecedente; el número que tenía ahora pertenece a otra historia.
+
+> **Descripción original.** Genera un expediente digital consolidado con el perfil del lead y sus documentos, para agilizar una derivación posterior a un banco.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 3 |
 | **Actor** | Ejecutivo comercial |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 
