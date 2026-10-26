@@ -1,5 +1,7 @@
 # Sprint Distribution — RutaHogar
 
+> **⛔ Historical — superseded.** This page reflects the original sprint plan and its numbering. Sprints 2 and 3 were later renumbered: the current backlog is in [[UserStories/index\|User Stories]] and the current Sprint 3 split (HU 21–31, 57 SP) is in [[Sprint3-Division\|División del Sprint 3]]. In particular, HU 21 (map), HU 23 (scoring parameters), HU 30 (undefined) and the 46/42 SP Sprint 3 total below no longer apply.
+
 Tentative distribution of user stories and research spikes across the three sprints, following the **updated sprint plan** (*"HUs para Sprint 1"* document, numbering `HU 1–29`). See per-story detail in [[UserStories/index\|User Stories]].
 
 **Categories** follow a MoSCoW-style scheme: Essential · Important · Desirable · Optional.

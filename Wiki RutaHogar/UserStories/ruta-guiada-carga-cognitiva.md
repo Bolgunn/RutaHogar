@@ -1,6 +1,9 @@
 # Ruta guiada: un siguiente paso a la vez
 
-> **🗓 Planificada - Sprint 3 · sin número de HU asignado.** El lead deja de ver nueve secciones
+> **💡 Propuesta sin numerar · no comprometida.** No está en el tablero del Sprint 3 ni en sus
+> 57 SP; entra a un sprint cuando el equipo le asigne número, puntos y responsable.
+>
+> El lead deja de ver nueve secciones
 > con el mismo peso y pasa a ver una ruta de tres etapas, la etapa en la que está y **una sola
 > acción recomendada**, calculada desde su última evaluación.
 
@@ -11,10 +14,10 @@
 | Campo | Valor |
 | :---- | :---- |
 | **Categoría** | Esencial |
-| **Puntos de Historia** | 5 |
+| **Puntos de Historia** | 5 *(estimación propia, no comprometida)* |
 | **Actor** | Lead |
-| **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Sprint** | *(sin asignar)* |
+| **Estado** | 💡 Propuesta sin numerar |
 
 ---
 
