@@ -4,8 +4,9 @@ import { BarsChart, RateChart } from "./CommercialCharts";
 import { computeFunnelMetrics } from "../lib/commercial/funnelMetrics";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
 import { STAGES } from "../lib/commercial/stageRules";
-import { roles } from "../lib/roles";
+import { isAdminRole, roles } from "../lib/roles";
 import { getCommercialFunnelFacts } from "../services/commercialMetricsService";
+import ProjectInterestMetrics from "./ProjectInterestMetrics";
 
 // HU 15 — métricas comerciales. Todo número sale de ALG-18 (computeFunnelMetrics); esta vista
 // solo filtra y dibuja. Copia y estructura: frontend/mockups/hu15-metricas.html.
@@ -348,9 +349,34 @@ export default function CommercialMetrics({ role, onNavigate }) {
       <p>{isEjecutivo
         ? "Conversión, tiempos y seguimiento de los leads de tus proyectos asignados."
         : "Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos."}</p>
-      {state.data && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
+      {state.data && tab !== "proyectos" && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
     </div>
   );
+
+  // HU 26: la vista por proyectos es del administrador inmobiliario y no usa los filtros de HU 15.
+  const tabs = [
+    ["embudo", "Embudo y seguimiento"],
+    ["historia", "Evoluciones históricas"],
+    ...(isAdminRole(role) ? [["proyectos", "Interés por proyecto"]] : []),
+  ];
+  const tabsBar = (
+    <div className="cm-tabs" role="tablist">
+      {tabs.map(([key, label]) => (
+        <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
+      ))}
+    </div>
+  );
+
+  if (tab === "proyectos") {
+    return (
+      <section className="section-block cm-page">
+        {heading}
+        {tabsBar}
+        <ProjectInterestMetrics />
+        <p className="cm-disclaimer">Orientativo: estas métricas no aprueban créditos ni reemplazan una evaluación bancaria.</p>
+      </section>
+    );
+  }
 
   if (state.status !== "ready" || !state.data.facts.length) {
     const message = state.status === "loading" ? "Cargando métricas…"
@@ -361,6 +387,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
     return (
       <section className="section-block cm-page">
         {heading}
+        {tabs.length > 2 && tabsBar}
         <article className="admin-surface"><p className="cm-empty">{message}</p></article>
       </section>
     );
@@ -486,11 +513,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
         </div>}
       </article>
 
-      <div className="cm-tabs" role="tablist">
-        {[["embudo", "Embudo y seguimiento"], ["historia", "Evoluciones históricas"]].map(([key, label]) => (
-          <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
-        ))}
-      </div>
+      {tabsBar}
 
       {tab === "embudo" ? (
         <>
