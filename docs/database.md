@@ -110,6 +110,7 @@ con `inmobiliaria_id` en `NULL` es **admin global** y ve todos los tenants.
 | `inmobiliarias` | — | la suya | la suya, o todas si es global |
 | `proyectos` | catálogo publicado | **sólo donde está asignado** | los de su inmobiliaria |
 | `proyecto_ejecutivos` | — | **sólo sus asignaciones, dentro de su tenant** | las de su inmobiliaria |
+| `proyecto_visualizaciones` | — (escribe sólo vía `registrar_visualizacion_proyecto()`) | — | — (conteos anónimos vía `project_interest_facts()`, HU 26) |
 
 ⚠️ **`evaluations` no está acotada por tenant.** La tabla no tiene `inmobiliaria_id` y cualquier
 `ejecutivo`/`admin` lee todas las evaluaciones. Es un hueco conocido contra la salvaguarda **S6**,
