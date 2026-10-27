@@ -1,0 +1,70 @@
+[
+  {
+    "id": "plataforma-general",
+    "title": "¿Qué es RutaHogar y cómo usar la plataforma?",
+    "category": "plataforma",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "RutaHogar es una plataforma de precalificación y orientación financiera para la compra de vivienda en Chile. Te permite conocer tu capacidad de endeudamiento, estimar tu dividendo, comparar proyectos inmobiliarios compatibles con tu presupuesto y acceder a educación financiera en la Academia.",
+    "synonyms": [
+      "que es rutahogar",
+      "como usar la plataforma",
+      "para que sirve rutahogar",
+      "que puedo hacer aca",
+      "ayuda plataforma"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ir al Inicio"
+    }
+  },
+  {
+    "id": "plataforma-academia",
+    "title": "Academia Financiera de RutaHogar",
+    "category": "plataforma",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "En la sección 'Academia' encontrarás artículos y guías prácticas sobre cómo funciona un crédito hipotecario, cómo ordenar tus deudas, qué es la tasa de interés, el CAE, la UF y los subsidios habitacionales del Estado (DS1, DS19, etc.). Toda la información está basada en fuentes oficiales (SERNAC, CMF, MINVU y Banco Central).",
+    "synonyms": [
+      "academia financiera",
+      "donde aprender de finanzas",
+      "guias financieras",
+      "articulos de educacion",
+      "subsidios habitacionales",
+      "minvu cmf"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "academia",
+      "label": "Ir a la Academia Financiera"
+    }
+  },
+  {
+    "id": "plataforma-privacidad-datos",
+    "title": "Privacidad de datos y derechos del titular (Ley 21.719)",
+    "category": "plataforma",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "Tus datos financieros y personales están protegidos bajo los más altos estándares de seguridad y en estricto cumplimiento de la Ley 21.719 de Chile. En cualquier momento puedes ingresar a 'Mi Perfil' para descargar una copia completa de tus datos en formato estructurado, rectificarlos o solicitar la eliminación total y revocación de consentimiento.",
+    "synonyms": [
+      "privacidad de datos",
+      "ley de proteccion de datos",
+      "descargar mis datos",
+      "eliminar mis datos",
+      "revocar consentimiento",
+      "seguridad de la informacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil"
+    }
+  }
+]

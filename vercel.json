@@ -10,11 +10,15 @@
   ],
   "functions": {
     "api/score.py": {
-      "includeFiles": "backend/app/lead_changes/templates/**",
+      "includeFiles": "backend/app/{lead_changes/templates,assistant/kb}/**",
       "maxDuration": 60
     }
   },
   "rewrites": [
+    {
+      "source": "/api/assistant/(.*)",
+      "destination": "/api/score"
+    },
     {
       "source": "/score",
       "destination": "/api/score"
