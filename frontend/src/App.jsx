@@ -2067,7 +2067,7 @@ export default function App() {
     <AssistantWidget
       screenId={page}
       role={profile?.role || "anon"}
-      token={session?.access_token || null}
+      token={auth?.session?.access_token || null}
       onNavigate={navigateToPage}
       onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
     />

@@ -7,4 +7,13 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn('Supabase no está configurado. Revisa las variables de entorno.');
 }
 
-export const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+export const supabase =
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          lock: async (_name, _acquireTimeout, fn) => {
+            return await fn();
+          },
+        },
+      })
+    : null;
