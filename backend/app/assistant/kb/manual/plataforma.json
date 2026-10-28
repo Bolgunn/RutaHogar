@@ -3,6 +3,7 @@
     "id": "plataforma-general",
     "title": "¿Qué es RutaHogar y cómo usar la plataforma?",
     "category": "plataforma",
+    "audience": "all",
     "step": null,
     "step_name": null,
     "field_id": null,
@@ -25,6 +26,7 @@
     "id": "plataforma-academia",
     "title": "Academia Financiera de RutaHogar",
     "category": "plataforma",
+    "audience": "all",
     "step": null,
     "step_name": null,
     "field_id": null,
@@ -35,8 +37,8 @@
       "donde aprender de finanzas",
       "guias financieras",
       "articulos de educacion",
-      "subsidios habitacionales",
-      "minvu cmf"
+      "educacion financiera",
+      "aprender finanzas"
     ],
     "action": {
       "type": "navigate",
@@ -48,6 +50,7 @@
     "id": "plataforma-privacidad-datos",
     "title": "Privacidad de datos y derechos del titular (Ley 21.719)",
     "category": "plataforma",
+    "audience": "all",
     "step": null,
     "step_name": null,
     "field_id": null,
@@ -65,6 +68,141 @@
       "type": "navigate",
       "target": "profile",
       "label": "Ir a Mi Perfil"
+    }
+  },
+  {
+    "id": "plataforma-simulador-credito",
+    "title": "Simulador de crédito hipotecario y dividendos",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "simulation",
+    "content": "En el 'Simulador' de RutaHogar puedes proyectar tu dividendo mensual estimado variando el precio de la propiedad (en UF), el porcentaje de pie disponible (ej. 10%, 15%, 20%), el plazo en años y la tasa de interés referencial. Te ayuda a comparar escenarios y verificar si la cuota mensual se ajusta a tu ingreso.",
+    "synonyms": [
+      "simulador",
+      "simular",
+      "simulacion",
+      "simulador de credito",
+      "simulador hipotecario",
+      "simular credito",
+      "simular hipotecario",
+      "calcular dividendo",
+      "donde simular",
+      "estimar dividendo"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "simulation",
+      "label": "Ir al Simulador de Crédito"
+    }
+  },
+  {
+    "id": "plataforma-catalogo-proyectos",
+    "title": "Búsqueda y catálogo de proyectos inmobiliarios",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "projects",
+    "content": "En la sección 'Proyectos' puedes explorar departamentos y casas según tu presupuesto y capacidad de endeudamiento. Puedes filtrar por comuna, rango de precio en UF, número de dormitorios y entrega inmediata o en blanco/verde.",
+    "synonyms": [
+      "proyectos",
+      "catalogo de proyectos",
+      "buscar proyectos",
+      "catalogo de viviendas",
+      "donde ver casas",
+      "proyectos disponibles",
+      "buscar departamentos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "projects",
+      "label": "Explorar Catálogo de Proyectos"
+    }
+  },
+  {
+    "id": "plataforma-subsidios-habitacionales",
+    "title": "Subsidios habitacionales del Estado (MINVU)",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "subsidios",
+    "content": "En la sección 'Subsidios' puedes revisar los beneficios estatales para la compra de vivienda en Chile: Subsidio DS1 (para sectores medios, tramos 1, 2 y 3) y Subsidio DS19 (integración social y territorial con aplicación automática en proyectos inmobiliarios seleccionados). Conoce sus requisitos de ahorro mínimo y tope de valor de la vivienda.",
+    "synonyms": [
+      "subsidios",
+      "subsidio",
+      "postular a subsidio",
+      "consultar subsidios",
+      "subsidio ds1",
+      "subsidio ds19",
+      "beneficios minvu",
+      "subsidios habitacionales",
+      "requisitos subsidio"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "subsidios",
+      "label": "Consultar Subsidios"
+    },
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-estatales",
+      "label": "Leer en Academia: Subsidios Estatales"
+    }
+  },
+  {
+    "id": "plataforma-codeudor-complementar",
+    "title": "Invitación y gestión de codeudores para complementar renta",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "co-debtor-management",
+    "content": "Si tus ingresos individuales no alcanzan para el dividendo deseado, puedes sumar a un codeudor (pareja, cónyuge, familiar directo o conviviente civil). En la sección de gestión de codeudores puedes enviar una invitación segura por correo electrónico para que ingrese sus datos y autorice la complementación de renta.",
+    "synonyms": [
+      "codeudor",
+      "codeudores",
+      "invitar codeudor",
+      "gestionar codeudor",
+      "agregar pareja",
+      "complementar renta",
+      "invitacion codeudor",
+      "como sumar codeudor"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "co-debtor-management",
+      "label": "Gestionar Codeudor"
+    }
+  },
+  {
+    "id": "plataforma-historial-evaluaciones",
+    "title": "Historial de precalificaciones y evolución de score",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "En 'Mi Perfil' puedes revisar el historial de todas tus precalificaciones realizadas, la fecha de cada cálculo, el score obtenido y las recomendaciones de ahorro o amortización de deuda para mejorar tu perfil financiero en el tiempo.",
+    "synonyms": [
+      "historial de evaluaciones",
+      "mis precalificaciones",
+      "evaluaciones anteriores",
+      "ver scores pasados",
+      "evolucion de score",
+      "donde ver mis resultados"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil e Historial"
     }
   }
 ]

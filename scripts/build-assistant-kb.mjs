@@ -6,23 +6,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
-const manualPreevalPath = path.join(
+const manualDir = path.join(
   rootDir,
   "backend",
   "app",
   "assistant",
   "kb",
-  "manual",
-  "preevaluacion.json"
-);
-const manualPlataformaPath = path.join(
-  rootDir,
-  "backend",
-  "app",
-  "assistant",
-  "kb",
-  "manual",
-  "plataforma.json"
+  "manual"
 );
 const academyContentPath = path.join(
   rootDir,
@@ -40,25 +30,49 @@ const outputKbPath = path.join(
   "kb.json"
 );
 
+// Whitelist of valid frontend routes
+const VALID_ROUTES = new Set([
+  "home",
+  "evaluate",
+  "onboarding",
+  "simulation",
+  "projects",
+  "portal",
+  "subsidios",
+  "academia",
+  "profile",
+  "co-debtor-management",
+  "co-debtor-invitation",
+  "admin",
+  "admin-projects",
+  "admin-profile",
+  "admin-reports",
+  "leads",
+  "metricas",
+  "sales-profile",
+  "auth",
+  "set-password",
+  "landing",
+]);
+
 async function buildKnowledgeBase() {
   console.log("Compiling Assistant Knowledge Base...");
   const chunks = [];
 
-  // 1. Manual chunks: Pre-evaluacion
-  if (fs.existsSync(manualPreevalPath)) {
-    const preevalChunks = JSON.parse(fs.readFileSync(manualPreevalPath, "utf-8"));
-    chunks.push(...preevalChunks);
-    console.log(`Loaded ${preevalChunks.length} chunks from preevaluacion.json`);
+  // 1. Load all manual chunks from backend/app/assistant/kb/manual/*.json
+  if (fs.existsSync(manualDir)) {
+    const files = fs.readdirSync(manualDir).filter((f) => f.endsWith(".json"));
+    for (const file of files) {
+      const filePath = path.join(manualDir, file);
+      const fileChunks = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      if (Array.isArray(fileChunks)) {
+        chunks.push(...fileChunks);
+        console.log(`Loaded ${fileChunks.length} chunks from ${file}`);
+      }
+    }
   }
 
-  // 2. Manual chunks: Plataforma
-  if (fs.existsSync(manualPlataformaPath)) {
-    const platChunks = JSON.parse(fs.readFileSync(manualPlataformaPath, "utf-8"));
-    chunks.push(...platChunks);
-    console.log(`Loaded ${platChunks.length} chunks from plataforma.json`);
-  }
-
-  // 3. Academia content
+  // 2. Academia content
   if (fs.existsSync(academyContentPath)) {
     // Copy to temp .mjs so Node ES module loader accepts it regardless of package.json
     const tempMjsPath = path.join(__dirname, "_temp_academyContent.mjs");
@@ -82,12 +96,17 @@ async function buildKnowledgeBase() {
           id: `glossary-${key.toLowerCase().replace(/\s+/g, "-")}`,
           title: `Glosario: ${item.label}`,
           category: "glosario",
+          audience: "all",
           step: null,
           step_name: null,
           field_id: null,
           screen_id: "academia",
           content: `${item.label}: ${item.definition}`,
-          synonyms: [item.label.toLowerCase(), `que es ${item.label.toLowerCase()}`, `definicion de ${item.label.toLowerCase()}`],
+          synonyms: [
+            item.label.toLowerCase(),
+            `que es ${item.label.toLowerCase()}`,
+            `definicion de ${item.label.toLowerCase()}`,
+          ],
           link: item.articleId
             ? {
                 type: "academy",
@@ -113,12 +132,16 @@ async function buildKnowledgeBase() {
           id: `article-${art.id}`,
           title: art.title,
           category: "academia",
+          audience: "all",
           step: null,
           step_name: null,
           field_id: null,
           screen_id: "academia",
           content: fullText,
-          synonyms: [art.title.toLowerCase(), ...(art.tags || []).map((t) => t.toLowerCase())],
+          synonyms: [
+            art.title.toLowerCase(),
+            ...(art.tags || []).map((t) => t.toLowerCase()),
+          ],
           link: {
             type: "academy",
             articleId: art.id,
@@ -128,6 +151,20 @@ async function buildKnowledgeBase() {
         articleCount++;
       }
       console.log(`Added ${articleCount} academy articles`);
+    }
+  }
+
+  // 3. Validate routes
+  for (const chunk of chunks) {
+    if (chunk.action?.target && !VALID_ROUTES.has(chunk.action.target)) {
+      throw new Error(
+        `Invalid action.target "${chunk.action.target}" in chunk "${chunk.id}". Must be in VALID_ROUTES.`
+      );
+    }
+    if (chunk.link?.target && !VALID_ROUTES.has(chunk.link.target)) {
+      throw new Error(
+        `Invalid link.target "${chunk.link.target}" in chunk "${chunk.id}". Must be in VALID_ROUTES.`
+      );
     }
   }
 

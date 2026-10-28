@@ -633,6 +633,8 @@ export default function AssistantWidget({
       } else if (onNavigate) {
         onNavigate("academia", { articleId: link.articleId });
       }
+    } else if ((link.type === "navigate" || link.target || link.route) && onNavigate) {
+      onNavigate(link.target || link.route);
     } else if (link.url) {
       window.open(link.url, "_blank", "noopener,noreferrer");
     }
@@ -897,7 +899,7 @@ export default function AssistantWidget({
                         </button>
                       )}
 
-                      {/* Links Buttons (e.g. Open Academy article) */}
+                      {/* Links Buttons (e.g. Open Academy article or navigate to section) */}
                       {msg.links && msg.links.length > 0 && (
                         <div className="assistant-links-container">
                           {msg.links.map((lnk, idx) => (
@@ -907,7 +909,7 @@ export default function AssistantWidget({
                               className="assistant-link-chip"
                               onClick={() => handleLinkClick(lnk)}
                             >
-                              <span>📖</span>
+                              <span>{lnk.type === "academy" ? "📖" : "🧭"}</span>
                               <span>{lnk.label}</span>
                             </button>
                           ))}

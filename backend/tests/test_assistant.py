@@ -141,6 +141,133 @@ class TestAssistant(unittest.TestCase):
         self.assertEqual(top_chunk["field_id"], "deuda_mensual")
 
     # -------------------------------------------------------------------------
+    # 3b. Acceptance Criterion E2: Financial Concepts & Staff How-To Retrieval
+    # -------------------------------------------------------------------------
+
+    def test_financial_concept_retrieves_academy_article_link(self):
+        req = AssistantChatRequest(
+            message="¿Qué es el CAE y cómo se calcula?",
+            screen_id="academia",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=False)
+        self.assertGreater(len(res.links), 0)
+        academy_links = [l for l in res.links if l.type == "academy" and l.articleId]
+        self.assertGreater(len(academy_links), 0)
+        self.assertEqual(academy_links[0].articleId, "costos-2")
+
+    def test_financial_concept_subsidies_retrieves_academy_article(self):
+        req = AssistantChatRequest(
+            message="¿Cuáles son los subsidios habitacionales DS19 y DS1?",
+            screen_id="subsidios",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=False)
+        self.assertIn("subsidio", res.answer.lower())
+        academy_links = [l for l in res.links if l.type == "academy" and l.articleId]
+        self.assertGreater(len(academy_links), 0)
+        self.assertIn(academy_links[0].articleId, {"subsidios-estatales", "rsh-3"})
+
+    def test_staff_how_to_retrieves_admin_executives_management(self):
+        req = AssistantChatRequest(
+            message="¿Cómo gestiono a mis ejecutivos inmobiliarios?",
+            screen_id="admin",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=True)
+        self.assertIn("ejecutivos", res.answer.lower())
+        self.assertIsNotNone(res.action)
+        self.assertEqual(res.action.target, "admin")
+        self.assertEqual(res.action.type, "navigate")
+
+    def test_staff_how_to_retrieves_executive_leads_pipeline(self):
+        req = AssistantChatRequest(
+            message="¿Dónde veo y atiendo mis leads asignados en el pipeline?",
+            screen_id="leads",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=True)
+        self.assertIn("leads", res.answer.lower())
+        self.assertIsNotNone(res.action)
+        self.assertEqual(res.action.target, "leads")
+
+    def test_staff_how_to_retrieves_projects_management(self):
+        req = AssistantChatRequest(
+            message="¿Cómo puedo subir o gestionar los proyectos de la inmobiliaria?",
+            screen_id="admin",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=True)
+        self.assertIn("proyectos", res.answer.lower())
+        self.assertIsNotNone(res.action)
+        self.assertEqual(res.action.target, "admin-projects")
+
+    def test_user_how_to_retrieves_simulation_and_codebtor_views(self):
+        req_sim = AssistantChatRequest(
+            message="¿Dónde uso el simulador de crédito hipotecario?",
+            screen_id="home",
+        )
+        res_sim = AssistantService.process_chat(req_sim, is_authenticated=False)
+        self.assertIsNotNone(res_sim.action)
+        self.assertEqual(res_sim.action.target, "simulation")
+
+        req_codebtor = AssistantChatRequest(
+            message="¿Cómo puedo invitar a un codeudor para complementar renta?",
+            screen_id="home",
+        )
+        res_codebtor = AssistantService.process_chat(req_codebtor, is_authenticated=False)
+        self.assertIsNotNone(res_codebtor.action)
+        self.assertEqual(res_codebtor.action.target, "co-debtor-management")
+
+    def test_answer_links_come_only_from_kb(self):
+        req = AssistantChatRequest(
+            message="¿Qué es la tasa de interés fija y variable?",
+            screen_id="academia",
+        )
+        res = AssistantService.process_chat(req, is_authenticated=True)
+        kb = load_kb()
+        kb_article_ids = {c.get("link", {}).get("articleId") for c in kb if c.get("link")}
+        for link in res.links:
+            if link.type == "academy":
+                self.assertIn(link.articleId, kb_article_ids)
+
+    def test_every_kb_link_route_exists(self):
+        valid_routes = {
+            "home",
+            "evaluate",
+            "onboarding",
+            "simulation",
+            "projects",
+            "portal",
+            "subsidios",
+            "academia",
+            "profile",
+            "co-debtor-management",
+            "co-debtor-invitation",
+            "admin",
+            "admin-projects",
+            "admin-profile",
+            "admin-reports",
+            "leads",
+            "metricas",
+            "sales-profile",
+            "auth",
+            "set-password",
+            "landing",
+        }
+        kb = load_kb()
+        for chunk in kb:
+            action = chunk.get("action")
+            if action and action.get("target"):
+                self.assertIn(
+                    action["target"],
+                    valid_routes,
+                    f"Chunk {chunk.get('id')} has invalid action.target {action.get('target')}",
+                )
+            link = chunk.get("link")
+            if link and link.get("target"):
+                self.assertIn(
+                    link["target"],
+                    valid_routes,
+                    f"Chunk {chunk.get('id')} has invalid link.target {link.get('target')}",
+                )
+
+    # -------------------------------------------------------------------------
     # 4. Service Tiering and Anonymous Flow Tests
     # -------------------------------------------------------------------------
 

@@ -35,8 +35,9 @@ class AssistantAction(BaseModel):
 
 
 class AssistantLink(BaseModel):
-    type: str  # "academy" | "external"
+    type: str  # "academy" | "external" | "navigate"
     articleId: Optional[str] = None
+    target: Optional[str] = None
     url: Optional[str] = None
     label: str
 
@@ -126,6 +127,7 @@ class AssistantService:
                     AssistantLink(
                         type=lnk.get("type", "academy"),
                         articleId=lnk.get("articleId"),
+                        target=lnk.get("target") or lnk.get("route"),
                         url=lnk.get("url"),
                         label=lnk.get("label", "Ver información"),
                     )
