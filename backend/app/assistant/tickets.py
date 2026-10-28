@@ -42,6 +42,7 @@ class UserTicketFeedbackRequest(BaseModel):
 class TicketResponse(BaseModel):
     id: str
     code: str
+    user_id: Optional[str] = None
     status: str
     created_at: str
     notified_at: Optional[str] = None
@@ -233,6 +234,7 @@ class TicketService:
                 return TicketResponse(
                     id=ticket_id,
                     code=code,
+                    user_id=ticket_row.get("user_id") or user_id,
                     status=ticket_row["status"],
                     created_at=ticket_row["created_at"],
                     notified_at=notified_at_val,

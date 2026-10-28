@@ -109,12 +109,24 @@ export async function createSupportTicket({
   history = [],
   screenId = null,
   token = null,
+  userId = null,
   clientRequestId = null,
   customFetch = fetch,
 }) {
   const activeToken = await getActiveAuthToken(token);
   if (!activeToken) {
     throw new Error("unauthenticated");
+  }
+
+  let effectiveUserId = userId;
+  if (!effectiveUserId) {
+    try {
+      const rawProfile = localStorage.getItem("RutaHogar_profile");
+      if (rawProfile) {
+        const p = JSON.parse(rawProfile);
+        effectiveUserId = p.id || p.user_id || null;
+      }
+    } catch {}
   }
 
   const cleanSubject = (subject || "Consulta de soporte").trim().slice(0, 120);
@@ -156,10 +168,14 @@ export async function createSupportTicket({
 
     if (res.ok) {
       const data = await res.json();
+      const ticketToStore = {
+        ...data,
+        user_id: data.user_id || effectiveUserId,
+      };
       // Cache in local storage for instant offline resilience
       const existing = readLocalSupportTickets();
-      writeLocalSupportTickets([data, ...existing.filter((t) => t.id !== data.id)]);
-      return data;
+      writeLocalSupportTickets([ticketToStore, ...existing.filter((t) => t.id !== ticketToStore.id)]);
+      return ticketToStore;
     }
 
     if (res.status === 401) {
@@ -182,6 +198,7 @@ export async function createSupportTicket({
       const p = JSON.parse(rawProfile);
       storedUserName = p.full_name || p.email || storedUserName;
       storedUserEmail = p.email || "";
+      if (!effectiveUserId) effectiveUserId = p.id || p.user_id || null;
     }
   } catch {}
 
@@ -193,6 +210,7 @@ export async function createSupportTicket({
   const localTicket = {
     id: localId,
     code,
+    user_id: effectiveUserId,
     user_name: storedUserName,
     user_email: storedUserEmail,
     subject: cleanSubject,
@@ -217,7 +235,7 @@ export async function createSupportTicket({
   };
 
   const existing = readLocalSupportTickets();
-  writeLocalSupportTickets([localTicket, ...existing]);
+  writeLocalSupportTickets([localTicket, ...existing.filter((t) => t.id !== localId)]);
   return localTicket;
 }
 
@@ -264,20 +282,31 @@ export async function getSupportTickets({ status = "todos" } = {}) {
  * @returns {Promise<Array<any>>}
  */
 export async function getUserSupportTickets({ userId = null, token = null } = {}) {
+  // Security guard: unauthenticated or guest users NEVER have support tickets
+  const cleanUserId = typeof userId === "string" ? userId.trim() : null;
+  if (!cleanUserId) {
+    return [];
+  }
+
   const localTickets = readLocalSupportTickets();
+  const matchingLocal = localTickets.filter(
+    (lt) => lt.user_id && lt.user_id === cleanUserId
+  );
 
   if (isSupabaseDataConfigured) {
     try {
       const activeToken = await getActiveAuthToken(token);
       if (activeToken) {
+        // ALWAYS filter strictly by user_id so admins/staff only see tickets they submitted
         const { data, error } = await supabase
           .from("support_tickets")
           .select("*")
+          .eq("user_id", cleanUserId)
           .order("created_at", { ascending: false });
 
         if (!error && Array.isArray(data)) {
           const map = new Map(data.map((t) => [t.id, t]));
-          for (const lt of localTickets) {
+          for (const lt of matchingLocal) {
             if (!map.has(lt.id)) {
               map.set(lt.id, lt);
             }
@@ -290,15 +319,8 @@ export async function getUserSupportTickets({ userId = null, token = null } = {}
     }
   }
 
-  // Filter local tickets by userId if provided, or return all if local/demo mode
-  if (userId) {
-    const userSpecific = localTickets.filter(
-      (t) => t.user_id === userId || !t.user_id || t.user_id.includes(userId)
-    );
-    if (userSpecific.length > 0) return userSpecific;
-  }
-
-  return localTickets;
+  // Filter local tickets strictly by this user's ID
+  return matchingLocal;
 }
 
 /**

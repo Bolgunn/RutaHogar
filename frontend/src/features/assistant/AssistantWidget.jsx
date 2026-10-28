@@ -121,25 +121,70 @@ export default function AssistantWidget({
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMessages(parsed);
+          return;
         }
       }
-    } catch {}
+      setMessages([DEFAULT_WELCOME]);
+      setActiveTicket(null);
+    } catch {
+      setMessages([DEFAULT_WELCOME]);
+      setActiveTicket(null);
+    }
   }, [profile?.id, profile?.email]);
+
+  // Safety purge: If user has no active ticket, remove any foreign ticket inquiry / admin reply messages
+  useEffect(() => {
+    if (!activeTicket) {
+      setMessages((prev) => {
+        const hasTicketArtifacts = prev.some(
+          (m) =>
+            m.id?.startsWith("user-ticket-inquiry-") ||
+            m.id?.startsWith("ticket-confirm-") ||
+            m.id?.startsWith("admin-reply-") ||
+            Boolean(m.ticketId)
+        );
+        if (!hasTicketArtifacts) return prev;
+
+        const cleaned = prev.filter(
+          (m) =>
+            !m.id?.startsWith("user-ticket-inquiry-") &&
+            !m.id?.startsWith("ticket-confirm-") &&
+            !m.id?.startsWith("admin-reply-") &&
+            !m.ticketId
+        );
+        return cleaned.length === 0 ? [DEFAULT_WELCOME] : cleaned;
+      });
+    }
+  }, [activeTicket]);
 
   // Sync tickets and admin responses
   const syncTicketsAndReplies = async () => {
+    // Unauthenticated/guest users do not have support tickets
+    if (!profile?.id) {
+      setActiveTicket(null);
+      return;
+    }
+
     try {
       const userTickets = await getUserSupportTickets({
-        userId: profile?.id || null,
+        userId: profile.id,
         token,
       });
 
       if (!userTickets || !Array.isArray(userTickets) || userTickets.length === 0) {
+        setActiveTicket(null);
+        return;
+      }
+
+      // Strictly consider tickets belonging to this profile
+      const ownedTickets = userTickets.filter((t) => t.user_id === profile.id);
+      if (ownedTickets.length === 0) {
+        setActiveTicket(null);
         return;
       }
 
       // Sort by created_at desc
-      const sorted = [...userTickets].sort(
+      const sorted = [...ownedTickets].sort(
         (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
       );
 
@@ -154,7 +199,7 @@ export default function AssistantWidget({
         const isFresh = updated.length === 1 && updated[0].id === "welcome";
 
         // Restore context if conversation was clean but active ticket exists
-        if (isFresh && latest && latest.message) {
+        if (isFresh && latest && latest.message && latest.user_id === profile.id) {
           updated.push({
             id: `user-ticket-inquiry-${latest.id}`,
             role: "user",
@@ -545,6 +590,7 @@ export default function AssistantWidget({
         history: transcriptHistory,
         screenId,
         token: activeToken || "local-authenticated-session",
+        userId: profile?.id || null,
       });
 
       setTicketSuccess(res);

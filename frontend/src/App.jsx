@@ -2047,6 +2047,9 @@ export default function App() {
     setAnonOnboarding(null);
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
     sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
+    try {
+      localStorage.removeItem("rutahogar_assistant_msgs_guest");
+    } catch {}
     navigateToPage("auth", { replace: true });
   };
 
@@ -2079,6 +2082,7 @@ export default function App() {
 
   const assistantNode = (
     <AssistantWidget
+      key={profile?.id || "anon"}
       screenId={page}
       role={profile?.role || "anon"}
       profile={profile}
