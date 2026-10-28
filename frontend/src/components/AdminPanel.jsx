@@ -4,6 +4,7 @@ import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
 import AdminReportedLeads from "./AdminReportedLeads";
+import AdminSupportTickets from "../features/assistant/AdminSupportTickets";
 import "./admin-panel-overview.css";
 
 function formatFecha(value) {
@@ -247,9 +248,14 @@ export default function AdminPanel({ evaluations, profile }) {
       
 
       {canSeeArco && (
-        <div className="admin-surface admin-panel-arco-surface admin-section-gap">
-          <AdminArcoRequests />
-        </div>
+        <>
+          <div className="admin-surface admin-panel-arco-surface admin-section-gap">
+            <AdminSupportTickets />
+          </div>
+          <div className="admin-surface admin-panel-arco-surface admin-section-gap">
+            <AdminArcoRequests />
+          </div>
+        </>
       )}
 
       <div className="admin-section-gap">

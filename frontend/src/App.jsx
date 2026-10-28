@@ -984,6 +984,20 @@ export default function App() {
     }
   }, [scoreFormDraft]);
 
+  useEffect(() => {
+    import("./utils/supabase").then(({ supabase }) => {
+      if (!supabase?.auth) return;
+      supabase.auth.getSession().then(({ data }) => {
+        if (data?.session?.access_token) {
+          setAuth((prev) => ({
+            ...prev,
+            session: data.session,
+          }));
+        }
+      }).catch(() => {});
+    });
+  }, []);
+
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
     ? profile.id
@@ -2067,7 +2081,8 @@ export default function App() {
     <AssistantWidget
       screenId={page}
       role={profile?.role || "anon"}
-      token={auth?.session?.access_token || null}
+      profile={profile}
+      token={auth?.session?.access_token || auth?.session?.token || null}
       onNavigate={navigateToPage}
       onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
     />

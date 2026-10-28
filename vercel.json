@@ -20,6 +20,10 @@
       "destination": "/api/score"
     },
     {
+      "source": "/api/support/(.*)",
+      "destination": "/api/score"
+    },
+    {
       "source": "/score",
       "destination": "/api/score"
     },
