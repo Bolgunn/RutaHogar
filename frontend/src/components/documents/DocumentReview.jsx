@@ -91,10 +91,11 @@ export default function DocumentReview({ session, onSession, onConfirmed = () =>
     {error && <p role="alert">{error}</p>}
   </section>;
   if (session.state !== 'awaiting_review') return <p role="status">Este intento terminó. No se confirmaron nuevos cambios desde esta revisión.</p>;
-  return <section aria-label="Revisión de antecedentes documentales">
+  return <section className="document-review" aria-label="Revisión de antecedentes documentales">
     <h3>Revisa los antecedentes detectados</h3>
     <p>Confirma sólo después de revisar cada campo. Esta acción no recalcula tu score.</p>
     <form onSubmit={submit}>
+      <div className="document-review-table" role="region" aria-label="Comparación de antecedentes" tabIndex={0}>
       <table><thead><tr><th>Antecedente</th><th>Declarado</th><th>Detectado</th><th>Comparación y decisión</th></tr></thead>
         <tbody>{candidates.map((row) => <tr key={row.field}>
           <th scope="row">{fieldLabels[row.field]}</th>
@@ -105,21 +106,27 @@ export default function DocumentReview({ session, onSession, onConfirmed = () =>
               : row.detection === 'not_detected' ? 'No se detectó este dato.' : 'No hay un valor declarado comparable.'} Este campo no se modificará ni quedará respaldado por este intento.</p>
             : row.comparison === 'match'
               ? <p>Coincide. Al confirmar, quedará respaldado sin cambiar el valor.</p>
-              : <fieldset disabled={busy || pending || needsRefresh}>
-                <legend>Hay diferencia en {fieldLabels[row.field]}</legend>
-                <label><input type="radio" name={row.field} value="accept_detected" checked={choices[row.field] === 'accept_detected'}
-                  onChange={() => { if (!commandRef.current) { setChoices((old) => ({ ...old, [row.field]: 'accept_detected' })); setAcknowledged(false); } }} />Aceptar valor detectado</label>
-                <label><input type="radio" name={row.field} value="keep_declared" checked={choices[row.field] === 'keep_declared'}
-                  onChange={() => { if (!commandRef.current) { setChoices((old) => ({ ...old, [row.field]: 'keep_declared' })); setAcknowledged(false); } }} />Mantener valor declarado</label>
+              : <fieldset className="document-decision" disabled={busy || pending || needsRefresh}>
+                <legend><span className="document-difference-badge">Se detectó una diferencia</span><span className="sr-only"> en {fieldLabels[row.field]}</span></legend>
+                {[
+                  ['accept_detected', 'Usar valor del documento', row.detected_value, 'Incorporar este valor a tus antecedentes al confirmar.'],
+                  ['keep_declared', 'Mantener valor declarado', row.declared_value, 'Conservar el dato actual y dejar registrada la diferencia.'],
+                ].map(([decision, title, value, explanation]) => <label key={decision}
+                  className={`document-decision-card${choices[row.field] === decision ? ' is-selected' : ''}`}>
+                  <input type="radio" name={row.field} value={decision} checked={choices[row.field] === decision}
+                    onChange={() => { if (!commandRef.current) { setChoices((old) => ({ ...old, [row.field]: decision })); setAcknowledged(false); } }} />
+                  <span><strong>{title}</strong><span className="document-decision-card__value">{valueLabel(row.field, value)}</span>
+                    <small>{explanation}</small></span>
+                </label>)}
               </fieldset>}</td>
-        </tr>)}</tbody></table>
+        </tr>)}</tbody></table></div>
       {actionable.length === 0 && <p>No hay datos que se puedan respaldar. Puedes finalizar la revisión sin cambios o cancelarla.</p>}
-      <label><input type="checkbox" checked={acknowledged} disabled={busy || pending || needsRefresh}
-        onChange={(event) => setAcknowledged(event.target.checked)} />He revisado la comparación y confirmo las decisiones indicadas.</label>
+      <label className="document-consent"><input type="checkbox" checked={acknowledged} disabled={busy || pending || needsRefresh}
+        onChange={(event) => setAcknowledged(event.target.checked)} /><span>He revisado la comparación y confirmo las decisiones indicadas.</span></label>
       <button type="submit" disabled={busy || needsRefresh || (!pending && (!acknowledged || missing))}>
         {pending ? 'Reintentar confirmación' : actionable.length ? 'Confirmar antecedentes' : 'Finalizar revisión sin cambios'}
       </button>
-      <button type="button" onClick={cancel} disabled={busy || pending}>Cancelar revisión</button>
+      <button type="button" className="document-cancel-button" onClick={cancel} disabled={busy || pending}>Cancelar revisión</button>
       {needsRefresh && <button type="button" onClick={refresh} disabled={busy}>Consultar estado actualizado</button>}
     </form>
     {error && <p role="alert">{error}</p>}

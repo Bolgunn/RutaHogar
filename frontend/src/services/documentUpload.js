@@ -2,7 +2,11 @@ import { supabase } from '../utils/supabase';
 import { trackingRequest } from './trackingService';
 import { withTimeout } from './httpRequest';
 
-export class DocumentUploadError extends Error {}
+export class DocumentUploadError extends Error {
+  constructor(message, { recoverable = false } = {}) {
+    super(message); this.recoverable = recoverable;
+  }
+}
 
 export const getDocumentConfiguration = () => trackingRequest('/documents/config');
 export const getDocumentSession = (id) => trackingRequest(`/documents/sessions/${encodeURIComponent(id)}`);
@@ -92,7 +96,13 @@ export async function uploadDocument(file, documentType, {
       const result = await withTimeout(storage.from(authorization.bucket).upload(authorization.path, blob, {
         contentType: authorization.content_type, upsert: false, cacheControl: '0',
       }));
-      if (result.error) throw new DocumentUploadError('No pudimos subir el archivo. Puedes reintentar sin sobrescribirlo.');
+      if (result.error) {
+        const status = Number(result.error.statusCode || result.error.status);
+        const recoverable = !status || status >= 500 || [408, 409, 425, 429].includes(status);
+        throw new DocumentUploadError(recoverable
+          ? 'No pudimos subir el archivo. Puedes reintentar sin sobrescribirlo.'
+          : 'No se autorizó esta carga. Cierra el intento y selecciona un archivo válido.', { recoverable });
+      }
     }
     checkActive();
     onState('verifying');
@@ -105,6 +115,7 @@ export async function uploadDocument(file, documentType, {
     return ready;
   } catch (error) {
     if (error instanceof DocumentUploadError) throw error;
-    throw new DocumentUploadError(messages[error.code] || 'No pudimos completar la carga. Reintenta o cancela el intento.');
+    const recoverable = !error.code || ['persistence_unavailable', 'storage_unavailable'].includes(error.code);
+    throw new DocumentUploadError(messages[error.code] || 'No pudimos completar la carga. Reintenta o cancela el intento.', { recoverable });
   }
 }

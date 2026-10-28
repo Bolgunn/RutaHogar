@@ -14,12 +14,15 @@ it('renderiza los tres estados y sólo fecha para datos vigentes',()=>{
   const html=renderToStaticMarkup(<DocumentBackingView projection={projection} />);
   for(const label of ['Respaldado','Con diferencia','Sin respaldo','Ingreso mensual','Ahorro disponible','Tipo de contrato','Continuidad laboral']) expect(html).toContain(label);
   expect(html).toContain('dateTime="2026-10-25"');
+  for (const state of ['respaldado', 'con_diferencia', 'sin_respaldo']) expect(html).toContain(`is-${state}`);
+  expect(html).toContain('document-backing-date');
   expect(html).toContain('confirmada aplicable al dato vigente');
   expect(html).not.toContain('iframe');expect(html).not.toContain('href=');
 });
 it('un widget sin respuesta muestra carga, no ausencia falsa de respaldo',()=>{
   const html=renderToStaticMarkup(<DocumentBacking leadId="selected-lead" mode="staff" />);
   expect(html).toContain('Consultando respaldo');
+  expect(html).toContain('RutaHogar no verifica la autenticidad del documento directamente con su emisor.');
   expect(html).not.toContain('Sin respaldo');
 });
 it('el usuario legacy tiene el panel sin habilitar carga/score antes de precalificarse',()=>{

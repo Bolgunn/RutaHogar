@@ -120,6 +120,25 @@ def test_signed_read_rejects_provider_url_to_other_host():
             TemporaryStorage(repo).signed_read('owner/process/object.pdf')
 
 
+def test_provider_diagnostics_keep_only_safe_codes():
+    from app.documents.azure import provider_error
+    error=provider_error('provider_failed',400,json.dumps({'error':{'code':'InvalidRequest',
+        'innererror':{'code':'InvalidContentSource','message':'SENSITIVE SIGNED URL AND KEY'}}}).encode())
+    assert error.status==400 and error.provider_code=='InvalidContentSource'
+    assert str(error)=='provider_failed' and error.reason=='azure_http_error'
+    assert 'SENSITIVE' not in repr(vars(error))
+    assert provider_error('provider_failed',400,b'{"error":{"code":{}}}').provider_code=='other'
+
+
+@pytest.mark.parametrize('exception,reason', [(httpx.ConnectError,'azure_unreachable'),
+    (httpx.ConnectTimeout,'azure_connect_timeout'),(httpx.ReadTimeout,'azure_timeout')])
+def test_transport_diagnostics_distinguish_unreachable_and_timeouts(exception,reason):
+    def respond(request):raise exception('SENSITIVE URL',request=request)
+    with pytest.raises(OcrError) as caught:client(respond).begin('https://source.invalid')
+    assert caught.value.reason==reason
+    assert 'SENSITIVE' not in str(caught.value)
+
+
 def test_oversized_ocr_response_is_rejected_without_returning_raw_text():
     from app.documents.azure import MAX_RESPONSE_BYTES
     with pytest.raises(OcrError,match='^invalid_response$'):

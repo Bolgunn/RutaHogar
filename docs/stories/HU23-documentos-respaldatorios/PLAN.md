@@ -700,3 +700,8 @@ Frontend completo: **816 aprobadas/2 fallidas** (RUT e invitación codeudor), re
 Deuda/riesgos restantes: activación y supervisión del workflow/secretos/default branch, disponibilidad/capacidad dentro de 24 h y smoke/E2E real. La ambigüedad de OCR y las limitaciones del conteo cliente permanecen explícitas; no se agregan inferencias o promesas de validación documental de identidad/vigencia no aprobadas. El submit sin result_id recuperable requiere revisión operativa. Los intentos de score conservan metadata/replay existentes como parte de la trazabilidad financiera, sin OCR/originales; no se cambia esa retención en T9. La recuperación/listado UI de intentos no confirmados al recargar continúa fuera de este cierre, con abandono cubierto por cleanup.
 
 No se cambian algoritmos ni se corrigen fallos preexistentes ajenos. No hay despliegue, migración remota, configuración de secrets remotos, merge, push ni PR. Se detiene en T9.
+
+
+### Aclaración del pendiente de score
+
+El pendiente representa una diferencia financiera aceptada explícitamente y aún no incorporada en los datos de entrada de la evaluación vigente. Una confirmación coincidente o una diferencia conservada como declarada no crea pendiente por sí sola. El estado se deriva del historial y la evidencia persistidos, sobrevive a una nueva sesión y sólo se consume al registrar una evaluación que incorpore el valor vigente. Confirmar un documento no calcula score.

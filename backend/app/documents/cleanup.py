@@ -44,6 +44,10 @@ class DocumentCleanupService:
         return {'outcome': 'deleted'}
 
     def _delete_azure(self, claim):
+        if claim.get('provider', 'azure') == 'local':
+            return {'outcome': 'deleted'}  # Stateless worker retains no remote result.
+        if claim.get('provider', 'azure') != 'azure':
+            raise DocumentError('invalid_result')
         client = self._azure()
         if claim['probe']:
             state, delay = client.probe(claim['result_id'])

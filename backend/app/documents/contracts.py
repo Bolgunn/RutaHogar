@@ -214,6 +214,7 @@ class UploadAuthorizationView(Contract):
 
 
 class StartOcr(Contract):
+    expected_provider: Literal['azure', 'local'] = 'azure'
     consent_external_processing: StrictBool
 
     @field_validator('consent_external_processing')
@@ -229,6 +230,7 @@ class PollOcr(Contract):
 
 
 class OcrView(Contract):
+    provider: Literal['azure', 'local'] = 'azure'
     process_id: UUID
     state: ProcessState
     revision: int

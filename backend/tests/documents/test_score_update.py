@@ -56,7 +56,10 @@ def test_confirmation_does_not_score_and_explicit_action_creates_one_versioned_e
     after=repo.load_tracking(user)
     assert len(calls)==1 and calls[0]['ingreso_mensual']==1200000
     assert len(after['evaluations'])==len(before['evaluations'])+1
-    assert after['evaluations'][:len(before['evaluations'])]==before['evaluations']
+    # hu13_read aggregates evaluations without ORDER BY. The full migration
+    # chain can choose an index scan; immutability concerns rows, not their order.
+    assert {row['id']:row for row in after['evaluations'] if row['id']!=result['evaluation_id']}=={
+        row['id']:row for row in before['evaluations']}
     assert after['events'][:len(before['events'])]==before['events']
     assert after['plan']==before['plan']
     created=next(row for row in after['evaluations'] if row['id']==result['evaluation_id'])
@@ -77,13 +80,10 @@ def test_confirmation_does_not_score_and_explicit_action_creates_one_versioned_e
     assert len(calls)==1
 
 
-def test_confirmed_match_is_a_new_validation_but_kept_difference_is_not(setup):
+def test_confirmed_match_does_not_require_a_new_evaluation(setup):
     user,pid,repo,_,review=confirmed(setup,'$1.000.000','keep_declared')
     assert review['tracking_event_id'] is None
-    scores=service(repo)
-    assert scores.status(user)['pending']
-    scores.update(user,command(scores.status(user)))
-    assert not scores.status(user)['pending']
+    assert not service(repo).status(user)['pending']
 
 
 def test_no_pending_evidence_cannot_score(setup):
@@ -268,3 +268,81 @@ def test_later_historical_evaluation_does_not_consume_current_unscored_data(setu
     new=next(row for row in repo.load_tracking(user)['evaluations'] if row['id']==result['evaluation_id'])
     assert new['financial_data']['input']['ingreso_mensual']==1200000
     assert not scores.status(user)['pending']
+
+@pytest.mark.parametrize('text,decision,expected', [
+    ('$1.000.000','keep_declared',False),
+    ('$1.200.000','keep_declared',False),
+    ('$1.200.000','accept_detected',True),
+])
+def test_pending_represents_effective_change_not_document_confirmation(setup,text,decision,expected):
+    user,pid,repo,docs=setup
+    assert not service(repo).status(user)['pending']
+    user,pid,repo,parser,azure,storage=prepared(setup)
+    azure.source={'content':'Líquido a pagar: '+text,'pages':[{'pageNumber':1}]}
+    view=parser.consume(user,pid)
+    assert view['state']=='awaiting_review'
+    assert not service(repo).status(user)['pending']
+    before=repo.load_tracking(user)
+    UploadService(repo,storage).confirm(user,pid,confirm_command(view,{'ingreso_mensual':decision}))
+    after=repo.load_tracking(user)
+    assert after['evaluations']==before['evaluations']
+    # A fresh service instance reads the durable state as it would after refresh.
+    status=service(repo).status(user)
+    assert status['pending'] is expected
+    if expected:
+        assert status['fields']==['ingreso_mensual']
+        result=service(repo).update(user,command(status))
+        final=repo.load_tracking(user)
+        assert len(final['evaluations'])==len(before['evaluations'])+1
+        assert all(row in final['evaluations'] for row in before['evaluations'])
+        assert result['evaluation_id'] and not service(repo).status(user)['pending']
+
+
+@pytest.mark.parametrize('fixture_name,kind,field', [
+    ('savings','certificado_ahorro','ahorro_disponible'),
+    ('employment','documento_laboral','continuidad_laboral'),
+])
+def test_other_supported_financial_changes_require_explicit_score(setup,fixture_name,kind,field):
+    user,pid,repo,parser,azure,storage=prepared(setup,fixture_name,kind)
+    view=parser.consume(user,pid)
+    choices={row['field']:('accept_detected' if row['field']==field else 'keep_declared')
+             for row in view['candidates']}
+    before=repo.load_tracking(user)
+    UploadService(repo,storage).confirm(user,pid,confirm_command(view,choices))
+    assert repo.load_tracking(user)['evaluations']==before['evaluations']
+    state=service(repo).status(user)
+    assert state['pending'] and state['fields']==[field]
+    service(repo).update(user,command(state))
+    assert not service(repo).status(user)['pending']
+
+def test_contract_type_change_requires_explicit_score(setup):
+    user,pid,repo,parser,azure,storage=prepared(setup,'employment','documento_laboral')
+    azure.source={'content':'Tipo de contrato: Plazo fijo\nFecha de ingreso: 01/01/2020\nFecha de emisión: 25/10/2026','pages':[{'pageNumber':1}]}
+    view=parser.consume(user,pid)
+    rows={row['field']:row for row in view['candidates']}
+    assert rows['tipo_contrato']['detected_value']=='plazo_fijo'
+    choices={field:('accept_detected' if field=='tipo_contrato' else 'keep_declared') for field in rows}
+    before=repo.load_tracking(user)
+    UploadService(repo,storage).confirm(user,pid,confirm_command(view,choices))
+    assert repo.load_tracking(user)['evaluations']==before['evaluations']
+    state=service(repo).status(user)
+    assert state['pending'] and state['fields']==['tipo_contrato']
+    service(repo).update(user,command(state))
+    assert not service(repo).status(user)['pending']
+
+def test_matching_document_does_not_flag_an_unrelated_unscored_change(setup):
+    from app.documents.tracking_adapter import prepare_update
+    user,pid,repo,docs=setup
+    before=repo.load_tracking(user)
+    update=prepare_update(before,user,pid,str(uuid4()),{'ingreso_mensual':1200000},datetime.now(timezone.utc).isoformat())
+    repo.rpc('hu13_commit',{'p_user_id':user,'p_command':update['command'],
+                            'p_expected_revision':before['revision'],'p_records':update['records']})
+    assert not service(repo).status(user)['pending']
+    pid=docs.create(user,CreateProcess(document_type='liquidacion_sueldo'))['id']
+    user,pid,repo,parser,azure,storage=prepared((user,pid,repo,docs))
+    view=parser.consume(user,pid)
+    assert view['candidates'][0]['comparison']=='match'
+    evaluations=repo.load_tracking(user)['evaluations']
+    UploadService(repo,storage).confirm(user,pid,confirm_command(view,{'ingreso_mensual':'keep_declared'}))
+    assert repo.load_tracking(user)['evaluations']==evaluations
+    assert not service(repo).status(user)['pending']

@@ -1,0 +1,33 @@
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: workers/hu23_ocr/Dockerfile
+    image: rutahogar-hu23-ocr-local:dev
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 64
+    stop_grace_period: 5s
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8011:8011"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .local/worker.env
+    environment:
+      HU23_LOCAL_OCR_BIND: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8011/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

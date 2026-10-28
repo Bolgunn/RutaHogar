@@ -65,7 +65,8 @@ with tempfile.TemporaryDirectory(prefix='hu23-sql-') as scratch:
                          '20261025160000_hu23_explicit_review.sql',
                          '20261025170000_hu23_explicit_score.sql',
                          '20261025180000_hu23_backing_projection.sql',
-                         '20261025190000_hu23_periodic_cleanup.sql'):
+                         '20261025190000_hu23_periodic_cleanup.sql',
+                         '20261027210000_hu23_local_ocr_poc.sql'):
             run_sql(file=ROOT/'supabase/migrations'/filename)
         run_sql(file=ROOT/'supabase/tests/hu13_tracking.sql')
         run_sql(file=ROOT/'supabase/tests/hu23_documents.sql')
@@ -75,6 +76,7 @@ with tempfile.TemporaryDirectory(prefix='hu23-sql-') as scratch:
         run_sql(file=ROOT/'supabase/tests/hu23_score.sql')
         run_sql(file=ROOT/'supabase/tests/hu23_backing.sql')
         run_sql(file=ROOT/'supabase/tests/hu23_cleanup.sql')
+        run_sql(file=ROOT/'supabase/tests/hu23_local_ocr.sql')
         subprocess.run([sys.executable,'-m','pytest','backend/tests/documents','-q'],
                        cwd=ROOT,env=env,check=True)
         def fingerprint():

@@ -42,19 +42,22 @@ export function waitForDocument(delayMs, signal) {
   });
 }
 
-export async function processDocument(session, { consent = false, signal, onSession = () => {},
+export async function processDocument(session, { consent = false, provider = 'azure', signal, onSession = () => {},
   request = trackingRequest, wait = waitForDocument, now = Date.now } = {}) {
-  if (consent !== true) throw new Error('Debes autorizar el procesamiento temporal del documento en Microsoft Azure.');
+  if (consent !== true) throw new Error('Debes autorizar el procesamiento temporal del documento.');
   const active = () => { if (signal?.aborted) throw new Error('Proceso cancelado.'); };
   let current = await request(sessionPath(session.id));
   active(); onSession(current);
   let nextAttempt = null;
-  if (current.state === 'ready') {
-    const started = await request(`${sessionPath(current.id)}/ocr/start`, { consent_external_processing: true });
+  if (current.state === 'ready' || (provider === 'local' && ['processing', 'ocr_ready'].includes(current.state))) {
+    const started = await request(`${sessionPath(current.id)}/ocr/start`, { consent_external_processing: true, ...(provider === 'local' ? { expected_provider: 'local' } : {}) });
     active();
     current = { ...current, state: started.state, revision: started.revision };
     nextAttempt = started.next_attempt_at;
     onSession(current);
+    if (started.provider === 'local' && current.state !== 'awaiting_review') {
+      throw new Error('El procesamiento local sigue pendiente. Espera unos segundos y vuelve a pulsar Procesar y revisar documento.');
+    }
   }
   while (['processing', 'ocr_ready'].includes(current.state)) {
     const timestamp = Date.parse(nextAttempt || '');

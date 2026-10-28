@@ -66,7 +66,7 @@ describe('conexión navegador upload → OCR → parser → revisión', () => {
   });
   it('requiere consentimiento antes de requests de procesamiento', async () => {
     const request=vi.fn();
-    await expect(processDocument(base,{request})).rejects.toThrow('Microsoft Azure');
+    await expect(processDocument(base,{request})).rejects.toThrow('procesamiento temporal');
     expect(request).not.toHaveBeenCalled();
   });
   it('abortar detiene el polling del navegador', async () => {

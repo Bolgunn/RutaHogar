@@ -402,7 +402,8 @@ function ProfessionalEvaluationDetails({ result }) {
   );
 }
 
-export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation, onDocumentConfirmed, onDocumentScoreUpdated }) {
+export default function ProfilePage({ profile, onboarding, evaluations, onSaveOnboarding, onDeleteEvaluation, onProfileUpdate, onRetryExplanation, onDocumentConfirmed, onDocumentScoreUpdated,
+  onDocumentPendingChange, focusDocumentScoreUpdate, onScoreUpdateFocused }) {
   const savedOnboarding = useMemo(() => normalizeOnboarding(onboarding), [onboarding]);
   const canSeeTechnicalScoring = isStaffRole(profile?.role);
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
@@ -996,10 +997,11 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
       </section>
 
       {profile?.role === "usuario" && (
-        <section className="profile-card">
+        <section className="profile-card profile-card--documents">
           <DocumentBacking key={profile?.id || profile?.user_id || 'owner'} refreshKey={documentScoreRevision + ':' + (latestEvaluation?.id || 'legacy')} />
           {evaluations.length > 0 && <>
-            <DocumentScoreUpdate refreshKey={documentScoreRevision} onUpdated={onDocumentScoreUpdated} />
+            <DocumentScoreUpdate refreshKey={documentScoreRevision} onUpdated={onDocumentScoreUpdated}
+              onPendingChange={onDocumentPendingChange} focusRequested={focusDocumentScoreUpdate} onFocused={onScoreUpdateFocused} />
             <button type="button" className="secondary-button" aria-expanded={showDocumentUpload}
               onClick={() => setShowDocumentUpload((value) => !value)}>
               Cargar documento respaldatorio

@@ -1,5 +1,6 @@
 """Untrusted OCR transport only. No financial interpretation or database access."""
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -17,13 +18,30 @@ ROOT = f'/documentintelligence/documentModels/{MODEL}'
 HTTP_TIMEOUT = 8.0
 MAX_RESPONSE_BYTES = 4_000_000
 SIGNED_READ_SECONDS = 300
+logger = logging.getLogger(__name__)
 
 
 class OcrError(Exception):
     """Only fixed technical codes; never include URLs, keys or provider messages."""
-    def __init__(self, code, *, retry_after=2):
+    def __init__(self, code, *, retry_after=2, reason=None, status=None, provider_code=None):
         super().__init__(code)
         self.code, self.retry_after = code, retry_after
+        self.reason, self.status, self.provider_code = reason or code, status, provider_code
+
+
+def provider_error(code, status, body, *, retry_after=2):
+    """Retain only documented codes, never provider messages, URLs or OCR text."""
+    allowed = {'InvalidRequest', 'InvalidContentSource', 'InvalidContent', 'InvalidImage',
+               'InvalidParameter', 'UnsupportedContent', 'ContentSourceNotAccessible',
+               'Unauthorized', 'Forbidden', 'InternalServerError', 'InvalidSasToken'}
+    try:
+        error = json.loads(body).get('error', {})
+        inner = error.get('innererror', error.get('innerError', {}))
+        candidate = inner.get('code') or error.get('code')
+    except (ValueError, AttributeError, TypeError):
+        candidate = None
+    return OcrError(code, retry_after=retry_after, reason='azure_http_error', status=status,
+                    provider_code=candidate if isinstance(candidate, str) and candidate in allowed else 'other')
 
 
 class Recognition(BaseModel):
@@ -93,28 +111,35 @@ class AzureOcrClient:
                 for chunk in response.iter_bytes():
                     data.extend(chunk)
                     if len(data) > MAX_RESPONSE_BYTES or time.monotonic() - started > self.timeout:
-                        raise OcrError('submission_unknown' if method == 'POST' else 'invalid_response')
+                        raise OcrError('submission_unknown' if method == 'POST' else 'invalid_response',
+                                       reason='azure_response_limit')
                 return response.status_code, response.headers, bytes(data)
         try:
             if self.client is not None:
                 return send(self.client)
             with httpx.Client() as client:
                 return send(client)
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
-            raise OcrError('transient') from None
+        except httpx.ConnectTimeout:
+            raise OcrError('transient', reason='azure_connect_timeout') from None
+        except httpx.ConnectError:
+            raise OcrError('transient', reason='azure_unreachable') from None
+        except httpx.PoolTimeout:
+            raise OcrError('transient', reason='azure_pool_timeout') from None
+        except httpx.TimeoutException:
+            raise OcrError('submission_unknown' if method == 'POST' else 'transient', reason='azure_timeout') from None
         except httpx.HTTPError:
             # POST may have been accepted. Repeating it could create a second analysis.
-            raise OcrError('submission_unknown' if method == 'POST' else 'transient') from None
+            raise OcrError('submission_unknown' if method == 'POST' else 'transient', reason='azure_transport_error') from None
 
     def begin(self, source_url):
-        status, headers, _ = self._request('POST', ROOT + ':analyze', {'urlSource': source_url})
+        status, headers, body = self._request('POST', ROOT + ':analyze', {'urlSource': source_url})
         delay = retry_seconds(headers.get('Retry-After'))
         if status == 429:
-            raise OcrError('transient', retry_after=delay)
+            raise provider_error('transient', status, body, retry_after=delay)
         if status >= 500:
-            raise OcrError('submission_unknown')
+            raise provider_error('submission_unknown', status, body)
         if status != 202:
-            raise OcrError('provider_failed')
+            raise provider_error('provider_failed', status, body)
         prefix = ROOT + '/analyzeResults/'
         try:
             location = urlsplit(headers.get('Operation-Location', ''))
@@ -125,7 +150,7 @@ class AzureOcrClient:
             result_id = UUID(location.path[len(prefix):])
         except (ValueError, TypeError):
             # Accepted without a safely recoverable identifier; never follow this URL.
-            raise OcrError('submission_unknown') from None
+            raise OcrError('submission_unknown', reason='azure_invalid_operation_location') from None
         return Started(result_id=result_id, retry_after=delay)
 
     def poll(self, result_id):
@@ -133,21 +158,26 @@ class AzureOcrClient:
         status, headers, body = self._request('GET', ROOT + '/analyzeResults/' + identifier)
         delay = retry_seconds(headers.get('Retry-After'))
         if status == 429 or status >= 500:
-            raise OcrError('transient', retry_after=delay)
+            raise provider_error('transient', status, body, retry_after=delay)
         if status != 200:
-            raise OcrError('provider_failed')
+            raise provider_error('provider_failed', status, body)
         try:
             result = Recognition.model_validate(json.loads(body)).require_layout()
         except (ValueError, ValidationError, TypeError):
-            raise OcrError('invalid_response') from None
+            raise OcrError('invalid_response', reason='azure_invalid_response') from None
+        if result.status == 'failed':
+            failure = provider_error('provider_failed', status, body)
+            logger.warning('hu23_ocr stage=analysis reason=azure_analysis_failed status=%s provider=%s',
+                           status, failure.provider_code)
         return result, delay
 
     def delete(self, result_id):
         identifier = str(UUID(str(result_id)))
-        status, headers, _ = self._request('DELETE', ROOT + '/analyzeResults/' + identifier)
+        status, headers, body = self._request('DELETE', ROOT + '/analyzeResults/' + identifier)
         if status in (204, 410):
             return
-        raise OcrError('not_found' if status == 404 else 'transient', retry_after=retry_seconds(headers.get('Retry-After')))
+        raise provider_error('not_found' if status == 404 else 'transient', status, body,
+                             retry_after=retry_seconds(headers.get('Retry-After')))
 
     def probe(self, result_id):
         """Cleanup reconciliation only: acknowledge absence or inspect status, not layout."""
@@ -157,9 +187,9 @@ class AzureOcrClient:
         if status in (404, 410):
             return None, delay
         if status == 429 or status >= 500:
-            raise OcrError('transient', retry_after=delay)
+            raise provider_error('transient', status, body, retry_after=delay)
         if status != 200:
-            raise OcrError('provider_failed')
+            raise provider_error('provider_failed', status, body)
         try:
             recognition = Recognition.model_validate(json.loads(body))
         except (ValueError, TypeError, ValidationError):

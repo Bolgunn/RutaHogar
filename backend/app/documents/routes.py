@@ -56,6 +56,8 @@ def checked(call):
                   "score_update_unavailable": 503, "market_data_unavailable": 503, "score_update_disabled": 503,
                   "already_closed": 409, "invalid_transition": 409, "tracking_baseline_required": 409,
                   "persistence_unavailable": 503, "storage_unavailable": 503, "ocr_unavailable": 503, "parsing_disabled": 503, "confirmation_disabled": 503,
+                  "local_ocr_unavailable": 503, "ocr_provider_mismatch": 409,
+                  "local_ocr_public_origin_invalid": 503,
                   "upload_already_exists": 409, "upload_format_locked": 409,
                   "upload_not_authorized": 409, "upload_not_verified": 409}.get(code, 422)
         raise HTTPException(status, detail={"code": code}) from None
@@ -104,7 +106,8 @@ def cancel(process_id: UUID, command: CancelProcess, ctx=Depends(context)):
 
 @router.get('/config')
 def configuration(ctx=Depends(context)):
-    return {'restrictions': public_limits(), 'document_types': ['liquidacion_sueldo','certificado_ahorro','documento_laboral']}
+    from .local_ocr import configured_provider
+    return {'ocr_provider': checked(configured_provider), 'restrictions': public_limits(), 'document_types': ['liquidacion_sueldo','certificado_ahorro','documento_laboral']}
 
 
 @router.post('/sessions/{process_id}/upload', response_model=UploadAuthorizationView)
@@ -122,7 +125,7 @@ def complete_upload(process_id: UUID, command: CompleteUpload, ctx=Depends(conte
 @router.post('/sessions/{process_id}/ocr/start', status_code=202, response_model=OcrView)
 def start_ocr(process_id: UUID, command: StartOcr, ctx=Depends(context)):
     user, service = ctx
-    return checked(lambda: OcrService(service.repository).start(user, str(process_id)))
+    return checked(lambda: OcrService(service.repository).start(user, str(process_id), expected_provider=command.expected_provider))
 
 
 @router.post('/sessions/{process_id}/ocr/poll', response_model=OcrView)

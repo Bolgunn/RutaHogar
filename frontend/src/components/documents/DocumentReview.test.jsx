@@ -9,9 +9,12 @@ const base={id:'review',revision:4,state:'awaiting_review',evidence:[],candidate
 
 it('muestra declarado/detectado y exige elección y confirmación sin OCR bruto',()=>{
   const html=renderToStaticMarkup(<DocumentReview session={{...base,ocr_text:'SECRET_OCR'}} onSession={()=>{}} />);
+  expect(html).toContain('Se detectó una diferencia');
+  expect(html).toContain('document-decision-card');
+  expect(html).toContain('document-cancel-button');
   expect(html).toContain('Declarado');expect(html).toContain('Detectado');
   expect(html).toContain('1.000.000');expect(html).toContain('1.200.000');
-  expect(html).toContain('Aceptar valor detectado');expect(html).toContain('Mantener valor declarado');
+  expect(html).toContain('Usar valor del documento');expect(html).toContain('Mantener valor declarado');
   expect(html).toContain('type="submit" disabled=""');
   expect(html).not.toContain('SECRET_OCR');expect(html).not.toContain('Actualizar score');
 });

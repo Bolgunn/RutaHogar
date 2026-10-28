@@ -1,8 +1,11 @@
 """Durable, request-driven OCR steps. No background tasks, sleep loops or raw OCR persistence."""
+import logging
 from .azure import AzureOcrClient, OcrError
 from .contracts import DocumentError
 from .storage import TemporaryStorage
 from .upload import UploadService
+
+logger = logging.getLogger(__name__)
 
 
 class OcrService:
@@ -26,18 +29,39 @@ class OcrService:
     @staticmethod
     def _view(bundle):
         process, job = bundle['process'], bundle.get('job')
-        return {'process_id': process['id'], 'state': process['state'], 'revision': process['revision'],
+        return {'provider': job.get('provider', 'azure') if job else 'azure', 'process_id': process['id'], 'state': process['state'], 'revision': process['revision'],
                 'status': job['job_state'] if job else None,
                 'next_attempt_at': job['next_attempt_at'] if job else None,
                 'result_deletion_state': job['deletion_state'] if job else None,
                 'message': ('No pudimos procesar este documento. Puedes intentar con otro archivo.'
                             if process['state'] == 'processing_failed' else None)}
 
-    def start(self, user, process_id):
-        self._client()  # Missing configuration must not strand a process in submitting.
+    def _provider(self, user, process_id, *, cleanup=False):
+        from .local_ocr import configured_provider
+        bundle = self._step(user, process_id, 'read')
+        job = bundle.get('job')
+        if cleanup and job:
+            return job.get('provider', 'azure')
+        selected = 'azure' if self.azure is not None else configured_provider()
+        pinned = job.get('provider', 'azure') if job else selected
+        if not cleanup and job and pinned != selected:
+            raise DocumentError('ocr_provider_mismatch')
+        return pinned
+
+    def start(self, user, process_id, *, expected_provider=None):
+        from .local_ocr import configured_provider
+        selected = 'azure' if self.azure is not None else configured_provider()
+        if expected_provider is not None and expected_provider != selected:
+            raise DocumentError('ocr_provider_mismatch')
+        if self._provider(user, process_id) == 'local':
+            from .local_ocr import LocalOcrService
+            return self._view(LocalOcrService(self.repository, self.storage).start(user, process_id))
+        self._client()
         return self._execute(user, process_id, 'start')
 
     def poll(self, user, process_id):
+        if self._provider(user, process_id) == 'local':
+            return self._view(self._step(user, process_id, 'read'))
         self._client()
         return self._execute(user, process_id, 'poll')
 
@@ -63,10 +87,13 @@ class OcrService:
                 else:
                     self._client().delete(job['result_id'])
                     payload = {'outcome': 'deleted'}
-            except DocumentError:
+            except DocumentError as error:
                 # Signing failed BEFORE submit, so retrying is safe.
+                logger.warning('hu23_ocr stage=%s reason=%s process=%s', operation, str(error), process_id)
                 payload = {'outcome': 'retry', 'retry_after': 2}
             except OcrError as error:
+                logger.warning('hu23_ocr stage=%s reason=%s status=%s provider=%s outcome=%s process=%s',
+                               operation, error.reason, error.status, error.provider_code, error.code, process_id)
                 payload = {'outcome': 'unknown' if error.code == 'submission_unknown' else
                            'retry' if error.code == 'transient' or operation == 'delete' else 'failed',
                            'error': error.code, 'retry_after': error.retry_after}
@@ -84,6 +111,10 @@ class OcrService:
     def try_cleanup(self, user, process_id):
         """Best effort AFTER logical cancellation/failure; absence of keys cannot undo closure."""
         try:
+            if self._provider(user, process_id, cleanup=True) == 'local':
+                from .local_ocr import LocalOcrService
+                LocalOcrService(self.repository, self.storage).cleanup(user, process_id)
+                return
             self._execute(user, process_id, 'cleanup')
         except (DocumentError, OcrError):
             # Database already records deletion duty. Recovery retries it later.

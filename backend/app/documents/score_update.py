@@ -25,17 +25,19 @@ def pending_context(data, now):
     current = applicable[-1]['snapshot'] if applicable else {}
     last = next((row for row in reversed(applicable) if row.get('evaluation_id') and row.get('evaluation')), None)
     history = {row['event_id']: row for row in bundle['events']}
-    cutoff = (parse_time(last['provenance'].get('cutoff_at') or history[last['event_id']]['recorded_at'])
-              if last else datetime.min.replace(tzinfo=timezone.utc))
     evaluated = next((row.get('financial_data') or {} for row in bundle.get('evaluations', [])
                       if last and row['id']==last['evaluation_id']), {})
     scored_input = evaluated.get('input') or evaluated.get('input_snapshot') or {}
     selected_by_field = {}
     for row in sorted(evidence, key=lambda row: (parse_time(row['confirmed_at']), row['process_id'], row['field'])):
-        if row['backing_at_confirmation'] != 'respaldado':
+        if (row['backing_at_confirmation'] != 'respaldado'
+                or row['comparison'] != 'difference' or row['decision'] != 'accept_detected'
+                or not row.get('tracking_event_id')):
             continue
-        # A later historical evaluation may have scored an earlier snapshot.
-        if parse_time(row['confirmed_at']) <= cutoff and scored_input.get(row['field']) == current.get(row['field']):
+        # Evidence alone never requires scoring: compare with the actual input
+        # persisted on the effective evaluation, including confirmations made later.
+        # A historical evaluation may instead have scored an earlier snapshot.
+        if row['field'] in scored_input and scored_input[row['field']] == current.get(row['field']):
             continue
         source = history.get(row['source_event_id'])
         if not source or parse_time(source['effective_at']) > now:

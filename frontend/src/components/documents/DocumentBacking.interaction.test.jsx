@@ -35,6 +35,14 @@ it('consulta la proyección propia al montar sin upload ni scoring',async()=>{
   expect(getStaffDocumentBacking).not.toHaveBeenCalled();
   expect(all(view,node=>node.props.projection===projection)).toHaveLength(1);
 });
+it('el detalle reutiliza la proyección autorizada de la tarjeta sin otra consulta',async()=>{
+  const loadStaffProjection=vi.fn().mockResolvedValue(projection);
+  const props={leadId:'lead-a',mode:'staff',loadStaffProjection};
+  render(props);hooks.effects[0]();await Promise.resolve();
+  expect(loadStaffProjection).toHaveBeenCalledWith('lead-a',{refresh:false});
+  expect(getStaffDocumentBacking).not.toHaveBeenCalled();
+  expect(all(render(props),node=>node.props.projection===projection)).toHaveLength(1);
+});
 it('un lead nuevo no muestra ni acepta respuesta tardía del anterior',async()=>{
   let first;
   getStaffDocumentBacking.mockImplementationOnce(()=>new Promise(resolve=>{first=resolve;}));
@@ -62,9 +70,22 @@ it('permite volver a consultar después de nuevos respaldos',async()=>{
   getOwnDocumentBacking.mockResolvedValue(projection);
   render();hooks.effects[0]();await Promise.resolve();
   const view=render();
-  all(view,node=>node.type==='button')[0].props.onClick();
-  const loading=render();
+  expect(all(view,node=>node.type==='button')).toHaveLength(0);
+  expect(text(view)).toContain('Estados documentales actualizados');
+  const loading=render({refreshKey:1});
   expect(text(loading)).toContain('Consultando');
   hooks.effects[0]();await Promise.resolve();
   expect(getOwnDocumentBacking).toHaveBeenCalledTimes(2);
+});
+
+it('ofrece reintento sólo cuando la consulta falla',async()=>{
+  getOwnDocumentBacking.mockRejectedValueOnce(new Error('network'));
+  render();hooks.effects[0]();await Promise.resolve();await Promise.resolve();
+  const view=render();
+  const button=all(view,node=>node.type==='button')[0];
+  expect(text(button)).toBe('Reintentar consulta');
+  button.props.onClick();
+  getOwnDocumentBacking.mockResolvedValue(projection);
+  render();hooks.effects[0]();await Promise.resolve();
+  expect(text(render())).toContain('Estados documentales actualizados');
 });

@@ -304,6 +304,7 @@ export default function LeadDetailModal({
   commercialRecords = null,
   onStageChanged = null,
   crm = null,
+  loadDocumentBacking,
 }) {
   const [activeLead, setActiveLead] = useState(lead);
   const [isReporting, setIsReporting] = useState(false);
@@ -777,7 +778,7 @@ export default function LeadDetailModal({
                 </dl>
               </article>
 
-              <DocumentBacking mode="staff" leadId={activeLead?.user_id || activeLead?.id} refreshKey={activeLead.id} />
+              <DocumentBacking mode="staff" leadId={activeLead?.user_id || activeLead?.id} refreshKey={activeLead.id} loadStaffProjection={loadDocumentBacking} />
               <ExecutiveCoDebtorSection coDebtor={coDebtor} />
 
               {selectedMainBlocker && (

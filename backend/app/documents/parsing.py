@@ -1,5 +1,6 @@
 """Owner-controlled consumption of OCR; only temporary allowlisted candidates reach DB."""
 from datetime import datetime
+import logging
 
 from .azure import OcrError
 from .contracts import DocumentError
@@ -7,6 +8,8 @@ from .ocr import OcrService
 from .parsers import parse_document
 from .service import DocumentService
 from .upload import UploadService
+
+logger = logging.getLogger(__name__)
 
 
 class ParsingService:
@@ -26,6 +29,10 @@ class ParsingService:
         self.ocr.try_cleanup(user,process_id)
 
     def consume(self, user, process_id):
+        if self.ocr._provider(user, process_id) == 'local':
+            from .local_ocr import LocalOcrService
+            LocalOcrService(self.repository, self.ocr.storage).start(user, process_id)
+            return self.documents.read(user, process_id)
         claimed = self._control(user,process_id,'claim')
         process, job = claimed['process'], claimed.get('job')
         if not claimed['claimed']:
@@ -41,6 +48,8 @@ class ParsingService:
             del recognition
             self.documents.record_result(user,process_id,process['revision'],result,parse_token=token)
         except OcrError as error:
+            logger.warning('hu23_ocr stage=parse reason=%s status=%s provider=%s outcome=%s process=%s',
+                           error.reason, error.status, error.provider_code, error.code, process_id)
             self._control(user,process_id,'retry' if error.code=='transient' else 'fail',token,error.retry_after)
         except DocumentError as error:
             code = str(error)

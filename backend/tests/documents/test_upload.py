@@ -21,7 +21,7 @@ class FakeStorage:
     def delete(self,path):
         self.paths.append(path)
         if self.fail:raise DocumentError('storage_unavailable')
-        sql(f"DELETE FROM storage.objects WHERE bucket_id={lit(TEMPORARY_BUCKET)} AND name={lit(path)};")
+        sql(f"DELETE FROM storage.objects WHERE bucket_id={lit(TEMPORARY_BUCKET)} AND name={lit(path)};",allow_storage_delete=True)
 
 
 def authorized(setup):
@@ -140,7 +140,12 @@ def test_storage_guards_deny_listing_read_overwrite_and_other_paths_even_with_br
         put(seed(),grant,role='authenticated')
     with pytest.raises(RuntimeError,match='hu23_no_overwrite'):
         sql(f"UPDATE storage.objects SET metadata='{{\"size\":999,\"mimetype\":\"application/pdf\"}}' WHERE name={lit(grant['path'])};")
-    sql(f'DELETE FROM storage.objects WHERE name={lit(grant["path"])};',role='authenticated',owner=user)
+    try:
+        sql(f'DELETE FROM storage.objects WHERE name={lit(grant["path"])};',role='authenticated',owner=user)
+    except RuntimeError as error:
+        # Current Supabase rejects SQL deletion before applying RLS; the bare
+        # PostgreSQL fixture instead filters all rows. Both must retain it.
+        assert 'Direct deletion from storage tables is not allowed' in str(error)
     assert sql(f'SELECT count(*) FROM storage.objects WHERE name={lit(grant["path"])};')=='1'
     assert sql(f'SELECT count(*) FROM storage.objects WHERE name={lit(grant["path"])};',role='service_role')=='1'
 

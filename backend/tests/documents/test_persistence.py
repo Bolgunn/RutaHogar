@@ -24,10 +24,15 @@ PSQL=os.environ.get('HU23_TEST_PSQL')
 pytestmark=pytest.mark.skipif(not PSQL,reason='requires disposable local PostgreSQL fixture (HU23_TEST_PSQL)')
 
 
-def sql(statement, role=None, owner=None):
+def sql(statement, role=None, owner=None, *, allow_storage_delete=False):
     socket=os.environ.get('HU23_TEST_SOCKET','/tmp')
     assert socket.startswith('/tmp') and '://' not in socket
     prefix=''
+    if allow_storage_delete:
+        # Synthetic objects have metadata only. Emulate the Storage API's own
+        # session flag for fixture cleanup, never for a browser role.
+        assert role is None
+        prefix="SET storage.allow_delete_query = 'true';"
     if role:
         assert role in ('authenticated','anon','service_role')
         prefix=f'SET ROLE {role};'
@@ -68,7 +73,7 @@ def seed(role='usuario'):
         'continuidad_laboral':'mas_3_anios','morosidad_actual':'no','consentimiento':True,
         'property_value_clp':100000000,'dividendo_estimado':300000})
     sql(f'''BEGIN;
-    INSERT INTO auth.users(id,email) VALUES({lit(user)},'synthetic@example.invalid');
+    INSERT INTO auth.users(id,email) VALUES({lit(user)},{lit(user+'@example.invalid')});
     INSERT INTO profiles(id,role) VALUES({lit(user)},{lit(role)});
     INSERT INTO evaluations(id,user_id,score,classification,financial_data) VALUES(
       {lit(evaluation)},{lit(user)},50,'Medio',{lit({'input':snapshot,'result':{'score':50,'classification':'Medio'}})});
@@ -101,7 +106,7 @@ def admit_upload(user, pid, repo):
 
 
 def remove_upload_object(pid):
-    sql(f"DELETE FROM storage.objects WHERE bucket_id='hu23-document-temporary' AND name=(SELECT storage_path FROM document_uploads WHERE process_id={lit(pid)});")
+    sql(f"DELETE FROM storage.objects WHERE bucket_id='hu23-document-temporary' AND name=(SELECT storage_path FROM document_uploads WHERE process_id={lit(pid)});",allow_storage_delete=True)
 
 
 def ready(setup,value=1200000,field='ingreso_mensual',kind='liquidacion_sueldo'):

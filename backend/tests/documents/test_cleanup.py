@@ -32,7 +32,7 @@ class Storage:
         self.calls.append(path)
         if self.callback: self.callback()
         if self.fail: raise DocumentError('storage_unavailable')
-        sql(f"DELETE FROM storage.objects WHERE bucket_id='hu23-document-temporary' AND name={lit(path)};")
+        sql(f"DELETE FROM storage.objects WHERE bucket_id='hu23-document-temporary' AND name={lit(path)};",allow_storage_delete=True)
 
 
 class Azure:

@@ -53,7 +53,7 @@ def staff_transport(monkeypatch,actors,allow,seen):
 def test_legacy_profile_without_hu13_is_sin_respaldo_without_reading_finances(api,monkeypatch):
     request,(_,_,repo,_)=api
     legacy=str(uuid4())
-    sql(f"INSERT INTO auth.users(id,email) VALUES({lit(legacy)},'legacy.synthetic@example.invalid');"
+    sql(f"INSERT INTO auth.users(id,email) VALUES({lit(legacy)},{lit(legacy+'@example.invalid')});"
         f"INSERT INTO profiles(id,role) VALUES({lit(legacy)},'usuario');"
         f"INSERT INTO evaluations(user_id,score,classification,financial_data) VALUES({lit(legacy)},45,'Bajo','{{}}');")
     monkeypatch.setattr(repo,'load_tracking',lambda *_:(_ for _ in ()).throw(AssertionError('legacy must not adopt/read finances')))

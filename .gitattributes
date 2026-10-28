@@ -1,3 +1,0 @@
-# Preserve existing CRLF dependency manifests while checking actual whitespace.
-frontend/package.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-frontend/package-lock.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

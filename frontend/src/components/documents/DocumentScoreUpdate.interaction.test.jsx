@@ -25,10 +25,10 @@ function content(node){
   if(Array.isArray(node))return node.map(content).join('');
   return React.isValidElement(node)?content(node.props.children):String(node??'');
 }
-function form(state=pending){
+function form(state=pending, extra={}){
   hooks.states[0]=state;
   const onUpdated=vi.fn().mockResolvedValue();
-  const render=()=>{hooks.si=0;hooks.ri=0;hooks.effects=[];return DocumentScoreUpdate({onUpdated});};
+  const render=()=>{hooks.si=0;hooks.ri=0;hooks.effects=[];return DocumentScoreUpdate({onUpdated,...extra});};
   const button=()=>all(render(),n=>n.type==='button'&&content(n)==='Actualizar score con datos validados')[0];
   return {render,button,onUpdated};
 }
@@ -60,7 +60,7 @@ it('doble clic produce una sola request y éxito consume la vista pendiente',asy
   finish(result);await first;
   expect(view.onUpdated).toHaveBeenCalledWith(result);
   expect(view.button()).toBeUndefined();
-  expect(content(view.render())).toContain('Score actualizado correctamente: 67');
+  expect(content(view.render())).toContain('Actualizado con tus nuevos antecedentes validados');
 });
 it('un fallo recuperable preserva pendiente y el mismo comando para reintentar',async()=>{
   const view=form();
@@ -103,7 +103,7 @@ it('si falla refrescar el historial mantiene el éxito ya persistido',async()=>{
   updateDocumentScore.mockResolvedValue(result);getDocumentScoreStatus.mockResolvedValue({...pending,pending:false});
   await view.button().props.onClick();
   expect(content(view.render())).toContain('El score se guardó');
-  expect(content(view.render())).toContain('Score actualizado correctamente');
+  expect(content(view.render())).toContain('Actualizado con tus nuevos antecedentes validados');
   expect(view.button()).toBeUndefined();
 });
 
@@ -117,5 +117,27 @@ it('una consulta antigua no vuelve a mostrar pendiente después del éxito',asyn
   await view.button().props.onClick();
   oldStatus(pending);await Promise.resolve();
   expect(view.button()).toBeUndefined();
-  expect(content(view.render())).toContain('Score actualizado correctamente');
+  expect(content(view.render())).toContain('Actualizado con tus nuevos antecedentes validados');
+});
+
+it('reporta el pendiente y lo consume sólo después de la actualización explícita',async()=>{
+  const onPendingChange=vi.fn();
+  getDocumentScoreStatus.mockResolvedValue(pending);
+  const view=form(null,{onPendingChange});view.render();hooks.effects[0]();await Promise.resolve();
+  expect(onPendingChange).toHaveBeenLastCalledWith(pending);
+  expect(updateDocumentScore).not.toHaveBeenCalled();
+  updateDocumentScore.mockResolvedValue(result);
+  getDocumentScoreStatus.mockResolvedValue({...pending,pending:false});
+  await view.button().props.onClick();
+  expect(onPendingChange).toHaveBeenCalledWith({pending:false});
+  expect(onPendingChange.mock.calls.at(-1)[0].pending).toBe(false);
+});
+it('el aviso enfoca el botón real sin recalcular',()=>{
+  const onFocused=vi.fn();const view=form(pending,{focusRequested:true,onFocused});
+  const button=view.button();
+  const target={scrollIntoView:vi.fn(),focus:vi.fn()};button.ref.current=target;
+  hooks.effects[1]();
+  expect(target.focus).toHaveBeenCalledWith({preventScroll:true});
+  expect(onFocused).toHaveBeenCalledOnce();
+  expect(updateDocumentScore).not.toHaveBeenCalled();
 });
