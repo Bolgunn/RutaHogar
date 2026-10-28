@@ -1,8 +1,8 @@
 # PLAN — HU 24: Asistente virtual y sistema de tickets para usuarios
 
 - **Historia:** `Wiki RutaHogar/UserStories/HU24-asistente-virtual-tickets.md` · **Actor:** administrador inmobiliario, ejecutivo, lead
-- **Estado:** propuesto (alcance ampliado: incluye bandeja de admin y correo; ver Alcance — 8 SP puede quedar corto, reevaluar al estimar) · Deseable · 8 SP · **Depende de:** HU12 Academia Financiera (implementada, contenido en `frontend/src/constants/academyContent.js`) e integración Groq existente (`backend/app/ai.py`, implementada). **Requerida por:** ninguna.
-- **Branch:** `feat/hu24-assistant-tickets`
+- **Estado:** Implementado y verificado (Criterios E1, E2, E3, E4 cumplidos) · Deseable · 8 SP · **Depende de:** HU12 Academia Financiera (implementada, contenido en `frontend/src/constants/academyContent.js`) e integración Groq existente (`backend/app/ai.py`, implementada). **Requerida por:** ninguna.
+- **Branch:** `feat/hu24-asistente-virtual-y-sistema-de-tickets-para-usuarios`
 
 ## Start here
 
@@ -321,3 +321,182 @@ misma historia (el correo ya cubre el aviso).
 - El dominio `rutahogar.cl` está verificado en Resend (confirmado por el equipo): `SUPPORT_FROM_EMAIL` puede usar un remitente de ese dominio y `SUPPORT_NOTIFICATION_EMAIL` apunta al buzón del equipo.
 - La tabla de rutas/URL del frontend puede consultarse para validar los valores de `link.route`; si no, el script valida contra una lista estática mantenida junto a `lib/routing/`.
 - Los límites del tier gratuito de Groq y la disponibilidad de modelos pueden cambiar (el proyecto ya perdió un modelo una vez — ver la nota en `ai.py`). El build no debe fijar un modelo más allá del mecanismo existente `DEFAULT_GROQ_MODEL`/`GROQ_MODEL`.
+
+---
+
+## Estado Final de la Implementación — Dónde se implementó cada componente
+
+La historia **HU24** fue completamente implementada y testeada en la rama `feat/hu24-asistente-virtual-y-sistema-de-tickets-para-usuarios`.
+
+### 1. Frontend
+
+| Archivo / Componente | Ubicación | Qué hace / Criterio cubierto |
+| :------------------- | :-------- | :--------------------------- |
+| `AssistantWidget.jsx` | `frontend/src/features/assistant/` | **E1, E2, E3:** Widget interactivo flotante en esquina inferior derecha. Gestiona el ciclo de vida del chat, preguntas sugeridas contextuales (`QUICK_PROMPTS`), foco interactivo en campos de pre-evaluación (`focus_field`), redimensionamiento manual por bordes/esquinas, botón maximizar/restaurar, estado de tickets activos, réplicas y confirmación de utilidad (`submit_ticket_user_feedback`). |
+| `AssistantWidget.css` | `frontend/src/features/assistant/` | **E1 / UX:** Estilos del widget con paleta corporativa RutaHogar (azul marino oscuro `#0d1b2a` a `#1b3b64`), texto de alto contraste blanco/azul claro, transiciones suaves y controladores de arrastre para redimensionamiento (`nw-resize`, `n-resize`, `w-resize`). |
+| `AdminSupportTickets.jsx` | `frontend/src/features/assistant/` | **E3:** Bandeja exclusiva para el administrador global (`is_global_admin()`). Permite listar, filtrar por estado (`abierto`, `en_proceso`, `resuelto`, `cerrado`), ver transcripción completa, censura de PII para privacidad, y formulario de respuesta directa del administrador con actualización automática de estado. |
+| `AdminSupportTickets.css` | `frontend/src/features/assistant/` | Estilos del panel de soporte administrativo, chips de estado, visor de hilos de conversación y layout responsivo. |
+| `supportTicketsService.js` | `frontend/src/services/` | **E3 / Seguridad:** Capa de acceso a datos para tickets en Supabase con RLS. Implementa caché local tolerante a fallos, aislamiento estricto por `userId` para impedir fugas entre sesiones y llamadas RPC (`updateTicketStatus`, `submitTicketFeedback`). |
+| `assistantClient.js` | `frontend/src/lib/assistant/` | Cliente HTTP del frontend para interactuar con la API `/api/assistant/chat` y `/api/support/tickets`. |
+| `escalation.js` | `frontend/src/lib/assistant/` | **E3:** Lógica determinista de detección de intenciones de escalamiento a soporte humano ("sigo con dudas", "no me sirvió", "hablar con soporte"). |
+| `transcript.js` | `frontend/src/lib/assistant/` | **E4:** Sanitización, recorte a turnos significativos y formateo estructurado de la transcripción enviada a soporte. |
+| `App.jsx` | `frontend/src/` | Montaje global del asistente en toda la aplicación con clave dinámica `key={profile?.id || "anon"}` para garantizar aislamiento de sesión y limpieza de tickets al cambiar de usuario. |
+| `AdminPanel.jsx` | `frontend/src/components/` | Montaje de la pestaña "Soporte Técnico" accesible exclusivamente para el rol Administrador Global (`isGlobalAdmin`). |
+
+### 2. Backend
+
+| Archivo / Módulo | Ubicación | Qué hace / Criterio cubierto |
+| :--------------- | :-------- | :--------------------------- |
+| `router.py` | `backend/app/assistant/` | Endpoints FastAPI: `POST /api/assistant/chat` (consultas al asistente), `POST /api/support/tickets` (creación de tickets con idempotencia), `GET /api/support/tickets/my` (listado de tickets del usuario). |
+| `service.py` | `backend/app/assistant/` | Orquestación del pipeline: sanitización PII &rarr; guardrails S1/S7 &rarr; recuperación BM25 &rarr; tiering &rarr; llamada a Groq LLM &rarr; ensamble de respuesta. |
+| `retrieval.py` | `backend/app/assistant/` | **E1, E2:** Motor de búsqueda léxica BM25 en memoria sobre `kb.json` con normalización de texto y ponderación contextual por `screen_id` y `field_id`. |
+| `guard.py` | `backend/app/assistant/` | **Safeguards S1/S7:** Detección y bloqueo de solicitudes fuera de alcance (intentos de cálculo de score, promesas de aprobación o asesoría financiera no permitida). |
+| `redact.py` | `backend/app/assistant/` | Sanitización estricta de datos personales sensibles (RUTs chilenos, números de tarjeta, emails y teléfonos) en memoria y logs. |
+| `llm.py` | `backend/app/assistant/` | Integración con Groq API para redacción concisa fundamentada exclusivamente en los chunks recuperados, con circuit-breaker ante fallos o rate-limits. |
+| `tickets.py` | `backend/app/assistant/` | Lógica de persistencia de tickets en Supabase con JWT verificado, idempotencia por `client_request_id` y disparo de correo asíncrono. |
+| `support_email.py` | `backend/app/assistant/` | **E4:** Cliente de correo vía Resend con plantillas HTML corporativas para creación de tickets y respuestas del administrador. |
+| `constants.py` | `backend/app/assistant/` | Umbrales de confianza BM25 (`MIN_RETRIEVAL_SCORE`, `EXACT_HIT_SCORE`), límites de caracteres y mensajes de fallback. |
+| `scripts/build-assistant-kb.mjs` | `scripts/` | Script Node.js que compila las fuentes estáticas (Academia + manuales) en `kb.json` y valida rutas contra una lista blanca. |
+
+### 3. Base de Datos (Supabase)
+
+| Archivo | Qué contiene |
+| :------ | :----------- |
+| `supabase/migrations/20261026120000_hu24_support_tickets.sql` | Creación de tabla `support_tickets`, índices, RLS (`select` y `insert` restringidos), revocación de `update`/`delete`, y funciones RPC `update_support_ticket_status` y `submit_ticket_user_feedback`. |
+| `supabase/schema.sql` (líneas 3550-3714) | Snapshot sincronizado para bootstrapping de nuevos entornos. |
+| `supabase/rollback/20261026120000_hu24_support_tickets_rollback.sql` | Script de reversión limpia de la migración. |
+
+---
+
+## Guía: Cómo y qué archivos editar para actualizar respuestas automatizadas
+
+Cuando se agreguen **nuevas funcionalidades**, **nuevas pantallas** o **nuevas fuentes de información** en RutaHogar, el asistente virtual puede y debe actualizarse para responder automáticamente sobre ellas. Sigue este procedimiento paso a paso:
+
+### Arquitectura de la Base de Conocimiento (KB)
+
+El asistente responde usando un enfoque **RAG-lite determinista**:
+1. No inventa respuestas: busca chunks relevantes en el archivo compilado `backend/app/assistant/kb/kb.json`.
+2. Si el usuario está autenticado y la confianza es alta, Groq redacta una respuesta amigable basada **únicamente** en el contenido de esos chunks.
+3. Si el usuario es anónimo o falla el LLM, devuelve directamente el contenido del chunk (Nivel 0).
+4. El archivo `kb.json` **no se edita a mano**: se compila automáticamente mediante el script `scripts/build-assistant-kb.mjs`.
+
+---
+
+### Paso a paso según el tipo de cambio
+
+#### Caso 1: Agregar o actualizar conceptos financieros o artículos educativos
+* **Archivo a editar:** `frontend/src/constants/academyContent.js`
+* **Qué hacer:**
+  - Si es un término de glosario: Añadirlo al objeto `ACADEMY_GLOSSARY`:
+    ```javascript
+    NUEVO_CONCEPTO: {
+      label: "Nombre del Concepto",
+      definition: "Definición clara y concisa...",
+      articleId: "id-del-articulo-relacionado", // opcional
+    }
+    ```
+  - Si es una guía o artículo completo: Añadirlo al array `ACADEMY_ARTICLES` con `id`, `title`, `summary`, `tags` y `takeaways`.
+
+#### Caso 2: Agregar orientación sobre una nueva funcionalidad, vista o rol
+* **Archivos a editar:**
+  - Para flujos generales o de usuario/lead: `backend/app/assistant/kb/manual/plataforma.json`
+  - Para la pre-evaluación o sus pasos: `backend/app/assistant/kb/manual/preevaluacion.json`
+  - Para funcionalidades de ejecutivos o administradores: `backend/app/assistant/kb/manual/staff.json`
+  - *(Opcional)* Si es un módulo muy grande, puedes crear un archivo nuevo: `backend/app/assistant/kb/manual/nuevo_modulo.json` (el script carga automáticamente todos los `.json` de esa carpeta).
+* **Estructura obligatoria de cada chunk:**
+  ```json
+  {
+    "id": "modulo-funcionalidad-especifica",
+    "title": "¿Cómo funciona la nueva funcionalidad X?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "nombre_de_la_pantalla",
+    "content": "Explicación detallada de la funcionalidad, qué debe hacer el usuario y qué beneficios obtiene.",
+    "synonyms": [
+      "como usar la nueva funcionalidad",
+      "para que sirve X",
+      "donde veo X",
+      "ayuda con X"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "ruta-de-la-pantalla",
+      "label": "Ir a la sección X"
+    }
+  }
+  ```
+  > **Nota sobre campos:**
+  > - `synonyms`: Frases clave y preguntas que los usuarios podrían hacer. El motor BM25 busca en `title`, `content` y `synonyms`.
+  > - `action.target`: Debe ser una ruta permitida (ver Caso 3).
+  > - `field_id`: Si la ayuda es para un input específico, pon su identificador (permite al botón enfocar el campo).
+
+#### Caso 3: Registrar una nueva ruta interna del frontend
+Si la nueva funcionalidad incluye una nueva vista o ruta de navegación interna en la aplicación:
+* **Archivo a editar:** `scripts/build-assistant-kb.mjs`
+* **Qué hacer:** Agregar el identificador de la ruta al conjunto `VALID_ROUTES` (líneas 34-56):
+  ```javascript
+  const VALID_ROUTES = new Set([
+    // ... rutas existentes ...
+    "nueva-ruta",
+  ]);
+  ```
+  *(Si no la agregas, el compilador lanzará un error de validación para evitar que el asistente recomiende links rotos).*
+
+#### Caso 4: Modificar las preguntas frecuentes (botones de inicio en el chat)
+Si quieres que una pregunta sobre la nueva funcionalidad aparezca como sugerencia rápida cuando el usuario abre el widget:
+* **Archivo a editar:** `frontend/src/features/assistant/AssistantWidget.jsx`
+* **Qué hacer:** Modificar el array `QUICK_PROMPTS` (líneas 16-21):
+  ```javascript
+  const QUICK_PROMPTS = [
+    "¿Cuáles son los pasos de la pre-evaluación?",
+    "¿Qué deudas debo ingresar?",
+    "¿Cómo funciona la nueva funcionalidad X?",
+    "¿Cómo funciona complementar renta?",
+  ];
+  ```
+
+#### Caso 5: Agregar salvaguardas o temas fuera de alcance (S1/S7)
+Si la nueva funcionalidad trata sobre aprobaciones, tasas bancarias directas u operaciones restringidas:
+* **Archivo a editar:** `backend/app/assistant/guard.py`
+* **Qué hacer:** Si se requiere prohibir que el asistente emita juicios o promesas sobre esa materia, agregar patrones regex al array `OUT_OF_SCOPE_PATTERNS`.
+
+---
+
+### Procedimiento de Compilación y Validación
+
+Una vez editados los archivos de contenido:
+
+1. **Compilar la base de conocimiento:**
+   Ejecutar desde la raíz del proyecto:
+   ```bash
+   node scripts/build-assistant-kb.mjs
+   ```
+   *Salida esperada:*
+   ```text
+   Compiling Assistant Knowledge Base...
+   Loaded X chunks from plataforma.json
+   Loaded Y chunks from preevaluacion.json
+   Loaded Z chunks from staff.json
+   Added N glossary terms
+   Added M academy articles
+   ✓ Generated .../backend/app/assistant/kb/kb.json
+     Total chunks: Total
+     Total size: ~90 KB
+   ```
+
+2. **Ejecutar las pruebas automatizadas del backend:**
+   ```bash
+   PYTHONPATH=backend python -m unittest backend/tests/test_assistant.py backend/tests/test_support_tickets.py
+   ```
+   *Confirma que la KB carga correctamente, no excede el límite de peso y los tests de recuperación siguen pasando.*
+
+3. **Ejecutar las pruebas automatizadas del frontend:**
+   ```bash
+   npm --prefix frontend test -- src/services/__tests__/supportTicketsService.test.js src/lib/assistant/ --run
+   ```
+
+4. **Hacer commit de los cambios:**
+   Recuerda incluir en el commit tanto las fuentes (`.json` / `academyContent.js`) como el archivo compilado resultante (`backend/app/assistant/kb/kb.json`).
