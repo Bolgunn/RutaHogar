@@ -1,4 +1,4 @@
--- Revierte 20261005160000_hu15_funnel_plan_accepted.sql: vuelve a la
+-- Revierte 20261024130000_hu15_funnel_plan_accepted.sql: vuelve a la
 -- definición de 20261005150000 (plan leído de tracking_plans).
 begin;
 

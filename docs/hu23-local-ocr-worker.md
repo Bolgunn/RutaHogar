@@ -26,6 +26,8 @@ Para el piloto, configurar el backend con `HU23_OCR_PROVIDER=local` y `HU23_LOCA
 
 Omitir `HU23_OCR_PROVIDER` o seleccionar `azure` mantiene el proveedor predeterminado. El PC, Docker y el túnel deben estar disponibles; el token debe mantenerse privado. Un documento especialmente ruidoso puede agotar el tiempo de OCR y quedar reintentable.
 
+El backend expone `GET /tracking/documents/diagnostics/ocr` solo para un administrador global autenticado. Devuelve el proveedor y booleanos de configuración, sin URLs ni secretos. Los nombres del backend son `HU23_OCR_PROVIDER`, `HU23_LOCAL_OCR_URL`, `HU23_LOCAL_OCR_TOKEN`, `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` y `AZURE_DOCUMENT_INTELLIGENCE_KEY`; los proveedores válidos son `azure` y `local`. `ready_for_selected_provider` también comprueba el formato requerido por el cliente, pero no comprueba conectividad ni credenciales. Si no se configura explícitamente `HU23_OCR_PROVIDER`, el backend usa Azure por defecto y el diagnóstico informa `ready_for_selected_provider=false`. El endpoint requiere un nuevo despliegue del backend para estar disponible.
+
 ## Migración y cierre
 
 La migración aditiva `20261027210000_hu23_local_ocr_poc.sql` conserva su nombre histórico para no cambiar la identidad de una migración ya aplicada. El rollback no debe reinterpretar jobs locales como Azure. No ejecutar migraciones enlazadas para pruebas locales.

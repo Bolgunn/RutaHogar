@@ -2581,7 +2581,7 @@ grant execute on function public.lead_changes_record_quick_update(jsonb) to auth
 -- HU19 — Portal Inmobiliario (RAG) sobre public.proyectos_rag
 -- =============================================================
 -- Espejo de migrations/20260920000000_hu19_proyectos_rag.sql con
--- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql y
+-- migrations/20261005150001_hu19_proyectos_rag_lock_writes.sql y
 -- migrations/20261006090000_hu19_proyectos_rag_campos_catalogo.sql ya aplicadas.
 
 create extension if not exists vector;
@@ -2617,7 +2617,7 @@ create index if not exists proyectos_rag_comuna_idx
   on public.proyectos_rag (lower(comuna));
 
 -- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
--- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
+-- catálogo; ver 20261005150001_hu19_proyectos_rag_lock_writes.sql.
 alter table public.proyectos_rag enable row level security;
 
 drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;

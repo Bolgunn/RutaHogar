@@ -104,6 +104,50 @@ def cancel(process_id: UUID, command: CancelProcess, ctx=Depends(context)):
     return checked(lambda: service.read(user, str(process_id)))
 
 
+def global_admin_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                         repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(401, detail={"code": "unauthenticated"})
+    actor = checked(lambda: repo.tracking.staff_actor(credentials.credentials))
+    if actor.get("role") != "admin" or actor.get("inmobiliaria_id") is not None:
+        raise HTTPException(403, detail={"code": "forbidden"})
+    return actor
+
+
+@router.get('/diagnostics/ocr')
+def ocr_diagnostics(_admin=Depends(global_admin_context)):
+    # Configuration presence only: never return or log supplied values.
+    import os
+    from .azure import AzureOcrClient, OcrError
+    from .local_ocr import LocalOcrClient
+
+    configured = lambda name: bool(os.getenv(name, '').strip())
+    raw_provider = os.getenv('HU23_OCR_PROVIDER')
+    provider = raw_provider if raw_provider in ('azure', 'local') else ('azure' if raw_provider is None else 'invalid')
+    worker_url = configured('HU23_LOCAL_OCR_URL')
+    worker_token = configured('HU23_LOCAL_OCR_TOKEN')
+    azure_endpoint = configured('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT')
+    azure_key = configured('AZURE_DOCUMENT_INTELLIGENCE_KEY')
+    ready = False
+    # The backend defaults to Azure, but an absent explicit provider is not
+    # counted as ready in this deployment diagnostic.
+    if raw_provider == 'azure' and azure_endpoint and azure_key:
+        try:
+            AzureOcrClient()
+            ready = True
+        except OcrError:
+            pass
+    elif raw_provider == 'local' and worker_url and worker_token:
+        try:
+            LocalOcrClient()
+            ready = True
+        except DocumentError:
+            pass
+    return {'provider': provider, 'worker_url_configured': worker_url,
+            'worker_token_configured': worker_token, 'azure_endpoint_configured': azure_endpoint,
+            'azure_key_configured': azure_key, 'ready_for_selected_provider': ready}
+
+
 @router.get('/config')
 def configuration(ctx=Depends(context)):
     from .local_ocr import configured_provider
