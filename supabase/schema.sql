@@ -3708,6 +3708,21 @@ begin
 end;
 $$;
 
+-- Mantener sobrecarga de 2 parámetros para llamadas sin réplica de texto
+create or replace function public.submit_ticket_user_feedback(
+  p_ticket_id uuid,
+  p_feedback text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return public.submit_ticket_user_feedback(p_ticket_id, p_feedback, null);
+end;
+$$;
+
 grant execute on function public.update_support_ticket_status(uuid, text, text) to authenticated;
 grant execute on function public.update_support_ticket_status(uuid, text) to authenticated;
 grant execute on function public.submit_ticket_user_feedback(uuid, text, text) to authenticated;
