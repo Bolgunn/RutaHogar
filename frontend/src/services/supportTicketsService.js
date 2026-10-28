@@ -247,6 +247,52 @@ export async function getSupportTickets({ status = "todos" } = {}) {
 }
 
 /**
+ * Retrieves support tickets for the current authenticated user (including admin responses).
+ *
+ * @param {Object} [params]
+ * @param {string|null} [params.userId]
+ * @param {string|null} [params.token]
+ * @returns {Promise<Array<any>>}
+ */
+export async function getUserSupportTickets({ userId = null, token = null } = {}) {
+  const localTickets = readLocalSupportTickets();
+
+  if (isSupabaseDataConfigured) {
+    try {
+      const activeToken = await getActiveAuthToken(token);
+      if (activeToken) {
+        const { data, error } = await supabase
+          .from("support_tickets")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const map = new Map(data.map((t) => [t.id, t]));
+          for (const lt of localTickets) {
+            if (!map.has(lt.id)) {
+              map.set(lt.id, lt);
+            }
+          }
+          return Array.from(map.values());
+        }
+      }
+    } catch (err) {
+      console.warn("[supportTicketsService] Supabase user fetch error:", err);
+    }
+  }
+
+  // Filter local tickets by userId if provided, or return all if local/demo mode
+  if (userId) {
+    const userSpecific = localTickets.filter(
+      (t) => t.user_id === userId || !t.user_id || t.user_id.includes(userId)
+    );
+    if (userSpecific.length > 0) return userSpecific;
+  }
+
+  return localTickets;
+}
+
+/**
  * Updates a support ticket status and/or records an admin reply.
  *
  * @param {Object} params

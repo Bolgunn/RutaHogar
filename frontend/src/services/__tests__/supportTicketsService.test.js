@@ -24,6 +24,7 @@ import {
   createSupportTicket,
   getActiveAuthToken,
   getSupportTickets,
+  getUserSupportTickets,
   updateSupportTicketStatus,
   readLocalSupportTickets,
   writeLocalSupportTickets,
@@ -223,5 +224,27 @@ describe("supportTicketsService.js (HU24 - E4)", () => {
 
     const local = readLocalSupportTickets();
     expect(local.find((t) => t.id === "t-patch").status).toBe("resuelto");
+  });
+
+  it("retrieves user tickets including admin reply via getUserSupportTickets", async () => {
+    writeLocalSupportTickets([
+      {
+        id: "t-user-1",
+        user_id: "user-abc",
+        status: "en_proceso",
+        admin_reply: "Estimado, tu consulta fue revisada.",
+        replied_at: "2026-10-28T03:00:00Z",
+      },
+      {
+        id: "t-user-2",
+        user_id: "user-other",
+        status: "abierto",
+      },
+    ]);
+
+    const tickets = await getUserSupportTickets({ userId: "user-abc" });
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0].id).toBe("t-user-1");
+    expect(tickets[0].admin_reply).toBe("Estimado, tu consulta fue revisada.");
   });
 });

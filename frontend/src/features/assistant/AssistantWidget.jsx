@@ -8,6 +8,7 @@ import { buildTranscriptForTicket } from "../../lib/assistant/transcript";
 import {
   createSupportTicket,
   getActiveAuthToken,
+  getUserSupportTickets,
 } from "../../services/supportTicketsService";
 import "./AssistantWidget.css";
 
@@ -17,6 +18,36 @@ const QUICK_PROMPTS = [
   "¿Qué es el ingreso mensual líquido?",
   "¿Cómo funciona complementar renta?",
 ];
+
+const DEFAULT_WELCOME = {
+  id: "welcome",
+  role: "assistant",
+  content:
+    "¡Hola! Soy tu asistente virtual de RutaHogar. Puedo orientarte sobre los 4 pasos de la pre-evaluación, el significado de cada campo y conceptos financieros. ¿En qué te puedo ayudar hoy?",
+  action: null,
+  links: [],
+  sources: [],
+  feedback: null,
+  suggestEscalation: false,
+};
+
+function formatFecha(val) {
+  if (!val) return "";
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-CL", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getStorageKey(prof) {
+  if (prof?.id) return `rutahogar_assistant_msgs_${prof.id}`;
+  if (prof?.email) return `rutahogar_assistant_msgs_${prof.email}`;
+  return "rutahogar_assistant_msgs_guest";
+}
 
 export default function AssistantWidget({
   screenId = null,
@@ -32,22 +63,26 @@ export default function AssistantWidget({
     token
   );
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "¡Hola! Soy tu asistente virtual de RutaHogar. Puedo orientarte sobre los 4 pasos de la pre-evaluación, el significado de cada campo y conceptos financieros. ¿En qué te puedo ayudar hoy?",
-      action: null,
-      links: [],
-      sources: [],
-      feedback: null,
-      suggestEscalation: false,
-    },
-  ]);
+
+  // Persistent messages state
+  const [messages, setMessages] = useState(() => {
+    try {
+      const key = getStorageKey(profile);
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return [DEFAULT_WELCOME];
+  });
+
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [hasUnread, setHasUnread] = useState(true);
+  const [hasUnread, setHasUnread] = useState(false);
+  const [activeTicket, setActiveTicket] = useState(null);
 
   // E3 & E4: Support ticket states
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
@@ -60,6 +95,150 @@ export default function AssistantWidget({
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Persist messages whenever they change
+  useEffect(() => {
+    try {
+      const key = getStorageKey(profile);
+      localStorage.setItem(key, JSON.stringify(messages));
+    } catch (err) {
+      console.warn("[AssistantWidget] Could not persist messages:", err);
+    }
+  }, [messages, profile?.id, profile?.email]);
+
+  // Reload messages when profile switches
+  useEffect(() => {
+    try {
+      const key = getStorageKey(profile);
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      }
+    } catch {}
+  }, [profile?.id, profile?.email]);
+
+  // Sync tickets and admin responses
+  const syncTicketsAndReplies = async () => {
+    try {
+      const userTickets = await getUserSupportTickets({
+        userId: profile?.id || null,
+        token,
+      });
+
+      if (!userTickets || !Array.isArray(userTickets) || userTickets.length === 0) {
+        return;
+      }
+
+      // Sort by created_at desc
+      const sorted = [...userTickets].sort(
+        (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      );
+
+      const active = sorted.find(
+        (t) => t.status === "abierto" || t.status === "en_proceso" || t.status === "en_curso"
+      );
+      const latest = active || sorted[0];
+      setActiveTicket(latest || null);
+
+      setMessages((prev) => {
+        let updated = [...prev];
+        const isFresh = updated.length === 1 && updated[0].id === "welcome";
+
+        // Restore context if conversation was clean but active ticket exists
+        if (isFresh && latest && latest.message) {
+          updated.push({
+            id: `user-ticket-inquiry-${latest.id}`,
+            role: "user",
+            content: latest.message,
+            createdAt: latest.created_at,
+          });
+          updated.push({
+            id: `ticket-confirm-${latest.id}`,
+            role: "assistant",
+            content: `✅ Ticket de soporte #${latest.code || latest.id.slice(0, 8).toUpperCase()} registrado sobre "${latest.subject || 'Consulta'}".`,
+            ticketCode: latest.code,
+            ticketStatus: latest.status,
+            feedback: "helpful",
+          });
+        }
+
+        let hasNewAdminReply = false;
+        for (const t of sorted) {
+          if (t.admin_reply && String(t.admin_reply).trim()) {
+            const replyId = `admin-reply-${t.id}`;
+            const existingIndex = updated.findIndex(
+              (m) =>
+                m.id === replyId ||
+                (m.role === "admin" && (m.ticketId === t.id || m.content === t.admin_reply))
+            );
+
+            const adminMsg = {
+              id: replyId,
+              role: "admin",
+              authorName: "Soporte RutaHogar",
+              content: t.admin_reply,
+              ticketId: t.id,
+              ticketCode: t.code || t.id.slice(0, 8).toUpperCase(),
+              ticketSubject: t.subject,
+              ticketStatus: t.status === "en_curso" ? "en_proceso" : t.status,
+              repliedAt: t.replied_at || t.status_updated_at || new Date().toISOString(),
+              createdAt: t.replied_at || new Date().toISOString(),
+            };
+
+            if (existingIndex >= 0) {
+              if (
+                updated[existingIndex].content !== adminMsg.content ||
+                updated[existingIndex].ticketStatus !== adminMsg.ticketStatus
+              ) {
+                updated[existingIndex] = {
+                  ...updated[existingIndex],
+                  ...adminMsg,
+                };
+              }
+            } else {
+              updated.push(adminMsg);
+              hasNewAdminReply = true;
+            }
+          }
+        }
+
+        if (hasNewAdminReply && !isOpen) {
+          setHasUnread(true);
+        }
+
+        return updated;
+      });
+    } catch (err) {
+      console.warn("[AssistantWidget] syncTicketsAndReplies error:", err);
+    }
+  };
+
+  // Cross-tab storage synchronization
+  useEffect(() => {
+    syncTicketsAndReplies();
+
+    const onStorageChange = (e) => {
+      if (
+        e.key === "rutahogar_support_tickets" ||
+        (e.key && e.key.startsWith("rutahogar_assistant_msgs"))
+      ) {
+        syncTicketsAndReplies();
+      }
+    };
+    window.addEventListener("storage", onStorageChange);
+    return () => window.removeEventListener("storage", onStorageChange);
+  }, [profile?.id, token]);
+
+  // Periodic polling while open (every 3.5 seconds)
+  useEffect(() => {
+    if (!isOpen) return;
+    syncTicketsAndReplies();
+    const interval = setInterval(syncTicketsAndReplies, 3500);
+    return () => clearInterval(interval);
+  }, [isOpen, profile?.id, token]);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,7 +267,7 @@ export default function AssistantWidget({
     setIsTyping(true);
 
     const historyPayload = messages.slice(-5).map((m) => ({
-      role: m.role,
+      role: m.role === "admin" ? "assistant" : m.role,
       content: m.content,
     }));
 
@@ -154,7 +333,11 @@ export default function AssistantWidget({
       : "Consulta sobre la plataforma";
 
     setTicketSubject(defaultSubject);
-    setTicketMessage(refMsg ? `Tengo dudas con respecto a la respuesta: "${refMsg.content.slice(0, 100)}..."` : "");
+    setTicketMessage(
+      refMsg
+        ? `Tengo dudas con respecto a la respuesta: "${refMsg.content.slice(0, 100)}..."`
+        : ""
+    );
     setTicketError(null);
     setTicketSuccess(null);
     setTicketModalOpen(true);
@@ -179,6 +362,7 @@ export default function AssistantWidget({
       });
 
       setTicketSuccess(res);
+      setActiveTicket(res);
 
       // Append confirmation message in chat stream
       setMessages((prev) => [
@@ -186,7 +370,7 @@ export default function AssistantWidget({
         {
           id: `ticket-confirm-${Date.now()}`,
           role: "assistant",
-          content: `✅ Se ha creado exitosamente tu ticket de soporte #${res.code} con el asunto "${ticketSubject}". Nuestro equipo revisará la conversación previa y te responderá por correo electrónico.`,
+          content: `✅ Se ha creado exitosamente tu ticket de soporte #${res.code} con el asunto "${ticketSubject}". Nuestro equipo revisará tu consulta y te responderá directamente en este chat y a tu correo electrónico.`,
           action: null,
           links: [],
           sources: [],
@@ -209,6 +393,10 @@ export default function AssistantWidget({
   };
 
   const handleClear = () => {
+    try {
+      const key = getStorageKey(profile);
+      localStorage.removeItem(key);
+    } catch {}
     setMessages([
       {
         id: `welcome-${Date.now()}`,
@@ -328,117 +516,185 @@ export default function AssistantWidget({
 
           {/* Privacy Disclaimer Banner */}
           <div className="assistant-banner">
-            <span>🔒 Tus datos están protegidos. No compartas claves ni contraseñas.</span>
+            <span>🔒 Tus datos están protegidos. No compartas claves bancarias.</span>
           </div>
+
+          {/* Active Ticket Banner if exists */}
+          {activeTicket && (
+            <div className="assistant-active-ticket-banner">
+              <div className="active-ticket-info">
+                <span className="active-ticket-icon">🎫</span>
+                <div className="active-ticket-text">
+                  <span className="active-ticket-title">
+                    Ticket #{activeTicket.code || activeTicket.id?.slice(0, 8).toUpperCase()}
+                  </span>
+                  <span className="active-ticket-subject">
+                    {activeTicket.subject || "Consulta de soporte"}
+                  </span>
+                </div>
+              </div>
+              <span className={`active-ticket-status-pill status-${activeTicket.status || "abierto"}`}>
+                {activeTicket.status === "abierto"
+                  ? "⏳ En espera"
+                  : activeTicket.status === "en_proceso" || activeTicket.status === "en_curso"
+                  ? "💬 En atención"
+                  : activeTicket.status === "resuelto"
+                  ? "✓ Resuelto"
+                  : "Cerrado"}
+              </span>
+            </div>
+          )}
 
           {/* Messages Stream */}
           <div className="assistant-messages-body">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`assistant-msg-row ${
-                  msg.role === "user" ? "assistant-msg-user" : "assistant-msg-bot"
-                }`}
-              >
-                {msg.role === "assistant" && (
-                  <div className="assistant-msg-avatar">RH</div>
-                )}
-                <div className="assistant-bubble-container">
-                  <div className="assistant-bubble">
-                    <p className="assistant-bubble-text">{msg.content}</p>
+            {messages.map((msg) => {
+              // Role: ADMIN (Human Support Staff Response)
+              if (msg.role === "admin") {
+                return (
+                  <div key={msg.id} className="assistant-msg-row assistant-msg-admin">
+                    <div className="assistant-admin-avatar" title="Administrador de RutaHogar">
+                      🛡️
+                    </div>
+                    <div className="assistant-bubble-container">
+                      <div className="assistant-bubble assistant-admin-bubble">
+                        <div className="assistant-admin-bubble-header">
+                          <div className="admin-header-title-row">
+                            <span className="admin-sender-name">Soporte RutaHogar</span>
+                            <span className="admin-role-badge">ADMINISTRADOR</span>
+                          </div>
+                          {msg.ticketCode && (
+                            <span className="admin-ticket-tag">#{msg.ticketCode}</span>
+                          )}
+                        </div>
 
-                    {/* Sources Badge */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="assistant-sources-tag">
-                        <span>Guía:</span> {msg.sources.slice(0, 2).join(" · ")}
+                        <p className="assistant-bubble-text assistant-admin-text">
+                          {msg.content}
+                        </p>
+
+                        <div className="assistant-admin-bubble-footer">
+                          <span className="admin-time-label">
+                            {formatFecha(msg.repliedAt || msg.createdAt)}
+                          </span>
+                          <span className={`admin-status-pill status-${msg.ticketStatus || "en_proceso"}`}>
+                            {msg.ticketStatus === "resuelto" ? "✓ Resuelto" : "En Proceso"}
+                          </span>
+                        </div>
                       </div>
-                    )}
+                    </div>
+                  </div>
+                );
+              }
 
-                    {/* Action Button (e.g. Focus field) */}
-                    {msg.action && (
-                      <button
-                        type="button"
-                        className="assistant-action-chip"
-                        onClick={() => handleActionClick(msg.action)}
-                      >
-                        <span className="assistant-action-icon">📍</span>
-                        <span>{msg.action.label || "Ir al campo en pantalla"}</span>
-                      </button>
-                    )}
+              // Standard User or Virtual Assistant messages
+              return (
+                <div
+                  key={msg.id}
+                  className={`assistant-msg-row ${
+                    msg.role === "user" ? "assistant-msg-user" : "assistant-msg-bot"
+                  }`}
+                >
+                  {msg.role === "assistant" && (
+                    <div className="assistant-msg-avatar">RH</div>
+                  )}
+                  <div className="assistant-bubble-container">
+                    <div className="assistant-bubble">
+                      <p className="assistant-bubble-text">{msg.content}</p>
 
-                    {/* Links Buttons (e.g. Open Academy article) */}
-                    {msg.links && msg.links.length > 0 && (
-                      <div className="assistant-links-container">
-                        {msg.links.map((lnk, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            className="assistant-link-chip"
-                            onClick={() => handleLinkClick(lnk)}
-                          >
-                            <span>📖</span>
-                            <span>{lnk.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                      {/* Sources Badge */}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="assistant-sources-tag">
+                          <span>Guía:</span> {msg.sources.slice(0, 2).join(" · ")}
+                        </div>
+                      )}
 
-                    {/* E3: Answer Feedback Thumbs */}
-                    {msg.role === "assistant" && msg.id !== "welcome" && !msg.id.startsWith("ticket-confirm") && (
-                      <div className="assistant-feedback-row">
-                        {!msg.feedback ? (
-                          <>
-                            <span className="assistant-feedback-label">¿Te sirvió esta respuesta?</span>
-                            <div className="assistant-feedback-buttons">
-                              <button
-                                type="button"
-                                className="assistant-feedback-btn"
-                                onClick={() => handleFeedback(msg.id, "helpful")}
-                                title="Sí, me sirvió"
-                              >
-                                👍 Sí
-                              </button>
-                              <button
-                                type="button"
-                                className="assistant-feedback-btn"
-                                onClick={() => handleFeedback(msg.id, "unhelpful")}
-                                title="No me sirvió"
-                              >
-                                👎 No
-                              </button>
-                            </div>
-                          </>
-                        ) : msg.feedback === "helpful" ? (
-                          <span className="assistant-feedback-thanks">¡Gracias por tu valoración! 😊</span>
-                        ) : (
-                          <span className="assistant-feedback-thanks">Lamentamos que no te haya servido.</span>
+                      {/* Action Button (e.g. Focus field) */}
+                      {msg.action && (
+                        <button
+                          type="button"
+                          className="assistant-action-chip"
+                          onClick={() => handleActionClick(msg.action)}
+                        >
+                          <span className="assistant-action-icon">📍</span>
+                          <span>{msg.action.label || "Ir al campo en pantalla"}</span>
+                        </button>
+                      )}
+
+                      {/* Links Buttons (e.g. Open Academy article) */}
+                      {msg.links && msg.links.length > 0 && (
+                        <div className="assistant-links-container">
+                          {msg.links.map((lnk, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className="assistant-link-chip"
+                              onClick={() => handleLinkClick(lnk)}
+                            >
+                              <span>📖</span>
+                              <span>{lnk.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* E3: Answer Feedback Thumbs */}
+                      {msg.role === "assistant" &&
+                        msg.id !== "welcome" &&
+                        !msg.id.startsWith("ticket-confirm") && (
+                          <div className="assistant-feedback-row">
+                            {!msg.feedback ? (
+                              <>
+                                <span className="assistant-feedback-label">¿Te sirvió esta respuesta?</span>
+                                <div className="assistant-feedback-buttons">
+                                  <button
+                                    type="button"
+                                    className="assistant-feedback-btn"
+                                    onClick={() => handleFeedback(msg.id, "helpful")}
+                                    title="Sí, me sirvió"
+                                  >
+                                    👍 Sí
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="assistant-feedback-btn"
+                                    onClick={() => handleFeedback(msg.id, "unhelpful")}
+                                    title="No me sirvió"
+                                  >
+                                    👎 No
+                                  </button>
+                                </div>
+                              </>
+                            ) : msg.feedback === "helpful" ? (
+                              <span className="assistant-feedback-thanks">¡Gracias por tu valoración! 😊</span>
+                            ) : (
+                              <span className="assistant-feedback-thanks">Lamentamos que no te haya servido.</span>
+                            )}
+                          </div>
                         )}
+                    </div>
+
+                    {/* E3: Escalation Offer Card */}
+                    {msg.role === "assistant" && msg.suggestEscalation && (
+                      <div className="assistant-escalation-card">
+                        <div className="assistant-escalation-card-content">
+                          <span className="assistant-escalation-icon">🛎️</span>
+                          <div className="assistant-escalation-text">
+                            <strong>¿Necesitas atención personalizada?</strong>
+                            <p>Podemos canalizar tu consulta con nuestro equipo de soporte.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="assistant-escalation-action-btn"
+                          onClick={() => handleOpenTicket(msg)}
+                        >
+                          ✉️ Contactar a Soporte
+                        </button>
                       </div>
                     )}
                   </div>
-
-                  {/* E3: Escalation Offer Card */}
-                  {msg.role === "assistant" && msg.suggestEscalation && (
-                    <div className="assistant-escalation-card">
-                      <div className="assistant-escalation-card-content">
-                        <span className="assistant-escalation-icon">🛎️</span>
-                        <div className="assistant-escalation-text">
-                          <strong>¿Necesitas atención personalizada?</strong>
-                          <p>Podemos canalizar tu consulta con nuestro equipo de soporte.</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="assistant-escalation-action-btn"
-                        onClick={() => handleOpenTicket(msg)}
-                      >
-                        ✉️ Contactar a Soporte
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isTyping && (
               <div className="assistant-msg-row assistant-msg-bot">
@@ -487,7 +743,7 @@ export default function AssistantWidget({
               className="assistant-input"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Pregunta sobre la pre-evaluación..."
+              placeholder="Escribe tu mensaje o consulta..."
               maxLength={400}
               disabled={isTyping}
             />
@@ -503,9 +759,9 @@ export default function AssistantWidget({
             </button>
           </form>
 
-          {/* Legal Note */}
+          {/* Live Indicator Note */}
           <div className="assistant-legal-note">
-            Orientación referencial. No constituye aprobación crediticia bancaria.
+            ● Conversación activa · Respuestas de soporte y asistente en vivo
           </div>
 
           {/* E4: Ticket Creation Modal Overlay */}
@@ -518,7 +774,9 @@ export default function AssistantWidget({
                       {ticketSuccess ? "¡Ticket Enviado!" : "Contactar a Soporte"}
                     </h4>
                     <span className="assistant-modal-subtitle">
-                      {ticketSuccess ? "Te responderemos a la brevedad" : "Resolución asistida por nuestro equipo"}
+                      {ticketSuccess
+                        ? "Te responderemos aquí mismo y a tu correo"
+                        : "Resolución asistida por nuestro equipo"}
                     </span>
                   </div>
                   <button
@@ -542,8 +800,8 @@ export default function AssistantWidget({
                       <strong className="code-value">#{ticketSuccess.code}</strong>
                     </div>
                     <p className="assistant-ticket-success-text">
-                      Hemos recibido tu ticket y una copia fue notificada al equipo de soporte de RutaHogar.
-                      Responderemos directamente a tu correo electrónico.
+                      Hemos recibido tu ticket y el equipo de soporte fue notificado.
+                      Podrás ver la respuesta directamente en este chat y también la recibirás en tu correo.
                     </p>
                     <button
                       type="button"
@@ -594,7 +852,7 @@ export default function AssistantWidget({
                       <span>🔒</span>
                       <p>
                         Adjuntaremos los últimos mensajes de este chat para darte una solución rápida.
-                        Cualquier dato sensible (RUT, números de cuenta) se elimina de forma automática.
+                        Cualquier dato sensible (RUT, números de cuenta) se anonimiza automáticamente.
                       </p>
                     </div>
 

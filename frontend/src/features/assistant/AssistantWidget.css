@@ -190,6 +190,80 @@
   gap: 6px;
 }
 
+/* ── Active Ticket Sticky Banner ── */
+.assistant-active-ticket-banner {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.active-ticket-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.active-ticket-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.active-ticket-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.active-ticket-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.active-ticket-subject {
+  font-size: 0.72rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.active-ticket-status-pill {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.active-ticket-status-pill.status-abierto {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.active-ticket-status-pill.status-en_proceso,
+.active-ticket-status-pill.status-en_curso {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.active-ticket-status-pill.status-resuelto {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
 /* ── Messages Stream ── */
 .assistant-messages-body {
   flex: 1;
@@ -214,6 +288,116 @@
 
 .assistant-msg-bot {
   align-self: flex-start;
+}
+
+/* ── Admin Staff Message Bubble ── */
+.assistant-msg-admin {
+  align-self: flex-start;
+  max-width: 92%;
+}
+
+.assistant-admin-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f172a 0%, #246354 100%);
+  color: #ffffff;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.15);
+}
+
+.assistant-admin-bubble {
+  background: #ffffff;
+  border: 1px solid #a7f3d0;
+  border-left: 4px solid #10b981;
+  color: #0f172a;
+  border-bottom-left-radius: 4px;
+}
+
+.assistant-admin-bubble-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #dcfce7;
+}
+
+.admin-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-sender-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #065f46;
+}
+
+.admin-role-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  background: #065f46;
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.admin-ticket-tag {
+  font-family: monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #246354;
+  background: #ecfdf5;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.assistant-admin-text {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #1e293b;
+  margin: 0;
+}
+
+.assistant-admin-bubble-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.admin-time-label {
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.admin-status-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.admin-status-pill.status-en_proceso,
+.admin-status-pill.status-en_curso {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.admin-status-pill.status-resuelto {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .assistant-msg-avatar {
