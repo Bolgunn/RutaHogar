@@ -85,6 +85,83 @@ export default function AssistantWidget({
   const [hasUnread, setHasUnread] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
 
+  // Window Resizing & Maximize states
+  const DEFAULT_SIZE = { width: 400, height: 600 };
+  const [dimensions, setDimensions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("rutahogar_assistant_size");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.width && parsed?.height) {
+          const maxW = typeof window !== "undefined" ? Math.max(340, window.innerWidth - 32) : 900;
+          const maxH = typeof window !== "undefined" ? Math.max(420, window.innerHeight - 48) : 900;
+          return {
+            width: Math.min(Math.max(parsed.width, 340), maxW),
+            height: Math.min(Math.max(parsed.height, 420), maxH),
+          };
+        }
+      }
+    } catch {}
+    return DEFAULT_SIZE;
+  });
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResizeStart = (e, direction) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = dimensions.width;
+    const startH = dimensions.height;
+
+    const handleMouseMove = (moveEvent) => {
+      let newW = startW;
+      let newH = startH;
+
+      if (direction.includes("w")) {
+        const deltaX = startX - moveEvent.clientX;
+        const maxW = typeof window !== "undefined" ? Math.max(340, window.innerWidth - 32) : 900;
+        newW = Math.max(340, Math.min(startW + deltaX, maxW));
+      }
+
+      if (direction.includes("n")) {
+        const deltaY = startY - moveEvent.clientY;
+        const maxH = typeof window !== "undefined" ? Math.max(420, window.innerHeight - 48) : 900;
+        newH = Math.max(420, Math.min(startH + deltaY, maxH));
+      }
+
+      setDimensions({ width: newW, height: newH });
+      setIsMaximized(false);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+
+      setDimensions((current) => {
+        try {
+          localStorage.setItem("rutahogar_assistant_size", JSON.stringify(current));
+        } catch {}
+        return current;
+      });
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = direction === "nw" ? "nwse-resize" : direction === "n" ? "ns-resize" : "ew-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const toggleMaximize = () => {
+    setIsMaximized((prev) => !prev);
+  };
+
   // E3 & E4: Support ticket states
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -706,7 +783,42 @@ export default function AssistantWidget({
       )}
 
       {isOpen && (
-        <div className="assistant-panel" role="dialog" aria-modal="true" aria-labelledby="assistant-header-title">
+        <div
+          className={`assistant-panel ${isResizing ? "is-resizing" : ""} ${isMaximized ? "is-maximized" : ""}`}
+          style={{
+            width: isMaximized ? "min(780px, calc(100vw - 32px))" : `${dimensions.width}px`,
+            height: isMaximized ? "min(840px, calc(100vh - 48px))" : `${dimensions.height}px`,
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="assistant-header-title"
+        >
+          {/* Resize handles */}
+          {!isMaximized && (
+            <>
+              <div
+                className="assistant-resize-handle assistant-resize-handle-nw"
+                onMouseDown={(e) => handleResizeStart(e, "nw")}
+                title="Arrastra para redimensionar"
+                aria-hidden="true"
+              >
+                <div className="assistant-resize-grip-indicator" />
+              </div>
+              <div
+                className="assistant-resize-handle assistant-resize-handle-n"
+                onMouseDown={(e) => handleResizeStart(e, "n")}
+                title="Arrastra para ajustar altura"
+                aria-hidden="true"
+              />
+              <div
+                className="assistant-resize-handle assistant-resize-handle-w"
+                onMouseDown={(e) => handleResizeStart(e, "w")}
+                title="Arrastra para ajustar ancho"
+                aria-hidden="true"
+              />
+            </>
+          )}
+
           {/* Header */}
           <div className="assistant-header">
             <div className="assistant-header-identity">
@@ -735,6 +847,24 @@ export default function AssistantWidget({
                 aria-label="Reiniciar chat"
               >
                 ↺
+              </button>
+              <button
+                type="button"
+                className="assistant-btn-icon"
+                onClick={toggleMaximize}
+                title={isMaximized ? "Restaurar tamaño normal" : "Maximizar ventana"}
+                aria-label={isMaximized ? "Restaurar tamaño normal" : "Maximizar ventana"}
+              >
+                {isMaximized ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                    <rect x="5" y="8" width="11" height="11" rx="2" />
+                    <path d="M8 5h10a1 1 0 011 1v10" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                )}
               </button>
               <button
                 type="button"
