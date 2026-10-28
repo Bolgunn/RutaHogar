@@ -34,6 +34,11 @@ class UpdateTicketStatusRequest(BaseModel):
     reply: Optional[str] = Field(None, max_length=3000)
 
 
+class UserTicketFeedbackRequest(BaseModel):
+    feedback: str = Field(..., pattern=r"^(helpful|unhelpful)$")
+    reply: Optional[str] = Field(None, max_length=2000)
+
+
 class TicketResponse(BaseModel):
     id: str
     code: str
@@ -43,6 +48,9 @@ class TicketResponse(BaseModel):
     notification_error: Optional[str] = None
     admin_reply: Optional[str] = None
     replied_at: Optional[str] = None
+    user_feedback: Optional[str] = None
+    user_feedback_at: Optional[str] = None
+    thread: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 def format_transcript_for_storage(
@@ -273,6 +281,9 @@ class TicketService:
             "notification_error": email_err,
             "admin_reply": None,
             "replied_at": None,
+            "user_feedback": None,
+            "user_feedback_at": None,
+            "thread": [{"role": "user", "content": clean_message, "created_at": now_iso}],
         }
         _LOCAL_TICKETS[idempotency_key] = res_data
         _LOCAL_TICKETS_BY_ID[ticket_id] = res_data
@@ -322,10 +333,12 @@ class TicketService:
                     headers=headers,
                     params={"id": f"eq.{ticket_id}", "select": "*"},
                 )
+                current_thread = []
                 if get_res.status_code == 200 and get_res.json():
                     ticket_data = get_res.json()[0]
                     user_email = ticket_data.get("user_email")
                     user_name = ticket_data.get("user_name")
+                    current_thread = ticket_data.get("thread") or []
                     if not user_email and ticket_data.get("user_id"):
                         try:
                             prof_res = client.get(
@@ -351,6 +364,9 @@ class TicketService:
                     patch_payload["replied_at"] = now_iso
                     if admin_id:
                         patch_payload["replied_by"] = admin_id
+                    # Append turn to thread
+                    admin_turn = {"role": "admin", "content": clean_reply, "created_at": now_iso}
+                    patch_payload["thread"] = current_thread + [admin_turn]
 
                 update_res = client.patch(
                     f"{supabase_url}/rest/v1/support_tickets",
@@ -359,13 +375,16 @@ class TicketService:
                     json=patch_payload,
                 )
 
-                if update_res.status_code >= 400 and "admin_reply" in update_res.text:
-                    # Fallback if admin_reply column is not yet present on remote DB
+                if update_res.status_code >= 400:
+                    # Fallback if admin_reply or thread column is not yet present on remote DB
+                    simple_payload = {"status": normalized_status, "status_updated_at": now_iso}
+                    if "admin_reply" not in update_res.text:
+                        simple_payload["admin_reply"] = clean_reply
                     client.patch(
                         f"{supabase_url}/rest/v1/support_tickets",
                         headers=headers,
                         params={"id": f"eq.{ticket_id}"},
-                        json={"status": normalized_status, "status_updated_at": now_iso},
+                        json=simple_payload,
                     )
             finally:
                 if db_client is None:
@@ -378,6 +397,8 @@ class TicketService:
                 if clean_reply:
                     updated_row["admin_reply"] = clean_reply
                     updated_row["replied_at"] = now_iso
+                    thr = updated_row.setdefault("thread", [])
+                    thr.append({"role": "admin", "content": clean_reply, "created_at": now_iso})
                 user_email = updated_row.get("user_email")
                 user_name = updated_row.get("user_name")
                 ticket_data = updated_row
@@ -401,4 +422,99 @@ class TicketService:
             "replied_at": now_iso if clean_reply else None,
             "reply_notified": email_sent,
             "reply_notification_error": reply_error,
+        }
+
+    @staticmethod
+    def submit_user_feedback(
+        ticket_id: str,
+        user_id: str,
+        feedback: str,
+        user_reply: Optional[str] = None,
+        db_client: Optional[httpx.Client] = None,
+    ) -> Dict[str, Any]:
+        """User confirms resolution or indicates unresolved with optional follow-up reply."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        normalized_feedback = "helpful" if feedback == "helpful" else "unhelpful"
+        new_status = "resuelto" if normalized_feedback == "helpful" else "en_proceso"
+        clean_user_reply = redact_pii(user_reply.strip()[:2000]) if user_reply and user_reply.strip() else None
+
+        user_turn = None
+        if clean_user_reply:
+            user_turn = {
+                "role": "user",
+                "content": clean_user_reply,
+                "created_at": now_iso,
+            }
+
+        supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+        supabase_key = (
+            os.environ.get("SUPABASE_SECRET_KEY")
+            or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        )
+
+        if supabase_url and supabase_key:
+            headers = {
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {supabase_key}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            }
+            client = db_client or httpx.Client(timeout=10.0)
+            try:
+                # 1. Fetch current ticket to get thread
+                get_res = client.get(
+                    f"{supabase_url}/rest/v1/support_tickets",
+                    headers=headers,
+                    params={"id": f"eq.{ticket_id}", "select": "*"},
+                )
+                current_thread = []
+                if get_res.status_code == 200 and get_res.json():
+                    row = get_res.json()[0]
+                    current_thread = row.get("thread") or []
+
+                patch_payload: Dict[str, Any] = {
+                    "status": new_status,
+                    "status_updated_at": now_iso,
+                    "user_feedback": normalized_feedback,
+                    "user_feedback_at": now_iso,
+                }
+                if user_turn:
+                    patch_payload["thread"] = current_thread + [user_turn]
+
+                update_res = client.patch(
+                    f"{supabase_url}/rest/v1/support_tickets",
+                    headers=headers,
+                    params={"id": f"eq.{ticket_id}"},
+                    json=patch_payload,
+                )
+                if update_res.status_code == 200 and update_res.json():
+                    return update_res.json()[0]
+            finally:
+                if db_client is None:
+                    client.close()
+
+        # Local storage / mock fallback
+        local = _LOCAL_TICKETS_BY_ID.get(ticket_id)
+        if not local:
+            for k, v in _LOCAL_TICKETS.items():
+                if v.get("id") == ticket_id:
+                    local = v
+                    break
+
+        if local:
+            local["status"] = new_status
+            local["status_updated_at"] = now_iso
+            local["user_feedback"] = normalized_feedback
+            local["user_feedback_at"] = now_iso
+            thr = local.setdefault("thread", [])
+            if user_turn:
+                thr.append(user_turn)
+            return local
+
+        return {
+            "id": ticket_id,
+            "status": new_status,
+            "user_feedback": normalized_feedback,
+            "user_feedback_at": now_iso,
+            "user_reply": clean_user_reply,
         }

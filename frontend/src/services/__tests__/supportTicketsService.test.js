@@ -26,6 +26,7 @@ import {
   getSupportTickets,
   getUserSupportTickets,
   updateSupportTicketStatus,
+  submitTicketUserFeedback,
   readLocalSupportTickets,
   writeLocalSupportTickets,
 } from "../supportTicketsService";
@@ -246,5 +247,92 @@ describe("supportTicketsService.js (HU24 - E4)", () => {
     expect(tickets).toHaveLength(1);
     expect(tickets[0].id).toBe("t-user-1");
     expect(tickets[0].admin_reply).toBe("Estimado, tu consulta fue revisada.");
+  });
+
+  it("submits helpful feedback resolving ticket in local storage", async () => {
+    writeLocalSupportTickets([
+      {
+        id: "t-fb-1",
+        status: "en_proceso",
+        admin_reply: "El valor UF considerado es de hoy.",
+        thread: [{ role: "admin", content: "El valor UF considerado es de hoy." }],
+      },
+    ]);
+
+    const res = await submitTicketUserFeedback({
+      ticketId: "t-fb-1",
+      feedback: "helpful",
+    });
+
+    expect(res.status).toBe("resuelto");
+    expect(res.user_feedback).toBe("helpful");
+
+    const local = readLocalSupportTickets();
+    const updated = local.find((t) => t.id === "t-fb-1");
+    expect(updated.status).toBe("resuelto");
+    expect(updated.user_feedback).toBe("helpful");
+    expect(updated.user_feedback_at).toBeTruthy();
+  });
+
+  it("submits unhelpful feedback with user follow-up reply in local storage", async () => {
+    writeLocalSupportTickets([
+      {
+        id: "t-fb-2",
+        status: "en_proceso",
+        admin_reply: "Debes adjuntar tu liquidación.",
+        thread: [
+          { role: "user", content: "No sé qué documento subir" },
+          { role: "admin", content: "Debes adjuntar tu liquidación." },
+        ],
+      },
+    ]);
+
+    const res = await submitTicketUserFeedback({
+      ticketId: "t-fb-2",
+      feedback: "unhelpful",
+      userReply: "Soy independiente, ¿sirve la carpeta tributaria?",
+    });
+
+    expect(res.status).toBe("en_proceso");
+    expect(res.user_feedback).toBe("unhelpful");
+
+    const local = readLocalSupportTickets();
+    const updated = local.find((t) => t.id === "t-fb-2");
+    expect(updated.status).toBe("en_proceso");
+    expect(updated.user_feedback).toBe("unhelpful");
+    expect(updated.thread).toHaveLength(3);
+    expect(updated.thread[2].role).toBe("user");
+    expect(updated.thread[2].content).toBe("Soy independiente, ¿sirve la carpeta tributaria?");
+  });
+
+  it("submits feedback via backend POST endpoint when available", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: "t-fb-3",
+        status: "resuelto",
+        user_feedback: "helpful",
+        user_feedback_at: "2026-10-28T03:30:00Z",
+      }),
+    });
+
+    writeLocalSupportTickets([
+      { id: "t-fb-3", status: "en_proceso" },
+    ]);
+
+    const res = await submitTicketUserFeedback({
+      ticketId: "t-fb-3",
+      feedback: "helpful",
+      token: "valid-user-token",
+      customFetch: mockFetch,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe("resuelto");
+    expect(res.user_feedback).toBe("helpful");
+
+    const local = readLocalSupportTickets();
+    expect(local.find((t) => t.id === "t-fb-3").status).toBe("resuelto");
   });
 });

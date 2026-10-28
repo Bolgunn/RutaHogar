@@ -9,6 +9,7 @@ import {
   createSupportTicket,
   getActiveAuthToken,
   getUserSupportTickets,
+  submitTicketUserFeedback,
 } from "../../services/supportTicketsService";
 import "./AssistantWidget.css";
 
@@ -93,6 +94,11 @@ export default function AssistantWidget({
   const [ticketSuccess, setTicketSuccess] = useState(null);
   const [ticketError, setTicketError] = useState(null);
 
+  // Feedback & follow-up states on admin responses
+  const [submittingFeedback, setSubmittingFeedback] = useState({});
+  const [followUpOpen, setFollowUpOpen] = useState({});
+  const [followUpReplies, setFollowUpReplies] = useState({});
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -167,7 +173,84 @@ export default function AssistantWidget({
 
         let hasNewAdminReply = false;
         for (const t of sorted) {
-          if (t.admin_reply && String(t.admin_reply).trim()) {
+          const ticketCode = t.code || t.id.slice(0, 8).toUpperCase();
+          const normalizedStatus = t.status === "en_curso" ? "en_proceso" : t.status;
+
+          if (t.thread && Array.isArray(t.thread) && t.thread.length > 0) {
+            let lastAdminIdx = -1;
+            for (let i = 0; i < t.thread.length; i++) {
+              if (t.thread[i].role === "admin") {
+                lastAdminIdx = i;
+              }
+            }
+
+            t.thread.forEach((turn, idx) => {
+              if (idx === 0 && turn.role === "user") {
+                return;
+              }
+
+              if (turn.role === "admin") {
+                const replyId = `admin-reply-${t.id}-${idx}`;
+                const isLatest = idx === lastAdminIdx;
+                const adminMsg = {
+                  id: replyId,
+                  role: "admin",
+                  authorName: "Soporte RutaHogar",
+                  content: turn.content,
+                  ticketId: t.id,
+                  ticketCode,
+                  ticketSubject: t.subject,
+                  ticketStatus: normalizedStatus,
+                  userFeedback: t.user_feedback,
+                  isLatestAdminTurn: isLatest,
+                  repliedAt: turn.created_at || t.replied_at || new Date().toISOString(),
+                  createdAt: turn.created_at || t.replied_at || new Date().toISOString(),
+                };
+
+                const existingIndex = updated.findIndex(
+                  (m) =>
+                    m.id === replyId ||
+                    (m.role === "admin" && m.ticketId === t.id && m.content === turn.content)
+                );
+
+                if (existingIndex >= 0) {
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    ...adminMsg,
+                  };
+                } else {
+                  updated.push(adminMsg);
+                  hasNewAdminReply = true;
+                }
+              } else if (turn.role === "user") {
+                const userReplyId = `user-reply-${t.id}-${idx}`;
+                const userMsg = {
+                  id: userReplyId,
+                  role: "user",
+                  content: turn.content,
+                  ticketId: t.id,
+                  ticketCode,
+                  isTicketFollowUp: true,
+                  createdAt: turn.created_at || new Date().toISOString(),
+                };
+
+                const existingIndex = updated.findIndex(
+                  (m) =>
+                    m.id === userReplyId ||
+                    (m.role === "user" && m.ticketId === t.id && m.content === turn.content)
+                );
+
+                if (existingIndex >= 0) {
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    ...userMsg,
+                  };
+                } else {
+                  updated.push(userMsg);
+                }
+              }
+            });
+          } else if (t.admin_reply && String(t.admin_reply).trim()) {
             const replyId = `admin-reply-${t.id}`;
             const existingIndex = updated.findIndex(
               (m) =>
@@ -181,9 +264,11 @@ export default function AssistantWidget({
               authorName: "Soporte RutaHogar",
               content: t.admin_reply,
               ticketId: t.id,
-              ticketCode: t.code || t.id.slice(0, 8).toUpperCase(),
+              ticketCode,
               ticketSubject: t.subject,
-              ticketStatus: t.status === "en_curso" ? "en_proceso" : t.status,
+              ticketStatus: normalizedStatus,
+              userFeedback: t.user_feedback,
+              isLatestAdminTurn: true,
               repliedAt: t.replied_at || t.status_updated_at || new Date().toISOString(),
               createdAt: t.replied_at || new Date().toISOString(),
             };
@@ -191,7 +276,8 @@ export default function AssistantWidget({
             if (existingIndex >= 0) {
               if (
                 updated[existingIndex].content !== adminMsg.content ||
-                updated[existingIndex].ticketStatus !== adminMsg.ticketStatus
+                updated[existingIndex].ticketStatus !== adminMsg.ticketStatus ||
+                updated[existingIndex].userFeedback !== adminMsg.userFeedback
               ) {
                 updated[existingIndex] = {
                   ...updated[existingIndex],
@@ -314,6 +400,106 @@ export default function AssistantWidget({
         };
       })
     );
+  };
+
+  const handleConfirmResolution = async (ticketId, ticketCode) => {
+    if (!ticketId || submittingFeedback[ticketId]) return;
+    setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: true }));
+    try {
+      const activeToken = token || (await getActiveAuthToken());
+      await submitTicketUserFeedback({
+        ticketId,
+        feedback: "helpful",
+        token: activeToken,
+      });
+
+      setActiveTicket((prev) =>
+        prev && prev.id === ticketId
+          ? { ...prev, status: "resuelto", user_feedback: "helpful" }
+          : prev
+      );
+
+      setMessages((prev) => [
+        ...prev.map((m) =>
+          m.ticketId === ticketId && m.role === "admin"
+            ? { ...m, ticketStatus: "resuelto", userFeedback: "helpful" }
+            : m
+        ),
+        {
+          id: `ticket-resolved-confirm-${Date.now()}`,
+          role: "assistant",
+          content: `✅ ¡Excelente! Nos alegra haberte ayudado. El ticket #${ticketCode} ha sido marcado como resuelto.`,
+          action: null,
+          links: [],
+          sources: [],
+          feedback: "helpful",
+        },
+      ]);
+    } catch (err) {
+      console.warn("[AssistantWidget] Error confirming ticket resolution:", err);
+    } finally {
+      setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: false }));
+    }
+  };
+
+  const handleToggleFollowUp = (ticketId) => {
+    setFollowUpOpen((prev) => ({ ...prev, [ticketId]: !prev[ticketId] }));
+  };
+
+  const handleSendFollowUp = async (ticketId, ticketCode) => {
+    const replyText = (followUpReplies[ticketId] || "").trim();
+    if (!replyText || submittingFeedback[ticketId]) return;
+
+    setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: true }));
+    try {
+      const activeToken = token || (await getActiveAuthToken());
+      const nowIso = new Date().toISOString();
+      await submitTicketUserFeedback({
+        ticketId,
+        feedback: "unhelpful",
+        userReply: replyText,
+        token: activeToken,
+      });
+
+      setActiveTicket((prev) =>
+        prev && prev.id === ticketId
+          ? { ...prev, status: "en_proceso", user_feedback: "unhelpful" }
+          : prev
+      );
+
+      setMessages((prev) => [
+        ...prev.map((m) =>
+          m.ticketId === ticketId && m.role === "admin"
+            ? { ...m, userFeedback: "unhelpful" }
+            : m
+        ),
+        {
+          id: `user-reply-${ticketId}-${Date.now()}`,
+          role: "user",
+          content: replyText,
+          ticketId,
+          ticketCode,
+          isTicketFollowUp: true,
+          createdAt: nowIso,
+        },
+        {
+          id: `followup-ack-${Date.now()}`,
+          role: "assistant",
+          content: `📨 Tu mensaje fue enviado al equipo de soporte sobre el Ticket #${ticketCode}. Te responderemos aquí mismo y a tu correo en cuanto el administrador revise tu réplica.`,
+          action: null,
+          links: [],
+          sources: [],
+          feedback: "helpful",
+        },
+      ]);
+
+      setFollowUpReplies((prev) => ({ ...prev, [ticketId]: "" }));
+      setFollowUpOpen((prev) => ({ ...prev, [ticketId]: false }));
+    } catch (err) {
+      console.warn("[AssistantWidget] Error sending follow-up reply:", err);
+    } finally {
+      setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: false }));
+    }
   };
 
   const handleOpenTicket = async (refMsg = null) => {
@@ -550,6 +736,11 @@ export default function AssistantWidget({
             {messages.map((msg) => {
               // Role: ADMIN (Human Support Staff Response)
               if (msg.role === "admin") {
+                const isTicketResolved =
+                  msg.ticketStatus === "resuelto" ||
+                  activeTicket?.status === "resuelto" ||
+                  msg.userFeedback === "helpful";
+
                 return (
                   <div key={msg.id} className="assistant-msg-row assistant-msg-admin">
                     <div className="assistant-admin-avatar" title="Administrador de RutaHogar">
@@ -575,10 +766,92 @@ export default function AssistantWidget({
                           <span className="admin-time-label">
                             {formatFecha(msg.repliedAt || msg.createdAt)}
                           </span>
-                          <span className={`admin-status-pill status-${msg.ticketStatus || "en_proceso"}`}>
-                            {msg.ticketStatus === "resuelto" ? "✓ Resuelto" : "En Proceso"}
+                          <span className={`admin-status-pill status-${isTicketResolved ? "resuelto" : "en_proceso"}`}>
+                            {isTicketResolved ? "✓ Resuelto" : "En Proceso"}
                           </span>
                         </div>
+
+                        {/* User Feedback & Follow-up Prompt for Latest Admin Response */}
+                        {msg.isLatestAdminTurn && (
+                          <div className="assistant-admin-feedback-container">
+                            {isTicketResolved ? (
+                              <div className="assistant-admin-resolved-chip">
+                                <span className="resolved-check-icon">✓</span>
+                                <span>Duda resuelta. ¡Gracias por confirmar!</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="assistant-admin-feedback-box">
+                                  <span className="admin-feedback-prompt">
+                                    ¿Esta respuesta resolvió tu duda?
+                                  </span>
+                                  <div className="admin-feedback-buttons">
+                                    <button
+                                      type="button"
+                                      className="admin-feedback-btn yes"
+                                      onClick={() => handleConfirmResolution(msg.ticketId, msg.ticketCode)}
+                                      disabled={submittingFeedback[msg.ticketId]}
+                                      title="Sí, la respuesta resolvió mi consulta"
+                                    >
+                                      👍 Sí, resolvió mi duda
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`admin-feedback-btn no ${followUpOpen[msg.ticketId] ? "active" : ""}`}
+                                      onClick={() => handleToggleFollowUp(msg.ticketId)}
+                                      disabled={submittingFeedback[msg.ticketId]}
+                                      title="No me sirvió, deseo consultar de nuevo"
+                                    >
+                                      👎 No, sigo con dudas
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {followUpOpen[msg.ticketId] && (
+                                  <div className="assistant-admin-followup-box">
+                                    <label className="admin-followup-label">
+                                      Escribe tu duda adicional para el administrador:
+                                    </label>
+                                    <textarea
+                                      className="admin-followup-textarea"
+                                      rows={3}
+                                      placeholder="Explica qué punto no quedó claro o qué más necesitas saber..."
+                                      value={followUpReplies[msg.ticketId] || ""}
+                                      onChange={(e) =>
+                                        setFollowUpReplies((prev) => ({
+                                          ...prev,
+                                          [msg.ticketId]: e.target.value,
+                                        }))
+                                      }
+                                      disabled={submittingFeedback[msg.ticketId]}
+                                    />
+                                    <div className="admin-followup-actions">
+                                      <button
+                                        type="button"
+                                        className="admin-followup-cancel-btn"
+                                        onClick={() => handleToggleFollowUp(msg.ticketId)}
+                                        disabled={submittingFeedback[msg.ticketId]}
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="admin-followup-send-btn"
+                                        onClick={() => handleSendFollowUp(msg.ticketId, msg.ticketCode)}
+                                        disabled={
+                                          submittingFeedback[msg.ticketId] ||
+                                          !(followUpReplies[msg.ticketId] || "").trim()
+                                        }
+                                      >
+                                        {submittingFeedback[msg.ticketId] ? "Enviando..." : "✉️ Enviar al Administrador"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -598,6 +871,11 @@ export default function AssistantWidget({
                   )}
                   <div className="assistant-bubble-container">
                     <div className="assistant-bubble">
+                      {msg.isTicketFollowUp && (
+                        <div className="user-ticket-followup-tag">
+                          <span>🎫 Réplica sobre Ticket #{msg.ticketCode}</span>
+                        </div>
+                      )}
                       <p className="assistant-bubble-text">{msg.content}</p>
 
                       {/* Sources Badge */}

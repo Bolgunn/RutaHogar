@@ -18,6 +18,7 @@ from .tickets import (
     TicketResponse,
     TicketService,
     UpdateTicketStatusRequest,
+    UserTicketFeedbackRequest,
 )
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"])
@@ -196,4 +197,19 @@ def update_support_ticket(
         status=body.status,
         admin_reply=body.reply,
         admin_id=user["user_id"],
+    )
+
+
+@support_router.post("/tickets/{ticket_id}/feedback", status_code=status.HTTP_200_OK)
+def submit_ticket_feedback(
+    ticket_id: str,
+    body: UserTicketFeedbackRequest,
+    user: Annotated[Dict[str, Any], Depends(resolve_authenticated_user)],
+):
+    """Allows user to confirm resolution of their ticket or send follow-up reply."""
+    return TicketService.submit_user_feedback(
+        ticket_id=ticket_id,
+        user_id=user["user_id"],
+        feedback=body.feedback,
+        user_reply=body.reply,
     )

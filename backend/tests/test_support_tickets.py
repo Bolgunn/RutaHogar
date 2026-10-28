@@ -387,6 +387,58 @@ class TestSupportTickets(unittest.TestCase):
         self.assertEqual(data["status"], "en_proceso")
         self.assertEqual(data["admin_reply"], "Estamos revisando tu solicitud.")
 
+    def test_user_feedback_helpful_resolves_ticket(self):
+        req = CreateTicketRequest(
+            subject="Consulta evaluacion",
+            message="No entendía el paso 3",
+            history=[],
+            client_request_id="req-feedback-helpful-1",
+        )
+        created = TicketService.create_ticket(
+            user_id="user-feedback-test",
+            role="usuario",
+            user_name="Usuario",
+            user_email="user@correo.cl",
+            inmobiliaria_id=None,
+            request=req,
+        )
+
+        res = TicketService.submit_user_feedback(
+            ticket_id=created.id,
+            user_id="user-feedback-test",
+            feedback="helpful",
+        )
+        self.assertEqual(res["status"], "resuelto")
+        self.assertEqual(res["user_feedback"], "helpful")
+
+    def test_user_feedback_unhelpful_with_followup_reply(self):
+        req = CreateTicketRequest(
+            subject="Consulta con réplica",
+            message="Mensaje inicial",
+            history=[],
+            client_request_id="req-feedback-unhelpful-1",
+        )
+        created = TicketService.create_ticket(
+            user_id="user-feedback-rep",
+            role="usuario",
+            user_name="Usuario",
+            user_email="user@correo.cl",
+            inmobiliaria_id=None,
+            request=req,
+        )
+
+        res = TicketService.submit_user_feedback(
+            ticket_id=created.id,
+            user_id="user-feedback-rep",
+            feedback="unhelpful",
+            user_reply="Sigo sin entender cómo opera la tasa mixta.",
+        )
+        self.assertEqual(res["status"], "en_proceso")
+        self.assertEqual(res["user_feedback"], "unhelpful")
+        # Check that user reply is in thread
+        thread = res.get("thread", [])
+        self.assertTrue(any(t.get("content") == "Sigo sin entender cómo opera la tasa mixta." for t in thread))
+
 
 if __name__ == "__main__":
     unittest.main()

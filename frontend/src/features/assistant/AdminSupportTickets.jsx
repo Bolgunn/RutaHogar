@@ -97,6 +97,23 @@ export default function AdminSupportTickets() {
       });
 
       const updatedRepliedAt = new Date().toISOString();
+      const updatedThread = [
+        ...(selectedTicket.thread && selectedTicket.thread.length > 0
+          ? selectedTicket.thread
+          : [
+              {
+                role: "user",
+                content: selectedTicket.message,
+                created_at: selectedTicket.created_at,
+              },
+            ]),
+        {
+          role: "admin",
+          content: trimmedReply,
+          created_at: updatedRepliedAt,
+        },
+      ];
+
       setTickets((prev) =>
         prev.map((t) =>
           t.id === selectedTicket.id
@@ -105,6 +122,7 @@ export default function AdminSupportTickets() {
                 status: targetStatus,
                 admin_reply: trimmedReply,
                 replied_at: updatedRepliedAt,
+                thread: updatedThread,
               }
             : t
         )
@@ -116,6 +134,7 @@ export default function AdminSupportTickets() {
               status: targetStatus,
               admin_reply: trimmedReply,
               replied_at: updatedRepliedAt,
+              thread: updatedThread,
             }
           : null
       );
@@ -248,7 +267,25 @@ export default function AdminSupportTickets() {
                       <span className="ticket-code-badge">#{code}</span>
                     </td>
                     <td className="ticket-subject-cell">
-                      <strong>{t.subject || "Consulta general"}</strong>
+                      <div className="ticket-subject-title-row">
+                        <strong>{t.subject || "Consulta general"}</strong>
+                        {t.user_feedback === "helpful" && (
+                          <span
+                            className="ticket-feedback-pill success"
+                            title="El usuario confirmó que la respuesta resolvió su consulta"
+                          >
+                            ✓ Solución confirmada
+                          </span>
+                        )}
+                        {t.user_feedback === "unhelpful" && (
+                          <span
+                            className="ticket-feedback-pill warning"
+                            title="El usuario indicó que tiene dudas y envió una réplica"
+                          >
+                            🔔 Nueva réplica
+                          </span>
+                        )}
+                      </div>
                       <span className="ticket-preview-snippet">
                         {(t.message || "").slice(0, 70)}...
                       </span>
@@ -345,33 +382,80 @@ export default function AdminSupportTickets() {
                 <div className="admin-tickets-alert error">{error}</div>
               )}
 
-              {/* Message from user */}
-              <div className="ticket-detail-section">
-                <h4 className="section-title">Mensaje del Usuario</h4>
-                <div className="ticket-user-message-box">
-                  {selectedTicket.message}
-                </div>
-              </div>
-
-              {/* Existing Admin Reply if already sent */}
-              {selectedTicket.admin_reply && (
-                <div className="ticket-detail-section">
-                  <h4 className="section-title">Última Respuesta Enviada al Usuario</h4>
-                  <div className="ticket-admin-reply-box">
-                    <div className="admin-reply-header">
-                      <span className="admin-reply-badge">✓ Equipo de Soporte</span>
-                      {selectedTicket.replied_at && (
-                        <span className="admin-reply-date">
-                          {formatFecha(selectedTicket.replied_at)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="admin-reply-content">
-                      {selectedTicket.admin_reply}
-                    </div>
+              {/* User Resolution Feedback Banner */}
+              {selectedTicket.user_feedback === "helpful" && (
+                <div className="ticket-feedback-banner success">
+                  <span className="banner-icon">✓</span>
+                  <div>
+                    <strong>Solución confirmada por el usuario</strong>
+                    <p>
+                      El solicitante confirmó que la respuesta resolvió su consulta
+                      {selectedTicket.user_feedback_at ? ` el ${formatFecha(selectedTicket.user_feedback_at)}` : ""}.
+                    </p>
                   </div>
                 </div>
               )}
+              {selectedTicket.user_feedback === "unhelpful" && (
+                <div className="ticket-feedback-banner warning">
+                  <span className="banner-icon">💬</span>
+                  <div>
+                    <strong>Nueva réplica del usuario pendiente de atención</strong>
+                    <p>
+                      El usuario indicó que aún tiene dudas y envió un mensaje de seguimiento
+                      {selectedTicket.user_feedback_at ? ` el ${formatFecha(selectedTicket.user_feedback_at)}` : ""}.
+                      Por favor revisa la conversación y responde abajo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Conversation Thread (All turns between User and Admin) */}
+              <div className="ticket-detail-section">
+                <h4 className="section-title">
+                  Hilo de Conversación del Ticket
+                  {selectedTicket.thread && selectedTicket.thread.length > 0
+                    ? ` (${selectedTicket.thread.length} mensajes)`
+                    : ""}
+                </h4>
+                {selectedTicket.thread && selectedTicket.thread.length > 0 ? (
+                  <div className="ticket-thread-container">
+                    {selectedTicket.thread.map((turn, idx) => (
+                      <div
+                        key={idx}
+                        className={`thread-turn ${turn.role === "admin" ? "admin-turn" : "user-turn"}`}
+                      >
+                        <div className="thread-turn-header">
+                          <span className="thread-role-badge">
+                            {turn.role === "admin"
+                              ? "🛡️ Soporte RutaHogar (Admin)"
+                              : `👤 ${selectedTicket.user_name || "Usuario"}`}
+                          </span>
+                          {turn.created_at && (
+                            <span className="thread-turn-date">
+                              {formatFecha(turn.created_at)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="thread-turn-body">{turn.content}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ticket-user-message-box">
+                    <p style={{ margin: 0 }}>
+                      <strong>Mensaje inicial:</strong> {selectedTicket.message}
+                    </p>
+                    {selectedTicket.admin_reply && (
+                      <div style={{ marginTop: "10px", borderTop: "1px dashed #cbd5e1", paddingTop: "8px" }}>
+                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#065f46" }}>
+                          ✓ Soporte RutaHogar:
+                        </span>
+                        <p style={{ margin: "4px 0 0" }}>{selectedTicket.admin_reply}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Orderly Lifecycle & Admin Reply Box */}
               <div className="ticket-detail-section">

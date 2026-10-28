@@ -205,6 +205,15 @@ export async function createSupportTicket({
     notification_error: "offline_fallback",
     admin_reply: null,
     replied_at: null,
+    user_feedback: null,
+    user_feedback_at: null,
+    thread: [
+      {
+        role: "user",
+        content: cleanMessage,
+        created_at: new Date().toISOString(),
+      },
+    ],
   };
 
   const existing = readLocalSupportTickets();
@@ -338,17 +347,21 @@ export async function updateSupportTicketStatus({
       if (res.ok) {
         const data = await res.json();
         const tickets = readLocalSupportTickets();
-        const updated = tickets.map((t) =>
-          t.id === ticketId
-            ? {
-                ...t,
-                status: data.status || status,
-                admin_reply: cleanReply || t.admin_reply,
-                replied_at: cleanReply ? nowIso : t.replied_at,
-                updated_at: nowIso,
-              }
-            : t
-        );
+        const updated = tickets.map((t) => {
+          if (t.id !== ticketId) return t;
+          const currentThread = t.thread || [];
+          const nextThread = cleanReply
+            ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
+            : currentThread;
+          return {
+            ...t,
+            status: data.status || status,
+            admin_reply: cleanReply || t.admin_reply,
+            replied_at: cleanReply ? nowIso : t.replied_at,
+            thread: data.thread || nextThread,
+            updated_at: nowIso,
+          };
+        });
         writeLocalSupportTickets(updated);
         return data;
       }
@@ -371,17 +384,21 @@ export async function updateSupportTicketStatus({
 
       if (!error) {
         const tickets = readLocalSupportTickets();
-        const updated = tickets.map((t) =>
-          t.id === ticketId
-            ? {
-                ...t,
-                status,
-                admin_reply: cleanReply || t.admin_reply,
-                replied_at: cleanReply ? nowIso : t.replied_at,
-                updated_at: nowIso,
-              }
-            : t
-        );
+        const updated = tickets.map((t) => {
+          if (t.id !== ticketId) return t;
+          const currentThread = t.thread || [];
+          const nextThread = cleanReply
+            ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
+            : currentThread;
+          return {
+            ...t,
+            status,
+            admin_reply: cleanReply || t.admin_reply,
+            replied_at: cleanReply ? nowIso : t.replied_at,
+            thread: nextThread,
+            updated_at: nowIso,
+          };
+        });
         writeLocalSupportTickets(updated);
         return data || { id: ticketId, status, admin_reply: cleanReply };
       }
@@ -393,17 +410,158 @@ export async function updateSupportTicketStatus({
 
   // 3. Update local storage fallback
   const tickets = readLocalSupportTickets();
-  const updated = tickets.map((t) =>
-    t.id === ticketId
-      ? {
-          ...t,
-          status,
-          admin_reply: cleanReply || t.admin_reply,
-          replied_at: cleanReply ? nowIso : t.replied_at,
-          updated_at: nowIso,
-        }
-      : t
-  );
+  const updated = tickets.map((t) => {
+    if (t.id !== ticketId) return t;
+    const currentThread = t.thread || [];
+    const nextThread = cleanReply
+      ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
+      : currentThread;
+    return {
+      ...t,
+      status,
+      admin_reply: cleanReply || t.admin_reply,
+      replied_at: cleanReply ? nowIso : t.replied_at,
+      thread: nextThread,
+      updated_at: nowIso,
+    };
+  });
   writeLocalSupportTickets(updated);
   return { id: ticketId, status, admin_reply: cleanReply, replied_at: cleanReply ? nowIso : null };
+}
+
+/**
+ * Submits user resolution feedback for a ticket, with optional user follow-up reply.
+ *
+ * @param {Object} params
+ * @param {string} params.ticketId
+ * @param {"helpful"|"unhelpful"} params.feedback
+ * @param {string|null} [params.userReply]
+ * @param {string|null} [params.token]
+ * @param {typeof fetch} [params.customFetch]
+ * @returns {Promise<any>}
+ */
+export async function submitTicketUserFeedback({
+  ticketId,
+  feedback,
+  userReply = null,
+  token = null,
+  customFetch = fetch,
+}) {
+  if (!ticketId || !feedback) {
+    throw new Error("ticketId and feedback are required");
+  }
+
+  const cleanReply =
+    userReply && typeof userReply === "string" && userReply.trim()
+      ? userReply.trim()
+      : null;
+  const nowIso = new Date().toISOString();
+  const newStatus = feedback === "helpful" ? "resuelto" : "en_proceso";
+
+  // 1. Try FastAPI backend endpoint if available
+  try {
+    const activeToken = await getActiveAuthToken(token);
+    if (activeToken) {
+      const baseUrl = getAssistantApiBaseUrl();
+      const res = await customFetch(`${baseUrl}/api/support/tickets/${ticketId}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${activeToken}`,
+        },
+        body: JSON.stringify({
+          feedback,
+          reply: cleanReply,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const tickets = readLocalSupportTickets();
+        const updated = tickets.map((t) => {
+          if (t.id !== ticketId) return t;
+          const currentThread = t.thread || [];
+          const nextThread = cleanReply
+            ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
+            : currentThread;
+          return {
+            ...t,
+            status: data.status || newStatus,
+            user_feedback: feedback,
+            user_feedback_at: nowIso,
+            thread: nextThread,
+            updated_at: nowIso,
+          };
+        });
+        writeLocalSupportTickets(updated);
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn("[supportTicketsService] Backend feedback error, attempting RPC:", err);
+  }
+
+  // 2. Try Supabase RPC
+  if (isSupabaseDataConfigured) {
+    try {
+      const rpcParams = {
+        p_ticket_id: ticketId,
+        p_feedback: feedback,
+      };
+      if (cleanReply) {
+        rpcParams.p_user_reply = cleanReply;
+      }
+      const { data, error } = await supabase.rpc("submit_ticket_user_feedback", rpcParams);
+      if (!error) {
+        const tickets = readLocalSupportTickets();
+        const updated = tickets.map((t) => {
+          if (t.id !== ticketId) return t;
+          const currentThread = t.thread || [];
+          const nextThread = cleanReply
+            ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
+            : currentThread;
+          return {
+            ...t,
+            status: newStatus,
+            user_feedback: feedback,
+            user_feedback_at: nowIso,
+            thread: nextThread,
+            updated_at: nowIso,
+          };
+        });
+        writeLocalSupportTickets(updated);
+        return data || { id: ticketId, status: newStatus, user_feedback: feedback };
+      }
+      logSupabaseError(error);
+    } catch (err) {
+      console.warn("[supportTicketsService] RPC feedback error, updating locally:", err);
+    }
+  }
+
+  // 3. Local storage fallback
+  const tickets = readLocalSupportTickets();
+  const updated = tickets.map((t) => {
+    if (t.id !== ticketId) return t;
+    const currentThread = t.thread || [];
+    const nextThread = cleanReply
+      ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
+      : currentThread;
+    return {
+      ...t,
+      status: newStatus,
+      user_feedback: feedback,
+      user_feedback_at: nowIso,
+      thread: nextThread,
+      updated_at: nowIso,
+    };
+  });
+  writeLocalSupportTickets(updated);
+
+  return {
+    id: ticketId,
+    status: newStatus,
+    user_feedback: feedback,
+    user_feedback_at: nowIso,
+    user_reply: cleanReply,
+  };
 }
