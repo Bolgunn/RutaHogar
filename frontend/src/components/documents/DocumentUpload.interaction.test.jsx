@@ -29,7 +29,7 @@ async function select(){
   all(render(),n=>n.type==='input'&&n.props.type==='file')[0].props.onChange({target:{files:[{name:'liquidacion-sintetica.pdf'}]}});
 }
 const send=()=>all(render(),n=>n.type==='form')[0].props.onSubmit({preventDefault:vi.fn()});
-afterEach(()=>{hooks.states=[];hooks.refs=[];hooks.effects=[];vi.resetAllMocks();});
+afterEach(()=>{hooks.states=[];hooks.refs=[];hooks.effects=[];vi.resetAllMocks();vi.unstubAllGlobals();});
 
 it('conserva nombre y estado tras upload, oculta el input y exige consentimiento para procesar',async()=>{
   await select();
@@ -78,4 +78,33 @@ it('cerrar intento limpia nombre y consentimiento para el siguiente archivo',asy
   expect(text(render())).not.toContain('liquidacion-sintetica.pdf');
   expect(all(render(),n=>n.type==='input'&&n.props.type==='checkbox')).toHaveLength(0);
   expect(all(render(),n=>n.type==='input'&&n.props.type==='file')).toHaveLength(1);
+});
+
+
+it('al recargar retoma el seguimiento sin reiniciar el OCR',async()=>{
+  const data=new Map([['rutahogar.hu23.pending-document',JSON.stringify({id:'attempt',tracking:true})]]);
+  vi.stubGlobal('window',{sessionStorage:{getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)}});
+  getDocumentConfiguration.mockResolvedValue({...config,ocr_provider:'local'});
+  getDocumentSession.mockResolvedValue({...ready,state:'processing'});
+  processDocument.mockImplementation(async(value,options)=>{
+    options.onSlow();
+    options.onSession({...ready,state:'awaiting_review',candidates:[],evidence:[]});
+  });
+  render();hooks.effects[0]();
+  for(let i=0;i<8;i++) await Promise.resolve();
+  expect(processDocument).toHaveBeenCalledTimes(1);
+  expect(processDocument.mock.calls[0][1]).toEqual(expect.objectContaining({startIfReady:false,provider:'local',consent:true}));
+  expect(all(render(),node=>node.type.name==='DocumentReview')).toHaveLength(1);
+});
+
+it('muestra un aviso no destructivo cuando el seguimiento se demora',async()=>{
+  await select();
+  uploadDocument.mockImplementation(async(file,type,options)=>{options.onSession(ready);return ready;});
+  await send();
+  all(render(),n=>n.type==='input'&&n.props.type==='checkbox')[0].props.onChange({target:{checked:true}});
+  processDocument.mockImplementation(async(value,options)=>{options.onSlow();await new Promise(()=>{});});
+  button('Procesar y revisar documento').props.onClick();
+  expect(text(render())).toContain('El procesamiento esta tomando mas de lo esperado.'.replace('esta','est\u00e1').replace('mas','m\u00e1s'));
+  expect(all(render(),n=>n.props.role==='alert')).toHaveLength(0);
+  expect(button('Procesar y revisar documento').props.disabled).toBe(true);
 });

@@ -17,12 +17,30 @@ it('local reaches persisted review from explicit start without polling, scoring 
   ]);
 });
 
-it('local retry is user driven and does not loop when another request owns the lease', async () => {
+it('local resumes an existing job by polling without starting it again', async () => {
   const request = vi.fn().mockResolvedValueOnce({ id: 'synthetic', state: 'processing' })
-    .mockResolvedValueOnce({ provider: 'local', state: 'processing' });
-  const wait = vi.fn();
-  await expect(processDocument({ id: 'synthetic' }, { provider: 'local', consent: true, request, wait }))
-    .rejects.toThrow('vuelve a pulsar');
-  expect(wait).not.toHaveBeenCalled();
-  expect(request).toHaveBeenCalledTimes(2);
+    .mockResolvedValueOnce({ provider: 'local', state: 'awaiting_review', revision: 3 })
+    .mockResolvedValueOnce({ id: 'synthetic', state: 'awaiting_review', candidates: [] });
+  const wait = vi.fn().mockResolvedValue();
+  const result = await processDocument({ id: 'synthetic' }, { provider: 'local', consent: true, request, wait });
+  expect(result.state).toBe('awaiting_review');
+  expect(request.mock.calls.some(([path]) => path.endsWith('/ocr/start'))).toBe(false);
+  expect(request.mock.calls.some(([path]) => path.endsWith('/ocr/poll'))).toBe(true);
+});
+
+
+it('local ocr_ready waits for persisted review without calling parse or start', async () => {
+  const request = vi.fn().mockResolvedValueOnce({id:'synthetic',state:'ocr_ready'})
+    .mockResolvedValueOnce({provider:'local',state:'awaiting_review',revision:3})
+    .mockResolvedValueOnce({id:'synthetic',state:'awaiting_review',candidates:[]});
+  await processDocument({id:'synthetic'},{provider:'local',consent:true,request,wait:async()=>{}});
+  expect(request.mock.calls.some(([path])=>path.endsWith('/parse')||path.endsWith('/ocr/start'))).toBe(false);
+});
+
+it('reports a real local worker failure instead of polling forever', async () => {
+  const request = vi.fn().mockResolvedValueOnce({id:'synthetic',state:'processing'})
+    .mockResolvedValueOnce({provider:'local',state:'processing',status:'retry_wait'});
+  await expect(processDocument({id:'synthetic'},{provider:'local',consent:true,request,wait:async()=>{}}))
+    .rejects.toThrow('servicio OCR no pudo completar');
+  expect(request.mock.calls.some(([path])=>path.endsWith('/ocr/start'))).toBe(false);
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../utils/supabase', () => ({ supabase: null }));
 import { buildDocumentConfirmation, confirmDocumentSession, processDocument, waitForDocument } from '../documentReview';
+import { RequestTimeoutError } from '../httpRequest';
 
 const id='11111111-1111-4111-8111-111111111111';
 const base={id,revision:4,state:'awaiting_review',candidates:[
@@ -85,5 +86,52 @@ describe('conexión navegador upload → OCR → parser → revisión', () => {
       controller.abort();await rejected;
       expect(vi.getTimerCount()).toBe(0);
     } finally {vi.useRealTimers();}
+  });
+});
+
+
+describe('seguimiento OCR prolongado', () => {
+  it('un timeout del inicio consulta el estado hasta completar sin duplicar start', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({...base, state:'ready'})
+      .mockRejectedValueOnce(new RequestTimeoutError('timeout'))
+      .mockResolvedValueOnce({...base, state:'ready'})
+      .mockResolvedValueOnce({...base, state:'processing'})
+      .mockResolvedValueOnce({state:'processing', revision:2})
+      .mockResolvedValueOnce({state:'awaiting_review', revision:4})
+      .mockResolvedValueOnce(base);
+    const onSlow=vi.fn(), wait=vi.fn().mockResolvedValue();
+    const result=await processDocument({...base,state:'ready'}, {consent:true,provider:'local',request,wait,onSlow});
+    expect(result.state).toBe('awaiting_review');
+    expect(onSlow).toHaveBeenCalledTimes(1);
+    expect(wait).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls.filter(([path])=>path.endsWith('/ocr/start'))).toHaveLength(1);
+  });
+  it('continua mas alla del limite anterior y muestra aviso sin fallo', async () => {
+    let tick=0, polls=0;
+    const request=vi.fn(async(path)=>{
+      if(path.endsWith('/ocr/start')) return {state:'processing',revision:2};
+      if(path.endsWith('/ocr/poll')) return {state:++polls===12?'awaiting_review':'processing',revision:3};
+      return {...base,state:polls===12?'awaiting_review':'ready'};
+    });
+    const onSlow=vi.fn();
+    const result=await processDocument({...base,state:'ready'}, {consent:true,request,onSlow,
+      wait:async()=>{tick+=2000;},now:()=>tick});
+    expect(result.state).toBe('awaiting_review');
+    expect(polls).toBe(12);
+    expect(onSlow).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls.filter(([path])=>path.endsWith('/ocr/start'))).toHaveLength(1);
+  });
+  it('al reanudar un inicio incierto en ready solo consulta estado', async () => {
+    const request=vi.fn().mockResolvedValueOnce({...base,state:'ready'})
+      .mockResolvedValueOnce({...base,state:'processing'})
+      .mockResolvedValueOnce({state:'awaiting_review',revision:4}).mockResolvedValueOnce(base);
+    await processDocument(base,{consent:true,startIfReady:false,provider:'local',request,wait:async()=>{}});
+    expect(request.mock.calls.some(([path])=>path.endsWith('/ocr/start'))).toBe(false);
+  });
+  it('distingue un fallo real del procesamiento', async () => {
+    const request=vi.fn().mockResolvedValueOnce({...base,state:'processing'})
+      .mockResolvedValueOnce({state:'processing_failed',revision:4});
+    await expect(processDocument(base,{consent:true,request,wait:async()=>{}})).rejects.toThrow('No pudimos completar');
   });
 });

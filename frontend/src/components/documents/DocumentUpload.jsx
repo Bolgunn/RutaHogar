@@ -7,6 +7,17 @@ const labels = { validating: 'Revisando archivo…', authorizing: 'Autorizando c
   uploading: 'Subiendo a almacenamiento privado…', verifying: 'Verificando admisión…', ready: 'Archivo cargado correctamente.' };
 const types = { liquidacion_sueldo: 'Liquidación de sueldo', certificado_ahorro: 'Certificado o cartola de ahorro', documento_laboral: 'Contrato o certificado laboral' };
 
+const pendingKey = 'rutahogar.hu23.pending-document';
+function readPending() {
+  try { return JSON.parse(window.sessionStorage.getItem(pendingKey) || 'null'); } catch { return null; }
+}
+function savePending(value) {
+  try {
+    if (value) window.sessionStorage.setItem(pendingKey, JSON.stringify(value));
+    else window.sessionStorage.removeItem(pendingKey);
+  } catch { /* The owner can continue in the current tab without storage. */ }
+}
+
 // Minimal T2–T5 owner flow; final presentation remains outside this component.
 export default function DocumentUpload({ onReady = () => {}, onConfirmed = () => {} }) {
   const [consent, setConsent] = useState(false);
@@ -22,14 +33,56 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
   const [session, setSession] = useState(null);
   const sessionRef = useRef(null);
   const controller = useRef(null);
+  const processingRef = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    getDocumentConfiguration().then((value) => { if (mounted.current) setConfig(value); })
-      .catch(() => { if (mounted.current) setError('No pudimos cargar las restricciones. Vuelve a abrir esta sección.'); });
-    return () => { mounted.current = false; controller.current?.abort(); };
+    let alive = true;
+    const saved = readPending();
+    getDocumentConfiguration().then(async (value) => {
+      if (!alive || !mounted.current) return;
+      setConfig(value);
+      if (!saved?.id) return;
+      try {
+        const restored = await getDocumentSession(saved.id);
+        if (!alive || !mounted.current) return;
+        remember(restored);
+        if (saved.tracking && ['ready', 'processing', 'ocr_ready'].includes(restored.state)) {
+          setConsent(true);
+          await follow(restored, value.ocr_provider || 'azure', false);
+        } else if (['processing', 'ocr_ready'].includes(restored.state)) {
+          setConsent(true);
+          await follow(restored, value.ocr_provider || 'azure', false);
+        }
+      } catch {
+        if (alive && mounted.current) setError('No pudimos consultar el intento anterior. Vuelve a abrir esta sección.');
+      }
+    }).catch(() => { if (alive && mounted.current) setError('No pudimos cargar las restricciones. Vuelve a abrir esta sección.'); });
+    return () => { alive = false; mounted.current = false; controller.current?.abort(); processingRef.current = false; };
   }, []);
-  const remember = (value) => { sessionRef.current = value; if (mounted.current) setSession(value); };
+  const remember = (value) => {
+    sessionRef.current = value;
+    if (value && ['ready', 'processing', 'ocr_ready', 'awaiting_review'].includes(value.state)) {
+      const saved = readPending();
+      savePending({ id: value.id, tracking: saved?.id === value.id && saved.tracking === true });
+    } else if (!value || ['confirmed', 'cancelled', 'expired', 'processing_failed'].includes(value.state)) savePending(null);
+    if (mounted.current) setSession(value);
+  };
+  async function follow(value, provider, startIfReady) {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    const active = new AbortController(); controller.current = active;
+    setBusy(true); setError(''); setPhase('processing');
+    try {
+      await processDocument(value, { provider, consent: true, signal: active.signal, startIfReady,
+        onSlow: () => { if (mounted.current && !active.signal.aborted) setPhase('slow'); },
+        onSession: (next) => { if (mounted.current && !active.signal.aborted) remember(next); } });
+      if (mounted.current && !active.signal.aborted) setPhase('review');
+    } catch (cause) { if (mounted.current && !active.signal.aborted) {
+      setError(cause.message); setPhase(sessionRef.current?.state === 'ready' ? 'ready' : 'failed');
+    } }
+    finally { if (controller.current === active) { processingRef.current = false; if (mounted.current) setBusy(false); } }
+  }
   const send = async (event) => {
     event.preventDefault();
     if (busy || !file || !config || (sessionRef.current && !retryUpload)) return;
@@ -48,19 +101,12 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
   };
   const process = async () => {
     if (busy || !consent || !['ready', 'processing', 'ocr_ready'].includes(sessionRef.current?.state)) return;
-    const active = new AbortController(); controller.current = active;
-    setBusy(true); setError(''); setPhase('processing');
-    try {
-      await processDocument(sessionRef.current, { provider: config?.ocr_provider || 'azure', consent, signal: active.signal,
-        onSession: (value) => { if (mounted.current && !active.signal.aborted) remember(value); } });
-      if (mounted.current && !active.signal.aborted) setPhase('review');
-    } catch (cause) { if (mounted.current && !active.signal.aborted) {
-      setError(cause.message); setPhase(sessionRef.current?.state === 'ready' ? 'ready' : 'failed');
-    } }
-    finally { if (mounted.current && controller.current === active) setBusy(false); }
+    const current = sessionRef.current;
+    savePending({ id: current.id, tracking: true });
+    await follow(current, config?.ocr_provider || 'azure', true);
   };
   const cancel = async () => {
-    controller.current?.abort(); controller.current = null;
+    controller.current?.abort(); controller.current = null; processingRef.current = false;
     setBusy(true); setError('');
     try {
       const value = sessionRef.current && await getDocumentSession(sessionRef.current.id);
@@ -97,7 +143,7 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
       </label>
       <button type="button" onClick={process} disabled={busy || !consent || !admitted}>Procesar y revisar documento</button>
     </div>}
-    {phase !== 'ready' && <p role="status">{phase === 'processing' ? 'Procesando documento. Puedes cancelar este intento.' : labels[phase] || ''}</p>}
+    {phase !== 'ready' && <p role="status">{phase === 'processing' ? 'Procesando documento. Puedes cancelar este intento.' : phase === 'slow' ? 'El procesamiento está tomando más de lo esperado. Seguiremos consultando el estado del documento.' : labels[phase] || ''}</p>}
     {session && ['awaiting_review', 'confirmed', 'cancelled'].includes(session.state) &&
       <DocumentReview key={session.id} session={session} onSession={remember} onConfirmed={onConfirmed} />}
     {error && <p role="alert">{error}</p>}

@@ -1,4 +1,5 @@
 import { trackingRequest } from './trackingService';
+import { RequestTimeoutError } from './httpRequest';
 
 export const isActionable = (row) => row.detection === 'detected'
   && ['match', 'difference'].includes(row.comparison) && row.detected_value !== null;
@@ -43,36 +44,60 @@ export function waitForDocument(delayMs, signal) {
 }
 
 export async function processDocument(session, { consent = false, provider = 'azure', signal, onSession = () => {},
-  request = trackingRequest, wait = waitForDocument, now = Date.now } = {}) {
+  onSlow = () => {}, startIfReady = true, request = trackingRequest, wait = waitForDocument, now = Date.now } = {}) {
   if (consent !== true) throw new Error('Debes autorizar el procesamiento temporal del documento.');
   const active = () => { if (signal?.aborted) throw new Error('Proceso cancelado.'); };
+  const startedAt = now();
+  let slow = false;
+  const markSlow = () => { if (!slow) { slow = true; onSlow(); } };
   let current = await request(sessionPath(session.id));
   active(); onSession(current);
   let nextAttempt = null;
-  if (current.state === 'ready' || (provider === 'local' && ['processing', 'ocr_ready'].includes(current.state))) {
-    const started = await request(`${sessionPath(current.id)}/ocr/start`, { consent_external_processing: true, ...(provider === 'local' ? { expected_provider: 'local' } : {}) });
-    active();
-    current = { ...current, state: started.state, revision: started.revision };
-    nextAttempt = started.next_attempt_at;
-    onSession(current);
-    if (started.provider === 'local' && current.state !== 'awaiting_review') {
-      throw new Error('El procesamiento local sigue pendiente. Espera unos segundos y vuelve a pulsar Procesar y revisar documento.');
+  let awaitingStart = current.state === 'ready' && !startIfReady;
+  if (current.state === 'ready' && startIfReady) {
+    try {
+      const started = await request(`${sessionPath(current.id)}/ocr/start`, { consent_external_processing: true, ...(provider === 'local' ? { expected_provider: 'local' } : {}) });
+      active();
+      current = { ...current, state: started.state, revision: started.revision };
+      nextAttempt = started.next_attempt_at;
+      onSession(current);
+    } catch (error) {
+      if (!(error instanceof RequestTimeoutError)) throw error;
+      // The server may have accepted the request even though its response timed out.
+      // Read the persisted state; never send a second start automatically.
+      active(); awaitingStart = true; markSlow();
     }
   }
-  while (['processing', 'ocr_ready'].includes(current.state)) {
+  while (awaitingStart || ['processing', 'ocr_ready'].includes(current.state)) {
+    if (now() - startedAt >= 15000) markSlow();
     const timestamp = Date.parse(nextAttempt || '');
     await wait(Math.max(2000, Number.isFinite(timestamp) ? timestamp - now() : 2000), signal);
     active();
-    if (current.state === 'ocr_ready') {
-      current = await request(`${sessionPath(current.id)}/parse`, {});
-      active(); onSession(current);
-      if (current.state !== 'ocr_ready') break;
+    try {
+      if (awaitingStart) {
+        current = await request(sessionPath(current.id));
+        active(); onSession(current);
+        awaitingStart = current.state === 'ready';
+        if (awaitingStart || !['processing', 'ocr_ready'].includes(current.state)) continue;
+      }
+      // Local OCR persists the review itself; /parse would claim another job.
+      if (current.state === 'ocr_ready' && provider !== 'local') {
+        current = await request(`${sessionPath(current.id)}/parse`, {});
+        active(); onSession(current);
+        if (current.state !== 'ocr_ready') break;
+      }
+      const progress = await request(`${sessionPath(current.id)}/ocr/poll`, {});
+      active();
+      current = { ...current, state: progress.state, revision: progress.revision };
+      nextAttempt = progress.next_attempt_at;
+      onSession(current);
+      if (progress.provider === 'local' && progress.status === 'retry_wait') {
+        throw new Error('El servicio OCR no pudo completar el procesamiento. Cierra este intento y vuelve a cargar el documento.');
+      }
+    } catch (error) {
+      if (!(error instanceof RequestTimeoutError)) throw error;
+      active(); markSlow(); awaitingStart = true; nextAttempt = null;
     }
-    const progress = await request(`${sessionPath(current.id)}/ocr/poll`, {});
-    active();
-    current = { ...current, state: progress.state, revision: progress.revision };
-    nextAttempt = progress.next_attempt_at;
-    onSession(current);
   }
   active();
   if (current.state !== 'awaiting_review') {
