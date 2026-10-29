@@ -44,3 +44,11 @@ it('reports a real local worker failure instead of polling forever', async () =>
     .rejects.toThrow('servicio OCR no pudo completar');
   expect(request.mock.calls.some(([path])=>path.endsWith('/ocr/start'))).toBe(false);
 });
+
+
+it('a rejected identity returns only the generic message on immediate start', async () => {
+  const request=vi.fn().mockResolvedValueOnce({id:'synthetic',state:'ready'})
+    .mockResolvedValueOnce({provider:'local',state:'processing_failed',revision:3,message:'Datos inconsistentes'});
+  await expect(processDocument({id:'synthetic'},{provider:'local',consent:true,request}))
+    .rejects.toThrow(/^Datos inconsistentes$/);
+});

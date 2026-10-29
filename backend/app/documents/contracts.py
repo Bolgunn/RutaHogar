@@ -100,11 +100,18 @@ class Candidate(Contract):
         return self
 
 
+class IdentityEvidence(Contract):
+    # Internal OCR-to-backend data only; never returned as document candidates.
+    rut: StrictStr | None = Field(default=None, max_length=32)
+    name: StrictStr | None = Field(default=None, max_length=160)
+
+
 class StructuredResult(Contract):
     document_type: DocumentType
     parser_version: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     normalizer_version: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     candidates: list[Candidate] = Field(min_length=1, max_length=2)
+    identity: IdentityEvidence | None = None
 
     @model_validator(mode="after")
     def allowed_fields(self):

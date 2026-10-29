@@ -205,3 +205,15 @@ def test_different_page_orientations_never_invent_employment_fields():
     assert rows['continuidad_laboral']['value'] == 'entre_1_y_3_anios'
     assert rows['continuidad_laboral']['page'] == 2
     assert result['rotation'] == 270 and result['ocr_attempts'] == 5
+
+
+def test_subject_identity_is_extracted_only_for_internal_result():
+    ext, data, kind = fixture('payslip_scan')
+    source = ('RUT trabajador: 12.345.678-5\nNombre trabajador: Juan Perez\n'
+              'RUT empleador: 17.493.908-k\nLiquido a pagar: $1.450.000')
+    with patch('workers.hu23_ocr.engine.tesseract', return_value=source):
+        result = extract(data, ext, kind, '2026-10-25')['result']
+    assert result['identity']['rut'] == '123456785'
+    assert result['identity']['name'] == 'juan perez'
+    assert result['candidates'][0]['value'] == 1450000
+    assert 'empleador' not in json.dumps(result)

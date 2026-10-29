@@ -5,6 +5,7 @@ from uuid import uuid4
 from .config import REVIEW_LIFETIME, public_limits
 from .contracts import ConfirmProcess, DocumentError, StructuredResult
 from .domain import compare, current_backing
+from .identity import compare_identity
 from .tracking_adapter import current_declaration, prepare_update
 
 PUBLIC_PROCESS_FIELDS = {"id", "document_type", "state", "revision", "created_at", "expires_at",
@@ -65,11 +66,15 @@ class DocumentService:
         process = bundle["process"]
         if process["document_type"] != result.document_type.value:
             raise DocumentError("invalid_result")
+        if result.identity:
+            evidence = result.identity.model_dump(exclude_none=True) if hasattr(result.identity, 'model_dump') else result.identity
+            if compare_identity(self.repository.load_identity(user), evidence) == 'inconsistent':
+                return self.repository.reject_identity(user, process_id, revision, parse_token)
         tracking = self.repository.load_tracking(user)
         if process["base_revision"] != tracking["revision"]:
             raise DocumentError("lineage_conflict")
         declared = current_declaration(tracking, user)
-        payload = result.model_dump(mode="json")
+        payload = result.model_dump(mode="json", exclude={"identity"})
         if parse_token is not None:
             payload["parse_token"] = parse_token
         for row, candidate in zip(payload["candidates"], result.candidates):

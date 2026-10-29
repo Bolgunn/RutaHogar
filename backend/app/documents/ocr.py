@@ -33,7 +33,8 @@ class OcrService:
                 'status': job['job_state'] if job else None,
                 'next_attempt_at': job['next_attempt_at'] if job else None,
                 'result_deletion_state': job['deletion_state'] if job else None,
-                'message': ('No pudimos procesar este documento. Puedes intentar con otro archivo.'
+                'message': ('Datos inconsistentes' if process.get('failure_code') == 'identity_inconsistent' else
+                            'No pudimos procesar este documento. Puedes intentar con otro archivo.'
                             if process['state'] == 'processing_failed' else None)}
 
     def _provider(self, user, process_id, *, cleanup=False):

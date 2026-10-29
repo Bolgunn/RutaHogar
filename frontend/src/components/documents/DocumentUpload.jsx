@@ -116,6 +116,9 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
     } catch { setError('No pudimos cerrar el intento. Reintenta la cancelación.'); }
     finally { if (mounted.current) setBusy(false); }
   };
+  if (error === 'Datos inconsistentes' || session?.failure_code === 'identity_inconsistent') {
+    return <p role="alert">Datos inconsistentes</p>;
+  }
   const accept = config && Object.values(config.restrictions.files).flat().map((ext) => `.${ext}`).join(',');
   const admitted = session && ['ready', 'processing', 'ocr_ready', 'awaiting_review', 'confirmed'].includes(session.state);
   return <section className="document-upload" aria-label="Carga privada de documentos">

@@ -108,3 +108,17 @@ it('muestra un aviso no destructivo cuando el seguimiento se demora',async()=>{
   expect(all(render(),n=>n.props.role==='alert')).toHaveLength(0);
   expect(button('Procesar y revisar documento').props.disabled).toBe(true);
 });
+
+
+it('muestra solamente el mensaje generico ante identidad inconsistente',async()=>{
+  await select();
+  uploadDocument.mockImplementation(async(file,type,options)=>{options.onSession(ready);return ready;});
+  await send();
+  all(render(),n=>n.type==='input'&&n.props.type==='checkbox')[0].props.onChange({target:{checked:true}});
+  processDocument.mockImplementation(async(value,options)=>{
+    options.onSession({...ready,state:'processing_failed',failure_code:'identity_inconsistent'});
+    throw new Error('Datos inconsistentes');
+  });
+  await button('Procesar y revisar documento').props.onClick();
+  expect(text(render())).toBe('Datos inconsistentes');
+});

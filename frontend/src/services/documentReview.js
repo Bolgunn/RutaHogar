@@ -58,7 +58,8 @@ export async function processDocument(session, { consent = false, provider = 'az
     try {
       const started = await request(`${sessionPath(current.id)}/ocr/start`, { consent_external_processing: true, ...(provider === 'local' ? { expected_provider: 'local' } : {}) });
       active();
-      current = { ...current, state: started.state, revision: started.revision };
+      current = { ...current, state: started.state, revision: started.revision,
+        failure_code: started.message === 'Datos inconsistentes' ? 'identity_inconsistent' : current.failure_code };
       nextAttempt = started.next_attempt_at;
       onSession(current);
     } catch (error) {
@@ -88,7 +89,8 @@ export async function processDocument(session, { consent = false, provider = 'az
       }
       const progress = await request(`${sessionPath(current.id)}/ocr/poll`, {});
       active();
-      current = { ...current, state: progress.state, revision: progress.revision };
+      current = { ...current, state: progress.state, revision: progress.revision,
+        failure_code: progress.message === 'Datos inconsistentes' ? 'identity_inconsistent' : current.failure_code };
       nextAttempt = progress.next_attempt_at;
       onSession(current);
       if (progress.provider === 'local' && progress.status === 'retry_wait') {
@@ -100,6 +102,7 @@ export async function processDocument(session, { consent = false, provider = 'az
     }
   }
   active();
+  if (current.failure_code === 'identity_inconsistent') throw new Error('Datos inconsistentes');
   if (current.state !== 'awaiting_review') {
     throw new Error('No pudimos completar este intento. Ciérralo e intenta con otro documento.');
   }

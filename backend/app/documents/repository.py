@@ -1,5 +1,6 @@
 """HU23 uses service-only RPCs. The caller identity is verified through Auth."""
 import httpx
+from urllib.parse import urlencode
 
 from ..tracking.repository import TrackingRepository
 from .contracts import DocumentError
@@ -16,6 +17,17 @@ class DocumentRepository:
 
     def authenticate(self, token):
         return self.tracking.authenticate(token)
+
+    def load_identity(self, user_id):
+        query = urlencode({'id': f'eq.{user_id}', 'select': 'rut,nombre,apellido_paterno,apellido_materno,full_name'})
+        rows = self.tracking.request('GET', f'/rest/v1/profiles?{query}')
+        if not isinstance(rows, list) or len(rows) != 1:
+            raise DocumentError('persistence_unavailable')
+        return rows[0]
+
+    def reject_identity(self, user_id, process_id, revision, token):
+        return self.rpc('hu23_reject_identity', {'p_user': user_id, 'p_process': process_id,
+                        'p_revision': revision, 'p_parse_token': token})
 
     def load_tracking(self, user_id):
         return self.tracking.load(user_id)

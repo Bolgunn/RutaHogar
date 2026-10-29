@@ -5,8 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
-from .contracts import ALLOWLISTS, Candidate, Contract, DocumentError, DocumentType, FieldName, StructuredResult
+from .contracts import ALLOWLISTS, Candidate, Contract, DocumentError, DocumentType, FieldName, IdentityEvidence, StructuredResult
 from .normalization import MONTHS, NORMALIZER_VERSION, clp, continuity, document_date, text
+from .identity import extract_identity
 
 PARSER_VERSION = 'deterministic-v1'
 
@@ -229,7 +230,9 @@ def parse_document(document_type, layout, reference: date):
         kind = DocumentType(document_type)
         typed_layout = Layout.model_validate(layout)
         raw = PARSERS[kind].parse(typed_layout, reference)
-        return normalize_result(raw)
+        result = normalize_result(raw)
+        identity = extract_identity(typed_layout.rows())
+        return result.model_copy(update={'identity': IdentityEvidence(**identity) if identity else None})
     except (ValueError, ValidationError, TypeError, KeyError):
         # Never propagate Pydantic input excerpts or OCR strings into HTTP errors/logs.
         raise DocumentError('invalid_result') from None
