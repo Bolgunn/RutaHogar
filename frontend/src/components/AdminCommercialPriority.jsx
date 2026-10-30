@@ -185,7 +185,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
 
       <section className="admin-surface admin-section-gap" aria-label="Reglas fijas">
         <div className="admin-surface__header"><div className="admin-surface__title">
-          <h2>🔒 Reglas fijas</h2>
+          <h2>Reglas fijas</h2>
           <p>Protegen a los leads con bloqueadores o datos incompletos. No se pueden modificar.</p>
         </div></div>
         <ul className="admin-bullet-list commercial-priority-locked">
@@ -302,10 +302,10 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
             <tbody>
               {countDeltas(preview.conteos).map((row) => (
                 <tr key={row.key}>
-                  <td>{row.key === "do_not_route" ? "🔒 " : ""}{row.label}</td>
-                  <td>{row.vigente}</td>
-                  <td>{row.borrador}</td>
-                  <td className={row.delta > 0 ? "commercial-priority-delta--up" : row.delta < 0 ? "commercial-priority-delta--down" : ""}>{signed(row.delta)}</td>
+                  <td data-label="Acción">{row.key === "do_not_route" ? "🔒 " : ""}{row.label}</td>
+                  <td data-label="Vigente">{row.vigente}</td>
+                  <td data-label="Con estos criterios">{row.borrador}</td>
+                  <td data-label="Δ" className={row.delta > 0 ? "commercial-priority-delta--up" : row.delta < 0 ? "commercial-priority-delta--down" : ""}>{signed(row.delta)}</td>
                 </tr>
               ))}
             </tbody>

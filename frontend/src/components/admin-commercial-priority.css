@@ -89,5 +89,54 @@
   text-align: right;
 }
 
+/* En pantallas angostas cada acción se vuelve una tarjeta con sus valores rotulados. */
+@media (max-width: 640px) {
+  .commercial-priority-page .commercial-priority-table,
+  .commercial-priority-page .commercial-priority-table tbody,
+  .commercial-priority-page .commercial-priority-table tr,
+  .commercial-priority-page .commercial-priority-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .commercial-priority-page .commercial-priority-table thead {
+    display: none;
+  }
+
+  .commercial-priority-page .commercial-priority-table tr {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--rh-border);
+    border-radius: var(--rh-radius-sm);
+    background: var(--rh-blue-light);
+  }
+
+  .commercial-priority-page .commercial-priority-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .commercial-priority-page .commercial-priority-table td::before {
+    content: attr(data-label);
+    color: var(--rh-text-secondary);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .commercial-priority-page .commercial-priority-table td:first-child {
+    font-weight: 700;
+    color: var(--rh-navy);
+  }
+
+  .commercial-priority-page .commercial-priority-table td:first-child::before {
+    content: none;
+  }
+}
+
 .commercial-priority-page .commercial-priority-delta--up { color: var(--rh-success, #1f7a4d); font-weight: 700; }
 .commercial-priority-page .commercial-priority-delta--down { color: var(--rh-danger, #b42318); font-weight: 700; }
