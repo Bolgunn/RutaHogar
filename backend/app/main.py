@@ -15,6 +15,7 @@ from .market_data.service import MarketSnapshotUnavailable, read_persisted_uf_hi
 from .market_data.repository import MarketRepositoryError
 from .housing_benefit_catalog import HousingBenefitCatalogueError, HousingBenefitCatalogueRepository
 from .scoring import calculate_score
+from .scoring_engine.constants import PURCHASE_TERM_ALIASES
 from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
@@ -156,13 +157,8 @@ class ScoreRequest(BaseModel):
             if dividend is not None:
                 data["dividendo_estimado"] = dividend
 
-        purchase_term_aliases = {
-            "0_3_meses": "inmediato",
-            "3_6_meses": "3_a_6_meses",
-            "6_12_meses": "6_a_12_meses",
-        }
-        if data.get("plazo_compra") in purchase_term_aliases:
-            data["plazo_compra"] = purchase_term_aliases[data["plazo_compra"]]
+        if data.get("plazo_compra") in PURCHASE_TERM_ALIASES:
+            data["plazo_compra"] = PURCHASE_TERM_ALIASES[data["plazo_compra"]]
         return data
 
     @field_validator("ingreso_mensual")
