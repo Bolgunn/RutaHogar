@@ -1,5 +1,7 @@
 // frontend/src/services/crmService.js
 
+import { resolvedPriorityDetail } from "../lib/commercial/priorityActions";
+
 function resolveApiBase() {
   const configuredUrl =
     import.meta.env.VITE_API_URL ||
@@ -49,7 +51,7 @@ export async function buildCrmPayload(lead, projectData, matchData) {
   }
 
   const result = lead?.result || {};
-  const commercialPriority = result?.commercial_priority_detail || {};
+  const commercialPriority = resolvedPriorityDetail(lead) || {};
   
   const basePayload = {
     lead_id: String(lead?.id || `anon_${Date.now()}`),
