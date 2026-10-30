@@ -47,9 +47,12 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
       co_debtor_confirmation_required: "Aún no hay una confirmación vigente del co-deudor para actualizar tu score.",
       co_debtor_consent_revoked: "El co-deudor revocó su consentimiento. Sus antecedentes ya no se pueden usar para actualizar tu score.",
       owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
+      config_version_conflict: "Otro administrador cambió la configuración; revisa los cambios.",
+      invalid_criterios: "Revisa los criterios marcados; hay valores no permitidos.",
     };
     const failure = new Error(messages[code] || "No se pudo completar la operación.");
     failure.code = code;
+    failure.errors = payload?.detail?.errors || [];
     throw failure;
   }
   return payload;

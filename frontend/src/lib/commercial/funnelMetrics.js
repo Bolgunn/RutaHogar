@@ -5,7 +5,7 @@
 // umbral.
 import { matchLeadToProjects } from "../matching/leadProjectMatching";
 import { overallStage } from "./overallStage";
-import { PRIORITY_ACTIONS, SIN_PRIORIDAD, priorityKeyFromDetail } from "./priorityActions";
+import { PRIORITY_ACTIONS, SIN_PRIORIDAD, priorityKeyFromDetail, resolvedPriorityDetail } from "./priorityActions";
 import { periodOf, periodsBetween } from "./santiagoCalendar";
 import { DEFAULT_STAGE, STAGES } from "./stageRules";
 
@@ -328,7 +328,7 @@ export function computeFunnelMetrics({ facts, proyectos, filtros, now, granulari
     .map((lead) => ({
       lead,
       bandas: sinCatalogo ? null : bandsOf(match(lead.evaluacion_actual, catalogo)),
-      prioridad: priorityKeyFromDetail(lead.evaluacion_actual.result?.commercial_priority_detail),
+      prioridad: priorityKeyFromDetail(resolvedPriorityDetail(lead.evaluacion_actual)),
     }))
     .filter(({ bandas, prioridad }) =>
       (sinCatalogo || !filtros.afinidad.length || filtros.afinidad.includes(bandas.afinidad))

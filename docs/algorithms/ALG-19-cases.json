@@ -1,0 +1,183 @@
+{
+  "algorithm": "ALG-19",
+  "version": "hu21-commercial-priority-v1",
+  "note": "Asserted by backend/tests/test_alg19_cases.py against calculate_commercial_priority. 'criterios' is a partial override merged over DEFAULT_CRITERIOS; null means defaults. Cases tagged 'default' also assert invariant 1: same action, reason and send_to_crm as the pre-HU21 engine.",
+  "cases": [
+    {
+      "name": "default_alto_compatible_contact_now",
+      "tags": ["default"],
+      "why": "R4 under defaults: today's happy path.",
+      "input": {
+        "classification": "Alto", "score": 82,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "6_a_12_meses", "tiene_propiedad_vista": false },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true, "promoted": false, "fixed_rule": false,
+        "reason": "Lead con alta preparación financiera y compatible con el objetivo inmobiliario." }
+    },
+    {
+      "name": "default_alto_compatible_both_signals_reason",
+      "tags": ["default"],
+      "why": "R4 reason variant needs both signals; 0_3_meses is an alias of inmediato.",
+      "input": {
+        "classification": "Alto", "score": 82,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "0_3_meses", "tiene_propiedad_vista": true },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true,
+        "reason": "Lead con alta preparación financiera, objetivo compatible, compra pronta y propiedad o proyecto visto." }
+    },
+    {
+      "name": "default_medio_cercano_with_signal_review",
+      "tags": ["default"],
+      "why": "R5 under defaults; a signal changes the reason only, never the action (R5b off).",
+      "input": {
+        "classification": "Medio", "score": 58,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_with_review", "send_to_crm": true, "promoted": false,
+        "reason": "Lead con potencial comercial y señales de intención de compra; requiere revisión antes de avanzar." }
+    },
+    {
+      "name": "locked_morosidad_vigente_never_routed",
+      "tags": ["default", "locked"],
+      "why": "R2 is fixed: the most permissive configuration still yields do_not_route (invariant 3).",
+      "input": {
+        "classification": "Alto", "score": 90,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [{ "code": "morosidad_vigente" }], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": true },
+        "criterios": {
+          "contactar_ahora": { "clasificaciones": ["Alto", "Medio"], "compatibilidades": ["Compatible", "Cercano"] },
+          "subir_con_senales": 1
+        }
+      },
+      "expect": { "action_key": "do_not_route", "send_to_crm": false, "fixed_rule": true }
+    },
+    {
+      "name": "locked_complemento_incompleto_request_info",
+      "tags": ["default", "locked"],
+      "why": "R1 precedes R2 and is fixed.",
+      "input": {
+        "classification": "Alto", "score": 80,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [{ "code": "complemento_incompleto" }, { "code": "carga_total_alta" }], "data": {},
+        "criterios": null
+      },
+      "expect": { "action_key": "request_info", "fixed_rule": true,
+        "reason": "Faltan antecedentes del complemento de renta antes de priorizar comercialmente." }
+    },
+    {
+      "name": "medio_admitted_to_contact_now",
+      "why": "R4 with Medio enabled: the higher level wins over R5.",
+      "input": {
+        "classification": "Medio", "score": 60,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": {},
+        "criterios": { "contactar_ahora": { "clasificaciones": ["Alto", "Medio"], "compatibilidades": ["Compatible"] } }
+      },
+      "expect": { "action_key": "contact_now", "promoted": false }
+    },
+    {
+      "name": "promotion_with_one_signal",
+      "why": "R5b: Medio + Cercano with an immediate purchase term is promoted one level.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 1 }
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true, "promoted": true,
+        "reason": "Lead con potencial comercial y señales de intención de compra; tu inmobiliaria prioriza contactarlo ahora." }
+    },
+    {
+      "name": "promotion_needs_two_signals",
+      "why": "R5b with subir_con_senales = 2 and only one signal: no promotion.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 2 }
+      },
+      "expect": { "action_key": "contact_with_review", "promoted": false }
+    },
+    {
+      "name": "mas_12_meses_never_a_signal",
+      "why": "A5: mas_12_meses cannot be configured as a signal, so promotion cannot fire on it.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "mas_12_meses", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 1, "senales": { "plazos": ["inmediato", "3_a_6_meses", "6_a_12_meses"], "propiedad_vista": true } }
+      },
+      "expect": { "action_key": "contact_with_review", "promoted": false }
+    },
+    {
+      "name": "nurture_never_promoted",
+      "why": "A3: Bajo is nurture even with both signals and promotion on.",
+      "input": {
+        "classification": "Bajo", "score": 30,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": true },
+        "criterios": { "subir_con_senales": 1 }
+      },
+      "expect": { "action_key": "nurture", "promoted": false }
+    },
+    {
+      "name": "reorient_threshold_raised",
+      "why": "R6 with umbral 75: a 72 out-of-reach Alto falls through to R8 instead of reorient.",
+      "input": {
+        "classification": "Alto", "score": 72,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": { "umbral_reorientar": 75 }
+      },
+      "expect": { "action_key": "request_info" }
+    },
+    {
+      "name": "default_reorient_at_70",
+      "tags": ["default"],
+      "why": "R6 under defaults.",
+      "input": {
+        "classification": "Alto", "score": 72,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": null
+      },
+      "expect": { "action_key": "reorient", "send_to_crm": false }
+    },
+    {
+      "name": "review_admits_fuera_de_alcance_before_reorient",
+      "why": "Precedence: with Fuera de alcance in R5, a Medio out-of-reach lead is reviewed, not reoriented.",
+      "input": {
+        "classification": "Medio", "score": 70,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": { "contactar_con_revision": { "clasificaciones": ["Medio"], "compatibilidades": ["Compatible", "Cercano", "Fuera de alcance"] } }
+      },
+      "expect": { "action_key": "contact_with_review" }
+    },
+    {
+      "name": "legacy_evaluation_without_fit",
+      "tags": ["default"],
+      "why": "Edge case: missing project_fit and classification fall through to R8, as today.",
+      "input": { "classification": null, "score": 50, "project_fit": null, "blockers": null, "data": null, "criterios": null },
+      "expect": { "action_key": "request_info",
+        "reason": "Se requieren más antecedentes antes de definir una prioridad comercial." }
+    }
+  ],
+  "invalid_criterios": [
+    { "name": "bajo_in_contact_now", "criterios": { "contactar_ahora": { "clasificaciones": ["Alto", "Bajo"], "compatibilidades": ["Compatible"] } }, "error_key": "contactar_ahora.clasificaciones" },
+    { "name": "fuera_de_alcance_in_contact_now", "criterios": { "contactar_ahora": { "clasificaciones": ["Alto"], "compatibilidades": ["Compatible", "Fuera de alcance"] } }, "error_key": "contactar_ahora.compatibilidades" },
+    { "name": "empty_plazos", "criterios": { "senales": { "plazos": [], "propiedad_vista": true } }, "error_key": "senales.plazos" },
+    { "name": "mas_12_meses_as_signal", "criterios": { "senales": { "plazos": ["mas_12_meses"], "propiedad_vista": true } }, "error_key": "senales.plazos" },
+    { "name": "two_signals_without_property", "criterios": { "subir_con_senales": 2, "senales": { "plazos": ["inmediato"], "propiedad_vista": false } }, "error_key": "subir_con_senales" },
+    { "name": "umbral_off_step", "criterios": { "umbral_reorientar": 72 }, "error_key": "umbral_reorientar" },
+    { "name": "umbral_out_of_range", "criterios": { "umbral_reorientar": 90 }, "error_key": "umbral_reorientar" },
+    { "name": "six_priority_projects", "criterios": { "proyectos_prioritarios": ["p1", "p2", "p3", "p4", "p5", "p6"] }, "error_key": "proyectos_prioritarios" },
+    { "name": "unknown_key", "criterios": { "peso_ingreso": 0.4 }, "error_key": "peso_ingreso" }
+  ]
+}

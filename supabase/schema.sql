@@ -1086,6 +1086,25 @@ create index if not exists market_snapshots_resolution_idx
 alter table public.market_snapshots enable row level security;
 revoke all on table public.market_snapshots from anon, authenticated;
 
+-- HU21: insert-only commercial criteria versions per inmobiliaria (ALG-19), backend-only.
+create table if not exists public.configuracion_comercial (
+  id uuid primary key default gen_random_uuid(),
+  inmobiliaria_id uuid not null references public.inmobiliarias(id),
+  version int not null check (version >= 1),
+  criterios jsonb not null check (jsonb_typeof(criterios) = 'object'),
+  alg_version text not null,
+  created_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now(),
+  constraint configuracion_comercial_version_unique unique (inmobiliaria_id, version)
+);
+
+create index if not exists configuracion_comercial_latest_idx
+  on public.configuracion_comercial (inmobiliaria_id, version desc);
+
+alter table public.configuracion_comercial enable row level security;
+revoke all on table public.configuracion_comercial from public, anon, authenticated, service_role;
+grant select, insert on table public.configuracion_comercial to service_role;
+
 -- HU17: backend-only reviewed benefits and immutable scenarios owned by the lead.
 create table if not exists public.housing_benefit_catalog_versions (
   id uuid primary key default gen_random_uuid(), version text not null unique,

@@ -37,8 +37,8 @@ class TrackingRepository:
         if not self.url or not self.key:
             raise TrackingError("persistence_unavailable")
 
-    def request(self, method, path, *, token=None, payload=None):
-        headers = {"apikey": self.key}
+    def request(self, method, path, *, token=None, payload=None, conflict_error=None, headers_extra=None):
+        headers = {"apikey": self.key, **(headers_extra or {})}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         elif not self.key.startswith("sb_secret_"):
@@ -52,9 +52,13 @@ class TrackingRepository:
             if path == "/auth/v1/user":
                 raise TrackingError("unauthenticated")
             try:
-                message = response.json().get("message", "")
+                body = response.json()
+                message = body.get("message", "")
             except ValueError:
-                message = ""
+                body, message = {}, ""
+            # 23505 = unique_violation; only callers that expect a race opt into mapping it.
+            if conflict_error and body.get("code") == "23505":
+                raise TrackingError(conflict_error)
             allowed = {"idempotency_conflict", "lineage_conflict", "owner_mismatch", "not_found", "verifiable_data_contradiction"}
             raise TrackingError(message if message in allowed else "persistence_unavailable")
         return response.json()
@@ -147,6 +151,53 @@ class TrackingRepository:
             row["id"]: {"full_name": row.get("full_name"), "phone": row.get("phone")}
             for row in rows if row.get("id")
         }
+
+    def lead_reliability_statuses(self, lead_ids):
+        ids = sorted({str(lead_id) for lead_id in lead_ids if lead_id})
+        if not ids:
+            return {}
+        query = urlencode({"select": "id,reliability_status", "id": f"in.({','.join(ids)})"})
+        rows = self.request("GET", f"/rest/v1/profiles?{query}")
+        return {row["id"]: row.get("reliability_status") for row in rows if row.get("id")}
+
+    def latest_commercial_config(self, inmobiliaria_id):
+        query = urlencode({
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            "select": "id,version,criterios,alg_version,created_by,created_at",
+            "order": "version.desc",
+            "limit": 1,
+        })
+        rows = self.request("GET", f"/rest/v1/configuracion_comercial?{query}")
+        return rows[0] if isinstance(rows, list) and rows else None
+
+    def commercial_config_history(self, inmobiliaria_id):
+        query = urlencode({
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            "select": "id,version,criterios,alg_version,created_by,created_at",
+            "order": "version.desc",
+        })
+        return self.request("GET", f"/rest/v1/configuracion_comercial?{query}")
+
+    def insert_commercial_config(self, row):
+        rows = self.request(
+            "POST", "/rest/v1/configuracion_comercial", payload=row,
+            conflict_error="config_version_conflict",
+            headers_extra={"Prefer": "return=representation"},
+        )
+        return rows[0] if isinstance(rows, list) and rows else row
+
+    def tenant_project_states(self, inmobiliaria_id, project_ids):
+        """{id: estado} of the given ids that belong to the inmobiliaria."""
+        ids = sorted({str(project_id) for project_id in project_ids if project_id})
+        if not ids:
+            return {}
+        query = urlencode({
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            "id": f"in.({','.join(ids)})",
+            "select": "id,estado",
+        })
+        rows = self.request("GET", f"/rest/v1/proyectos?{query}")
+        return {row["id"]: row.get("estado") for row in rows if row.get("id")}
 
     def staff_lead_evaluations(self, lead_id):
         query = urlencode({"user_id": f"eq.{lead_id}", "select": "financial_data,created_at"})

@@ -1,5 +1,7 @@
 # Propuesta — El complemento de renta en la vista del ejecutivo
 
+> **✅ Entró al backlog** como [[HU30-codeudor-capacidad-bipersonal|HU 30]]. Se conserva como antecedente del análisis.
+
 > **Propuesta sin numerar.** En el dashboard del ejecutivo, el complemento de renta existe como una etiqueta y nada más. El ejecutivo no puede saber si un lead viene con co-deudor, quién es, ni si su renta se computó.
 
 ---

@@ -110,6 +110,7 @@ con `inmobiliaria_id` en `NULL` es **admin global** y ve todos los tenants.
 | `inmobiliarias` | — | la suya | la suya, o todas si es global |
 | `proyectos` | catálogo publicado | **sólo donde está asignado** | los de su inmobiliaria |
 | `proyecto_ejecutivos` | — | **sólo sus asignaciones, dentro de su tenant** | las de su inmobiliaria |
+| `configuracion_comercial` | — | — | — (sólo el backend, `service_role`) |
 
 ⚠️ **`evaluations` no está acotada por tenant.** La tabla no tiene `inmobiliaria_id` y cualquier
 `ejecutivo`/`admin` lee todas las evaluaciones. Es un hueco conocido contra la salvaguarda **S6**,
@@ -173,6 +174,22 @@ Apply `20260918000000_market_snapshots.sql` to the hosted project before
 enabling `/score`, then run the backend refresh command once to seed a valid
 bundle. The matching rollback drops only this cache table; exported cache rows
 and evaluation-embedded snapshots must be retained before using it.
+
+---
+
+## Configuración comercial (HU 21)
+
+`public.configuracion_comercial` guarda las versiones de los criterios comerciales de cada
+inmobiliaria (`ALG-19`). Es **insert-only**: cada cambio es una fila nueva con `version` correlativa
+por inmobiliaria (`unique (inmobiliaria_id, version)`), y el historial es la tabla misma. RLS
+habilitada **sin ninguna policy** para `anon`/`authenticated` (deny-all): toda lectura y escritura
+pasa por el backend con `service_role`, que solo tiene `select` e `insert` — nadie actualiza ni
+borra. El tenant y `created_by` salen siempre del perfil del actor, nunca del request (S6).
+
+Tabla vacía = valores por defecto, que reproducen la prioridad del motor; por eso
+`20261029120000_hu21_configuracion_comercial.sql` puede aplicarse antes o después del código.
+Se aplica como archivo único (`supabase db query --linked -f <archivo>` y luego
+`supabase migration repair --status applied 20261029120000`), **nunca con `supabase db push`**.
 
 ---
 

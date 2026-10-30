@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from .commercial_config import CommercialConfigService, InvalidCriteria
 from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, TrackingError
 from .repository import TrackingRepository
 from .service import TrackingService, client_tracking_view
@@ -25,12 +26,15 @@ def repository(credentials: Annotated[HTTPAuthorizationCredentials | None, Depen
 def checked(call):
     try:
         return call()
+    except InvalidCriteria as error:
+        raise HTTPException(status_code=422, detail={"code": error.code, "errors": error.errors}) from None
     except TrackingError as error:
         status = {
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
             "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
             "co_debtor_consent_revoked": 409, "co_debtor_confirmation_already_applied": 409,
+            "config_version_conflict": 409,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 
@@ -97,6 +101,39 @@ def projection(ctx=Depends(context), as_of: AwareDatetime | None = None):
 def staff_evaluations(ctx=Depends(staff_context)):
     token, service = ctx
     return checked(lambda: service.evaluations(token))
+
+
+def commercial_config_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                              repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, CommercialConfigService(repo)
+
+
+class CommercialConfigCommand(BaseModel):
+    """criterios is validated by ALG-19 R0 in the service, with per-key errors."""
+
+    model_config = ConfigDict(extra="forbid")
+    base_version: int | None = Field(default=None, ge=1)
+    criterios: dict
+
+
+@router.get("/staff/commercial-config")
+def staff_commercial_config(ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.config(token))
+
+
+@router.post("/staff/commercial-config/preview")
+def staff_commercial_config_preview(command: CommercialConfigCommand, ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.preview_config(token, command.model_dump()))
+
+
+@router.post("/staff/commercial-config")
+def staff_commercial_config_save(command: CommercialConfigCommand, ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.save_config(token, command.model_dump()))
 
 
 @router.get("/staff/leads/{lead_id}")

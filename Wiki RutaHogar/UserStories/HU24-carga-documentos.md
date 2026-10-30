@@ -1,6 +1,8 @@
-# HU 24 - Carga de documentos respaldatorios
+# ~~HU 24~~ (retirada) - Carga de documentos respaldatorios
 
-> **🗓 Planificada - Sprint 3.** Permite a los leads precalificados subir comprobantes financieros para que el ejecutivo pueda validar la información declarada.
+> **⛔ Reemplazada.** Esta historia ya no está en el backlog: el tablero del Sprint 3 (octubre 2026) renumeró el sprint y su alcance pasó a [[HU23-documentos-validacion-asistida|HU 23]]. Se conserva como antecedente; el número que tenía ahora pertenece a otra historia.
+
+> **Descripción original.** Permite a los leads precalificados subir comprobantes financieros para que el ejecutivo pueda validar la información declarada.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Ejecutivo comercial |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

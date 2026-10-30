@@ -10,6 +10,7 @@ import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
 import CommercialMetrics from "./components/CommercialMetrics";
 import DashboardLeads from "./components/DashboardLeads";
+import AdminCommercialPriority from "./components/AdminCommercialPriority";
 import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
@@ -777,6 +778,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin-profile") return "/admin/perfil";
   if (page === "metricas") return "/metricas";
   if (page === "admin-reports") return "/admin/reportes";
+  if (page === "admin-priorizacion") return "/admin/priorizacion";
   return "/inicio";
 };
 
@@ -817,6 +819,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin/perfil",
     "/metricas",
     "/admin/reportes",
+    "/admin/priorizacion",
     "/definir-password",
     "/proyectos",
   ].includes(path);
@@ -832,7 +835,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     }
     // El portal es la puerta de entrada pública: un lead busca antes de tener cuenta.
     if (path === "/portal") return { page: "anon-portal" };
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/admin/priorizacion", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -1331,7 +1334,7 @@ export default function App() {
 
   // HU 15: las métricas son por inmobiliaria; el admin global no tiene una y vuelve a su inicio.
   useEffect(() => {
-    if (page === "metricas" && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
+    if ((page === "metricas" || page === "admin-priorizacion") && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
       navigateToPage("admin", { replace: true });
     }
   }, [page, tenantResolved, inmobiliariaId, profile?.role]);
@@ -2597,6 +2600,10 @@ export default function App() {
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
+      ) : page === "admin-priorizacion" && canViewStaffPage(page, profile.role, inmobiliariaId) ? (
+        <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} />
+      ) : page === "admin-priorizacion" && isAdminRole(profile.role) && !tenantResolved ? (
+        <section className="section-block"><p>Cargando configuración comercial…</p></section>
       ) : (
         <section className="section-block">
           <div className="section-heading">

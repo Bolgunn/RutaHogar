@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { rankLeadsForProject } from "../leadRanking";
+import rankingCases from "../../../../../docs/algorithms/ALG-19-ranking-cases.json";
+import { compareCommercialPriority, rankLeadsForProject } from "../leadRanking";
 
 const supuestos = {
   tasa_anual_uf: 0.04,
@@ -52,16 +53,73 @@ const proyecto = {
 };
 
 describe("panel del ejecutivo — sin proyecto seleccionado", () => {
-  // HU 2 no puede regresar en silencio: sin proyecto, el panel devuelve las
-  // mismas filas en el mismo orden y sin evidencia.
-  it("devuelve los leads tal cual, sin evidencia ni grupos", () => {
-    const leads = [lead("c", 3000), lead("a", 1000), lead("b", null)];
+  // HU 21 / ALG-19 R9 reemplaza el pin de HU 2 ("mismas filas, mismo orden"): sin proyecto la
+  // bandeja también se ordena por acción comercial. Las filas siguen sin evidencia ni grupos.
+  it("devuelve las mismas filas, sin evidencia ni grupos, ordenadas por R9", () => {
+    const detalle = (action) => ({ commercial_priority_detail: { action } });
+    const leads = [
+      { ...lead("c", 3000), result: { ...lead("c", 3000).result, ...detalle("Nutrir con plan de mejora") } },
+      { ...lead("a", 1000), result: { ...lead("a", 1000).result, ...detalle("Contactar ahora") } },
+      lead("b", null),
+    ];
     const { ranked, descartados, requiereAntecedentes } = rankLeadsForProject(leads, null);
 
-    expect(ranked.map((f) => f.lead)).toEqual(leads);
+    expect(ranked.map((f) => f.lead.id)).toEqual(["a", "c", "b"]);
     expect(ranked.every((f) => f.match === null)).toBe(true);
     expect(descartados).toEqual([]);
     expect(requiereAntecedentes).toEqual([]);
+  });
+
+  it("prefiere la prioridad configurada del tenant sobre la guardada por el motor", () => {
+    const leads = [
+      { ...lead("motor"), result: { ...lead("motor").result, commercial_priority_detail: { action: "Contactar ahora" } } },
+      {
+        ...lead("tenant"),
+        result: { ...lead("tenant").result, commercial_priority_detail: { action: "Nutrir con plan de mejora" } },
+        commercial_priority_configured: { action_key: "contact_now", action: "Contactar ahora" },
+        created_at: "2026-08-21T10:00:00.000Z",
+      },
+    ];
+    expect(rankLeadsForProject(leads, null).ranked.map((f) => f.lead.id)).toEqual(["tenant", "motor"]);
+  });
+
+  it("sube dentro de su nivel al lead compatible con un proyecto prioritario", () => {
+    // "holgado" tiene mejor afinidad (con Macul) pero con el proyecto premium solo es Cercano;
+    // "premium" es Compatible con él. Marcarlo prioritario invierte el orden dentro del nivel (A7).
+    const premium = { ...proyecto, id: "p-premium", nombre: "Premium", precio_min_uf: 3600, precio_max_uf: 4400 };
+    const leads = [lead("holgado", 3840), lead("premium", 4600)];
+    const opciones = (prioritarios) => ({ proyectos: [proyecto, premium], commercialConfig: { proyectos_prioritarios: prioritarios } });
+
+    const sinPrioritarios = rankLeadsForProject(leads, null, "afinidad", opciones([])).ranked;
+    expect(sinPrioritarios.map((f) => f.lead.id)).toEqual(["holgado", "premium"]);
+
+    const conPremium = rankLeadsForProject(leads, null, "afinidad", opciones(["p-premium"])).ranked;
+    expect(conPremium.map((f) => [f.lead.id, f.prioridad.prioritario_compatible])).toEqual([["premium", true], ["holgado", false]]);
+  });
+
+  it("ignora proyectos prioritarios agotados o que ya no existen", () => {
+    const agotado = { ...proyecto, id: "p-agotado", estado: "agotado" };
+    const { ranked } = rankLeadsForProject([lead("a", 3000)], null, "afinidad", {
+      proyectos: [agotado], commercialConfig: { proyectos_prioritarios: ["p-agotado", "p-borrado"] },
+    });
+    expect(ranked[0].prioridad).toMatchObject({ prioritario_compatible: false, afinidad: null });
+  });
+});
+
+describe("ALG-19 R9 — casos de ALG-19-ranking-cases.json", () => {
+  it.each(rankingCases.cases.map((caso) => [caso.name, caso]))("%s", (_name, caso) => {
+    const ordered = [...caso.rows].sort(compareCommercialPriority(caso.sortBy));
+    expect(ordered.map((row) => row.id)).toEqual(caso.expect_order);
+  });
+
+  it("es un orden total: ninguna fila distinta compara igual (invariante 6)", () => {
+    const rows = rankingCases.cases.flatMap((caso) => caso.rows.map((row) => ({ ...row, id: `${caso.name}-${row.id}` })));
+    const compare = compareCommercialPriority("afinidad");
+    for (const a of rows) {
+      for (const b of rows) {
+        if (a.id !== b.id) expect(compare(a, b)).not.toBe(0);
+      }
+    }
   });
 });
 

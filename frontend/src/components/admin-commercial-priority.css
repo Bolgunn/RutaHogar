@@ -1,0 +1,143 @@
+/* HU 21 — página de priorización comercial. Acotada a .commercial-priority-page. */
+.commercial-priority-page .commercial-priority-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.commercial-priority-page .commercial-priority-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rh-border);
+  border-radius: var(--rh-radius-sm);
+  background: var(--rh-blue-light);
+  min-width: 0;
+}
+
+.commercial-priority-page .commercial-priority-field--wide {
+  grid-column: 1 / -1;
+}
+
+.commercial-priority-page .commercial-priority-field legend,
+.commercial-priority-page .commercial-priority-field > span {
+  padding: 0;
+  float: left;
+  width: 100%;
+  margin-bottom: 4px;
+  color: var(--rh-navy);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.commercial-priority-page .commercial-priority-field small {
+  color: var(--rh-text-secondary);
+}
+
+.commercial-priority-page .inline-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--rh-text);
+}
+
+.commercial-priority-page .inline-choice input[type="radio"],
+.commercial-priority-page .inline-choice input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--rh-blue);
+}
+
+.commercial-priority-page .inline-choice input:disabled + span {
+  color: var(--rh-text-muted);
+}
+
+.commercial-priority-page .commercial-priority-field select {
+  width: 100%;
+  font-weight: 600;
+}
+
+.commercial-priority-page .commercial-priority-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.commercial-priority-page .commercial-priority-locked li,
+.commercial-priority-page .commercial-priority-history > li {
+  margin-bottom: 6px;
+}
+
+.commercial-priority-page .commercial-priority-table {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.commercial-priority-page .commercial-priority-table td:not(:first-child),
+.commercial-priority-page .commercial-priority-table th:not(:first-child) {
+  text-align: right;
+}
+
+/* En pantallas angostas cada acción se vuelve una tarjeta con sus valores rotulados. */
+@media (max-width: 640px) {
+  .commercial-priority-page .commercial-priority-table,
+  .commercial-priority-page .commercial-priority-table tbody,
+  .commercial-priority-page .commercial-priority-table tr,
+  .commercial-priority-page .commercial-priority-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .commercial-priority-page .commercial-priority-table thead {
+    display: none;
+  }
+
+  .commercial-priority-page .commercial-priority-table tr {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--rh-border);
+    border-radius: var(--rh-radius-sm);
+    background: var(--rh-blue-light);
+  }
+
+  .commercial-priority-page .commercial-priority-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .commercial-priority-page .commercial-priority-table td::before {
+    content: attr(data-label);
+    color: var(--rh-text-secondary);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .commercial-priority-page .commercial-priority-table td:first-child {
+    font-weight: 700;
+    color: var(--rh-navy);
+  }
+
+  .commercial-priority-page .commercial-priority-table td:first-child::before {
+    content: none;
+  }
+}
+
+.commercial-priority-page .commercial-priority-delta--up { color: var(--rh-success, #1f7a4d); font-weight: 700; }
+.commercial-priority-page .commercial-priority-delta--down { color: var(--rh-danger, #b42318); font-weight: 700; }
+.commercial-priority-page .commercial-priority-delta--same { color: var(--rh-text-muted); }
