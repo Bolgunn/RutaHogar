@@ -18,6 +18,30 @@ export const CRITERIA_LABELS = {
   orden_desempate: "Desempate de la bandeja",
 };
 
+// Qué hace cada criterio, en los términos de ALG-19. Para los botones de ayuda (?).
+export const CRITERIA_HELP = {
+  "contactar_ahora.clasificaciones":
+    "Clasificación financiera que un lead debe tener para llegar a «Contactar ahora». Además debe cumplir la compatibilidad de esa acción.",
+  "contactar_ahora.compatibilidades":
+    "Compatibilidad con el objetivo que un lead debe tener para «Contactar ahora». Además debe cumplir la clasificación de esa acción.",
+  "contactar_con_revision.clasificaciones":
+    "Clasificación financiera que lleva un lead a «Contactar con revisión» cuando no califica para «Contactar ahora». Además debe cumplir la compatibilidad de esa acción.",
+  "contactar_con_revision.compatibilidades":
+    "Compatibilidad con el objetivo que lleva un lead a «Contactar con revisión». Además debe cumplir la clasificación de esa acción.",
+  "senales.plazos":
+    "Plazos de compra declarados que cuentan como señal de intención de compra.",
+  "senales.propiedad_vista":
+    "Si haber visto una propiedad o proyecto cuenta como señal de intención de compra.",
+  subir_con_senales:
+    "Cuántas señales de intención suben un lead de «Contactar con revisión» a «Contactar ahora». Con «Desactivado» no sube de nivel.",
+  umbral_reorientar:
+    "Score mínimo para sugerir «Reorientar a otro proyecto» cuando el objetivo declarado quedó fuera de alcance.",
+  proyectos_prioritarios:
+    "Dentro de una misma acción, los leads Compatibles con estos proyectos se muestran primero en la bandeja.",
+  orden_desempate:
+    "Cómo se ordenan los leads con la misma acción: por mejor afinidad con tus proyectos o por mayor capacidad de compra.",
+};
+
 const PLAZO_LABELS = {
   inmediato: "Inmediato",
   "3_a_6_meses": "3 a 6 meses",

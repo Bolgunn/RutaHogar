@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./admin-management.css";
 import "./admin-commercial-priority.css";
+import FieldTooltip from "./FieldTooltip";
 import { getAvailableProjects } from "../services/projectService";
 import {
   getCommercialConfig,
@@ -8,6 +9,7 @@ import {
   saveCommercialConfig,
 } from "../services/commercialConfigService";
 import {
+  CRITERIA_HELP,
   CRITERIA_LABELS,
   countDeltas,
   deltaText,
@@ -204,7 +206,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
         <div className="commercial-priority-grid">
           {SET_CHOICE_KEYS.map((key) => (
             <fieldset key={key} className="commercial-priority-field">
-              <legend>{CRITERIA_LABELS[key]}</legend>
+              <legend>{CRITERIA_LABELS[key]}<FieldTooltip text={CRITERIA_HELP[key]} /></legend>
               {(opciones[key] || []).map((option) => (
                 <label key={option.join("+")} className="inline-choice">
                   <input type="radio" name={key} checked={sameSet(getCriterion(draft, key), option)} onChange={() => update(key, option)} />
@@ -216,7 +218,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           ))}
 
           <fieldset className="commercial-priority-field">
-            <legend>{CRITERIA_LABELS["senales.plazos"]}</legend>
+            <legend>{CRITERIA_LABELS["senales.plazos"]}<FieldTooltip text={CRITERIA_HELP["senales.plazos"]} /></legend>
             {(opciones["senales.plazos"] || []).map((plazo) => {
               const selected = draft.senales.plazos.includes(plazo);
               return (
@@ -231,13 +233,14 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
             <label className="inline-choice">
               <input type="checkbox" checked={draft.senales.propiedad_vista} onChange={(event) => update("senales.propiedad_vista", event.target.checked)} />
               <span>{CRITERIA_LABELS["senales.propiedad_vista"]}</span>
+              <FieldTooltip text={CRITERIA_HELP["senales.propiedad_vista"]} />
             </label>
             {fieldError("senales.propiedad_vista")}
           </fieldset>
 
           {SELECT_KEYS.map((key) => (
             <label key={key} className="commercial-priority-field">
-              <span>{CRITERIA_LABELS[key]}</span>
+              <span>{CRITERIA_LABELS[key]}<FieldTooltip text={CRITERIA_HELP[key]} /></span>
               <select value={String(getCriterion(draft, key))} onChange={(event) => {
                 const option = (opciones[key] || []).find((item) => String(item) === event.target.value);
                 update(key, option);
@@ -251,8 +254,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           ))}
 
           <fieldset className="commercial-priority-field commercial-priority-field--wide">
-            <legend>{CRITERIA_LABELS.proyectos_prioritarios} (máximo {maxProjects})</legend>
-            <small>Dentro de una misma acción, los leads Compatibles con estos proyectos se muestran primero.</small>
+            <legend>{CRITERIA_LABELS.proyectos_prioritarios} (máximo {maxProjects})<FieldTooltip text={CRITERIA_HELP.proyectos_prioritarios} /></legend>
             {projects.length === 0 && <p className="leads-hint">No hay proyectos disponibles en tu catálogo.</p>}
             {projects.map((project) => {
               const id = String(project.id);
