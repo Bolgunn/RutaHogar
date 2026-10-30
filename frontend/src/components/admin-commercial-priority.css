@@ -140,3 +140,4 @@
 
 .commercial-priority-page .commercial-priority-delta--up { color: var(--rh-success, #1f7a4d); font-weight: 700; }
 .commercial-priority-page .commercial-priority-delta--down { color: var(--rh-danger, #b42318); font-weight: 700; }
+.commercial-priority-page .commercial-priority-delta--same { color: var(--rh-text-muted); }

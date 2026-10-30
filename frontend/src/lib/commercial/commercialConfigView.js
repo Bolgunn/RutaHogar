@@ -69,6 +69,13 @@ export function countDeltas(conteos) {
   });
 }
 
+// "Δ" no lo entiende todo administrador: el cambio se dice con palabras.
+export function deltaText(delta, key) {
+  const leads = (n) => `${n} lead${n === 1 ? "" : "s"}`;
+  const text = delta > 0 ? `${leads(delta)} más` : delta < 0 ? `${leads(-delta)} menos` : "Sin cambios";
+  return key === "do_not_route" && delta === 0 ? `${text} · regla fija` : text;
+}
+
 // Afinidad es un algoritmo del frontend (ALG-10), así que este efecto se calcula aquí y no en el preview.
 export function priorityProjectsImpact(leads, projects, draftIds) {
   const byId = new Map((projects || []).filter((p) => p.estado !== "agotado").map((p) => [String(p.id), p]));

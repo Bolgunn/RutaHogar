@@ -10,6 +10,7 @@ import {
 import {
   CRITERIA_LABELS,
   countDeltas,
+  deltaText,
   formatCambios,
   formatCriterionValue,
   getCriterion,
@@ -39,10 +40,6 @@ const sameSet = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringi
 function formatDateTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL");
-}
-
-function signed(value) {
-  return value > 0 ? `+${value}` : String(value);
 }
 
 export default function AdminCommercialPriority({ evaluations, inmobiliariaId }) {
@@ -298,14 +295,18 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
             </ul>
           ) : <p>Sin cambios respecto de la configuración vigente.</p>}
           <table className="admin-table commercial-priority-table">
-            <thead><tr><th>Acción</th><th>Vigente</th><th>Con estos criterios</th><th>Δ</th></tr></thead>
+            <thead><tr><th>Acción</th><th>Hoy</th><th>Con estos criterios</th><th>Qué cambia</th></tr></thead>
             <tbody>
               {countDeltas(preview.conteos).map((row) => (
                 <tr key={row.key}>
-                  <td data-label="Acción">{row.key === "do_not_route" ? "🔒 " : ""}{row.label}</td>
-                  <td data-label="Vigente">{row.vigente}</td>
+                  <td data-label="Acción">{row.label}</td>
+                  <td data-label="Hoy">{row.vigente}</td>
                   <td data-label="Con estos criterios">{row.borrador}</td>
-                  <td data-label="Δ" className={row.delta > 0 ? "commercial-priority-delta--up" : row.delta < 0 ? "commercial-priority-delta--down" : ""}>{signed(row.delta)}</td>
+                  <td data-label="Qué cambia" className={row.delta > 0 ? "commercial-priority-delta--up" : row.delta < 0 ? "commercial-priority-delta--down" : "commercial-priority-delta--same"}>
+                    <span>
+                      {row.delta !== 0 && <i className={`ti ${row.delta > 0 ? "ti-arrow-up" : "ti-arrow-down"}`} aria-hidden="true" />} {deltaText(row.delta, row.key)}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   countDeltas,
+  deltaText,
   formatCambios,
   getCriterion,
   priorityProjectsImpact,
@@ -68,5 +69,12 @@ describe("commercialConfigView", () => {
     expect(impact).toEqual([
       { proyecto_id: "p-macul", compatibles: 2, texto: "2 leads compatibles con Altos de Macul subirán dentro de su nivel" },
     ]);
+  });
+
+  it("describe el cambio con palabras en vez de un delta", () => {
+    expect(deltaText(30, "contact_now")).toBe("30 leads más");
+    expect(deltaText(-1, "contact_with_review")).toBe("1 lead menos");
+    expect(deltaText(0, "nurture")).toBe("Sin cambios");
+    expect(deltaText(0, "do_not_route")).toBe("Sin cambios · regla fija");
   });
 });
