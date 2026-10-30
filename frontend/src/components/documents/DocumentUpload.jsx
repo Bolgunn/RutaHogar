@@ -1,0 +1,154 @@
+import React, { useEffect, useRef, useState } from 'react';
+import DocumentReview from './DocumentReview';
+import { IDENTITY_INCONSISTENT_MESSAGE, processDocument } from '../../services/documentReview';
+import { cancelDocumentSession, getDocumentConfiguration, getDocumentSession, uploadDocument } from '../../services/documentUpload';
+
+const labels = { validating: 'Revisando archivo…', authorizing: 'Autorizando carga privada…',
+  uploading: 'Subiendo a almacenamiento privado…', verifying: 'Verificando admisión…', ready: 'Archivo cargado correctamente.' };
+const types = { liquidacion_sueldo: 'Liquidación de sueldo', certificado_ahorro: 'Certificado o cartola de ahorro', documento_laboral: 'Contrato o certificado laboral' };
+
+const pendingKey = 'rutahogar.hu23.pending-document';
+function readPending() {
+  try { return JSON.parse(window.sessionStorage.getItem(pendingKey) || 'null'); } catch { return null; }
+}
+function savePending(value) {
+  try {
+    if (value) window.sessionStorage.setItem(pendingKey, JSON.stringify(value));
+    else window.sessionStorage.removeItem(pendingKey);
+  } catch { /* The owner can continue in the current tab without storage. */ }
+}
+
+// Minimal T2–T5 owner flow; final presentation remains outside this component.
+export default function DocumentUpload({ onReady = () => {}, onConfirmed = () => {} }) {
+  const [consent, setConsent] = useState(false);
+  const [config, setConfig] = useState(null);
+  const [type, setType] = useState('liquidacion_sueldo');
+  const [file, setFile] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [retryUpload, setRetryUpload] = useState(false);
+  const [fileNonce, setFileNonce] = useState(0);
+  const [phase, setPhase] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [session, setSession] = useState(null);
+  const sessionRef = useRef(null);
+  const controller = useRef(null);
+  const processingRef = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    let alive = true;
+    const saved = readPending();
+    getDocumentConfiguration().then(async (value) => {
+      if (!alive || !mounted.current) return;
+      setConfig(value);
+      if (!saved?.id) return;
+      try {
+        const restored = await getDocumentSession(saved.id);
+        if (!alive || !mounted.current) return;
+        remember(restored);
+        if (saved.tracking && ['ready', 'processing', 'ocr_ready'].includes(restored.state)) {
+          setConsent(true);
+          await follow(restored, value.ocr_provider || 'azure', false);
+        } else if (['processing', 'ocr_ready'].includes(restored.state)) {
+          setConsent(true);
+          await follow(restored, value.ocr_provider || 'azure', false);
+        }
+      } catch {
+        if (alive && mounted.current) setError('No pudimos consultar el intento anterior. Vuelve a abrir esta sección.');
+      }
+    }).catch(() => { if (alive && mounted.current) setError('No pudimos cargar las restricciones. Vuelve a abrir esta sección.'); });
+    return () => { alive = false; mounted.current = false; controller.current?.abort(); processingRef.current = false; };
+  }, []);
+  const remember = (value) => {
+    sessionRef.current = value;
+    if (value && ['ready', 'processing', 'ocr_ready', 'awaiting_review'].includes(value.state)) {
+      const saved = readPending();
+      savePending({ id: value.id, tracking: saved?.id === value.id && saved.tracking === true });
+    } else if (!value || ['confirmed', 'cancelled', 'expired', 'processing_failed'].includes(value.state)) savePending(null);
+    if (mounted.current) setSession(value);
+  };
+  async function follow(value, provider, startIfReady) {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    const active = new AbortController(); controller.current = active;
+    setBusy(true); setError(''); setPhase('processing');
+    try {
+      await processDocument(value, { provider, consent: true, signal: active.signal, startIfReady,
+        onSlow: () => { if (mounted.current && !active.signal.aborted) setPhase('slow'); },
+        onSession: (next) => { if (mounted.current && !active.signal.aborted) remember(next); } });
+      if (mounted.current && !active.signal.aborted) setPhase('review');
+    } catch (cause) { if (mounted.current && !active.signal.aborted) {
+      setError(cause.message); setPhase(sessionRef.current?.state === 'ready' ? 'ready' : 'failed');
+    } }
+    finally { if (controller.current === active) { processingRef.current = false; if (mounted.current) setBusy(false); } }
+  }
+  const send = async (event) => {
+    event.preventDefault();
+    if (busy || !file || !config || (sessionRef.current && !retryUpload)) return;
+    setBusy(true); setError(''); setRetryUpload(false);
+    const active = new AbortController(); controller.current = active;
+    try {
+      const ready = await uploadDocument(file, type, { restrictions: config.restrictions, session: sessionRef.current,
+        signal: active.signal, onSession: remember, onState: (value) => { if (mounted.current && !active.signal.aborted) setPhase(value); } });
+      if (mounted.current && !active.signal.aborted) {
+        setFileName(file.name); setFile(null); setFileNonce((value) => value + 1); onReady(ready);
+      }
+    } catch (cause) { if (mounted.current && !active.signal.aborted) {
+      setError(cause.message); setPhase('failed'); setRetryUpload(cause.recoverable === true);
+    } }
+    finally { if (mounted.current && controller.current === active) setBusy(false); }
+  };
+  const process = async () => {
+    if (busy || !consent || !['ready', 'processing', 'ocr_ready'].includes(sessionRef.current?.state)) return;
+    const current = sessionRef.current;
+    savePending({ id: current.id, tracking: true });
+    await follow(current, config?.ocr_provider || 'azure', true);
+  };
+  const cancel = async () => {
+    controller.current?.abort(); controller.current = null; processingRef.current = false;
+    setBusy(true); setError('');
+    try {
+      const value = sessionRef.current && await getDocumentSession(sessionRef.current.id);
+      if (value && !['confirmed', 'cancelled', 'processing_failed', 'expired'].includes(value.state)) await cancelDocumentSession(value);
+      remember(null); setConsent(false); setFile(null); setFileName(''); setRetryUpload(false);
+      setFileNonce((value) => value + 1); setPhase('');
+    } catch { setError('No pudimos cerrar el intento. Reintenta la cancelación.'); }
+    finally { if (mounted.current) setBusy(false); }
+  };
+  if (error === 'Datos inconsistentes' || error === IDENTITY_INCONSISTENT_MESSAGE || session?.failure_code === 'identity_inconsistent') {
+    return <p role="alert">{IDENTITY_INCONSISTENT_MESSAGE}</p>;
+  }
+  const accept = config && Object.values(config.restrictions.files).flat().map((ext) => `.${ext}`).join(',');
+  const admitted = session && ['ready', 'processing', 'ocr_ready', 'awaiting_review', 'confirmed'].includes(session.state);
+  return <section className="document-upload" aria-label="Carga privada de documentos">
+    <h2>Respaldar mis datos</h2>
+    <p>El archivo es temporal y privado. Los ejecutivos no pueden verlo. Esta carga no cambia tus antecedentes ni tu score.</p>
+    <form onSubmit={send}>
+      <label>Tipo de documento<select value={type} disabled={busy || Boolean(session)} onChange={(event) => setType(event.target.value)}>
+        {(config?.document_types || []).map((key) => <option key={key} value={key}>{types[key]}</option>)}
+      </select></label>
+      {!session && <label>Archivo<input key={fileNonce} type="file" accept={accept} disabled={!config || busy}
+        onChange={(event) => { const selected = event.target.files?.[0] || null;
+          setFile(selected); setFileName(selected?.name || ''); setError(''); setRetryUpload(false); }} /></label>}
+      {fileName && <p className="document-file-name">{session ? 'Archivo asociado a este intento' : 'Archivo seleccionado'}: <strong>{fileName}</strong></p>}
+      {admitted && <p role="status" className="document-upload-success">Archivo cargado correctamente.</p>}
+      {config && <p>Máximo {config.restrictions.max_bytes / 1_000_000} MB; PDF de hasta {config.restrictions.max_pdf_pages} páginas. Cada imagen cuenta como una página.</p>}
+      <div className="document-actions">
+        {!session && <button type="submit" disabled={!config || !file || busy}>Subir documento</button>}
+        {session && retryUpload && !admitted && <button type="submit" disabled={!config || !file || busy}>Reintentar carga</button>}
+        {session && session.state !== 'awaiting_review' && <button type="button" className="secondary-button" onClick={cancel}>Cerrar intento / nueva carga</button>}
+      </div>
+    </form>
+    {session && ['ready', 'processing', 'ocr_ready'].includes(session.state) && <div className="document-processing">
+      <label className="document-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={(event) => setConsent(event.target.checked)} />
+        <span>Autorizo procesar temporalmente este documento para extraer y revisar sus datos. RutaHogar sólo cambiará mis antecedentes si luego confirmo.</span>
+      </label>
+      <button type="button" onClick={process} disabled={busy || !consent || !admitted}>Procesar y revisar documento</button>
+    </div>}
+    {phase !== 'ready' && <p role="status">{phase === 'processing' ? 'Procesando documento. Puedes cancelar este intento.' : phase === 'slow' ? 'El procesamiento está tomando más de lo esperado. Seguiremos consultando el estado del documento.' : labels[phase] || ''}</p>}
+    {session && ['awaiting_review', 'confirmed', 'cancelled'].includes(session.state) &&
+      <DocumentReview key={session.id} session={session} onSession={remember} onConfirmed={onConfirmed} />}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}

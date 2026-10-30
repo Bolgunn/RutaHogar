@@ -1,2 +1,20 @@
+project_id = "RutaHogar-HU23"
+
+[api]
+port = 55321
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+port = 55323
+
+[inbucket]
+port = 55324
+
+[analytics]
+port = 55327
+
 [functions.co-debtor-consent]
 verify_jwt = false

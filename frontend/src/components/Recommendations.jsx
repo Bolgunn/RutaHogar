@@ -14,6 +14,7 @@ import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
 import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 import AiExplanationBlock from "./AiExplanationBlock";
 import CoDebtorSection from "./CoDebtorSection";
+import ScoreUpdateFeedback from "./ScoreUpdateFeedback";
 
 
 function PlanCarousel({ children }) {
@@ -95,12 +96,14 @@ export function scrollToScoreSummary(element) {
   element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
-export default function Recommendations({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated }) {
+export default function Recommendations({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated,
+  scoreUpdate }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
   const scoreSummaryRef = useRef(null);
   const [coDebtorSuccess, setCoDebtorSuccess] = useState(false);
+  const activeUpdate = scoreUpdate?.evaluationId === evaluation?.id ? scoreUpdate : null;
   const openInAcademy = () => onNavigate?.("academia");
   const handleCoDebtorScoreUpdated = async () => {
     await onCoDebtorScoreUpdated?.();
@@ -112,6 +115,16 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
       scrollToScore();
     }
   };
+  useEffect(() => {
+    if (!activeUpdate) return;
+    const scrollToScore = () => scrollToScoreSummary(scoreSummaryRef.current);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      const frame = window.requestAnimationFrame(scrollToScore);
+      return () => window.cancelAnimationFrame(frame);
+    } else {
+      scrollToScore();
+    }
+  }, [activeUpdate?.evaluationId]);
 
   if (!data) {
     return (
@@ -144,7 +157,8 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
       <div className="recommendation-hero-row" ref={scoreSummaryRef}>
         <section className="recommendation-score-ai-card">
           <header className="results-section-head"><div><span className="eyebrow">Tu punto de partida</span><h2>Tu resultado actual</h2></div><span className="results-reference-label">Orientativo</span></header>
-          <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
+          {activeUpdate && <ScoreUpdateFeedback previousScore={activeUpdate.previousScore} score={data.score} />}
+          <div key={activeUpdate?.evaluationId || 'current-score'} className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}${activeUpdate ? ' is-score-updated' : ''}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
             <span>Score orientativo</span>
             <strong>{formatScore(data.score, "Sin score")}</strong>
             <small>{data.classification || "Sin clasificación"}</small>

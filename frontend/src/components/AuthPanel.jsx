@@ -344,7 +344,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               Precalificación inmobiliaria
             </div>
             <h2>Descubre si estás listo para <span className="gold">comprar tu primera vivienda</span></h2>
-            <p>Conoce tu posición financiera antes de solicitar un crédito hipotecario. Sin documentos, sin claves bancarias.</p>
+            <p>Conoce tu posición financiera antes de solicitar un crédito hipotecario. Puedes precalificar sin documentos ni claves bancarias.</p>
             <div className="auth-left-divider" />
             <ul className="auth-left-features">
               <li className="auth-left-feature">

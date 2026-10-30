@@ -13,6 +13,8 @@ import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
 import LeadDetailModal from "./LeadDetailModal";
+import DocumentLeadBadges from "./documents/DocumentLeadBadges";
+import useStaffDocumentBackings from "../hooks/useStaffDocumentBackings";
 import { getCommercialRecords } from "../services/commercialStageService";
 import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
@@ -547,6 +549,11 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     () => rankLeadsForProject(filtered, selectedProject, sortBy),
     [filtered, selectedProject, sortBy],
   );
+  const documentScope = JSON.stringify([executiveId, executiveEmail, inmobiliariaId, role,
+    latestEvaluations.map(row => row.id).sort()]);
+  const documentLeadIds = [...ranked, ...(showRequiresDocuments ? requiereAntecedentes : []),
+    ...(showExcluded ? descartados : [])].map(({ lead }) => lead.user_id).filter(Boolean);
+  const documentBackings = useStaffDocumentBackings(documentLeadIds, documentScope);
   const contactOpportunities = useMemo(
     () => detectContactOpportunities(evaluations, projects),
     [evaluations, projects],
@@ -671,6 +678,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <div className="executive-lead-card__status">
             {getReliabilityBadgeCard(lead.reliability_status || "normal")}
             <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
+            <DocumentLeadBadges projection={documentBackings.projections[lead.user_id]} />
             <CommercialStageBadge records={commercialRecords[lead.user_id]} />
             <small>{formatDate(lead.created_at)}</small>
             {lead.email && crmLeads[lead.email] ? (
@@ -985,6 +993,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         selectedProject={selectedProject}
         role={role}
         executiveScope={executiveScope}
+        loadDocumentBacking={documentBackings.load}
         onLeadUpdated={(updatedLead) => {
           setLocalEvaluations((prev) =>
             prev.map((item) =>

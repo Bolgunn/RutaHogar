@@ -5,7 +5,7 @@ function resolveApiBase() {
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_BACKEND_URL ||
     import.meta.env.VITE_API_BASE_URL;
-  const fallbackUrl = import.meta.env.DEV ? "http://127.0.0.1:8000" : "http://localhost:8000";
+  const fallbackUrl = import.meta.env.DEV ? "http://127.0.0.1:8000" : "";
   return String(configuredUrl || fallbackUrl).replace(/\/$/, "");
 }
 

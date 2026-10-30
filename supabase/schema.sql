@@ -2581,7 +2581,7 @@ grant execute on function public.lead_changes_record_quick_update(jsonb) to auth
 -- HU19 — Portal Inmobiliario (RAG) sobre public.proyectos_rag
 -- =============================================================
 -- Espejo de migrations/20260920000000_hu19_proyectos_rag.sql con
--- migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql y
+-- migrations/20261005150001_hu19_proyectos_rag_lock_writes.sql y
 -- migrations/20261006090000_hu19_proyectos_rag_campos_catalogo.sql ya aplicadas.
 
 create extension if not exists vector;
@@ -2617,7 +2617,7 @@ create index if not exists proyectos_rag_comuna_idx
   on public.proyectos_rag (lower(comuna));
 
 -- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
--- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
+-- catálogo; ver 20261005150001_hu19_proyectos_rag_lock_writes.sql.
 alter table public.proyectos_rag enable row level security;
 
 drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;
@@ -3533,3 +3533,1311 @@ CREATE TRIGGER trg_check_ml_fraud_on_insert
 BEFORE INSERT ON public.evaluations
 FOR EACH ROW
 EXECUTE FUNCTION public.check_ml_fraud_on_insert();
+
+-- HU23 T1. No bucket, OCR, scheduler or historical evaluation changes.
+begin;
+
+create or replace function public.hu23_allowed_field(p_type text, p_field text)
+returns boolean language sql immutable set search_path = public as $$
+  select case p_type when 'liquidacion_sueldo' then p_field = 'ingreso_mensual'
+    when 'certificado_ahorro' then p_field = 'ahorro_disponible'
+    when 'documento_laboral' then p_field in ('tipo_contrato','continuidad_laboral') else false end;
+$$;
+create or replace function public.hu23_valid_value(p_field text, p_value jsonb)
+returns boolean language plpgsql immutable set search_path = public as $$
+begin
+  if p_field in ('ingreso_mensual','ahorro_disponible') then
+    return jsonb_typeof(p_value) = 'number' and (p_value::text)::numeric between 0 and 9007199254740991
+      and (p_field <> 'ingreso_mensual' or (p_value::text)::numeric > 0);
+  elsif p_field = 'tipo_contrato' then
+    return jsonb_typeof(p_value) = 'string' and p_value #>> '{}' in ('indefinido','plazo_fijo','independiente','honorarios_variable');
+  elsif p_field = 'continuidad_laboral' then
+    return jsonb_typeof(p_value) = 'string' and p_value #>> '{}' in ('menos_6_meses','entre_6_y_12_meses','entre_1_y_3_anios','mas_3_anios');
+  end if;
+  return false;
+exception when invalid_text_representation then return false;
+end;
+$$;
+
+create table public.document_processes (
+  id uuid primary key,
+  user_id uuid not null references public.profiles(id),
+  document_type text not null check(document_type in ('liquidacion_sueldo','certificado_ahorro','documento_laboral')),
+  state text not null default 'awaiting_upload' check(state in ('awaiting_upload','ready','processing','awaiting_review','confirmed','cancelled','processing_failed','expired')),
+  revision integer not null default 0 check(revision >= 0),
+  plan_id uuid not null,
+  base_evaluation_id uuid not null,
+  base_revision uuid not null,
+  storage_path text,
+  created_at timestamptz not null default clock_timestamp(),
+  expires_at timestamptz not null,
+  processing_at timestamptz,
+  review_at timestamptz,
+  closed_at timestamptz,
+  parser_version text check(parser_version ~ '^[A-Za-z0-9_.-]{1,64}$'),
+  normalizer_version text check(normalizer_version ~ '^[A-Za-z0-9_.-]{1,64}$'),
+  contract_version text not null default 'hu23-v1' check(contract_version = 'hu23-v1'),
+  failure_code text check(failure_code in ('unreadable_document','provider_unavailable','invalid_result')),
+  deletion_state text not null default 'not_requested' check(deletion_state in ('not_requested','delete_pending','deleting','deleted','retry_required')),
+  deletion_attempts integer not null default 0 check(deletion_attempts >= 0),
+  deletion_at timestamptz,
+  confirm_request jsonb,
+  tracking_event_id uuid,
+  unique(id,user_id,document_type),
+  foreign key(plan_id,user_id) references public.tracking_plans(id,user_id),
+  foreign key(base_evaluation_id,user_id) references public.evaluations(id,user_id),
+  foreign key(base_revision,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+  foreign key(tracking_event_id,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+  check(expires_at > created_at and expires_at <= created_at + interval '24 hours'),
+  check((state in ('confirmed','cancelled','processing_failed','expired')) = (closed_at is not null)),
+  check((state in ('confirmed','cancelled','processing_failed','expired')) = (deletion_state <> 'not_requested')),
+  check((deletion_state = 'deleted') = (deletion_at is not null)),
+  check(deletion_state <> 'deleted' or storage_path is null),
+  check((state = 'confirmed') = (confirm_request is not null)),
+  check(state not in ('awaiting_review','confirmed') or (parser_version is not null and normalizer_version is not null and review_at is not null)),
+  check(state = 'confirmed' or tracking_event_id is null)
+);
+create index document_processes_cleanup_idx on public.document_processes(deletion_state,expires_at);
+create index document_processes_owner_idx on public.document_processes(user_id,created_at desc);
+
+-- Values here are temporary. Every terminal transition deletes these rows.
+create table public.document_candidates (
+  process_id uuid not null,
+  user_id uuid not null,
+  document_type text not null,
+  field text not null,
+  detection text not null check(detection in ('detected','ambiguous','not_detected')),
+  detected_value jsonb,
+  declared_value jsonb,
+  comparison text not null check(comparison in ('match','difference','insufficient')),
+  page integer not null check(page between 1 and 2),
+  primary key(process_id,field),
+  foreign key(process_id,user_id,document_type) references public.document_processes(id,user_id,document_type),
+  check(public.hu23_allowed_field(document_type,field)),
+  check((detection = 'detected' and detected_value is not null and public.hu23_valid_value(field,detected_value))
+    or (detection <> 'detected' and detected_value is null)),
+  check(declared_value is null or public.hu23_valid_value(field,declared_value)),
+  check((comparison = 'insufficient') = (detection <> 'detected' or declared_value is null)),
+  check(comparison <> 'match' or detected_value = declared_value),
+  check(comparison <> 'difference' or detected_value <> declared_value)
+);
+-- Append-only categorical evidence: never copy a rejected candidate amount.
+create table public.document_field_evidence (
+  process_id uuid not null,
+  user_id uuid not null,
+  document_type text not null,
+  field text not null,
+  comparison text not null check(comparison in ('match','difference')),
+  decision text not null check(decision in ('accept_detected','keep_declared')),
+  backing_at_confirmation text not null check(backing_at_confirmation in ('respaldado','con_diferencia')),
+  confirmed_at timestamptz not null default clock_timestamp(),
+  plan_id uuid not null,
+  source_event_id uuid not null,
+  tracking_event_id uuid,
+  primary key(process_id,field),
+  foreign key(process_id,user_id,document_type) references public.document_processes(id,user_id,document_type),
+  foreign key(source_event_id,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+  foreign key(tracking_event_id,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+  check(public.hu23_allowed_field(document_type,field)),
+  check(backing_at_confirmation = case when comparison = 'difference' and decision = 'keep_declared'
+    then 'con_diferencia' else 'respaldado' end)
+);
+create trigger hu23_evidence_immutable before update or delete on public.document_field_evidence
+  for each row execute function public.hu13_reject_mutation();
+
+alter table public.document_processes enable row level security;
+alter table public.document_candidates enable row level security;
+alter table public.document_field_evidence enable row level security;
+revoke all on public.document_processes, public.document_candidates, public.document_field_evidence from public,anon,authenticated,service_role;
+grant select on public.document_processes, public.document_candidates, public.document_field_evidence to authenticated,service_role;
+create policy "HU23 owner processes" on public.document_processes for select to authenticated
+  using(user_id = auth.uid() and public.get_my_role() = 'usuario');
+create policy "HU23 owner review" on public.document_candidates for select to authenticated
+  using(user_id = auth.uid() and public.get_my_role() = 'usuario' and exists (
+    select 1 from public.document_processes p where p.id = process_id and p.state = 'awaiting_review' and p.expires_at > clock_timestamp()));
+create policy "HU23 owner evidence" on public.document_field_evidence for select to authenticated
+  using(user_id = auth.uid() and public.get_my_role() = 'usuario');
+
+create or replace function public.hu23_require_owner(p_user uuid, p_process uuid default null)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists(select 1 from profiles where id = p_user and role = 'usuario') then
+    raise exception 'not_found';
+  end if;
+  if p_process is not null and not exists(select 1 from document_processes where id = p_process and user_id = p_user) then
+    raise exception 'not_found';
+  end if;
+end;
+$$;
+create or replace function public.hu23_read(p_user uuid,p_process uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes;
+begin
+  perform hu23_require_owner(p_user,p_process);
+  select * into p from document_processes where id = p_process;
+  return jsonb_build_object('process',to_jsonb(p),
+    'candidates',case when p.state = 'awaiting_review' and p.expires_at > clock_timestamp()
+      then coalesce((select jsonb_agg(to_jsonb(c) order by field) from document_candidates c where process_id = p.id),'[]') else '[]'::jsonb end,
+    'evidence',coalesce((select jsonb_agg(to_jsonb(e) order by field) from document_field_evidence e where process_id = p.id),'[]'));
+end;
+$$;
+create or replace function public.hu23_create(p_user uuid,p_process uuid,p_type text,p_expires_at timestamptz)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes; plan tracking_plans; rev uuid;
+begin
+  perform hu23_require_owner(p_user);
+  perform 1 from profiles where id = p_user for update;
+  select * into p from document_processes where id = p_process;
+  if found then
+    if p.user_id <> p_user then raise exception 'not_found'; end if;
+    if p.document_type <> p_type then raise exception 'idempotency_conflict'; end if;
+    return hu23_read(p_user,p_process);
+  end if;
+  select * into plan from tracking_plans where user_id = p_user;
+  if not found then raise exception 'tracking_baseline_required'; end if;
+  select event_id into rev from tracking_events where user_id = p_user order by recorded_at desc,event_id desc limit 1;
+  insert into document_processes(id,user_id,document_type,plan_id,base_evaluation_id,base_revision,storage_path,expires_at)
+    values(p_process,p_user,p_type,plan.id,plan.baseline_evaluation_id,rev,
+      p_user::text || '/' || p_process::text || '/' || gen_random_uuid()::text,p_expires_at);
+  return hu23_read(p_user,p_process);
+end;
+$$;
+
+-- Internal lifecycle only; no raw extraction endpoint/grant for browser roles.
+create or replace function public.hu23_lifecycle(p_user uuid,p_process uuid,p_revision integer,p_action text,p_payload jsonb default '{}')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes; next_state text; item jsonb; rev uuid;
+begin
+  perform hu23_require_owner(p_user,p_process);
+  perform 1 from profiles where id = p_user for update;
+  select * into p from document_processes where id = p_process for update;
+  if p_action = 'cancel' and p.state = 'cancelled' then return hu23_read(p_user,p_process); end if;
+  if p_action = 'cleanup' and p.deletion_state = 'deleted' and p_payload->>'deletion_state' = 'deleted' then return hu23_read(p_user,p_process); end if;
+  if p_revision is null or p.revision <> p_revision then raise exception 'stale_review'; end if;
+  if p_action = 'cleanup' then
+    if p.closed_at is null then raise exception 'invalid_transition'; end if;
+    next_state := p_payload->>'deletion_state';
+    if p.deletion_state = 'deleted' and next_state = 'deleted' then return hu23_read(p_user,p_process); end if;
+    if not ((p.deletion_state in ('delete_pending','retry_required') and next_state = 'deleting')
+       or (p.deletion_state = 'deleting' and next_state in ('deleted','retry_required'))) then raise exception 'invalid_transition'; end if;
+    update document_processes set deletion_state = next_state, revision = revision+1,
+      deletion_attempts = deletion_attempts + case when next_state = 'deleting' then 1 else 0 end,
+      deletion_at = case when next_state = 'deleted' then clock_timestamp() else null end,
+      storage_path = case when next_state = 'deleted' then null else storage_path end where id = p.id;
+    return hu23_read(p_user,p_process);
+  end if;
+  if p.closed_at is not null then raise exception 'already_closed'; end if;
+  if p_action not in ('cancel','fail','expire') and p.expires_at <= clock_timestamp() then raise exception 'expired'; end if;
+  next_state := case p_action when 'ready' then 'ready' when 'start' then 'processing'
+    when 'result' then 'awaiting_review' when 'cancel' then 'cancelled'
+    when 'fail' then 'processing_failed' when 'expire' then 'expired' else null end;
+  if next_state is null then raise exception 'invalid_transition'; end if;
+  if not ((p.state = 'awaiting_upload' and p_action = 'ready') or (p.state = 'ready' and p_action = 'start')
+    or (p.state = 'processing' and p_action = 'result') or p_action in ('cancel','fail','expire')) then raise exception 'invalid_transition'; end if;
+  if p_action = 'expire' and p.expires_at > clock_timestamp() then raise exception 'invalid_transition'; end if;
+  if p_action = 'fail' and coalesce(p_payload->>'failure_code','') not in ('unreadable_document','provider_unavailable','invalid_result') then raise exception 'invalid_result'; end if;
+  if p_action = 'result' then
+    select event_id into rev from tracking_events where user_id = p_user order by recorded_at desc,event_id desc limit 1;
+    if rev is distinct from p.base_revision then raise exception 'lineage_conflict'; end if;
+    if p_payload->>'document_type' is distinct from p.document_type or jsonb_typeof(p_payload->'candidates') is distinct from 'array'
+       or jsonb_array_length(p_payload->'candidates') not between 1 and 2 then raise exception 'invalid_result'; end if;
+    for item in select value from jsonb_array_elements(p_payload->'candidates') loop
+      insert into document_candidates(process_id,user_id,document_type,field,detection,detected_value,declared_value,comparison,page)
+        values(p.id,p.user_id,p.document_type,item->>'field',item->>'detection',nullif(item->'value','null'::jsonb),
+          nullif(item->'declared_value','null'::jsonb),item->>'comparison',(item->>'page')::integer);
+    end loop;
+  end if;
+  update document_processes set state = next_state, revision = revision+1,
+    processing_at = case when p_action = 'start' then clock_timestamp() else processing_at end,
+    review_at = case when p_action = 'result' then clock_timestamp() else review_at end,
+    parser_version = case when p_action = 'result' then p_payload->>'parser_version' else parser_version end,
+    normalizer_version = case when p_action = 'result' then p_payload->>'normalizer_version' else normalizer_version end,
+    failure_code = case when p_action = 'fail' then p_payload->>'failure_code' else null end,
+    closed_at = case when p_action in ('cancel','fail','expire') then clock_timestamp() else null end,
+    deletion_state = case when p_action in ('cancel','fail','expire') then 'delete_pending' else 'not_requested' end
+    where id = p.id;
+  if p_action in ('cancel','fail','expire') then delete from document_candidates where process_id = p.id; end if;
+  return hu23_read(p_user,p_process);
+end;
+$$;
+
+create or replace function public.hu23_confirm(p_user uuid,p_process uuid,p_request jsonb,p_update jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes; c document_candidates; d jsonb; decisions jsonb; patch jsonb := '{}';
+  rev uuid; event_id_value uuid; source_id uuid; item jsonb;
+begin
+  perform hu23_require_owner(p_user,p_process);
+  perform 1 from profiles where id = p_user for update;
+  select * into p from document_processes where id = p_process for update;
+  if p.state = 'confirmed' then
+    if p.confirm_request is distinct from p_request then raise exception 'idempotency_conflict'; end if;
+    return hu23_read(p_user,p_process);
+  end if;
+  if p.state <> 'awaiting_review' then raise exception 'invalid_transition'; end if;
+  if p.expires_at <= clock_timestamp() then raise exception 'expired'; end if;
+  if p_request->>'expected_revision' is null or p.revision <> (p_request->>'expected_revision')::integer then raise exception 'stale_review'; end if;
+  if p_request->'confirmed' is distinct from 'true'::jsonb or p_request->>'request_id' is null then raise exception 'invalid_request'; end if;
+  decisions := p_request->'decisions';
+  if jsonb_typeof(decisions) is distinct from 'array' or jsonb_array_length(decisions) <> (select count(*) from document_candidates where process_id=p.id)
+    or jsonb_array_length(decisions) = 0 then raise exception 'invalid_decision'; end if;
+  if (select count(distinct value->>'field') from jsonb_array_elements(decisions)) <> jsonb_array_length(decisions) then raise exception 'invalid_decision'; end if;
+  select event_id into rev from tracking_events where user_id = p_user order by recorded_at desc,event_id desc limit 1;
+  if rev is distinct from p.base_revision then raise exception 'lineage_conflict'; end if;
+  for d in select value from jsonb_array_elements(decisions) loop
+    select * into c from document_candidates where process_id=p.id and field=d->>'field';
+    if not found or not hu23_allowed_field(p.document_type,d->>'field') or coalesce(d->>'decision','') not in ('accept_detected','keep_declared') then raise exception 'invalid_decision'; end if;
+    if d->>'decision' = 'accept_detected' then
+      if c.detection <> 'detected' or c.comparison = 'insufficient' then raise exception 'invalid_decision'; end if;
+      if c.comparison = 'difference' then patch := patch || jsonb_build_object(c.field,c.detected_value); end if;
+    end if;
+  end loop;
+  if patch <> '{}' then
+    item := p_update->'records'->'events'->0;
+    if p_update is null or jsonb_typeof(p_update) is distinct from 'object'
+      or p_update->'records'->'evaluations' is distinct from '[]'::jsonb
+      or p_update->'records'->'goals' is distinct from '[]'::jsonb
+      or nullif(p_update->'records'->'plan','null'::jsonb) is not null
+      or jsonb_array_length(p_update->'records'->'events') <> 1
+      or item->>'event_kind' is distinct from 'data_update' or nullif(item->'evaluation_id','null'::jsonb) is not null
+      or item->'patch' is distinct from patch or p_update->'command'->'patch' is distinct from patch
+      or (item->>'previous')::uuid is distinct from rev then raise exception 'invalid_update'; end if;
+    -- HU13 serializes and appends the source event, with no evaluations/market/scorer.
+    perform hu13_commit(p_user,p_update->'command',rev,p_update->'records');
+    event_id_value := (item->>'event_id')::uuid;
+  elsif p_update is not null and p_update <> 'null'::jsonb then raise exception 'invalid_update';
+  end if;
+  source_id := coalesce(event_id_value,p.base_revision);
+  for d in select value from jsonb_array_elements(decisions) loop
+    select * into c from document_candidates where process_id=p.id and field=d->>'field';
+    if c.comparison <> 'insufficient' then
+      insert into document_field_evidence(process_id,user_id,document_type,field,comparison,decision,backing_at_confirmation,plan_id,source_event_id,tracking_event_id)
+      values(p.id,p_user,p.document_type,c.field,c.comparison,d->>'decision',
+        case when c.comparison='difference' and d->>'decision'='keep_declared' then 'con_diferencia' else 'respaldado' end,
+        p.plan_id,source_id,event_id_value);
+    end if;
+  end loop;
+  update document_processes set state='confirmed',closed_at=clock_timestamp(),deletion_state='delete_pending',
+    revision=revision+1,confirm_request=p_request,tracking_event_id=event_id_value where id=p.id;
+  delete from document_candidates where process_id=p.id;
+  return hu23_read(p_user,p_process);
+end;
+$$;
+
+-- Default PUBLIC EXECUTE would allow fabricated internal OCR/confirmation records.
+revoke all on function public.hu23_allowed_field(text,text),public.hu23_valid_value(text,jsonb),
+  public.hu23_require_owner(uuid,uuid),public.hu23_read(uuid,uuid),public.hu23_create(uuid,uuid,text,timestamptz),
+  public.hu23_lifecycle(uuid,uuid,integer,text,jsonb),public.hu23_confirm(uuid,uuid,jsonb,jsonb) from public,anon,authenticated;
+-- Constraint helpers are harmless, read-free and necessary for evaluating constraints.
+grant execute on function public.hu23_allowed_field(text,text),public.hu23_valid_value(text,jsonb) to service_role;
+grant execute on function public.hu23_read(uuid,uuid),public.hu23_create(uuid,uuid,text,timestamptz),
+  public.hu23_lifecycle(uuid,uuid,integer,text,jsonb),public.hu23_confirm(uuid,uuid,jsonb,jsonb) to service_role;
+commit;
+
+-- HU23 T2. Private direct upload with authenticated, operation-aware RLS.
+begin;
+-- Kept in sync with documents/config.py by contract tests. Frontend reads backend limits.
+create or replace function public.hu23_upload_limits()
+returns jsonb language sql immutable set search_path=public,pg_temp as $$
+ select '{"bucket":"hu23-document-temporary","max_bytes":4000000,"max_pdf_pages":2,"lease_seconds":600}'::jsonb;
+$$;
+do $$ begin
+ if to_regprocedure('storage.allow_only_operation(text)') is null then
+   raise exception 'HU23 requires the official operation-aware Storage helpers; no permissive fallback';
+ end if;
+end $$;
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('hu23-document-temporary','hu23-document-temporary',false,
+ (public.hu23_upload_limits()->>'max_bytes')::bigint,array['application/pdf','image/jpeg','image/png'])
+on conflict(id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
+
+create unique index hu23_process_owner_unique on public.document_processes(id,user_id);
+-- One object identity per process. Keep its locator as a tombstone for late uploads/cleanup.
+create table public.document_uploads (
+ process_id uuid primary key,
+ user_id uuid not null,
+ bucket_id text not null default 'hu23-document-temporary' check(bucket_id='hu23-document-temporary'),
+ storage_path text not null unique,
+ extension text not null check(extension in ('pdf','jpg','jpeg','png')),
+ content_type text not null,
+ client_pages integer not null,
+ authorized_at timestamptz not null default clock_timestamp(),
+ upload_expires_at timestamptz not null,
+ reconcile_until timestamptz not null,
+ admitted_at timestamptz,
+ storage_object_id uuid,
+ size_bytes bigint,
+ admission_error text check(admission_error in ('upload_object_missing','upload_invalid_metadata','upload_authorization_expired')),
+ foreign key(process_id,user_id) references public.document_processes(id,user_id),
+ check((extension='pdf' and content_type='application/pdf') or (extension in ('jpg','jpeg') and content_type='image/jpeg') or (extension='png' and content_type='image/png')),
+ check(client_pages between 1 and 2 and (extension='pdf' or client_pages=1)),
+ check(upload_expires_at>authorized_at and reconcile_until>=upload_expires_at),
+ check((admitted_at is null)=(storage_object_id is null)),
+ check(size_bytes is null or size_bytes between 1 and 4000000)
+);
+alter table public.document_uploads enable row level security;
+revoke all on public.document_uploads from public,anon,authenticated,service_role;
+grant select on public.document_uploads to service_role;
+create index hu23_upload_recovery_idx on public.document_uploads(reconcile_until);
+
+-- Exact operation check also blocks createSignedUploadUrl: its two-hour bearer
+-- capability must not outlive this revocable ten-minute authenticated lease.
+create or replace function public.hu23_may_upload(p_path text)
+returns boolean language plpgsql security definer set search_path=public,storage,pg_temp as $$
+declare p document_processes; u document_uploads;
+begin
+ if not storage.allow_only_operation('object.upload') or auth.uid() is null or public.get_my_role()<>'usuario' then return false; end if;
+ select d.* into p from document_processes d join document_uploads x on x.process_id=d.id
+   where x.storage_path=p_path and d.user_id=auth.uid() for share of d;
+ if not found then return false; end if;
+ select * into u from document_uploads where process_id=p.id for share;
+ return p.state='awaiting_upload' and p.storage_path=p_path and p.expires_at>clock_timestamp()
+   and u.upload_expires_at>clock_timestamp() and u.admitted_at is null
+   and not exists(select 1 from storage.objects where bucket_id=u.bucket_id and name=p_path);
+end;
+$$;
+revoke all on function public.hu23_may_upload(text) from public;
+grant execute on function public.hu23_may_upload(text) to authenticated,anon;
+-- Restrictive policies protect this bucket even if another HU has a broad permissive policy.
+create policy "HU23 exact upload" on storage.objects for insert to authenticated
+ with check(bucket_id='hu23-document-temporary' and public.hu23_may_upload(name));
+create policy "HU23 guard insert" on storage.objects as restrictive for insert to public
+ with check(bucket_id<>'hu23-document-temporary' or public.hu23_may_upload(name));
+create policy "HU23 no original reads" on storage.objects as restrictive for select to public
+ using(bucket_id<>'hu23-document-temporary');
+create policy "HU23 no overwrite" on storage.objects as restrictive for update to public
+ using(bucket_id<>'hu23-document-temporary') with check(bucket_id<>'hu23-document-temporary');
+create policy "HU23 no client delete" on storage.objects as restrictive for delete to public
+ using(bucket_id<>'hu23-document-temporary');
+
+-- Storage may check permission before transferring bytes and commit metadata with
+-- a privileged role later. Recheck the lease at that commit, including late uploads.
+create or replace function public.hu23_guard_storage_object()
+returns trigger language plpgsql security definer set search_path=public,storage,pg_temp as $$
+declare p document_processes; u document_uploads;
+begin
+ if tg_op='UPDATE' then
+   if (old.bucket_id='hu23-document-temporary' or new.bucket_id='hu23-document-temporary')
+      and (to_jsonb(new)-array['updated_at','last_accessed_at']) is distinct from (to_jsonb(old)-array['updated_at','last_accessed_at'])
+      then raise exception 'hu23_no_overwrite'; end if;
+   return new;
+ end if;
+ if new.bucket_id<>'hu23-document-temporary' then return new; end if;
+ select d.* into p from document_processes d join document_uploads x on x.process_id=d.id
+   where x.storage_path=new.name and d.user_id::text=new.owner_id for share of d;
+ if not found then raise exception 'upload_not_authorized'; end if;
+ select * into u from document_uploads where process_id=p.id for share;
+ if p.state<>'awaiting_upload' or p.storage_path<>new.name or p.expires_at<=clock_timestamp()
+    or u.upload_expires_at<=clock_timestamp() or u.admitted_at is not null then raise exception 'upload_not_authorized'; end if;
+ return new;
+end;
+$$;
+create trigger hu23_storage_object_guard before insert or update on storage.objects
+ for each row execute function public.hu23_guard_storage_object();
+revoke all on function public.hu23_guard_storage_object() from public,anon,authenticated;
+
+create or replace function public.hu23_upload_authorize(p_user uuid,p_process uuid,p_request jsonb)
+returns jsonb language plpgsql security definer set search_path=public,storage,pg_temp as $$
+declare p document_processes; u document_uploads; stamp timestamptz:=clock_timestamp();
+ ext text:=p_request->>'extension'; mime text:=p_request->>'content_type'; pages integer:=(p_request->>'client_pages')::integer;
+begin
+ perform hu23_require_owner(p_user,p_process);
+ perform 1 from profiles where id=p_user for update;
+ select * into p from document_processes where id=p_process for update;
+ if p.closed_at is not null or p.state<>'awaiting_upload' then raise exception 'invalid_transition'; end if;
+ if p.expires_at<=stamp then
+   perform hu23_lifecycle(p_user,p.id,p.revision,'expire','{}');
+   return hu23_read(p_user,p.id);
+ end if;
+ if p.revision is distinct from (p_request->>'expected_revision')::integer then raise exception 'stale_review'; end if;
+ if not ((ext='pdf' and mime='application/pdf') or (ext in ('jpg','jpeg') and mime='image/jpeg') or (ext='png' and mime='image/png'))
+    or pages is null or pages<1 or pages>(hu23_upload_limits()->>'max_pdf_pages')::integer or (ext<>'pdf' and pages<>1) then raise exception 'invalid_upload_request'; end if;
+ select * into u from document_uploads where process_id=p.id for update;
+ if found then
+   if u.extension<>ext or u.content_type<>mime or u.client_pages<>pages then raise exception 'upload_format_locked'; end if;
+   if exists(select 1 from storage.objects where bucket_id=u.bucket_id and name=u.storage_path) then raise exception 'upload_already_exists'; end if;
+   if u.upload_expires_at>stamp then return jsonb_build_object('process',to_jsonb(p),'upload',to_jsonb(u)); end if;
+   update document_uploads set authorized_at=stamp,
+     upload_expires_at=least(stamp+make_interval(secs=>(hu23_upload_limits()->>'lease_seconds')::integer),p.expires_at),
+     reconcile_until=least(stamp+make_interval(secs=>2*(hu23_upload_limits()->>'lease_seconds')::integer),p.created_at+interval '24 hours')
+     where process_id=p.id returning * into u;
+ else
+   insert into document_uploads(process_id,user_id,storage_path,extension,content_type,client_pages,upload_expires_at,reconcile_until)
+    values(p.id,p_user,p_user::text||'/'||p.id::text||'/'||gen_random_uuid()::text||'.'||ext,ext,mime,pages,
+      least(stamp+make_interval(secs=>(hu23_upload_limits()->>'lease_seconds')::integer),p.expires_at),
+      least(stamp+make_interval(secs=>2*(hu23_upload_limits()->>'lease_seconds')::integer),p.created_at+interval '24 hours')) returning * into u;
+   update document_processes set storage_path=u.storage_path where id=p.id returning * into p;
+ end if;
+ return jsonb_build_object('process',to_jsonb(p),'upload',to_jsonb(u));
+end;
+$$;
+
+create or replace function public.hu23_upload_complete(p_user uuid,p_process uuid,p_revision integer)
+returns jsonb language plpgsql security definer set search_path=public,storage,pg_temp as $$
+declare p document_processes; u document_uploads; o storage.objects; err text; size_value numeric;
+begin
+ perform hu23_require_owner(p_user,p_process);
+ perform 1 from profiles where id=p_user for update;
+ select * into p from document_processes where id=p_process for update;
+ select * into u from document_uploads where process_id=p.id for update;
+ if p.state='ready' and u.admitted_at is not null then return hu23_read(p_user,p.id); end if;
+ if p.closed_at is not null or p.state<>'awaiting_upload' then raise exception 'invalid_transition'; end if;
+ if p.expires_at<=clock_timestamp() then
+   perform hu23_lifecycle(p_user,p.id,p.revision,'expire','{}'); return hu23_read(p_user,p.id);
+ end if;
+ if p.revision is distinct from p_revision then raise exception 'stale_review'; end if;
+ if u.process_id is null then raise exception 'upload_not_authorized'; end if;
+ select * into o from storage.objects where bucket_id=u.bucket_id and name=u.storage_path;
+ if not found then err:='upload_object_missing';
+ elsif u.upload_expires_at<=clock_timestamp() then err:='upload_authorization_expired';
+ else
+   if coalesce(o.metadata->>'size','') ~ '^[0-9]{1,18}$' then size_value:=(o.metadata->>'size')::numeric; end if;
+   if p.storage_path is distinct from u.storage_path or o.owner_id is distinct from p_user::text
+      or size_value is null or size_value<1 or size_value>(hu23_upload_limits()->>'max_bytes')::numeric
+      or coalesce(o.metadata->>'mimetype','')<>u.content_type then err:='upload_invalid_metadata'; end if;
+ end if;
+ if err is not null then
+   update document_uploads set admission_error=err where process_id=p.id;
+   perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"invalid_result"}');
+   return hu23_read(p_user,p.id)||jsonb_build_object('upload_error',err);
+ end if;
+ update document_uploads set admitted_at=clock_timestamp(),storage_object_id=o.id,size_bytes=size_value where process_id=p.id;
+ return hu23_lifecycle(p_user,p.id,p.revision,'ready','{}');
+end;
+$$;
+create or replace function public.hu23_require_absent_object()
+returns trigger language plpgsql security definer set search_path=public,storage,pg_temp as $$
+begin
+ if new.deletion_state='deleted' and old.deletion_state is distinct from 'deleted' and exists(
+   select 1 from document_uploads u join storage.objects o on o.bucket_id=u.bucket_id and o.name=u.storage_path
+    where u.process_id=new.id
+ ) then raise exception 'upload_not_deleted'; end if;
+ return new;
+end;
+$$;
+create trigger hu23_object_deletion_guard before update of deletion_state on public.document_processes
+ for each row execute function public.hu23_require_absent_object();
+revoke all on function public.hu23_require_absent_object() from public,anon,authenticated;
+
+-- T1 exposed ready/start only internally; T2 enforces their upload prerequisite in DB too.
+create or replace function public.hu23_require_admitted_upload()
+returns trigger language plpgsql security definer set search_path=public,storage,pg_temp as $$
+begin
+ if new.state in ('ready','processing') and old.state is distinct from new.state and not exists(
+   select 1 from document_uploads u join storage.objects o on o.id=u.storage_object_id
+    and o.bucket_id=u.bucket_id and o.name=u.storage_path and o.owner_id=u.user_id::text
+   where u.process_id=new.id and u.user_id=new.user_id and u.admitted_at is not null and new.storage_path=u.storage_path
+ ) then raise exception 'upload_not_verified'; end if;
+ return new;
+end;
+$$;
+create trigger hu23_admitted_upload before update of state on public.document_processes
+ for each row execute function public.hu23_require_admitted_upload();
+revoke all on function public.hu23_upload_limits(),public.hu23_upload_authorize(uuid,uuid,jsonb),
+ public.hu23_upload_complete(uuid,uuid,integer),public.hu23_require_admitted_upload() from public,anon,authenticated;
+grant execute on function public.hu23_upload_limits(),public.hu23_upload_authorize(uuid,uuid,jsonb),
+ public.hu23_upload_complete(uuid,uuid,integer) to service_role;
+commit;
+
+-- HU23 T3: durable OCR metadata only. Never persist provider payloads or signed URLs.
+begin;
+alter table public.document_processes drop constraint document_processes_state_check;
+alter table public.document_processes add constraint document_processes_state_check
+ check(state in ('awaiting_upload','ready','processing','ocr_ready','awaiting_review','confirmed','cancelled','processing_failed','expired'));
+
+create table public.document_ocr_jobs(
+ process_id uuid primary key,
+ user_id uuid not null,
+ job_state text not null check(job_state in ('submitting','retry_wait','running','succeeded','failed','submission_unknown')),
+ result_id uuid unique,
+ api_version text not null default '2024-11-30' check(api_version='2024-11-30'),
+ model_id text not null default 'prebuilt-layout' check(model_id='prebuilt-layout'),
+ consented_at timestamptz not null default clock_timestamp(),
+ created_at timestamptz not null default clock_timestamp(),
+ submitted_at timestamptz,
+ completed_at timestamptz,
+ next_attempt_at timestamptz not null default clock_timestamp(),
+ submit_attempts integer not null default 0 check(submit_attempts between 0 and 3),
+ poll_attempts integer not null default 0 check(poll_attempts between 0 and 60),
+ delete_attempts integer not null default 0 check(delete_attempts>=0),
+ transient_errors integer not null default 0 check(transient_errors>=0),
+ last_error text check(last_error in ('transient','submission_unknown','provider_failed','invalid_response','deadline','interrupted')),
+ lease_token uuid,
+ lease_kind text check(lease_kind in ('submit','poll','delete')),
+ lease_until timestamptz,
+ deletion_state text not null default 'not_requested'
+   check(deletion_state in ('not_requested','delete_pending','deleting','deleted','retry_required')),
+ deleted_at timestamptz,
+ foreign key(process_id,user_id) references public.document_processes(id,user_id),
+ check(job_state not in ('running','succeeded') or result_id is not null),
+ check((deletion_state='deleted')=(deleted_at is not null))
+);
+alter table public.document_ocr_jobs enable row level security;
+revoke all on public.document_ocr_jobs from public,anon,authenticated,service_role;
+grant select on public.document_ocr_jobs to service_role;
+create index hu23_ocr_recovery_idx on public.document_ocr_jobs(deletion_state,next_attempt_at);
+
+-- Closing a process must retain cleanup duty even while an Azure submit is in flight.
+create function public.hu23_ocr_close()
+returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if new.closed_at is not null and old.closed_at is null then
+   update document_ocr_jobs set deletion_state=case when deletion_state='deleted' then 'deleted' else 'delete_pending' end,
+     next_attempt_at=least(next_attempt_at,clock_timestamp()) where process_id=new.id;
+ end if;
+ return new;
+end;
+$$;
+create trigger hu23_ocr_close after update of state on public.document_processes
+ for each row execute function public.hu23_ocr_close();
+
+-- One external HTTP operation per claim. Fencing tokens serialize callers without
+-- holding a PostgreSQL transaction or Vercel request open while Azure processes.
+create function public.hu23_ocr_step(p_user uuid,p_process uuid,p_action text,p_token uuid default null,p_payload jsonb default '{}')
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare p document_processes; j document_ocr_jobs; stamp timestamptz:=clock_timestamp();
+ op text; outcome text:=p_payload->>'outcome'; delay integer; count_attempts integer;
+begin
+ perform hu23_require_owner(p_user,p_process);
+ perform 1 from profiles where id=p_user for update;
+ select * into p from document_processes where id=p_process for update;
+ select * into j from document_ocr_jobs where process_id=p.id for update;
+ if p_action not in ('read','start','poll','cleanup','settle','discard') then raise exception 'invalid_transition'; end if;
+ if p.closed_at is null and p.expires_at<=stamp then
+   perform hu23_lifecycle(p_user,p.id,p.revision,'expire','{}');
+   select * into p from document_processes where id=p.id;
+   select * into j from document_ocr_jobs where process_id=p.id;
+ end if;
+
+ if p_action='settle' then
+   if j.process_id is null or j.lease_token is distinct from p_token then raise exception 'stale_review'; end if;
+   delay:=greatest(2,least(86400,coalesce((p_payload->>'retry_after')::integer,2)));
+   if j.lease_kind='submit' and outcome='started' then
+     update document_ocr_jobs set result_id=(p_payload->>'result_id')::uuid,job_state='running',submitted_at=stamp,
+       last_error=null,next_attempt_at=case when p.closed_at is not null then stamp else stamp+make_interval(secs=>delay) end,
+       deletion_state=case when p.closed_at is not null then 'delete_pending' else deletion_state end where process_id=p.id;
+   elsif j.lease_kind='delete' and outcome='deleted' then
+     update document_ocr_jobs set deletion_state='deleted',deleted_at=stamp,last_error=null where process_id=p.id;
+   elsif j.lease_kind='delete' and outcome='retry' then
+     update document_ocr_jobs set deletion_state='retry_required',last_error='transient',
+       next_attempt_at=stamp+make_interval(secs=>greatest(delay,case when j.delete_attempts>=5 then 3600 else least(60,power(2,j.delete_attempts)::integer) end)) where process_id=p.id;
+   elsif j.lease_kind='poll' and outcome in ('running','succeeded') then
+     update document_ocr_jobs set job_state=case when outcome='succeeded' then 'succeeded' else 'running' end,
+       completed_at=case when outcome='succeeded' then stamp else null end,transient_errors=0,last_error=null,
+       next_attempt_at=case when p.closed_at is not null then stamp else stamp+make_interval(secs=>delay) end where process_id=p.id;
+     if outcome='succeeded' and p.closed_at is null then
+       update document_processes set state='ocr_ready',revision=revision+1 where id=p.id;
+     end if;
+   elsif j.lease_kind in ('submit','poll') and outcome='retry'
+     and (j.lease_kind<>'submit' or j.submit_attempts<3) and j.transient_errors<4 then
+     update document_ocr_jobs set job_state=case when j.lease_kind='submit' then 'retry_wait' else 'running' end,
+       transient_errors=transient_errors+1,last_error='transient',
+       next_attempt_at=stamp+make_interval(secs=>greatest(delay,least(60,power(2,j.transient_errors+1)::integer))) where process_id=p.id;
+   elsif j.lease_kind in ('submit','poll') and outcome in ('failed','unknown','retry') then
+     update document_ocr_jobs set job_state=case when outcome='unknown' then 'submission_unknown' else 'failed' end,
+       completed_at=stamp,last_error=case when outcome='unknown' then 'submission_unknown'
+         when p_payload->>'error'='invalid_response' then 'invalid_response' else 'provider_failed' end,
+       deletion_state='delete_pending',next_attempt_at=stamp where process_id=p.id;
+     if p.closed_at is null then
+       perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"provider_unavailable"}');
+     end if;
+   else raise exception 'invalid_result'; end if;
+   update document_ocr_jobs set lease_until=null,lease_kind=null,lease_token=null where process_id=p.id;
+
+ elsif p_action='discard' then
+   -- Internal T4 acknowledgement only AFTER validated minimal candidates are committed.
+   if j.job_state<>'succeeded' or p.state<>'awaiting_review' then raise exception 'invalid_transition'; end if;
+   update document_ocr_jobs set deletion_state=case when deletion_state='deleted' then 'deleted' else 'delete_pending' end,
+     next_attempt_at=stamp where process_id=p.id;
+
+ elsif p_action in ('start','poll','cleanup') then
+   if j.process_id is null then
+     if p_action<>'start' or p.state<>'ready' or p.closed_at is not null then raise exception 'invalid_transition'; end if;
+     perform hu23_lifecycle(p_user,p.id,p.revision,'start','{}');
+     insert into document_ocr_jobs(process_id,user_id,job_state) values(p.id,p_user,'submitting') returning * into j;
+     op:='submit';
+   elsif j.lease_until>stamp then
+     op:=null;
+   elsif j.lease_kind='submit' then
+     -- Crash/timeout after submit may have created an operation. Never resubmit blindly.
+     update document_ocr_jobs set job_state='submission_unknown',last_error='interrupted',completed_at=stamp,
+       deletion_state='delete_pending' where process_id=p.id;
+     if p.closed_at is null then perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"provider_unavailable"}'); end if;
+   elsif j.result_id is not null and j.deletion_state in ('delete_pending','retry_required','deleting')
+       and j.next_attempt_at<=stamp then
+     op:='delete';
+   elsif p.closed_at is null and j.next_attempt_at<=stamp and p_action in ('start','poll') then
+     if j.job_state='retry_wait' and j.submit_attempts<3 then op:='submit';
+     elsif j.job_state='running' then
+       if j.poll_attempts>=60 or stamp>j.created_at+interval '15 minutes' then
+         update document_ocr_jobs set job_state='failed',last_error='deadline',completed_at=stamp,deletion_state='delete_pending',
+           next_attempt_at=stamp where process_id=p.id;
+         perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"provider_unavailable"}');
+       else op:='poll'; end if;
+     end if;
+   end if;
+   if op is not null then
+     update document_ocr_jobs set lease_token=gen_random_uuid(),lease_kind=op,lease_until=stamp+interval '45 seconds',
+       submit_attempts=submit_attempts+case when op='submit' then 1 else 0 end,
+       poll_attempts=poll_attempts+case when op='poll' then 1 else 0 end,
+       delete_attempts=delete_attempts+case when op='delete' then 1 else 0 end,
+       job_state=case when op='submit' then 'submitting' else job_state end,
+       deletion_state=case when op='delete' then 'deleting' else deletion_state end where process_id=p.id;
+   end if;
+ end if;
+ select * into p from document_processes where id=p_process;
+ select * into j from document_ocr_jobs where process_id=p_process;
+ return jsonb_build_object('process',to_jsonb(p),'job',case when j.process_id is null then null else to_jsonb(j) end,'action',op);
+end;
+$$;
+revoke all on function public.hu23_ocr_close(),public.hu23_ocr_step(uuid,uuid,text,uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.hu23_ocr_step(uuid,uuid,text,uuid,jsonb) to service_role;
+commit;
+
+-- HU23 T4. No new financial facts: temporary candidates + durable remote deletion duty.
+begin;
+alter table public.document_ocr_jobs drop constraint document_ocr_jobs_lease_kind_check;
+alter table public.document_ocr_jobs add constraint document_ocr_jobs_lease_kind_check
+ check(lease_kind in ('submit','poll','delete','parse'));
+alter table public.document_ocr_jobs add column parse_attempts integer not null default 0 check(parse_attempts>=0);
+
+create function public.hu23_parsing_enabled()
+returns boolean language sql immutable set search_path=public,pg_temp as $$ select true; $$;
+
+create function public.hu23_parse_control(p_user uuid,p_process uuid,p_action text,p_token uuid default null,p_delay integer default 2)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare p document_processes; j document_ocr_jobs; stamp timestamptz:=clock_timestamp(); claimed boolean:=false;
+begin
+ perform hu23_require_owner(p_user,p_process);
+ perform 1 from profiles where id=p_user for update;
+ select * into p from document_processes where id=p_process for update;
+ select * into j from document_ocr_jobs where process_id=p.id for update;
+ if p_action not in ('claim','retry','release','fail') then raise exception 'invalid_transition'; end if;
+ if p_action='claim' and not hu23_parsing_enabled() then raise exception 'parsing_disabled'; end if;
+ if p.closed_at is null and p.expires_at<=stamp then
+   perform hu23_lifecycle(p_user,p.id,p.revision,'expire','{}');
+   select * into p from document_processes where id=p_process;
+ end if;
+ if p_action='claim' then
+   if p.state='awaiting_review' or p.closed_at is not null then null;
+   elsif p.state<>'ocr_ready' or j.job_state is distinct from 'succeeded' or j.deletion_state<>'not_requested' then
+     raise exception 'invalid_transition';
+   elsif coalesce(j.lease_until,stamp)<=stamp and j.next_attempt_at<=stamp then
+     if j.parse_attempts>=5 then
+       perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"provider_unavailable"}');
+     else
+       update document_ocr_jobs set lease_kind='parse',lease_token=gen_random_uuid(),lease_until=stamp+interval '45 seconds',
+         parse_attempts=parse_attempts+1 where process_id=p.id;
+       claimed:=true;
+     end if;
+   end if;
+ else
+   if j.lease_kind is distinct from 'parse' or j.lease_token is distinct from p_token then raise exception 'stale_review'; end if;
+   update document_ocr_jobs set lease_kind=null,lease_token=null,lease_until=null,
+     next_attempt_at=case when p_action='release' then stamp else stamp+make_interval(secs=>greatest(2,least(86400,p_delay))) end where process_id=p.id;
+   if p_action='fail' and p.closed_at is null then
+     perform hu23_lifecycle(p_user,p.id,p.revision,'fail','{"failure_code":"invalid_result"}');
+   end if;
+ end if;
+ select * into p from document_processes where id=p_process;
+ select * into j from document_ocr_jobs where process_id=p_process;
+ return jsonb_build_object('process',to_jsonb(p),'job',case when j.process_id is null then null else to_jsonb(j) end,'claimed',claimed);
+end;
+$$;
+revoke all on function public.hu23_parsing_enabled(),public.hu23_parse_control(uuid,uuid,text,uuid,integer) from public,anon,authenticated;
+grant execute on function public.hu23_parsing_enabled(),public.hu23_parse_control(uuid,uuid,text,uuid,integer) to service_role;
+
+-- Extend the existing lifecycle only for OCR-ready consumption, fencing and atomic deletion duty.
+create or replace function public.hu23_lifecycle(p_user uuid,p_process uuid,p_revision integer,p_action text,p_payload jsonb default '{}')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes; j document_ocr_jobs; next_state text; item jsonb; rev uuid;
+begin
+  perform hu23_require_owner(p_user,p_process);
+  perform 1 from profiles where id = p_user for update;
+  select * into p from document_processes where id = p_process for update;
+  if p_action = 'cancel' and p.state = 'cancelled' then return hu23_read(p_user,p_process); end if;
+  if p_action = 'cleanup' and p.deletion_state = 'deleted' and p_payload->>'deletion_state' = 'deleted' then return hu23_read(p_user,p_process); end if;
+  if p_revision is null or p.revision <> p_revision then raise exception 'stale_review'; end if;
+  if p_action = 'cleanup' then
+    if p.closed_at is null then raise exception 'invalid_transition'; end if;
+    next_state := p_payload->>'deletion_state';
+    if p.deletion_state = 'deleted' and next_state = 'deleted' then return hu23_read(p_user,p_process); end if;
+    if not ((p.deletion_state in ('delete_pending','retry_required') and next_state = 'deleting')
+       or (p.deletion_state = 'deleting' and next_state in ('deleted','retry_required'))) then raise exception 'invalid_transition'; end if;
+    update document_processes set deletion_state = next_state, revision = revision+1,
+      deletion_attempts = deletion_attempts + case when next_state = 'deleting' then 1 else 0 end,
+      deletion_at = case when next_state = 'deleted' then clock_timestamp() else null end,
+      storage_path = case when next_state = 'deleted' then null else storage_path end where id = p.id;
+    return hu23_read(p_user,p_process);
+  end if;
+  if p.closed_at is not null then raise exception 'already_closed'; end if;
+  if p_action not in ('cancel','fail','expire') and p.expires_at <= clock_timestamp() then raise exception 'expired'; end if;
+  next_state := case p_action when 'ready' then 'ready' when 'start' then 'processing'
+    when 'result' then 'awaiting_review' when 'cancel' then 'cancelled'
+    when 'fail' then 'processing_failed' when 'expire' then 'expired' else null end;
+  if next_state is null then raise exception 'invalid_transition'; end if;
+  if not ((p.state = 'awaiting_upload' and p_action = 'ready') or (p.state = 'ready' and p_action = 'start')
+    or (p.state in ('processing','ocr_ready') and p_action = 'result') or p_action in ('cancel','fail','expire')) then raise exception 'invalid_transition'; end if;
+  if p_action = 'expire' and p.expires_at > clock_timestamp() then raise exception 'invalid_transition'; end if;
+  if p_action = 'fail' and coalesce(p_payload->>'failure_code','') not in ('unreadable_document','provider_unavailable','invalid_result') then raise exception 'invalid_result'; end if;
+  if p_action = 'result' then
+    if not hu23_parsing_enabled() then raise exception 'parsing_disabled'; end if;
+    select * into j from document_ocr_jobs where process_id=p.id for update;
+    if found and (p.state<>'ocr_ready' or j.job_state<>'succeeded' or j.deletion_state<>'not_requested'
+      or j.lease_kind is distinct from 'parse' or coalesce(j.lease_until<=clock_timestamp(),true)
+      or j.lease_token is distinct from (p_payload->>'parse_token')::uuid) then raise exception 'stale_review'; end if;
+    if p.state='ocr_ready' and j.process_id is null then raise exception 'invalid_transition'; end if;
+    select event_id into rev from tracking_events where user_id = p_user order by recorded_at desc,event_id desc limit 1;
+    if rev is distinct from p.base_revision then raise exception 'lineage_conflict'; end if;
+    if p_payload->>'document_type' is distinct from p.document_type or jsonb_typeof(p_payload->'candidates') is distinct from 'array'
+       or jsonb_array_length(p_payload->'candidates') not between 1 and 2 then raise exception 'invalid_result'; end if;
+    for item in select value from jsonb_array_elements(p_payload->'candidates') loop
+      insert into document_candidates(process_id,user_id,document_type,field,detection,detected_value,declared_value,comparison,page)
+        values(p.id,p.user_id,p.document_type,item->>'field',item->>'detection',nullif(item->'value','null'::jsonb),
+          nullif(item->'declared_value','null'::jsonb),item->>'comparison',(item->>'page')::integer);
+    end loop;
+  end if;
+  update document_processes set state = next_state, revision = revision+1,
+    processing_at = case when p_action = 'start' then clock_timestamp() else processing_at end,
+    review_at = case when p_action = 'result' then clock_timestamp() else review_at end,
+    parser_version = case when p_action = 'result' then p_payload->>'parser_version' else parser_version end,
+    normalizer_version = case when p_action = 'result' then p_payload->>'normalizer_version' else normalizer_version end,
+    failure_code = case when p_action = 'fail' then p_payload->>'failure_code' else null end,
+    closed_at = case when p_action in ('cancel','fail','expire') then clock_timestamp() else null end,
+    deletion_state = case when p_action in ('cancel','fail','expire') then 'delete_pending' else 'not_requested' end
+    where id = p.id;
+  if p_action='result' and j.process_id is not null then
+    update document_ocr_jobs set deletion_state='delete_pending',next_attempt_at=clock_timestamp(),
+      lease_kind=null,lease_token=null,lease_until=null where process_id=p.id;
+  end if;
+  if p_action in ('cancel','fail','expire') then delete from document_candidates where process_id = p.id; end if;
+  return hu23_read(p_user,p_process);
+end;
+$$;
+
+commit;
+
+-- HU23 T5: explicit actionable decisions; unresolved fields never receive fabricated choices.
+begin;
+create function public.hu23_confirmation_enabled()
+returns boolean language sql immutable set search_path=public,pg_temp as $$ select true; $$;
+revoke all on function public.hu23_confirmation_enabled() from public,anon,authenticated;
+grant execute on function public.hu23_confirmation_enabled() to service_role;
+
+create or replace function public.hu23_confirm(p_user uuid,p_process uuid,p_request jsonb,p_update jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p document_processes; c document_candidates; d jsonb; decisions jsonb; patch jsonb := '{}';
+  rev uuid; event_id_value uuid; source_id uuid; item jsonb;
+begin
+  perform hu23_require_owner(p_user,p_process);
+  perform 1 from profiles where id = p_user for update;
+  select * into p from document_processes where id = p_process for update;
+  if p.state = 'confirmed' then
+    if p.confirm_request is distinct from p_request then raise exception 'idempotency_conflict'; end if;
+    return hu23_read(p_user,p_process);
+  end if;
+  if not hu23_confirmation_enabled() then raise exception 'confirmation_disabled'; end if;
+  if p.state <> 'awaiting_review' then raise exception 'invalid_transition'; end if;
+  if p.expires_at <= clock_timestamp() then raise exception 'expired'; end if;
+  if p_request->>'expected_revision' is null or p.revision <> (p_request->>'expected_revision')::integer then raise exception 'stale_review'; end if;
+  if p_request->'confirmed' is distinct from 'true'::jsonb or p_request->>'request_id' is null then raise exception 'invalid_request'; end if;
+  decisions := p_request->'decisions';
+  if jsonb_typeof(decisions) is distinct from 'array' or jsonb_array_length(decisions) <> (select count(*) from document_candidates where process_id=p.id
+       and detection='detected' and comparison in ('match','difference')) then raise exception 'invalid_decision'; end if;
+  if (select count(distinct value->>'field') from jsonb_array_elements(decisions)) <> jsonb_array_length(decisions) then raise exception 'invalid_decision'; end if;
+  select event_id into rev from tracking_events where user_id = p_user order by recorded_at desc,event_id desc limit 1;
+  if rev is distinct from p.base_revision then raise exception 'lineage_conflict'; end if;
+  for d in select value from jsonb_array_elements(decisions) loop
+    select * into c from document_candidates where process_id=p.id and field=d->>'field';
+    if not found or c.detection<>'detected' or c.comparison='insufficient' or not hu23_allowed_field(p.document_type,d->>'field') or coalesce(d->>'decision','') not in ('accept_detected','keep_declared') then raise exception 'invalid_decision'; end if;
+    if d->>'decision' = 'accept_detected' then
+      if c.detection <> 'detected' or c.comparison = 'insufficient' then raise exception 'invalid_decision'; end if;
+      if c.comparison = 'difference' then patch := patch || jsonb_build_object(c.field,c.detected_value); end if;
+    end if;
+  end loop;
+  if patch <> '{}' then
+    item := p_update->'records'->'events'->0;
+    if p_update is null or jsonb_typeof(p_update) is distinct from 'object'
+      or p_update->'records'->'evaluations' is distinct from '[]'::jsonb
+      or p_update->'records'->'goals' is distinct from '[]'::jsonb
+      or nullif(p_update->'records'->'plan','null'::jsonb) is not null
+      or jsonb_array_length(p_update->'records'->'events') <> 1
+      or item->>'event_kind' is distinct from 'data_update' or nullif(item->'evaluation_id','null'::jsonb) is not null
+      or item->'patch' is distinct from patch or p_update->'command'->'patch' is distinct from patch
+      or (item->>'previous')::uuid is distinct from rev then raise exception 'invalid_update'; end if;
+    -- HU13 serializes and appends the source event, with no evaluations/market/scorer.
+    perform hu13_commit(p_user,p_update->'command',rev,p_update->'records');
+    event_id_value := (item->>'event_id')::uuid;
+  elsif p_update is not null and p_update <> 'null'::jsonb then raise exception 'invalid_update';
+  end if;
+  source_id := coalesce(event_id_value,p.base_revision);
+  for d in select value from jsonb_array_elements(decisions) loop
+    select * into c from document_candidates where process_id=p.id and field=d->>'field';
+    if c.comparison <> 'insufficient' then
+      insert into document_field_evidence(process_id,user_id,document_type,field,comparison,decision,backing_at_confirmation,plan_id,source_event_id,tracking_event_id)
+      values(p.id,p_user,p.document_type,c.field,c.comparison,d->>'decision',
+        case when c.comparison='difference' and d->>'decision'='keep_declared' then 'con_diferencia' else 'respaldado' end,
+        p.plan_id,source_id,event_id_value);
+    end if;
+  end loop;
+  update document_processes set state='confirmed',closed_at=clock_timestamp(),deletion_state='delete_pending',
+    revision=revision+1,confirm_request=p_request,tracking_event_id=event_id_value where id=p.id;
+  delete from document_candidates where process_id=p.id;
+  return hu23_read(p_user,p_process);
+end;
+$$;
+
+commit;
+
+-- HU23 T6. A durable explicit intent wraps the UNCHANGED normal HU13 scoring commit.
+begin;
+create function public.hu23_score_enabled()
+returns boolean language sql immutable set search_path=public,pg_temp as $$ select true; $$;
+
+create table public.document_score_requests(
+ user_id uuid not null references public.profiles(id),
+ request_id uuid not null,
+ plan_id uuid not null,
+ revision uuid not null,
+ previous_event_id uuid not null,
+ validation_token uuid not null,
+ evidence_count bigint not null check(evidence_count>0),
+ sources jsonb not null check(jsonb_typeof(sources)='array' and jsonb_array_length(sources) between 1 and 4),
+ reference_evaluation_id uuid,
+ event_id uuid not null unique default gen_random_uuid(),
+ created_at timestamptz not null default clock_timestamp(),
+ evaluation_id uuid,
+ completed_at timestamptz,
+ primary key(user_id,request_id),
+ unique(user_id,revision,validation_token),
+ foreign key(revision,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+ foreign key(previous_event_id,plan_id,user_id) references public.tracking_events(event_id,plan_id,user_id),
+ foreign key(reference_evaluation_id,user_id) references public.evaluations(id,user_id),
+ foreign key(evaluation_id,user_id) references public.evaluations(id,user_id),
+ check((evaluation_id is null)=(completed_at is null))
+);
+alter table public.document_score_requests enable row level security;
+revoke all on public.document_score_requests from public,anon,authenticated,service_role;
+grant select on public.document_score_requests to service_role;
+
+create function public.hu23_score_context(p_user uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ perform hu23_require_owner(p_user);
+ return jsonb_build_object('user_id',p_user,'tracking',hu13_read(p_user),'evidence',coalesce((
+   select jsonb_agg(to_jsonb(e)||jsonb_build_object('deletion_state',p.deletion_state)
+     order by e.confirmed_at,e.process_id,e.field)
+     from document_field_evidence e join document_processes p on p.id=e.process_id
+     where e.user_id=p_user and p.state='confirmed'),'[]'::jsonb));
+end;
+$$;
+
+create function public.hu23_score_intent(p_user uuid,p_action text,p_request jsonb,p_context jsonb default '{}')
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare j document_score_requests; rev uuid; item jsonb; amount bigint;
+begin
+ perform hu23_require_owner(p_user);
+ if p_action not in ('find','prepare') then raise exception 'invalid_request'; end if;
+ perform 1 from profiles where id=p_user for update;
+ select * into j from document_score_requests where user_id=p_user and request_id=(p_request->>'request_id')::uuid for update;
+ if found then
+   if j.revision is distinct from (p_request->>'expected_revision')::uuid
+      or j.validation_token is distinct from (p_request->>'validation_token')::uuid then raise exception 'idempotency_conflict'; end if;
+ else
+   select * into j from document_score_requests where user_id=p_user
+     and revision=(p_request->>'expected_revision')::uuid and validation_token=(p_request->>'validation_token')::uuid for update;
+ end if;
+ if j.request_id is not null then
+   if p_action='prepare' and j.completed_at is null and not hu23_score_enabled() then raise exception 'score_update_disabled'; end if;
+   return to_jsonb(j)||jsonb_build_object('result',(select command_result from tracking_events where event_id=j.event_id and user_id=p_user));
+ end if;
+ if p_action='find' then return 'null'::jsonb; end if;
+ if p_action<>'prepare' then raise exception 'invalid_request'; end if;
+ if not hu23_score_enabled() then raise exception 'score_update_disabled'; end if;
+ select event_id into rev from tracking_events where user_id=p_user order by recorded_at desc,event_id desc limit 1;
+ select count(*) into amount from document_field_evidence where user_id=p_user;
+ if rev is distinct from (p_request->>'expected_revision')::uuid
+    or amount is distinct from (p_context->>'evidence_count')::bigint then raise exception 'stale_score_state'; end if;
+ if jsonb_typeof(p_context->'sources') is distinct from 'array'
+    or jsonb_array_length(p_context->'sources') not between 1 and 4 then raise exception 'no_score_pending'; end if;
+ for item in select value from jsonb_array_elements(p_context->'sources') loop
+   if item is distinct from jsonb_build_object('process_id',item->>'process_id','field',item->>'field')
+      or not exists(select 1 from document_field_evidence e join document_processes p on p.id=e.process_id
+       where e.user_id=p_user and e.process_id=(item->>'process_id')::uuid and e.field=item->>'field'
+         and e.backing_at_confirmation='respaldado' and p.state='confirmed' and p.deletion_state='deleted')
+     then raise exception 'invalid_decision'; end if;
+ end loop;
+ insert into document_score_requests(user_id,request_id,plan_id,revision,previous_event_id,validation_token,
+   evidence_count,sources,reference_evaluation_id)
+ values(p_user,(p_request->>'request_id')::uuid,(p_context->>'plan_id')::uuid,rev,
+   (p_context->>'previous_event_id')::uuid,(p_request->>'validation_token')::uuid,amount,
+   p_context->'sources',(p_context->>'reference_evaluation_id')::uuid) returning * into j;
+ return to_jsonb(j);
+end;
+$$;
+
+create function public.hu23_score_commit(p_user uuid,p_event uuid,p_command jsonb,p_revision uuid,p_records jsonb)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare j document_score_requests; rev uuid; amount bigint; ev jsonb; evaluation jsonb; result jsonb;
+begin
+ perform hu23_require_owner(p_user);
+ perform 1 from profiles where id=p_user for update;
+ select * into j from document_score_requests where user_id=p_user and event_id=p_event for update;
+ if not found then raise exception 'not_found'; end if;
+ if p_command->>'event_id' is distinct from j.event_id::text or p_command->>'reason'<>'hu23_datos_validados'
+   or p_command->>'event_kind'<>'evaluation' or p_command->'patch' is distinct from '{}'::jsonb
+   or (p_command->>'previous_event_id')::uuid is distinct from j.previous_event_id
+   or (p_command->>'effective_at')::timestamptz is distinct from j.created_at then raise exception 'invalid_update'; end if;
+ if j.completed_at is not null then
+   return (select command_result from tracking_events where event_id=j.event_id and user_id=p_user);
+ end if;
+ if not hu23_score_enabled() then raise exception 'score_update_disabled'; end if;
+ select event_id into rev from tracking_events where user_id=p_user order by recorded_at desc,event_id desc limit 1;
+ select count(*) into amount from document_field_evidence where user_id=p_user;
+ if rev is distinct from j.revision or p_revision is distinct from j.revision or amount<>j.evidence_count then
+   raise exception 'stale_score_state'; end if;
+ if jsonb_array_length(p_records->'events')<>1 or jsonb_array_length(p_records->'evaluations')<>1
+    or p_records->'plan' is distinct from 'null'::jsonb or p_records->'goals' is distinct from '[]'::jsonb then raise exception 'invalid_update'; end if;
+ ev:=p_records->'events'->0; evaluation:=p_records->'evaluations'->0;
+ if ev->>'event_kind'<>'evaluation' or ev->>'reason'<>'hu23_datos_validados'
+    or ev->'patch' is distinct from '{}'::jsonb or ev->>'event_id' is distinct from j.event_id::text
+    or ev->>'evaluation_id' is distinct from evaluation->>'id'
+    or ev->'provenance'->'hu23_document_validation'->'evidence' is distinct from j.sources
+    or evaluation->'provenance'->'hu23_document_validation'->'evidence' is distinct from j.sources then raise exception 'invalid_update'; end if;
+ result:=hu13_commit(p_user,p_command,j.revision,p_records);
+ update document_score_requests set evaluation_id=(evaluation->>'id')::uuid,completed_at=clock_timestamp()
+   where user_id=p_user and request_id=j.request_id;
+ return result;
+end;
+$$;
+revoke all on function public.hu23_score_enabled(),public.hu23_score_context(uuid),
+ public.hu23_score_intent(uuid,text,jsonb,jsonb),public.hu23_score_commit(uuid,uuid,jsonb,uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.hu23_score_enabled(),public.hu23_score_context(uuid),
+ public.hu23_score_intent(uuid,text,jsonb,jsonb),public.hu23_score_commit(uuid,uuid,jsonb,uuid,jsonb) to service_role;
+commit;
+
+-- HU23 T7. Private read port for E4. No table/Storage permission changes.
+begin;
+create function public.hu23_backing_evidence(p_subject uuid,p_owner boolean default true)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if p_owner then
+   perform hu23_require_owner(p_subject);
+ elsif not exists(select 1 from profiles where id=p_subject) then raise exception 'not_found';
+ end if;
+ -- p_owner=false is exclusively a backend call AFTER existing commercial authorization.
+ return coalesce((
+   select jsonb_agg(jsonb_build_object('field',x.field,'backing_at_confirmation',x.backing_at_confirmation,
+     'confirmed_at',x.confirmed_at,'source_event_id',x.source_event_id) order by x.field)
+   from (
+     select distinct on(e.field) e.field,e.backing_at_confirmation,e.confirmed_at,e.source_event_id
+     from document_field_evidence e join document_processes p on p.id=e.process_id and p.user_id=e.user_id
+     where e.user_id=p_subject and p.state='confirmed'
+     order by e.field,e.confirmed_at desc,e.process_id desc
+   ) x
+ ),'[]'::jsonb);
+end;
+$$;
+revoke all on function public.hu23_backing_evidence(uuid,boolean) from public,anon,authenticated;
+grant execute on function public.hu23_backing_evidence(uuid,boolean) to service_role;
+commit;
+
+-- HU23 T8: private recovery ports. Storage bytes are deleted through its API, never SQL.
+begin;
+create table public.document_cleanup_control (
+ singleton boolean primary key default true check(singleton),
+ enabled boolean not null default true,
+ lease_token uuid,
+ lease_until timestamptz,
+ last_finished_at timestamptz
+);
+insert into public.document_cleanup_control(singleton) values(true);
+alter table public.document_cleanup_control enable row level security;
+revoke all on public.document_cleanup_control from public,anon,authenticated,service_role;
+
+alter table public.document_processes
+ add column storage_delete_after timestamptz not null default clock_timestamp(),
+ add column storage_delete_token uuid,
+ add column storage_delete_lease_until timestamptz;
+alter table public.document_ocr_jobs add column cleanup_probe boolean not null default false;
+create index hu23_storage_retry_idx on public.document_processes(storage_delete_after)
+ where deletion_state in ('delete_pending','retry_required','deleting');
+
+-- Twenty hours leaves three hourly recovery opportunities and operational margin.
+-- Enforce on DB writers too; a cold instance using the old 22h config cannot extend it.
+create function public.hu23_cleanup_deadline() returns trigger
+language plpgsql set search_path=public,pg_temp as $$
+begin
+ if new.expires_at>new.created_at+interval '24 hours' then
+   raise check_violation using message='HU23 retention check constraint';
+ end if;
+ if new.closed_at is null then new.expires_at:=least(new.expires_at,new.created_at+interval '20 hours'); end if;
+ return new;
+end $$;
+create trigger hu23_cleanup_deadline before insert or update of expires_at,created_at on public.document_processes
+ for each row execute function public.hu23_cleanup_deadline();
+update public.document_processes set expires_at=least(expires_at,created_at+interval '20 hours') where closed_at is null;
+
+-- Also lease immediate owner cleanup calls from T2. A killed request is recoverable.
+create function public.hu23_storage_delete_lease() returns trigger
+language plpgsql set search_path=public,pg_temp as $$
+begin
+ if new.deletion_state='deleting' then
+   new.storage_delete_token:=gen_random_uuid();
+   new.storage_delete_lease_until:=clock_timestamp()+interval '45 seconds';
+ elsif new.deletion_state in ('retry_required','delete_pending','deleted') then
+   new.storage_delete_token:=null; new.storage_delete_lease_until:=null;
+   new.storage_delete_after:=clock_timestamp()+make_interval(secs=>case when new.deletion_state='retry_required'
+     then least(1800,60*power(2,least(new.deletion_attempts,5))::integer) else 0 end);
+ end if;
+ return new;
+end $$;
+create trigger hu23_storage_delete_lease before update of deletion_state on public.document_processes
+ for each row execute function public.hu23_storage_delete_lease();
+
+-- All actions below are backend-only, separate from user lifecycle/role checks.
+-- Lock ordering is the same as HU13: profile -> process -> OCR job.
+create function public.hu23_cleanup(p_action text,p_run uuid default null,p_process uuid default null,
+ p_kind text default null,p_token uuid default null,p_payload jsonb default '{}',p_limit integer default 50)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare stamp timestamptz:=clock_timestamp(); ctl document_cleanup_control;
+ p document_processes; j document_ocr_jobs; uid uuid; items jsonb;
+ outcome text:=p_payload->>'outcome'; delay integer; path text;
+begin
+ if p_action='begin' then
+   select * into ctl from document_cleanup_control where singleton for update;
+   if not ctl.enabled or ctl.lease_until>stamp then return jsonb_build_object('busy',true); end if;
+   update document_cleanup_control set lease_token=gen_random_uuid(),lease_until=stamp+interval '90 seconds'
+     where singleton returning * into ctl;
+   return jsonb_build_object('token',ctl.lease_token);
+ end if;
+ select * into ctl from document_cleanup_control where singleton;
+ if p_run is null or ctl.lease_token is distinct from p_run or ctl.lease_until<=stamp then return 'null'::jsonb; end if;
+ if p_action='finish' then
+   update document_cleanup_control set lease_until=null,lease_token=null,last_finished_at=stamp
+     where singleton and lease_token=p_run;
+   return '{}'::jsonb;
+ elsif p_action='list' then
+   -- Independent resources avoid a failing original starving Azure deletion.
+   select coalesce(jsonb_agg(v.item order by v.rank,v.priority),'[]') into items from (
+     select jsonb_build_object('process_id',q.id,'kind',q.kind) item,q.kind,q.priority,q.due,
+       row_number() over(partition by q.kind order by q.due,q.id) rank from (
+       select d.id,'storage'::text kind,0 priority,
+         case when d.closed_at is null then least(d.expires_at,
+           (select o.created_at+interval '15 minutes' from document_ocr_jobs o where o.process_id=d.id))
+           else d.storage_delete_after end due from document_processes d
+       where (d.closed_at is null and (d.expires_at<=stamp or exists(select 1 from document_ocr_jobs o
+         where o.process_id=d.id and ((o.lease_kind='submit' and o.lease_until<=stamp)
+           or (o.job_state in ('running','retry_wait') and o.created_at+interval '15 minutes'<=stamp)))))
+         or (d.deletion_state in ('delete_pending','retry_required','deleting') and d.storage_delete_after<=stamp
+           and coalesce(d.storage_delete_lease_until,'-infinity')<=stamp)
+         or (d.deletion_state='deleted' and exists(select 1 from document_uploads u join storage.objects s
+           on s.bucket_id=u.bucket_id and s.name=u.storage_path where u.process_id=d.id))
+       union all
+       select o.process_id,'azure',1,o.next_attempt_at from document_ocr_jobs o
+       where o.deletion_state in ('delete_pending','retry_required','deleting') and o.next_attempt_at<=stamp
+         and coalesce(o.lease_until,'-infinity')<=stamp
+       union all
+       select d.id,'purge',2,d.created_at from document_processes d
+       where d.closed_at is not null and d.deletion_state='deleted' and d.created_at+interval '24 hours'<=stamp
+         and (exists(select 1 from document_uploads u where u.process_id=d.id and u.reconcile_until<=stamp)
+           or exists(select 1 from document_ocr_jobs o where o.process_id=d.id and o.deletion_state='deleted'
+             and o.deleted_at+interval '1 hour'<=stamp and coalesce(o.lease_until,'-infinity')<=stamp))
+     ) q order by rank,q.priority limit greatest(1,least(p_limit,100))
+   ) v;
+   return items;
+ elsif p_action='metrics' then
+   return jsonb_build_object('overdue_originals',(select count(*) from storage.objects
+     where bucket_id='hu23-document-temporary' and created_at+interval '24 hours'<=stamp),
+     'pending_originals',(select count(*) from document_processes where deletion_state in ('delete_pending','retry_required','deleting')),
+     'pending_azure',(select count(*) from document_ocr_jobs where deletion_state in ('delete_pending','retry_required','deleting')),
+     'unresolved_submissions',(select count(*) from document_ocr_jobs where job_state='submission_unknown' and result_id is null));
+ end if;
+
+ select user_id into uid from document_processes where id=p_process;
+ if uid is null then return 'null'::jsonb; end if;
+ perform 1 from profiles where id=uid for update skip locked;
+ if not found then return 'null'::jsonb; end if;
+ select * into p from document_processes where id=p_process for update skip locked;
+ if not found then return 'null'::jsonb; end if;
+ select * into j from document_ocr_jobs where process_id=p_process for update skip locked;
+ -- A competing job lock must not be mistaken for absence.
+ if j.process_id is null and exists(select 1 from document_ocr_jobs where process_id=p_process) then return 'null'::jsonb; end if;
+
+ if p_action='claim' then
+   if not ctl.enabled then return 'null'::jsonb; end if;
+   if p.closed_at is null and (p.expires_at<=stamp or
+     (j.lease_kind='submit' and j.lease_until<=stamp) or
+     (j.job_state in ('running','retry_wait') and j.created_at+interval '15 minutes'<=stamp)) then
+     update document_processes set state=case when expires_at<=stamp then 'expired' else 'processing_failed' end,
+       closed_at=stamp,revision=revision+1,deletion_state='delete_pending',
+       failure_code=case when expires_at<=stamp then failure_code else 'provider_unavailable' end where id=p.id;
+     delete from document_candidates where process_id=p.id;
+     if j.lease_kind='submit' and j.lease_until<=stamp then
+       -- Preserve submit token: a late accepted 202 must still attach its result ID.
+       update document_ocr_jobs set job_state='submission_unknown',last_error='interrupted',completed_at=stamp where process_id=p.id;
+     elsif j.job_state in ('running','retry_wait') and j.created_at+interval '15 minutes'<=stamp then
+       update document_ocr_jobs set job_state='failed',last_error='deadline',completed_at=stamp where process_id=p.id;
+     end if;
+     select * into p from document_processes where id=p.id;
+     select * into j from document_ocr_jobs where process_id=p.id;
+   end if;
+   if j.result_id is null and j.lease_kind='submit' and j.lease_until<=stamp and j.job_state<>'submission_unknown' then
+     update document_ocr_jobs set job_state='submission_unknown',last_error='interrupted',completed_at=stamp where process_id=p.id;
+     select * into j from document_ocr_jobs where process_id=p.id;
+   end if;
+   if p_kind='storage' then
+     if p.closed_at is null or (p.deletion_state<>'delete_pending' and p.storage_delete_after>stamp) or p.storage_delete_lease_until>stamp then return 'null'::jsonb; end if;
+     select coalesce(p.storage_path,u.storage_path) into path from (select 1) x left join document_uploads u on u.process_id=p.id;
+     if p.deletion_state='deleted' then
+       if not exists(select 1 from storage.objects where bucket_id='hu23-document-temporary' and name=path) then return 'null'::jsonb; end if;
+       update document_processes set deletion_state='retry_required',deletion_at=null,storage_path=path where id=p.id;
+     end if;
+     update document_processes set deletion_state='deleting',deletion_attempts=deletion_attempts+1,revision=revision+1
+       where id=p.id returning * into p;
+     return jsonb_build_object('token',p.storage_delete_token,'path',path);
+   elsif p_kind='azure' then
+     if j.process_id is null or j.deletion_state not in ('delete_pending','retry_required','deleting')
+       or j.next_attempt_at>stamp or j.lease_until>stamp then return 'null'::jsonb; end if;
+     if j.result_id is null then
+       if j.job_state='submission_unknown' or j.lease_kind='submit' then
+         update document_ocr_jobs set next_attempt_at=stamp+interval '1 hour' where process_id=p.id;
+         return jsonb_build_object('unresolved',true);
+       end if;
+       update document_ocr_jobs set deletion_state='deleted',deleted_at=stamp where process_id=p.id;
+       return jsonb_build_object('absent',true);
+     end if;
+     update document_ocr_jobs set lease_token=gen_random_uuid(),lease_kind='delete',lease_until=stamp+interval '45 seconds',
+       deletion_state='deleting',delete_attempts=delete_attempts+1 where process_id=p.id returning * into j;
+     return jsonb_build_object('token',j.lease_token,'result_id',j.result_id,'probe',j.cleanup_probe,'job_state',j.job_state);
+   elsif p_kind='purge' then
+     if p.closed_at is null or p.deletion_state<>'deleted' or p.created_at+interval '24 hours'>stamp then return 'null'::jsonb; end if;
+     delete from document_uploads u where u.process_id=p.id and u.reconcile_until<=stamp
+       and not exists(select 1 from storage.objects s where s.bucket_id=u.bucket_id and s.name=u.storage_path);
+     delete from document_ocr_jobs where process_id=p.id and deletion_state='deleted' and deleted_at+interval '1 hour'<=stamp
+       and coalesce(lease_until,'-infinity')<=stamp;
+     return jsonb_build_object('purged',true);
+   end if;
+ elsif p_action='settle' then
+   if p_kind='storage' then
+     if p_token is null or p.storage_delete_token is distinct from p_token then return 'null'::jsonb; end if;
+     -- Existing T2 trigger refuses acknowledgement while Storage still reports the object.
+     if outcome='deleted' and not exists(select 1 from storage.objects s join document_uploads u
+       on u.bucket_id=s.bucket_id and u.storage_path=s.name where u.process_id=p.id) then
+       update document_processes set deletion_state='deleted',deletion_at=stamp,storage_path=null,revision=revision+1 where id=p.id;
+     else
+       update document_processes set deletion_state='retry_required',revision=revision+1 where id=p.id;
+     end if;
+   elsif p_kind='azure' then
+     if p_token is null or j.lease_token is distinct from p_token or j.lease_kind<>'delete' then return 'null'::jsonb; end if;
+     delay:=greatest(60,least(86400,coalesce((p_payload->>'retry_after')::integer,60)),
+       least(1800,60*power(2,least(j.delete_attempts,5))::integer));
+     if outcome='deleted' then
+       update document_ocr_jobs set deletion_state='deleted',deleted_at=stamp,last_error=null,cleanup_probe=false,
+         lease_token=null,lease_kind=null,lease_until=null where process_id=p.id;
+     else
+       update document_ocr_jobs set deletion_state='retry_required',last_error='transient',
+         next_attempt_at=stamp+make_interval(secs=>delay),
+         cleanup_probe=case when outcome in ('missing','running') then true when outcome in ('succeeded','failed') then false else cleanup_probe end,
+         job_state=case when outcome in ('succeeded','failed') then outcome else job_state end,
+         lease_token=null,lease_kind=null,lease_until=null where process_id=p.id;
+     end if;
+   else raise exception 'invalid_transition'; end if;
+   return jsonb_build_object('outcome',case when p_kind='storage' then
+     (select deletion_state from document_processes where id=p.id) else
+     (select deletion_state from document_ocr_jobs where process_id=p.id) end);
+ end if;
+ raise exception 'invalid_transition';
+end $$;
+revoke all on function public.hu23_cleanup_deadline(),public.hu23_storage_delete_lease(),
+ public.hu23_cleanup(text,uuid,uuid,text,uuid,jsonb,integer) from public,anon,authenticated;
+grant execute on function public.hu23_cleanup(text,uuid,uuid,text,uuid,jsonb,integer) to service_role;
+commit;
+
+-- Optional HU23 PoC. Pin transport per job; no OCR, URLs or new financial fields persist.
+begin;
+alter table public.document_ocr_jobs add column provider text not null default 'azure'
+ check(provider in ('azure','local'));
+alter table public.document_ocr_jobs drop constraint document_ocr_jobs_api_version_check;
+alter table public.document_ocr_jobs drop constraint document_ocr_jobs_model_id_check;
+alter table public.document_ocr_jobs add constraint document_ocr_jobs_provider_metadata_check check(
+ (provider='azure' and api_version='2024-11-30' and model_id='prebuilt-layout') or
+ (provider='local' and api_version='1' and model_id='hu23-local'));
+
+-- Preserve the original Azure cleanup body/privileges behind a service-only facade.
+-- Older databases return Azure-only claims; new claims carry the pinned provider.
+alter function public.hu23_cleanup(text,uuid,uuid,text,uuid,jsonb,integer) rename to hu23_cleanup_before_local_ocr;
+revoke all on function public.hu23_cleanup_before_local_ocr(text,uuid,uuid,text,uuid,jsonb,integer) from public,anon,authenticated,service_role;
+create function public.hu23_cleanup(p_action text,p_run uuid default null,p_process uuid default null,
+ p_kind text default null,p_token uuid default null,p_payload jsonb default '{}',p_limit integer default 50)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare response jsonb;
+begin
+ response:=hu23_cleanup_before_local_ocr(p_action,p_run,p_process,p_kind,p_token,p_payload,p_limit);
+ if p_action='claim' and p_kind='azure' and response->>'result_id' is not null then
+   response:=response||jsonb_build_object('provider',(select provider from document_ocr_jobs where process_id=p_process));
+ end if;
+ return response;
+end $$;
+revoke all on function public.hu23_cleanup(text,uuid,uuid,text,uuid,jsonb,integer) from public,anon,authenticated;
+grant execute on function public.hu23_cleanup(text,uuid,uuid,text,uuid,jsonb,integer) to service_role;
+
+create function public.hu23_local_ocr(p_user uuid,p_process uuid,p_action text,p_token uuid default null)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare p document_processes; j document_ocr_jobs; stamp timestamptz:=clock_timestamp(); claimed boolean:=false;
+begin
+ perform hu23_require_owner(p_user,p_process);
+ perform 1 from profiles where id=p_user for update;
+ select * into p from document_processes where id=p_process for update;
+ select * into j from document_ocr_jobs where process_id=p.id for update;
+ if p_action not in ('claim','prepare','retry','cleanup') then raise exception 'invalid_transition'; end if;
+ if j.process_id is not null and j.provider<>'local' then raise exception 'invalid_transition'; end if;
+ if p.closed_at is null and p.expires_at<=stamp then
+   perform hu23_lifecycle(p_user,p.id,p.revision,'expire','{}');
+   select * into p from document_processes where id=p.id;
+ end if;
+ if p_action='claim' then
+   if not hu23_parsing_enabled() then raise exception 'parsing_disabled'; end if;
+   if p.closed_at is not null or p.state='awaiting_review' then null;
+   elsif j.lease_until>stamp or j.next_attempt_at>stamp then null;
+   else
+     if j.process_id is null then
+       if p.state<>'ready' then raise exception 'invalid_transition'; end if;
+       perform hu23_ocr_step(p_user,p.id,'start');
+     elsif p.state not in ('processing','ocr_ready') then raise exception 'invalid_transition';
+     end if;
+     -- A fresh UUID is a local correlation reference, never an Azure result ID.
+     update document_ocr_jobs set provider='local',api_version='1',model_id='hu23-local',
+       result_id=coalesce(result_id,gen_random_uuid()),job_state='running',
+       submitted_at=coalesce(submitted_at,stamp),completed_at=null,
+       -- Stateless extraction is a parse lease, not an uncertain Azure submission.
+       lease_kind='parse',lease_token=gen_random_uuid(),lease_until=stamp+interval '90 seconds',
+       last_error=null where process_id=p.id;
+     claimed:=true;
+   end if;
+ elsif p_action in ('prepare','retry') then
+   if p.closed_at is not null or p.state='awaiting_review' then null;
+   elsif j.process_id is null or p_token is null or j.lease_token is distinct from p_token or coalesce(j.lease_until<=stamp,true)
+       or j.lease_kind not in ('submit','parse') then raise exception 'stale_review';
+   elsif p_action='prepare' then
+     update document_processes set state='ocr_ready',revision=revision+1 where id=p.id;
+     update document_ocr_jobs set job_state='succeeded',completed_at=stamp,lease_kind='parse',
+       lease_until=stamp+interval '45 seconds' where process_id=p.id;
+   else
+     update document_ocr_jobs set job_state='retry_wait',last_error='transient',
+       lease_kind=null,lease_token=null,lease_until=null,next_attempt_at=stamp+interval '10 seconds'
+       where process_id=p.id;
+   end if;
+ elsif p_action='cleanup' and (p.closed_at is not null or p.state='awaiting_review') then
+   -- Worker has no retained result. Original Storage duty remains unchanged.
+   update document_ocr_jobs set deletion_state='deleted',deleted_at=coalesce(deleted_at,stamp),
+     lease_kind=null,lease_token=null,lease_until=null where process_id=p.id;
+ end if;
+ select * into p from document_processes where id=p_process;
+ select * into j from document_ocr_jobs where process_id=p_process;
+ return jsonb_build_object('process',to_jsonb(p),'job',case when j.process_id is null then null else to_jsonb(j) end,
+                           'claimed',claimed);
+end;
+$$;
+revoke all on function public.hu23_local_ocr(uuid,uuid,text,uuid) from public,anon,authenticated;
+grant execute on function public.hu23_local_ocr(uuid,uuid,text,uuid) to service_role;
+commit;

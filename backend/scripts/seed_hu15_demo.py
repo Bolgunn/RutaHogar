@@ -670,9 +670,10 @@ def coverage_problems(summary: dict, meta: dict) -> list[str]:
 # Supabase I/O
 # --------------------------------------------------------------------------------------------
 class Supabase:
-    def __init__(self):
-        self.url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-        self.key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    def __init__(self, *, url=None, key=None, client=None):
+        self.url = (url if url is not None else os.environ.get("SUPABASE_URL", "")).rstrip("/")
+        self.key = key if key is not None else (os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
+        self.client = client
         if not self.url or not self.key:
             sys.exit("SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) are required.")
         self.headers = {"apikey": self.key, "Content-Type": "application/json"}
@@ -680,7 +681,8 @@ class Supabase:
             self.headers["Authorization"] = f"Bearer {self.key}"
 
     def request(self, method, path, **kwargs):
-        response = httpx.request(method, self.url + path, headers=self.headers, timeout=30, **kwargs)
+        requester = self.client.request if self.client is not None else httpx.request
+        response = requester(method, self.url + path, headers=self.headers, timeout=30, **kwargs)
         if response.status_code >= 400:
             raise RuntimeError(f"{method} {path}: {response.status_code} {response.text[:300]}")
         return response.json() if response.content else None
