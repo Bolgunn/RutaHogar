@@ -2602,6 +2602,8 @@ export default function App() {
         <AdminProjectCatalog />
       ) : page === "admin-priorizacion" && canViewStaffPage(page, profile.role, inmobiliariaId) ? (
         <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} />
+      ) : page === "admin-priorizacion" && isAdminRole(profile.role) && !tenantResolved ? (
+        <section className="section-block"><p>Cargando configuración comercial…</p></section>
       ) : (
         <section className="section-block">
           <div className="section-heading">
