@@ -8,7 +8,9 @@ import { detectContactOpportunities } from "../lib/matching/contactOpportunities
 import { buildOpportunityChanges } from "../lib/commercial/opportunityChanges";
 import { buildLeadProjectComparison } from "../lib/matching/leadComparison";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
-import { rankLeadsForProject } from "../lib/matching/leadRanking";
+import { actionKeyOf, rankLeadsForProject } from "../lib/matching/leadRanking";
+import { PRIORITY_ACTIONS } from "../lib/commercial/priorityActions";
+import { getStaffCommercialConfig } from "../services/evaluationService";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
@@ -58,6 +60,14 @@ const AGE_RANGES = [
   { label: "35 - 45 años", min: 35, max: 45 },
   { label: "45 - 55 años", min: 45, max: 55 },
   { label: "55+ años", min: 55, max: Infinity },
+];
+const PRIORITY_RAIL = [
+  ["contact_now", "admin-leads-metric--high"],
+  ["contact_with_review", "admin-leads-metric--medium"],
+  ["reorient", ""],
+  ["request_info", ""],
+  ["nurture", "admin-leads-metric--low"],
+  ["do_not_route", "admin-leads-metric--low"],
 ];
 const DISMISSED_OPPORTUNITIES_KEY = "RutaHogar_dismissed_contact_opportunities";
 
@@ -342,7 +352,8 @@ function buildHistoryTimeline(history = [], project = null) {
 }
 
 export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role, highScoreNotification }) {
-  const [classification, setClassification] = useState("Alto");
+  const [priority, setPriority] = useState("contact_now");
+  const [classification, setClassification] = useState("todos");
   const [commune, setCommune] = useState("todas");
   const [age, setAge] = useState(0);
   const [date, setDate] = useState("todos");
@@ -372,6 +383,13 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   useEffect(() => {
     setLocalEvaluations(evaluations || []);
   }, [evaluations]);
+
+  // HU 21: la proyección staff trae junto a las evaluaciones lo que R9 necesita de los criterios.
+  const commercialConfig = useMemo(() => getStaffCommercialConfig(), [evaluations]);
+  const defaultSortBy = commercialConfig?.orden_desempate || "afinidad";
+  useEffect(() => {
+    setSortBy(defaultSortBy);
+  }, [defaultSortBy]);
 
   
   // CRM Mock State
@@ -512,20 +530,22 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const counts = useMemo(() => latestEvaluations.reduce((result, item) => {
     const status = item.reliability_status || "normal";
     if (status === "silenciado" || status === "descartado") return result;
-    if (item.result?.classification in result) result[item.result.classification] += 1;
+    const key = actionKeyOf(item);
+    if (key in result) result[key] += 1;
     return result;
-  }, { Alto: 0, Medio: 0, Bajo: 0 }), [latestEvaluations]);
+  }, Object.fromEntries(Object.keys(PRIORITY_ACTIONS).map((key) => [key, 0]))), [latestEvaluations]);
   const selectedProject = useMemo(
     () => projects.find((item) => String(item.id) === projectId) || null,
     [projects, projectId],
   );
-  const defaultClassification = selectedProject ? "todos" : "Alto";
+  const defaultPriority = selectedProject ? "todos" : "contact_now";
   const filtered = useMemo(() => {
     const dateThreshold = threshold(date);
     const ageRange = AGE_RANGES[age];
     const term = search.trim().toLowerCase();
     return latestEvaluations.filter((item) => {
       const mainCommune = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
+      if (priority !== "todos" && actionKeyOf(item) !== priority) return false;
       if (classification !== "todos" && item.result?.classification !== classification) return false;
       if (commune !== "todas" && mainCommune !== commune && item.onboarding?.comuna_alternativa !== commune) return false;
       if (item.input?.edad != null && (item.input.edad < ageRange.min || item.input.edad >= ageRange.max)) return false;
@@ -542,10 +562,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
       return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
     });
-  }, [latestEvaluations, classification, commune, age, date, search, reliabilityStatus]);
+  }, [latestEvaluations, priority, classification, commune, age, date, search, reliabilityStatus]);
   const { ranked, descartados, requiereAntecedentes } = useMemo(
-    () => rankLeadsForProject(filtered, selectedProject, sortBy),
-    [filtered, selectedProject, sortBy],
+    () => rankLeadsForProject(filtered, selectedProject, sortBy, { proyectos: projects, commercialConfig }),
+    [filtered, selectedProject, sortBy, projects, commercialConfig],
   );
   const contactOpportunities = useMemo(
     () => detectContactOpportunities(evaluations, projects),
@@ -610,11 +630,11 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     [comparisonLeads, selectedProject],
   );
   const visibleContactQuestions = showAllContactQuestions ? contactQuestions : contactQuestions.slice(0, 5);
-  const activeFilters = classification !== defaultClassification || commune !== "todas" || age || date !== "todos" || search || reliabilityStatus !== "default";
-  const clearFilters = () => { setClassification(defaultClassification); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); setReliabilityStatus("default"); };
+  const activeFilters = priority !== defaultPriority || classification !== "todos" || commune !== "todas" || age || date !== "todos" || search || reliabilityStatus !== "default" || sortBy !== defaultSortBy;
+  const clearFilters = () => { setPriority(defaultPriority); setClassification("todos"); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); setReliabilityStatus("default"); setSortBy(defaultSortBy); };
   const selectProject = (nextId) => {
     setProjectId(nextId);
-    setClassification(nextId ? "todos" : "Alto");
+    setPriority(nextId ? "todos" : "contact_now");
     setShowRequiresDocuments(false);
     setShowExcluded(false);
   };
@@ -671,6 +691,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <div className="executive-lead-card__status">
             {getReliabilityBadgeCard(lead.reliability_status || "normal")}
             <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
+            <span className="status-pill">{PRIORITY_ACTIONS[actionKeyOf(lead)] || "Sin prioridad"}</span>
             <CommercialStageBadge records={commercialRecords[lead.user_id]} />
             <small>{formatDate(lead.created_at)}</small>
             {lead.email && crmLeads[lead.email] ? (
@@ -821,18 +842,16 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       </div>
       <div className="executive-leads-controls__primary">
         <label className="executive-leads-controls__project"><span><i className="ti ti-building-estate" aria-hidden="true" />Proyecto a analizar</span><select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Compara afinidad, capacidad y pie con este proyecto.</small></label>
-        <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Ordena los resultados sin cambiar los filtros." : "Disponible al seleccionar un proyecto."}</small></label>
+        <label className="executive-leads-controls__sort">Desempate dentro de cada prioridad<select value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="afinidad">{selectedProject ? "Mejor afinidad con el proyecto" : "Mejor afinidad con tus proyectos"}</option><option value="capacidad">Mayor capacidad de compra</option></select><small>La prioridad comercial siempre ordena primero; esto decide entre leads con la misma acción.</small></label>
       </div>
       <div className="executive-leads-controls__priority">
-        <div><strong>Prioridad de calificación</strong><p>Filtra por nivel de calificación.</p></div>
-        <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
+        <div><strong>Prioridad comercial</strong><p>Filtra por la acción sugerida para cada lead.</p></div>
+        <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad comercial">
           {[
             ["todos", "Total", latestEvaluations.length, ""],
-            ["Alto", "Alta prioridad", counts.Alto, "admin-leads-metric--high"],
-            ["Medio", "Prioridad media", counts.Medio, "admin-leads-metric--medium"],
-            ["Bajo", "Prioridad baja", counts.Bajo, "admin-leads-metric--low"],
+            ...PRIORITY_RAIL.map(([key, tone]) => [key, PRIORITY_ACTIONS[key], counts[key], tone]),
           ].map(([value, label, count, tone]) => (
-            <button type="button" key={value} className={`admin-leads-metric executive-priority-rail__item ${tone} ${classification === value ? "is-active" : ""}`} onClick={() => setClassification(value)} aria-pressed={classification === value}>
+            <button type="button" key={value} className={`admin-leads-metric executive-priority-rail__item ${tone} ${priority === value ? "is-active" : ""}`} onClick={() => setPriority(value)} aria-pressed={priority === value}>
               <span>{label}</span>
               <strong>{count}</strong>
             </button>
@@ -841,6 +860,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       </div>
       <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
         <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
+        <label>Clasificación financiera<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="todos">Todas</option><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select></label>
         <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label>Confiabilidad<select value={reliabilityStatus} onChange={(event) => setReliabilityStatus(event.target.value)}><option value="default">Oportunidades confiables</option><option value="todos">Todos los leads activos</option><option value="normal">Solo normales</option><option value="sospechoso">Solo sospechosos</option><option value="en_revision">En revisión</option><option value="reactivado">Reactivados</option></select></label>
         <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
@@ -966,6 +986,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <span className="eyebrow">Bandeja activa</span>
           <h2>{selectedProject ? "Leads con mejor encaje" : "Leads para revisar"}</h2>
           <p>{selectedProject ? `${ranked.length} de ${filtered.length} alcanzan ${selectedProject.nombre}.` : `${ranked.length} resultado${ranked.length === 1 ? "" : "s"} según la prioridad y los filtros aplicados.`}</p>
+          {commercialConfig?.version != null && <small className="leads-hint">Orden según los criterios comerciales de tu inmobiliaria.</small>}
         </div>
         <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
            <button type="button" className="secondary-button compact-button" onClick={() => setIsCrmModalOpen(true)}>Auditoría CRM</button>
