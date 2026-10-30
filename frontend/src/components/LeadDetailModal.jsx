@@ -5,6 +5,7 @@ import { getEvaluations } from "../services/evaluationService";
 import { getStaffLeadDetail } from "../services/trackingService";
 import { reportLead, resolveLeadStatus } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
+import { resolvedPriorityDetail } from "../lib/commercial/priorityActions";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import CommercialStagePanel from "./CommercialStagePanel";
@@ -418,7 +419,12 @@ export default function LeadDetailModal({
   const selectedAdjustment = getClassificationAdjustment(selectedResult);
   const selectedMainBlocker = hasObjectData(selectedResult.main_blocker) ? selectedResult.main_blocker : null;
   const selectedProjectFit = hasObjectData(selectedResult.project_fit) ? selectedResult.project_fit : null;
-  const selectedPriority = hasObjectData(selectedResult.commercial_priority_detail) ? selectedResult.commercial_priority_detail : null;
+  const resolvedPriority = resolvedPriorityDetail(activeLead);
+  const selectedPriority = hasObjectData(resolvedPriority) ? resolvedPriority : null;
+  // HU 21: cuando los criterios del tenant cambian la acción, se muestra también la del motor.
+  const enginePriority = activeLead?.differs_from_engine && hasObjectData(selectedResult.commercial_priority_detail)
+    ? selectedResult.commercial_priority_detail
+    : null;
   const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators) ? selectedResult.financial_indicators : {};
   const selectedCommunes = activeLead ? comunasDeclaradas(activeLead).declaradas : [];
   const selectedProjectGoal = selectedInput.project_goal || null;
@@ -855,6 +861,11 @@ export default function LeadDetailModal({
                     <DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow>
                     <DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow>
                   </dl>
+                  {enginePriority && (
+                    <p className="lead-cell-sub">
+                      Prioridad según criterios de tu inmobiliaria · el motor sugiere: {enginePriority.action || enginePriority.level}
+                    </p>
+                  )}
                 </article>
               )}
 
