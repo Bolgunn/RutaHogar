@@ -6,7 +6,7 @@
 | **Runs on / implemented in** | **backend** · `backend/app/scoring_engine/commercial_priority.py` (R0–R8) · **frontend** · `frontend/src/lib/matching/leadRanking.js` (R9 only) |
 | **Cases** | `docs/algorithms/ALG-19-cases.json` — asserted by `backend/tests/test_alg19_cases.py` (pytest, R0–R8) · `docs/algorithms/ALG-19-ranking-cases.json` — asserted by `frontend/src/lib/matching/__tests__/leadRanking.test.js` (vitest, R9) |
 | **Open assumptions** | 7 open — see the log below |
-| **Last changed** | 2026-10-29 · HU 21 · created with AI assistance during the HU 21 grill; reviewed and approved by Benjamín |
+| **Last changed** | 2026-10-29 · HU 21 · created with AI assistance during the HU 21 grill; reviewed and approved by Benjamín · implemented on `feat/hu21-configuracion-comercial-priorizacion` (PR number pending) |
 
 ## Purpose
 
