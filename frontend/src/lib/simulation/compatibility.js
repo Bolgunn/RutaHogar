@@ -280,9 +280,9 @@ export function evaluateScenario(input = {}, scenario, capacidad = null) {
 }
 
 function getPreferenceScore(project, onboarding = {}) {
-  const targetCommune = normalizeText(onboarding.comuna_interes || onboarding.comuna_objetivo);
+  const targetCommune = normalizeText(onboarding?.comuna_interes || onboarding?.comuna_objetivo);
   const projectCommune = normalizeText(project?.comuna);
-  const preferredType = normalizeType(onboarding.tipo_propiedad || onboarding.tipo_vivienda_preferida);
+  const preferredType = normalizeType(onboarding?.tipo_propiedad || onboarding?.tipo_vivienda_preferida);
   const projectType = normalizeType(project?.tipo_vivienda);
 
   return {
@@ -294,9 +294,9 @@ function getPreferenceScore(project, onboarding = {}) {
 function getScenarioPreference(result, preferences = {}) {
   const scenario = result?.scenario || {};
   const project = result?.project || scenario.project || {};
-  const targetCommune = normalizeText(preferences.comuna_interes || preferences.comuna_objetivo);
+  const targetCommune = normalizeText(preferences?.comuna_interes || preferences?.comuna_objetivo);
   const scenarioCommune = normalizeText(scenario.comuna || project.comuna);
-  const preferredType = normalizeType(preferences.tipo_propiedad || preferences.tipo_vivienda_preferida);
+  const preferredType = normalizeType(preferences?.tipo_propiedad || preferences?.tipo_vivienda_preferida);
   const scenarioType = normalizeType(scenario.tipo_vivienda || project.tipo_vivienda);
 
   return {

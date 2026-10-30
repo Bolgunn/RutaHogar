@@ -9,7 +9,7 @@ vi.mock('react',async(original)=>({...await original(),
 }));
 vi.mock('../../services/documentUpload',()=>({getDocumentConfiguration:vi.fn(),getDocumentSession:vi.fn(),
   cancelDocumentSession:vi.fn(),uploadDocument:vi.fn()}));
-vi.mock('../../services/documentReview',()=>({processDocument:vi.fn()}));
+vi.mock('../../services/documentReview',async(original)=>({...await original(),processDocument:vi.fn()}));
 import DocumentUpload from './DocumentUpload';
 import { getDocumentConfiguration,getDocumentSession,cancelDocumentSession,uploadDocument } from '../../services/documentUpload';
 import { processDocument } from '../../services/documentReview';
@@ -30,6 +30,19 @@ async function select(){
 }
 const send=()=>all(render(),n=>n.type==='form')[0].props.onSubmit({preventDefault:vi.fn()});
 afterEach(()=>{hooks.states=[];hooks.refs=[];hooks.effects=[];vi.resetAllMocks();vi.unstubAllGlobals();});
+
+it.each(['azure','local'])('usa el mismo consentimiento neutral y privado con %s',async(provider)=>{
+  getDocumentConfiguration.mockResolvedValue({...config,ocr_provider:provider});
+  render();hooks.effects[0]();await Promise.resolve();
+  all(render(),node=>node.type==='input'&&node.props.type==='file')[0].props.onChange({target:{files:[{name:'sintetico.pdf'}]}});
+  uploadDocument.mockImplementation(async(file,type,options)=>{options.onSession(ready);return ready;});
+  await send();
+  const content=text(render());
+  expect(content).toContain('Autorizo procesar temporalmente este documento para extraer y revisar sus datos. RutaHogar sólo cambiará mis antecedentes si luego confirmo.');
+  expect(content).toContain('Los ejecutivos no pueden verlo');
+  expect(content).not.toMatch(/Azure|Microsoft|proveedor|worker|OCR propio/i);
+  expect(button('Procesar y revisar documento').props.disabled).toBe(true);
+});
 
 it('conserva nombre y estado tras upload, oculta el input y exige consentimiento para procesar',async()=>{
   await select();
@@ -120,5 +133,5 @@ it('muestra solamente el mensaje generico ante identidad inconsistente',async()=
     throw new Error('Datos inconsistentes');
   });
   await button('Procesar y revisar documento').props.onClick();
-  expect(text(render())).toBe('Datos inconsistentes');
+  expect(text(render())).toBe('Se detectaron inconsistencias entre los datos de tu perfil y los del documento cargado.');
 });

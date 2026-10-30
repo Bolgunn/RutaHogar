@@ -15,5 +15,6 @@
 !backend/app/documents/__init__.py
 !backend/app/documents/config.py
 !backend/app/documents/contracts.py
+!backend/app/documents/identity.py
 !backend/app/documents/normalization.py
 !backend/app/documents/parsers.py

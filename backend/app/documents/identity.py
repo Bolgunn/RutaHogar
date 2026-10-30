@@ -66,17 +66,26 @@ def extract_identity(rows):
     """Extract only explicit subject-labelled values; ambiguous labels are discarded."""
     found = {'rut': [], 'name': []}
     patterns = {
-        'rut': re.compile(r'^(?:rut|r\.u\.t\.?) (?:del? )?(?:trabajador|empleado|titular|afiliado|beneficiario)\s*[:|=]\s*(.+)$'),
-        'name': re.compile(r'^(?:nombre(?: completo)? (?:del? )?(?:trabajador|empleado|titular|afiliado|beneficiario))\s*[:|=]\s*(.+)$'),
+        'rut': re.compile(r'(?:rut|r\.u\.t\.?) (?:del? )?(?:trabajador|empleado|titular|afiliado|beneficiario)'),
+        'name': re.compile(r'nombre(?: completo)? (?:del? )?(?:trabajador|empleado|titular|afiliado|beneficiario)'),
     }
+    # PDF text extraction can merge employer/worker columns into one line.
+    # Bound each value by the NEXT labelled field, including employer fields,
+    # but continue to accept identity only from explicit subject labels.
+    labels = re.compile(r'(?<!\w)(?P<label>(?:rut|r\.u\.t\.?|nombre(?: completo)?)'
+                        r'(?: (?:del? )?(?:trabajador|empleado|titular|afiliado|beneficiario|empleador|empresa))?'
+                        r'|razon social|cargo|periodo|fecha de emision|fecha de ingreso)\s*[:|=]\s*')
     for _, line in rows:
-        for field, pattern in patterns.items():
-            match = pattern.fullmatch(line)
-            if match:
-                value = match.group(1).strip()
+        matches = list(labels.finditer(line))
+        for index, match in enumerate(matches):
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(line)
+            for field, pattern in patterns.items():
+                if not pattern.fullmatch(match.group('label')):
+                    continue
+                value = line[match.end():end].strip()
                 if field == 'rut':
                     value = normalize_rut(value)
-                elif len(name_tokens(value)) < 2 or len(value) > 160 or re.search(r'\d', value):
+                elif len(name_tokens(value)) < 2 or len(value) > 160 or re.search(r'[\d:|=]', value):
                     value = None
                 if value:
                     found[field].append(value)

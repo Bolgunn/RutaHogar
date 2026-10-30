@@ -14,6 +14,7 @@ PROFILE = {'rut': '12.345.678-5', 'nombre': 'Juan Carlos', 'apellido_paterno': '
     ('12345678-5', '123456785'), ('12.345.678 - 5', '123456785'),
     ('17.493.908-k', '17493908K'), ('17.493.908-K', '17493908K'),
     ('12.345.678-4', None), ('rut 12.345.678-5', None),
+    ('1.111.111-4', '11111114'), ('2.222.222-8', '22222228'), ('1.111.111-5', None),
 ])
 def test_rut_normalization(value, expected):
     assert normalize_rut(value) == expected
@@ -45,6 +46,39 @@ def test_only_subject_identity_is_extracted():
     assert result.identity.name == 'juan perez'
     assert result.candidates[0].value == 1450000
     assert compare_identity(PROFILE, result.identity.model_dump(exclude_none=True)) == 'consistent'
+
+
+@pytest.mark.parametrize('worker_first', [False, True])
+@pytest.mark.parametrize('name,rut,expected', [
+    ('Camila Fernanda Prueba Usuario', '1.111.111-4', 'consistent'),
+    ('Diego Andres Ejemplo Demo', '2.222.222-8', 'inconsistent'),
+])
+def test_identity_from_merged_employer_and_worker_columns(worker_first,name,rut,expected):
+    name_fields=['Razon social: Empresa Demo RutaHogar SpA',f'Nombre trabajador: {name}']
+    rut_fields=['RUT empleador: 76.000.000-0',f'RUT trabajador: {rut}']
+    if worker_first:
+        name_fields.reverse(); rut_fields.reverse()
+    result=parse_document('liquidacion_sueldo',layout(' '.join(name_fields),' '.join(rut_fields),
+        'RENTA LIQUIDA MENSUAL $1.450.000','Monto liquido a pagar: $1.450.000 CLP'),date(2026,10,29))
+    assert result.identity.rut==normalize_rut(rut)
+    assert result.identity.name==name.lower()
+    assert result.candidates[0].value==1450000
+    profile={'rut':'1.111.111-4','full_name':'Camila Fernanda Prueba Usuario'}
+    assert compare_identity(profile,result.identity.model_dump(exclude_none=True))==expected
+
+
+def test_merged_columns_do_not_use_employer_or_invalid_subject_rut():
+    result=parse_document('liquidacion_sueldo',layout(
+        'RUT empleador: 76.000.000-0 RUT trabajador: 1.111.111-5',
+        'Nombre empresa: Empresa Demo RutaHogar SpA','Liquido a pagar: $1.450.000'),date(2026,10,29))
+    assert result.identity is None
+
+
+def test_conflicting_subject_values_on_one_line_remain_ambiguous():
+    result=parse_document('liquidacion_sueldo',layout(
+        'RUT empleador: 76.000.000-0 RUT trabajador: 1.111.111-4 RUT trabajador: 2.222.222-8',
+        'Liquido a pagar: $1.450.000'),date(2026,10,29))
+    assert result.identity is None
 
 
 def test_ambiguous_identity_is_not_contradiction():

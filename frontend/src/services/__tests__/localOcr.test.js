@@ -41,7 +41,7 @@ it('reports a real local worker failure instead of polling forever', async () =>
   const request = vi.fn().mockResolvedValueOnce({id:'synthetic',state:'processing'})
     .mockResolvedValueOnce({provider:'local',state:'processing',status:'retry_wait'});
   await expect(processDocument({id:'synthetic'},{provider:'local',consent:true,request,wait:async()=>{}}))
-    .rejects.toThrow('servicio OCR no pudo completar');
+    .rejects.toThrow('No pudimos procesar el documento. Cierra este intento y vuelve a cargarlo.');
   expect(request.mock.calls.some(([path])=>path.endsWith('/ocr/start'))).toBe(false);
 });
 
@@ -50,5 +50,5 @@ it('a rejected identity returns only the generic message on immediate start', as
   const request=vi.fn().mockResolvedValueOnce({id:'synthetic',state:'ready'})
     .mockResolvedValueOnce({provider:'local',state:'processing_failed',revision:3,message:'Datos inconsistentes'});
   await expect(processDocument({id:'synthetic'},{provider:'local',consent:true,request}))
-    .rejects.toThrow(/^Datos inconsistentes$/);
+    .rejects.toThrow(/^Se detectaron inconsistencias entre los datos de tu perfil y los del documento cargado\.$/);
 });

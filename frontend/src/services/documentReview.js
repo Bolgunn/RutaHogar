@@ -1,6 +1,8 @@
 import { trackingRequest } from './trackingService';
 import { RequestTimeoutError } from './httpRequest';
 
+export const IDENTITY_INCONSISTENT_MESSAGE = 'Se detectaron inconsistencias entre los datos de tu perfil y los del documento cargado.';
+
 export const isActionable = (row) => row.detection === 'detected'
   && ['match', 'difference'].includes(row.comparison) && row.detected_value !== null;
 const sessionPath = (id) => `/documents/sessions/${encodeURIComponent(id)}`;
@@ -94,7 +96,7 @@ export async function processDocument(session, { consent = false, provider = 'az
       nextAttempt = progress.next_attempt_at;
       onSession(current);
       if (progress.provider === 'local' && progress.status === 'retry_wait') {
-        throw new Error('El servicio OCR no pudo completar el procesamiento. Cierra este intento y vuelve a cargar el documento.');
+        throw new Error('No pudimos procesar el documento. Cierra este intento y vuelve a cargarlo.');
       }
     } catch (error) {
       if (!(error instanceof RequestTimeoutError)) throw error;
@@ -102,7 +104,7 @@ export async function processDocument(session, { consent = false, provider = 'az
     }
   }
   active();
-  if (current.failure_code === 'identity_inconsistent') throw new Error('Datos inconsistentes');
+  if (current.failure_code === 'identity_inconsistent') throw new Error(IDENTITY_INCONSISTENT_MESSAGE);
   if (current.state !== 'awaiting_review') {
     throw new Error('No pudimos completar este intento. Ciérralo e intenta con otro documento.');
   }

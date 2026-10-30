@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import DocumentReview from './DocumentReview';
-import { processDocument } from '../../services/documentReview';
+import { IDENTITY_INCONSISTENT_MESSAGE, processDocument } from '../../services/documentReview';
 import { cancelDocumentSession, getDocumentConfiguration, getDocumentSession, uploadDocument } from '../../services/documentUpload';
 
 const labels = { validating: 'Revisando archivo…', authorizing: 'Autorizando carga privada…',
@@ -116,8 +116,8 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
     } catch { setError('No pudimos cerrar el intento. Reintenta la cancelación.'); }
     finally { if (mounted.current) setBusy(false); }
   };
-  if (error === 'Datos inconsistentes' || session?.failure_code === 'identity_inconsistent') {
-    return <p role="alert">Datos inconsistentes</p>;
+  if (error === 'Datos inconsistentes' || error === IDENTITY_INCONSISTENT_MESSAGE || session?.failure_code === 'identity_inconsistent') {
+    return <p role="alert">{IDENTITY_INCONSISTENT_MESSAGE}</p>;
   }
   const accept = config && Object.values(config.restrictions.files).flat().map((ext) => `.${ext}`).join(',');
   const admitted = session && ['ready', 'processing', 'ocr_ready', 'awaiting_review', 'confirmed'].includes(session.state);
@@ -142,7 +142,7 @@ export default function DocumentUpload({ onReady = () => {}, onConfirmed = () =>
     </form>
     {session && ['ready', 'processing', 'ocr_ready'].includes(session.state) && <div className="document-processing">
       <label className="document-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={(event) => setConsent(event.target.checked)} />
-        <span>{config?.ocr_provider === 'local' ? 'Autorizo procesar temporalmente este documento en el servicio OCR propio de RutaHogar.' : 'Autorizo enviar temporalmente este documento a Microsoft Azure para reconocer su texto.'} RutaHogar sólo cambiará mis datos si luego confirmo.</span>
+        <span>Autorizo procesar temporalmente este documento para extraer y revisar sus datos. RutaHogar sólo cambiará mis antecedentes si luego confirmo.</span>
       </label>
       <button type="button" onClick={process} disabled={busy || !consent || !admitted}>Procesar y revisar documento</button>
     </div>}
