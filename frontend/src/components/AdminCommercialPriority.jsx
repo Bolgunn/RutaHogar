@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "./admin-management.css";
+import "./admin-commercial-priority.css";
 import { getAvailableProjects } from "../services/projectService";
 import {
   getCommercialConfig,
@@ -162,7 +163,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
   if (!data || !draft) return <section className="section-block"><p>Cargando configuración comercial…</p></section>;
 
   return (
-    <section className="section-block admin-catalog admin-catalog-page">
+    <section className="section-block admin-catalog admin-catalog-page commercial-priority-page">
       <div className="section-heading">
         <span className="eyebrow">Administración</span>
         <h1>Priorización comercial</h1>
@@ -187,7 +188,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           <h2>🔒 Reglas fijas</h2>
           <p>Protegen a los leads con bloqueadores o datos incompletos. No se pueden modificar.</p>
         </div></div>
-        <ul className="admin-bullet-list">
+        <ul className="admin-bullet-list commercial-priority-locked">
           {LOCKED_RULES.map(([condition, action]) => <li key={condition}>{condition} → <strong>{action}</strong></li>)}
         </ul>
       </section>
@@ -203,21 +204,21 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           </button>
         </div>
 
-        <div className="admin-control-stack">
+        <div className="commercial-priority-grid">
           {SET_CHOICE_KEYS.map((key) => (
-            <fieldset key={key} className="field-wrap">
+            <fieldset key={key} className="commercial-priority-field">
               <legend>{CRITERIA_LABELS[key]}</legend>
               {(opciones[key] || []).map((option) => (
                 <label key={option.join("+")} className="inline-choice">
                   <input type="radio" name={key} checked={sameSet(getCriterion(draft, key), option)} onChange={() => update(key, option)} />
-                  {option.join(" + ")}
+                  <span>{option.join(" + ")}</span>
                 </label>
               ))}
               {fieldError(key)}
             </fieldset>
           ))}
 
-          <fieldset className="field-wrap">
+          <fieldset className="commercial-priority-field">
             <legend>{CRITERIA_LABELS["senales.plazos"]}</legend>
             {(opciones["senales.plazos"] || []).map((plazo) => {
               const selected = draft.senales.plazos.includes(plazo);
@@ -225,21 +226,21 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
                 <label key={plazo} className="inline-choice">
                   <input type="checkbox" checked={selected} onChange={() => update("senales.plazos",
                     selected ? draft.senales.plazos.filter((item) => item !== plazo) : [...draft.senales.plazos, plazo])} />
-                  {formatCriterionValue("senales.plazos", [plazo])}
+                  <span>{formatCriterionValue("senales.plazos", [plazo])}</span>
                 </label>
               );
             })}
             {fieldError("senales.plazos")}
             <label className="inline-choice">
               <input type="checkbox" checked={draft.senales.propiedad_vista} onChange={(event) => update("senales.propiedad_vista", event.target.checked)} />
-              {CRITERIA_LABELS["senales.propiedad_vista"]}
+              <span>{CRITERIA_LABELS["senales.propiedad_vista"]}</span>
             </label>
             {fieldError("senales.propiedad_vista")}
           </fieldset>
 
           {SELECT_KEYS.map((key) => (
-            <label key={key} className="field-wrap">
-              {CRITERIA_LABELS[key]}
+            <label key={key} className="commercial-priority-field">
+              <span>{CRITERIA_LABELS[key]}</span>
               <select value={String(getCriterion(draft, key))} onChange={(event) => {
                 const option = (opciones[key] || []).find((item) => String(item) === event.target.value);
                 update(key, option);
@@ -252,7 +253,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
             </label>
           ))}
 
-          <fieldset className="field-wrap">
+          <fieldset className="commercial-priority-field commercial-priority-field--wide">
             <legend>{CRITERIA_LABELS.proyectos_prioritarios} (máximo {maxProjects})</legend>
             <small>Dentro de una misma acción, los leads Compatibles con estos proyectos se muestran primero.</small>
             {projects.length === 0 && <p className="leads-hint">No hay proyectos disponibles en tu catálogo.</p>}
@@ -266,7 +267,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
                     onChange={() => update("proyectos_prioritarios", selected
                       ? draft.proyectos_prioritarios.filter((item) => String(item) !== id)
                       : [...draft.proyectos_prioritarios, project.id])} />
-                  {project.nombre} · {project.comuna}
+                  <span>{project.nombre} · {project.comuna}</span>
                 </label>
               );
             })}
@@ -274,7 +275,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           </fieldset>
         </div>
 
-        <div className="admin-control-grid">
+        <div className="commercial-priority-actions">
           <button type="button" className="secondary-button" onClick={runPreview} disabled={busy}>Previsualizar</button>
           <button type="button" className="primary-button" onClick={apply} disabled={busy || !previewIsCurrent}>Aplicar configuración</button>
           <button type="button" className="secondary-button" onClick={discard} disabled={busy || (!isDirty && !preview)}>Descartar cambios</button>
@@ -296,7 +297,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
               ))}
             </ul>
           ) : <p>Sin cambios respecto de la configuración vigente.</p>}
-          <table className="admin-table">
+          <table className="admin-table commercial-priority-table">
             <thead><tr><th>Acción</th><th>Vigente</th><th>Con estos criterios</th><th>Δ</th></tr></thead>
             <tbody>
               {countDeltas(preview.conteos).map((row) => (
@@ -304,7 +305,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
                   <td>{row.key === "do_not_route" ? "🔒 " : ""}{row.label}</td>
                   <td>{row.vigente}</td>
                   <td>{row.borrador}</td>
-                  <td>{signed(row.delta)}</td>
+                  <td className={row.delta > 0 ? "commercial-priority-delta--up" : row.delta < 0 ? "commercial-priority-delta--down" : ""}>{signed(row.delta)}</td>
                 </tr>
               ))}
             </tbody>
@@ -319,7 +320,7 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
           <p>Cada aplicación crea una versión nueva; las anteriores no se modifican.</p>
         </div></div>
         {data.historial.length ? (
-          <ul className="admin-bullet-list">
+          <ul className="admin-bullet-list commercial-priority-history">
             {data.historial.map((item) => (
               <li key={item.version}>
                 <strong>Versión {item.version}</strong> · {formatDateTime(item.created_at)} · {item.created_by_name || "Autor no disponible"}
