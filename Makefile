@@ -29,7 +29,7 @@ VENV_BIN := .venv/bin
 PYTHON := python3
 endif
 
-.PHONY: all help install install-backend install-frontend run-backend run-frontend run
+.PHONY: all help install install-backend install-frontend run-backend run-frontend run hu23-identity-fixtures hu23-local-reset
 
 all: run
 
@@ -41,6 +41,8 @@ help:
 	@echo "  make run-frontend      - start Vite frontend on port 5173"
 	@echo "  make run               - install dependencies and start both servers"
 	@echo "  make test-fraude       - run automated bot detection tests"
+	@echo "  make hu23-identity-fixtures - create HU23 test accounts in verified local Supabase only"
+	@echo "  make hu23-local-reset - rebuild local Supabase from the current snapshot (deletes local data)"
 	@echo ""
 	@echo "En Windows 'make run' necesita el bash de Git. Si no esta instalado,"
 	@echo "usa 'make run-backend' y 'make run-frontend' en dos terminales."
@@ -76,3 +78,10 @@ run: install-backend install-frontend
 
 test-fraude:
 	cd $(BACKEND_DIR) && $(VENV_BIN)/python test_fraude.py
+
+# Status local supplies the URL/key; no remote/linked option is supported.
+hu23-identity-fixtures:
+	@$(BACKEND_DIR)/$(VENV_BIN)/python $(BACKEND_DIR)/scripts/hu23_identity_fixtures.py
+
+hu23-local-reset:
+	@$(BACKEND_DIR)/$(VENV_BIN)/python $(BACKEND_DIR)/scripts/hu23_local_reset.py

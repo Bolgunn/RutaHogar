@@ -26,6 +26,22 @@ Para el piloto, configurar el backend con `HU23_OCR_PROVIDER=local` y `HU23_LOCA
 
 Omitir `HU23_OCR_PROVIDER` o seleccionar `azure` mantiene el proveedor predeterminado. El PC, Docker y el túnel deben estar disponibles; el token debe mantenerse privado. Un documento especialmente ruidoso puede agotar el tiempo de OCR y quedar reintentable.
 
+Para probar íntegramente en el PC, `HU23_LOCAL_OCR_URL=http://127.0.0.1:8011`
+es válido: no hace falta túnel. Confirmar que el proceso FastAPI que sirve la
+aplicación haya cargado `HU23_OCR_PROVIDER=local`, el mismo token del worker y
+el origen Docker de Storage. Cambiar un archivo `.env` no cambia el entorno
+de un proceso ya iniciado: reiniciar el backend. La respuesta autenticada de
+`GET /tracking/documents/config` permite comprobar el proveedor efectivo sin
+mostrar claves; la interfaz usa consentimiento y errores independientes del proveedor.
+Un intento ya creado conserva su proveedor: después de cambiar la configuración,
+iniciar una nueva carga, sin reinterpretar jobs anteriores.
+
+El documento sintético de identidad con columnas empleador/trabajador puede
+producir ambos campos en una misma línea de texto PDF. El parser delimita las
+etiquetas explícitas y extrae sólo la identidad del trabajador; nunca usa el RUT
+del empleador para comparar identidad. La imagen Docker incluye `identity.py`
+además del parser, y su smoke test ejecuta extracción sin montar fuentes.
+
 El backend expone `GET /tracking/documents/diagnostics/ocr` solo para un administrador global autenticado. Devuelve el proveedor y booleanos de configuración, sin URLs ni secretos. Los nombres del backend son `HU23_OCR_PROVIDER`, `HU23_LOCAL_OCR_URL`, `HU23_LOCAL_OCR_TOKEN`, `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` y `AZURE_DOCUMENT_INTELLIGENCE_KEY`; los proveedores válidos son `azure` y `local`. `ready_for_selected_provider` también comprueba el formato requerido por el cliente, pero no comprueba conectividad ni credenciales. Si no se configura explícitamente `HU23_OCR_PROVIDER`, el backend usa Azure por defecto y el diagnóstico informa `ready_for_selected_provider=false`. El endpoint requiere un nuevo despliegue del backend para estar disponible.
 
 ## Migración y cierre
