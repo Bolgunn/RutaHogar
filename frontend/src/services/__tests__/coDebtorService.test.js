@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ from: vi.fn(), invoke: vi.fn(), read: vi.fn() }));
 
@@ -43,7 +43,10 @@ describe("HU18 lead co-debtor service", () => {
     expect(invitation.declaredRelation).toBe("conyuge");
     expect(invitation.declaredComplement).toEqual(declaredComplement);
   });
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-07T12:00:00Z"));
     mocks.from.mockReset();
     mocks.invoke.mockReset();
     mocks.read.mockReset();

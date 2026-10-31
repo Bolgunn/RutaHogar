@@ -1,20 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
 import { BarsChart, RateChart } from "./CommercialCharts";
-import { computeFunnelMetrics } from "../lib/commercial/funnelMetrics";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
 import { STAGES } from "../lib/commercial/stageRules";
 import { roles } from "../lib/roles";
-import { getCommercialFunnelFacts } from "../services/commercialMetricsService";
+import { getCommercialFunnelMetrics } from "../services/commercialMetricsService";
 
-// HU 15 — métricas comerciales. Todo número sale de ALG-18 (computeFunnelMetrics); esta vista
+// HU 15 — métricas comerciales. ALG-10/ALG-18 se ejecutan en servidor; esta vista
 // solo filtra y dibuja. Copia y estructura: frontend/mockups/hu15-metricas.html.
 
 const EMPTY_FILTERS = { proyecto_id: null, afinidad: [], capacidad: [], prioridad: [] };
 const LADDER = STAGES.filter((stage) => stage.value !== "perdido");
 const TIME_STAGES = LADDER.filter((stage) => stage.value !== "venta_cerrada");
 
-const ANTECEDENTES = "Su precalificación más reciente no tiene datos suficientes para estimar su capacidad de compra. Necesita volver a precalificarse; no significa que no pueda comprar.";
+const ANTECEDENTES = "No hay antecedentes financieros disponibles para estas métricas: pueden estar incompletos o protegidos por privacidad. No significa que no pueda comprar.";
 const MEJORES_HELP = "Solo leads Compatible que además alcanzan a comprar: los que tienen más probabilidad de cerrar.";
 
 const AFINIDAD = [
@@ -22,17 +21,17 @@ const AFINIDAD = [
   ["Cercano", "Cercano", "Afinidad media con su mejor proyecto: calza en lo principal, pero algo le resta, como poca holgura de capacidad, otra comuna u otro tipo de vivienda."],
   ["Marginal", "Marginal", "Podría optar a alguno de tus proyectos, pero con baja afinidad: varios factores le restan."],
   ["fuera_de_alcance", "Fuera de alcance", "No calza con ninguno de tus proyectos disponibles: su capacidad está lejos del precio de entrada o tiene un bloqueador crítico, como morosidad vigente."],
-  ["requiere_antecedentes", "Requiere antecedentes", ANTECEDENTES],
+  ["requiere_antecedentes", "Sin datos disponibles", ANTECEDENTES],
 ];
 
 const CAPACIDAD = [
   ["alcanza", "Alcanza", "Su capacidad de compra estimada alcanza el precio de la unidad más barata de al menos uno de tus proyectos disponibles."],
   ["cercano_por_capacidad", "Cerca de alcanzar", "Todavía no alcanza la unidad más barata, pero está cerca: con algo más de ahorro o renta, o con apoyos como FOGAES, podría lograrlo."],
   ["insuficiente", "Insuficiente", "Su capacidad de compra está lejos del precio de entrada de tus proyectos, o tiene un bloqueador crítico que impide derivarlo."],
-  ["requiere_antecedentes", "Requiere antecedentes", ANTECEDENTES],
+  ["requiere_antecedentes", "Sin datos disponibles", ANTECEDENTES],
 ];
 
-const PRIORIDAD = [...Object.entries(PRIORITY_ACTIONS), [SIN_PRIORIDAD, "Sin prioridad"]];
+const PRIORIDAD = [...Object.entries(PRIORITY_ACTIONS), [SIN_PRIORIDAD, "Sin prioridad disponible"]];
 
 const ETAPA_HELP = {
   nuevo: "El lead está asociado a tus proyectos (los marcó como favoritos o busca en su comuna) y nadie lo ha contactado todavía.",
@@ -321,25 +320,36 @@ export default function CommercialMetrics({ role, onNavigate }) {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
   const [filtros, setFiltros] = useState(EMPTY_FILTERS);
   const [granularidad, setGranularidad] = useState("mes");
+  const [refresh, setRefresh] = useState(0);
   const [tab, setTab] = useState("embudo");
   const [view, setView] = useState({ funnel: "todos", times: "todos" });
   const [dimension, setDimension] = useState("proyecto");
   const [tiempoSerie, setTiempoSerie] = useState("ciclo");
   const isEjecutivo = role === roles.sales;
 
+  const queryKey = JSON.stringify([filtros, granularidad, refresh]);
   useEffect(() => {
     let active = true;
-    getCommercialFunnelFacts()
-      .then((data) => { if (active) setState({ status: data ? "ready" : "offline", data, error: "" }); })
-      .catch((error) => { if (active) setState({ status: "error", data: null, error: error.message }); });
+    setState({ status: "loading", data: null, error: "", queryKey });
+    getCommercialFunnelMetrics({ filtros, granularidad })
+      .then((data) => { if (active) setState({ status: data ? "ready" : "offline", data, error: "", queryKey }); })
+      .catch((error) => { if (active) setState({ status: "error", data: null, error: error.message, queryKey }); });
     return () => { active = false; };
-  }, []);
+  }, [queryKey]);
 
-  const metrics = useMemo(() => {
-    if (!state.data) return null;
-    const { facts, proyectos, now } = state.data;
-    return computeFunnelMetrics({ facts, proyectos, filtros, now, granularidad });
-  }, [state.data, filtros, granularidad]);
+  useEffect(() => {
+    const invalidate = () => setRefresh(value => value + 1);
+    window.addEventListener("focus", invalidate);
+    return () => window.removeEventListener("focus", invalidate);
+  }, []);
+  useEffect(() => {
+    const cutoff = Date.parse(state.data?.refresh_at);
+    if (!Number.isFinite(cutoff)) return undefined;
+    const timer = setTimeout(() => setRefresh(value => value + 1), Math.min(2_147_483_647, Math.max(1000, cutoff - Date.now() + 1)));
+    return () => clearTimeout(timer);
+  }, [state.data?.refresh_at]);
+
+  const metrics = state.data?.metrics;
 
   const heading = (
     <div className="section-heading">
@@ -352,8 +362,8 @@ export default function CommercialMetrics({ role, onNavigate }) {
     </div>
   );
 
-  if (state.status !== "ready" || !state.data.facts.length) {
-    const message = state.status === "loading" ? "Cargando métricas…"
+  if (state.queryKey !== queryKey || state.status !== "ready" || !state.data.total_leads) {
+    const message = state.queryKey !== queryKey || state.status === "loading" ? "Cargando métricas…"
       : state.status === "offline" ? "Las métricas requieren conexión a Supabase."
         : state.status === "error" ? state.error
           : isEjecutivo ? "Todavía no hay leads asociados a tus proyectos asignados."
@@ -366,7 +376,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
     );
   }
 
-  const { proyectos, facts } = state.data;
+  const { proyectos, total_leads, privacy_hidden } = state.data;
   const m = metrics;
   const sinCatalogo = m.bandas.sin_catalogo;
   const projectView = Boolean(filtros.proyecto_id) || isEjecutivo;
@@ -474,7 +484,8 @@ export default function CommercialMetrics({ role, onNavigate }) {
         )}
         <div className="cm-filters__foot">
           <span className="cm-summary" role="status">
-            Mostrando <strong>{m.n} de {facts.length} leads</strong> · {activeFilters.length ? `${activeFilters.length} filtro${activeFilters.length === 1 ? "" : "s"} activo${activeFilters.length === 1 ? "" : "s"}` : "Sin filtros activos"}
+            Mostrando <strong>{m.n} de {total_leads} leads</strong> · {activeFilters.length ? `${activeFilters.length} filtro${activeFilters.length === 1 ? "" : "s"} activo${activeFilters.length === 1 ? "" : "s"}` : "Sin filtros activos"}
+            {privacy_hidden > 0 && ` · ${privacy_hidden} con antecedentes financieros protegidos; sus bandas y prioridad no se muestran`}
             {m.prioridad_no_reconocida > 0 && ` · ${m.prioridad_no_reconocida} con una prioridad que no se reconoce (cuentan como sin prioridad)`}
           </span>
           <button className="secondary-button compact-button" type="button" disabled={!activeFilters.length} onClick={() => setFiltros(EMPTY_FILTERS)}>Limpiar filtros</button>

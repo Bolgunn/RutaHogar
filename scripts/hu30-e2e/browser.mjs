@@ -138,6 +138,8 @@ try{
  await verified.getByText('Esta cuenta no puede acceder a la invitación. Puedes cambiar de cuenta.').waitFor();
  await verified.getByRole('button',{name:'Cerrar sesión y cambiar de cuenta',exact:true}).click();await verified.locator('#auth-email').waitFor();
  await verified.locator('#auth-email').fill('participant@hu30.invalid');await verified.locator('#auth-password').fill(password);await verified.locator('button[type=submit]').click();
+ await verified.getByRole('heading',{name:'Antecedentes confirmados',exact:true}).waitFor();
+ await verified.getByRole('button',{name:'Revisar para una nueva confirmación',exact:true}).click();
  await verified.getByRole('heading',{name:'Revisa tus antecedentes',exact:true}).waitFor();
  assert.equal(sql(`select count(*) from public.co_debtor_confirmations where invitation_id='${invitation}';`),'3');
  console.log('PASS real Auth UI: wrong account blocked without financial detail; switch account -> password login -> return to the same participation without creating a revision');

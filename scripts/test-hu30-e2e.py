@@ -144,9 +144,9 @@ def main():
             sql((ROOT/'supabase/migrations/20260922000000_add_name_fields_to_profiles.sql').read_text())
             sql((ROOT/'supabase/migrations/20260827090000_proyectos_campos_comerciales.sql').read_text())
             sql((ROOT/'supabase/migrations/20261008150000_lead_contacts_email.sql').read_text())
-            for migration in sorted((ROOT/'supabase/migrations').glob('2026102*hu30*.sql')):sql(migration.read_text())
-            # Supabase normally supplies public-schema table ACLs; RLS still scopes every actor.
+            sql((ROOT/'supabase/migrations/20261024130000_hu15_funnel_plan_accepted.sql').read_text())
             sql('grant all on all tables in schema public to anon,authenticated; grant usage,select on all sequences in schema public to anon,authenticated;')
+            for migration in sorted((ROOT/'supabase/migrations').glob('*_hu30_*.sql')):sql(migration.read_text())
             start_container('rest','postgrest/postgrest:v12.2.12', {
                 'PGRST_DB_URI':'postgres://postgres@db:5432/postgres','PGRST_DB_SCHEMAS':'public',
                 'PGRST_DB_ANON_ROLE':'anon','PGRST_JWT_SECRET':secret,'PGRST_SERVER_PORT':3000,

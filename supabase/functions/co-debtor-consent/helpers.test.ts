@@ -105,6 +105,6 @@ Deno.test("HU18 rejects missing consent and lead-owned relation changes", () => 
 });
 
 Deno.test("HU18 management context allows only confirmed consent to be revoked", () => {
-  if (!managementPublicContext({ ...pending, status: "confirmed" }, now).can_revoke) throw new Error("confirmed not manageable");
-  if (managementPublicContext({ ...pending, status: "revoked" }, now).can_revoke) throw new Error("revoked consent mutable");
+  if (!managementPublicContext({ ...pending, status: "confirmed" }).can_revoke) throw new Error("confirmed not manageable");
+  if (managementPublicContext({ ...pending, status: "revoked" }).can_revoke) throw new Error("revoked consent mutable");
 });

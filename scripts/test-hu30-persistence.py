@@ -49,7 +49,8 @@ def main():
         sql(bootstrap + '\nalter table auth.users add column email_confirmed_at timestamptz;\n'
             'set check_function_bodies=off;\n' + core + '\nset check_function_bodies=on;')
         sql((ROOT / 'supabase/tests/hu30_legacy_seed.sql').read_text())
-        migrations = sorted((ROOT / 'supabase/migrations').glob('2026102*hu30*.sql'))
+        sql((ROOT / 'supabase/migrations/20261024130000_hu15_funnel_plan_accepted.sql').read_text())
+        migrations = sorted((ROOT / 'supabase/migrations').glob('*_hu30_*.sql'))
         for migration in migrations:
             if migration.name == '20261022090000_hu30_legacy_snapshot_guard.sql':
                 assert sql("select public.hu30_has_complement('{\"input\":{\"complemento_renta\":false,\"complemento_ingreso_mensual\":1500000}}');").stdout.strip() == 'f'
@@ -68,6 +69,8 @@ def main():
         print('PASS: T6 direct RLS legacy aliases, partial snapshots and service-only raw access')
         sql((ROOT / 'supabase/tests/hu30_staff_contact_isolation.sql').read_text())
         print('PASS: T9B contact/history isolation and admin report financial redaction')
+        sql((ROOT / 'supabase/tests/hu30_production_privacy.sql').read_text())
+        print('PASS: production ACL and HU15 raw-snapshot bypass closed')
         access_tests = (ROOT / 'supabase/tests/hu30_authenticated_access.sql').read_text()
         sql(access_tests.rsplit('rollback;', 1)[0] + 'commit;')
         print('PASS: T4A account linking, identity, state revalidation and no financial revision')

@@ -90,3 +90,9 @@ jobs:
         run: |
           set -euo pipefail
           supabase functions deploy co-debtor-consent --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy commercial funnel aggregate function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy commercial-funnel-metrics --project-ref "$SUPABASE_PROJECT_REF"

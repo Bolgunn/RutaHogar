@@ -2595,7 +2595,7 @@ export default function App() {
           role={profile.role}
         />
       ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
-        <CommercialMetrics role={profile.role} onNavigate={navigateToPage} />
+        <CommercialMetrics key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`} role={profile.role} onNavigate={navigateToPage} />
       ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
