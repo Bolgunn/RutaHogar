@@ -1,19 +1,6 @@
 import { supabase } from "../utils/supabase";
+import { trackingRequest } from "./trackingService";
 import { normalizeChileanRut } from "../utils/chileanRut";
-
-const invitationFields = [
-  "recipient_email",
-  "recipient_rut",
-  "status",
-  "expires_at",
-  "created_at",
-  "ingreso_mensual_complementario",
-  "deuda_mensual_complementario",
-  "tipo_contrato_complementario",
-  "continuidad_laboral_complementario",
-  "morosidad_complementario",
-  "co_debtor_confirmations(ingreso_mensual_complementario,deuda_mensual_complementario,tipo_contrato_complementario,continuidad_laboral_complementario,morosidad_complementario,confirmed_at)",
-].join(",");
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -58,7 +45,7 @@ function publicFunctionFailure(error, payload, fallback) {
 async function invokePublicCoDebtor(action, token, values = {}) {
   requireSupabase();
   const { data, error } = await supabase.functions.invoke("co-debtor-consent", {
-    body: { action, token, ...values },
+    body: { action, ...(token !== undefined ? { token } : {}), ...values },
   });
   if (error) {
     const payload = await readFunctionError(error);
@@ -126,7 +113,9 @@ function isExpired(invitation, now = Date.now()) {
 
 function confirmationFor(invitation) {
   const relation = invitation?.co_debtor_confirmations;
-  return Array.isArray(relation) ? relation[0] || null : relation || null;
+  if (!Array.isArray(relation)) return relation || null;
+  if (relation.length > 1) throw new Error("La revisión del co-deudor es ambigua. Actualiza la página.");
+  return relation.at(0) || null;
 }
 
 function declaredComplementFor(invitation) {
@@ -148,6 +137,7 @@ export function normalizeLeadCoDebtorInvitation(invitation, now = Date.now()) {
     status,
     expiresAt: invitation.expires_at || null,
     declaredComplement: declaredComplementFor(invitation),
+    ...(invitation.declared_relation ? { declaredRelation: invitation.declared_relation } : {}),
     // Confirmed values are deliberately omitted as soon as consent is no
     // longer current. The UI never reads invitation or management tokens.
     confirmation: status === "confirmed" ? confirmationFor(invitation) : null,
@@ -156,12 +146,8 @@ export function normalizeLeadCoDebtorInvitation(invitation, now = Date.now()) {
 
 export async function getLeadCoDebtorInvitation() {
   requireSupabase();
-  const { data, error } = await supabase
-    .from("co_debtor_invitations")
-    .select(invitationFields)
-    .order("created_at", { ascending: false })
-    .limit(10);
-  if (error) throw new Error("No pudimos cargar el estado de tu co-deudor. Intenta nuevamente.");
+  const projection = await trackingRequest("/owner/co-debtor");
+  const data = projection.items || [];
   const invitations = (data || []).map((item) => normalizeLeadCoDebtorInvitation(item));
   return invitations.find((item) => item.status === "pending") || invitations[0] || null;
 }
@@ -178,7 +164,7 @@ export function validateCoDebtorRut(value) {
   return rut;
 }
 
-export async function createCoDebtorInvitation(recipientEmail, recipientRut, declaredComplement = {}) {
+export async function createCoDebtorInvitation(recipientEmail, recipientRut, declaredComplement = {}, declaredRelation) {
   requireSupabase();
   const email = validateCoDebtorEmail(recipientEmail);
   const rut = validateCoDebtorRut(recipientRut);
@@ -187,6 +173,7 @@ export async function createCoDebtorInvitation(recipientEmail, recipientRut, dec
       action: "create_invitation",
       recipient_email: email,
       recipient_rut: rut,
+      ...(declaredRelation !== undefined ? { relacion_complementario: declaredRelation } : {}),
       ...Object.fromEntries(publicFinancialFields.map((field) => [field, declaredComplement[field]])),
     },
   });
@@ -196,3 +183,11 @@ export async function createCoDebtorInvitation(recipientEmail, recipientRut, dec
   }
   return data;
 }
+
+export const authorizeCoDebtorInvitation = (token) => invokePublicCoDebtor("authorize_invitation", token);
+
+// Participation IDs are scoped selectors, never authorization; Edge resolves the actor.
+export const reviewCoDebtorParticipation = (id) => invokePublicCoDebtor("review_participation", undefined, { participation_id: id });
+export const listCoDebtorParticipations = () => invokePublicCoDebtor("list_participations", undefined);
+export const confirmCoDebtorParticipation = (id, command) => invokePublicCoDebtor("confirm_participation", undefined, { participation_id: id, ...command });
+export const decideCoDebtorParticipation = (id, decision) => invokePublicCoDebtor(`${decision}_participation`, undefined, { participation_id: id });

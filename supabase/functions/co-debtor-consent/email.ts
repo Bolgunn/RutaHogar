@@ -112,7 +112,16 @@ export function coDebtorConfirmationEmail(link: string): EmailMessage {
   };
 }
 
-export function leadConfirmationEmail(link: string): EmailMessage {
+export function leadConfirmationEmail(link: string, matchesEvaluated = false): EmailMessage {
+  if (matchesEvaluated) return {
+    subject: "El co-deudor confirmó antecedentes coincidentes",
+    html: emailShell("Se conservó una nueva confirmación de participación.", [
+      title("Antecedentes coincidentes confirmados posteriormente"),
+      paragraph("El co-deudor confirmó los mismos cinco antecedentes utilizados en tu evaluación. No hay cambios financieros que incorporar y tu evaluación conserva su procedencia original."),
+      cta("Revisar mi evaluación", link, "gold"),
+    ].join("")),
+    text: "El co-deudor confirmó antecedentes coincidentes. No hay cambios financieros que incorporar; tu evaluación conserva su procedencia original.",
+  };
   return {
     subject: "El co-deudor confirmó sus antecedentes",
     html: emailShell("Ya puedes actualizar tu score con los datos confirmados.", [

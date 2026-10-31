@@ -126,10 +126,11 @@ function parseFinancialFields(payload: Record<string, unknown>): DeclaredComplem
 }
 
 export function parseLeadDeclaredComplement(payload: Record<string, unknown>): DeclaredComplement {
-  const allowed = new Set(["action", "recipient_email", "recipient_rut", ...FINANCIAL_FIELDS]);
+  const allowed = new Set(["action", "recipient_email", "recipient_rut", "relacion_complementario", ...FINANCIAL_FIELDS]);
   if (Object.keys(payload).some((key) => !allowed.has(key))) {
     throw new Error("La invitaci\u00f3n contiene campos no permitidos.");
   }
+  if (payload.relacion_complementario !== undefined) parseDeclaredRelation(payload.relacion_complementario);
   return parseFinancialFields(payload);
 }
 
@@ -147,27 +148,19 @@ export function parseSubmission(payload: Record<string, unknown>): Submission {
   };
 }
 
-function hasDeclaredComplement(row: InvitationRow): row is InvitationRow & Required<DeclaredComplement> {
-  return FINANCIAL_FIELDS.every((field) => row[field] !== undefined && row[field] !== null && row[field] !== "");
-}
-
-export function invitationPublicContext(row: InvitationRow, status = invitationStatus(row)) {
-  const context = {
-    status,
-    expires_at: status === "pending" ? row.expires_at : null,
-    can_submit: status === "pending",
-  };
-  if (status !== "pending" || !hasDeclaredComplement(row)) return context;
-  return {
-    ...context,
-    ingreso_mensual_complementario: row.ingreso_mensual_complementario,
-    deuda_mensual_complementario: row.deuda_mensual_complementario,
-    tipo_contrato_complementario: row.tipo_contrato_complementario,
-    continuidad_laboral_complementario: row.continuidad_laboral_complementario,
-    morosidad_complementario: row.morosidad_complementario,
-  };
+// A public bearer link is context only, never authorization to financial data.
+export function invitationPublicContext(row: InvitationRow, now = new Date()) {
+  const status = invitationStatus(row, now);
+  return { status, expires_at: status === "pending" ? row.expires_at : null,
+    can_submit: false, authentication_required: status === "pending" };
 }
 
 export function managementPublicContext(row: InvitationRow, status = invitationStatus(row)) {
   return { status, can_revoke: status === "confirmed" };
+}
+
+export const RELATIONS = new Set(["conyuge","pareja_conviviente","pareja_hijos_comun","padre_madre","hijo_hija","hermano_hermana","otro_familiar","amigo","otro"]);
+export function parseDeclaredRelation(value: unknown): string {
+  if (typeof value !== "string" || !RELATIONS.has(value)) throw new Error("Declara la relación con el co-deudor antes de invitar.");
+  return value;
 }

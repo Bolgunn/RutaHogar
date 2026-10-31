@@ -160,7 +160,7 @@ function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, option
 }
 
 
-export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon }) {
+export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon, invitationContext = null }) {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     nombre: "",
@@ -176,6 +176,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
     password: "",
     role: roles.user,
   });
+  const [verificationPending, setVerificationPending] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showWeakPasswordConfirm, setShowWeakPasswordConfirm] = useState(false);
@@ -300,13 +301,14 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         mode === "signin"
           ? await signIn(form)
           : await signUp({ 
-              ...form, 
+              ...form, invitationContext,
               full_name: `${form.nombre} ${form.apellido_paterno} ${form.apellido_materno}`.trim(),
               phone: normalizedPhone, 
               birth_date: birthDate, 
               rut: `${form.rut_number}-${form.rut_dv}` 
             });
       if (mode === "signup") trackSignUp({ method: "auth_panel" });
+      if (auth.emailConfirmationRequired) { setVerificationPending(true); return; }
       onAuth(auth);
     } catch (err) {
       const fallback =
@@ -385,7 +387,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
 
             <h1>{mode === "signin" ? "Bienvenido de vuelta" : "Crea tu cuenta"}</h1>
             <p className="auth-right-sub">
-              {mode === "signin"
+              {invitationContext ? "Accede a tu cuenta para volver a la invitación de co-deudor." : mode === "signin"
                 ? "Ingresa tus credenciales para acceder a tu precalificación."
                 : "Regístrate para guardar tu score y seguimiento financiero."}
             </p>
@@ -396,7 +398,11 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               </div>
             )}
 
-            <form ref={formRef} onSubmit={submit}>
+            {verificationPending && <div role="status">
+              <p>Revisa tu correo y confirma tu cuenta. Después podrás volver a la invitación.</p>
+              <button type="button" onClick={() => { setVerificationPending(false); changeMode("signin"); }}>Ya confirmé mi correo: iniciar sesión</button>
+            </div>}
+            {!verificationPending && <form ref={formRef} onSubmit={submit}>
               <div className="auth-seg" aria-label="Modo de acceso">
                 <button type="button" className={`auth-seg-btn ${mode === "signin" ? "is-active" : ""}`} onClick={() => changeMode("signin")}>
                   Entrar
@@ -587,7 +593,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               <button type="submit" className="auth-submit" disabled={loading}>
                 {loading ? "Validando…" : mode === "signin" ? "Iniciar sesión" : "Crear cuenta"}
               </button>
-            </form>
+            </form>}
           </div>
         </div>
       </div>

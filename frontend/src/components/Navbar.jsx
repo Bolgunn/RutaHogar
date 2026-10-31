@@ -81,6 +81,43 @@ const sidebarSupportByRole = {
 };
 
 export default function Navbar({ profile, page, inmobiliariaId, currentScore, onNavigate, onLogout }) {
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const menuRef = React.useRef(null);
+  const toggleRef = React.useRef(null);
+  const menuId = React.useId();
+  React.useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const closeOnDesktop = () => { if (!media.matches) setMobileOpen(false); };
+    media.addEventListener("change", closeOnDesktop);
+    return () => media.removeEventListener("change", closeOnDesktop);
+  }, []);
+  React.useEffect(() => { setMobileOpen(false); }, [page, profile?.role]);
+  React.useEffect(() => {
+    if (!mobileOpen || !window.matchMedia("(max-width: 767px)").matches) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const menu = menuRef.current;
+    const focusable = () => [...menu.querySelectorAll('a[href], button:not([disabled]), [tabindex="0"]')]
+      .filter((element) => element.getClientRects().length && getComputedStyle(element).display !== "none");
+    const focusFrame = window.requestAnimationFrame(() => focusable()[0]?.focus({ preventScroll: true }));
+    const handleKey = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); setMobileOpen(false); }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!menu.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first)?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKey);
+      if (window.matchMedia("(max-width: 767px)").matches) toggleRef.current?.focus();
+    };
+  }, [mobileOpen]);
   const role = profile?.role || roles.user;
   const isAdmin = isAdminRole(role);
   const fallbackRole = isAdmin ? roles.admin : roles.user;
@@ -97,11 +134,26 @@ export default function Navbar({ profile, page, inmobiliariaId, currentScore, on
   const brandHref = isAdmin ? "/admin" : "/inicio";
 
   const handleNavigate = (id) => {
+    setMobileOpen(false);
     onNavigate(id);
   };
 
   return (
-    <aside className={`sidebar ${isAdmin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
+    <>
+    <header className="mobile-navigation">
+      <a href={brandHref} onClick={(event) => { event.preventDefault(); handleNavigate(brandTarget); }}>
+        <img src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
+      </a>
+      <button ref={toggleRef} type="button" aria-expanded={mobileOpen} aria-controls={menuId} onClick={() => setMobileOpen(true)}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        Menú
+      </button>
+    </header>
+    {mobileOpen && <div className="mobile-navigation-backdrop" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
+    <aside ref={menuRef} id={menuId} className={`sidebar ${isAdmin ? "sidebar--admin" : ""} ${mobileOpen ? "sidebar--mobile-open" : ""}`} role={mobileOpen ? "dialog" : "navigation"} aria-modal={mobileOpen ? true : undefined} aria-label="Navegación principal">
+      <button className="mobile-navigation-close" type="button" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </button>
       <a className="sidebar-brand" href={brandHref} onClick={(e) => { e.preventDefault(); handleNavigate(brandTarget); }}>
         <span className="sidebar-brand__pill">
           <img className="sidebar-brand__logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
@@ -147,10 +199,11 @@ export default function Navbar({ profile, page, inmobiliariaId, currentScore, on
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
 
-      <button className="nav-item sidebar-logout" type="button" onClick={onLogout}>
+      <button className="nav-item sidebar-logout" type="button" onClick={() => { setMobileOpen(false); onLogout(); }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
         <span className="sidebar__label">Salir</span>
       </button>
     </aside>
+    </>
   );
 }

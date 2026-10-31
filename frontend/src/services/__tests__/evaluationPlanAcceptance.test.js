@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getStaffEvaluations: vi.fn(),
   logSupabaseError: vi.fn(),
   rpc: vi.fn(),
+  trackingRequest: vi.fn(),
 }));
 
 vi.mock("../../utils/supabase", () => ({
@@ -22,6 +23,7 @@ vi.mock("../profileService", () => ({
 
 vi.mock("../trackingService", () => ({
   annotateEvaluation: mocks.annotateEvaluation,
+  trackingRequest: mocks.trackingRequest,
   appendTrackingEvent: vi.fn(),
   getStaffEvaluations: mocks.getStaffEvaluations,
   getTracking: vi.fn(),
@@ -59,16 +61,16 @@ function query(data, error = null) {
 }
 
 function setReadResult({ rows = [evaluation], annotations = [acceptedEvent], error = null } = {}) {
-  const evaluationsQuery = query(rows, error);
-  const annotationsQuery = query(annotations);
-  mocks.from.mockImplementation((table) => (
-    table === "evaluations" ? evaluationsQuery : annotationsQuery
-  ));
+  if (error) mocks.trackingRequest.mockRejectedValue(error);
+  else mocks.trackingRequest.mockResolvedValue({ items: rows.map((row) => ({
+    ...row, annotations: annotations.filter((event) => event.evaluation_id === row.id),
+  })) });
 }
 
 describe("HU13 — aceptación del plan", () => {
   beforeEach(() => {
     mocks.annotateEvaluation.mockReset();
+    mocks.trackingRequest.mockReset();
     mocks.ensureUserProfile.mockReset();
     mocks.from.mockReset();
     mocks.getAuthenticatedUser.mockReset();

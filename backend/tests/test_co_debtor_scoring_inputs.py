@@ -187,8 +187,8 @@ def test_repository_loads_only_latest_server_side_hu18_facts():
     assert method == "GET"
     assert kwargs == {}
     assert query["lead_id"] == ["eq.lead-1"]
-    assert query["order"] == ["created_at.desc"]
-    assert query["limit"] == ["10"]
+    assert query["order"] == ["created_at.desc,id.desc"]
+    assert "limit" not in query
     assert "recipient_email" not in query["select"][0]
     assert "management_token" not in query["select"][0]
 
@@ -214,8 +214,8 @@ def test_staff_repository_prefers_an_older_pending_invitation_over_the_newest_re
 
     assert repository.staff_co_debtor_invitation("lead-1") == rows[1]
     query = parse_qs(urlsplit(calls[0][0][1]).query)
-    assert query["order"] == ["created_at.desc"]
-    assert query["limit"] == ["10"]
+    assert query["order"] == ["created_at.desc,id.desc"]
+    assert "limit" not in query
 
 
 def test_staff_repository_prefers_an_older_pending_invitation_over_the_newest_decline():

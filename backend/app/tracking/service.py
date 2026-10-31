@@ -6,6 +6,8 @@ from math import isfinite
 from uuid import uuid4
 
 from .contracts import TrackingError, parse_time
+from .bipersonal import contribution_summary
+from .co_debtor import FINANCIAL_FIELDS
 from .goal_contract import freeze_goals
 from .goal_progress import calculate_goal_progress
 from .lineage import append_event, reconstruct
@@ -209,9 +211,19 @@ class TrackingService:
         required = bool(
             (consent_facts or {}).get("invitation_status") == "confirmed"
             and confirmation_id
+            and not (consent_facts or {}).get("exclude_complement")
+            and (consent_facts or {}).get("matches_evaluated") is not True
             and not self._confirmation_was_applied(bundle, confirmation_id)
         )
-        return {"score_update_required": required}
+        matches = bool((consent_facts or {}).get("matches_evaluated") is True
+                       and (consent_facts or {}).get("invitation_status") == "confirmed"
+                       and not (consent_facts or {}).get("exclude_complement")
+                       and confirmation_id
+                       and not any((row.get("financial_data", {}).get("provenance") or {}).get(
+                           "co_debtor_confirmation_id") == confirmation_id for row in bundle.get("evaluations", [])))
+        return {"score_update_required": required,
+                "antecedents_status": "matching_confirmed_later" if matches else None,
+                "message": "Antecedentes coincidentes confirmados posteriormente" if matches else None}
 
     def update_score_with_confirmed_co_debtor(self, user_id):
         """Append an explicit HU18 re-evaluation for the authenticated lead."""
@@ -224,9 +236,11 @@ class TrackingService:
         if (consent_facts or {}).get("invitation_status") == "revoked":
             raise TrackingError("co_debtor_consent_revoked")
         confirmation_id = self._confirmation_id(consent_facts)
-        if (consent_facts or {}).get("invitation_status") != "confirmed" or not confirmation_id:
+        if ((consent_facts or {}).get("invitation_status") != "confirmed" or not confirmation_id
+                or (consent_facts or {}).get("exclude_complement")):
             raise TrackingError("co_debtor_confirmation_required")
-        if self._confirmation_was_applied(bundle, confirmation_id):
+        if ((consent_facts or {}).get("matches_evaluated") is True
+                or self._confirmation_was_applied(bundle, confirmation_id)):
             raise TrackingError("co_debtor_confirmation_already_applied")
         now = self.clock().isoformat()
         try:
@@ -238,7 +252,7 @@ class TrackingService:
                     "effective_at": now,
                     "reason": CO_DEBTOR_CONFIRMATION_REASON,
                     "previous_event_id": lineage["active_line"][-1]["event_id"],
-                    "patch": {},
+                    "patch": {"complemento_renta": True},
                 },
                 require_co_debtor_confirmation=True,
                 co_debtor_confirmation_id=confirmation_id,
@@ -410,8 +424,17 @@ class TrackingService:
             if (snapshot.get("complemento_renta") or require_co_debtor_confirmation) and not consent_loaded:
                 consent_facts = self._co_debtor_consent(user_id)
                 consent_loaded = True
+            source_snapshot = deepcopy(snapshot)
+            if require_co_debtor_confirmation:
+                source_snapshot["complemento_renta"] = True
+            if (consent_facts or {}).get("exclude_complement"):
+                source_snapshot["complemento_renta"] = False
+                for field in (*FINANCIAL_FIELDS, "relacion_complementario"):
+                    source_snapshot[field] = None
+            elif (consent_facts or {}).get("declared_relation"):
+                source_snapshot["relacion_complementario"] = consent_facts["declared_relation"]
             resolved_input, consent_provenance = assemble_co_debtor_scoring_input(
-                snapshot,
+                source_snapshot,
                 co_debtor_consent=consent_facts,
                 now=recorded_at,
             )
@@ -439,8 +462,18 @@ class TrackingService:
             }
             if scoring_override:
                 details["scoring_overrides"] = scoring_override
-            if co_debtor_confirmation_id:
-                details["co_debtor_confirmation_id"] = co_debtor_confirmation_id
+            if consent_provenance.get("complement_source") == "co_debtor_confirmed":
+                selected_id = self._confirmation_id(consent_facts)
+                if selected_id:
+                    details["co_debtor_confirmation_id"] = selected_id
+                for key in ("revision_number", "relation_declaration_event_id"):
+                    if key in (consent_facts or {}):
+                        details["co_debtor_consent"][key] = consent_facts[key]
+            result["bipersonal_summary"] = contribution_summary(
+                scoring_input, result, details,
+                verified_revision=(consent_facts or {}).get("verified_revision") is True,
+                market_snapshot=market_snapshot,
+            )
             evaluation = {
                 "id": self.new_id(), "snapshot": deepcopy(complete_input),
                 "result": result, "provenance": details,
