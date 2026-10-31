@@ -76,20 +76,3 @@ frontend/src/components/DashboardLeads.jsx
 
 **Regression — date filter removed.** This hunk deleted the `dateThreshold` check, so the Fecha selector no longer filters anything (`dateThreshold` is still computed and counts as an active filter). Restore `if (dateThreshold && (!item.created_at || new Date(item.created_at) < dateThreshold)) return false;`.
 
-
-frontend/src/components/DashboardLeads.jsx
-                    try {
-                      await reportLead(selectedLead.user_id, executiveScope.id, reportReason);
-                      // Optimistic UI update
-                      selectedLead.reliability_status = "en_revision";
-
-**Stale UI after reporting.** This mutates the `selectedLead` prop in place instead of updating `evaluations` state, so after closing the ficha the reported lead still shows under the default filter until reload. Also: if `executiveScope` is missing the button silently does nothing, and without Supabase `reportLead` returns `null` but the success alert still shows.
-
-
-supabase/schema.sql
-  END IF;
-
-  -- Script automatizado
-  IF v_time_to_submit < 5 THEN
-
-**False positives hide real leads.** The insert trigger sets the profile to `sospechoso` from client-controlled or easy-to-hit signals: `time_to_submit` is measured from ScoreForm mount, and `device_id_hash` is per-browser (localStorage). A user who re-runs the evaluation 4× in 15 min trying different numbers, or relatives sharing a laptop (the 24h savings comparison then runs across different users), gets flagged and disappears from the sales dashboard by default. A real bot just clears localStorage. Consider scoping by `user_id` and sending to `en_revision` rather than auto-hiding.

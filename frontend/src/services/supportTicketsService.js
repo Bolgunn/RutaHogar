@@ -1,6 +1,6 @@
 /**
  * Service for Support Tickets (HU24 - E4).
- * Handles ticket creation, listing, status updates with Supabase integration and offline fallback.
+ * Handles ticket creation, listing, status updates with Supabase integration and local-mode fallback.
  */
 
 import { supabase } from "../utils/supabase";
@@ -10,17 +10,14 @@ import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 const SUPPORT_TICKETS_KEY = "rutahogar_support_tickets";
 
 /**
- * Dynamically resolves the active user token from explicit argument, Supabase session, or localStorage.
+ * Dynamically resolves the active user token, prioritizing the freshest Supabase session token
+ * so that background token refreshes (TOKEN_REFRESHED) are always respected.
  *
  * @param {string|null} [explicitToken]
  * @returns {Promise<string|null>}
  */
 export async function getActiveAuthToken(explicitToken = null) {
-  if (explicitToken && typeof explicitToken === "string" && explicitToken.trim()) {
-    return explicitToken.trim();
-  }
-
-  // 1. Try reading active session directly from supabase client
+  // 1. Always prefer the live Supabase session first when configured (avoids stale prop tokens)
   if (isSupabaseDataConfigured && supabase?.auth) {
     try {
       const { data } = await supabase.auth.getSession();
@@ -32,7 +29,12 @@ export async function getActiveAuthToken(explicitToken = null) {
     }
   }
 
-  // 2. Try reading from localStorage RutaHogar_session
+  // 2. Use explicit token if provided
+  if (explicitToken && typeof explicitToken === "string" && explicitToken.trim()) {
+    return explicitToken.trim();
+  }
+
+  // 3. Try reading from localStorage RutaHogar_session
   try {
     const rawSession = localStorage.getItem("RutaHogar_session");
     if (rawSession) {
@@ -42,16 +44,18 @@ export async function getActiveAuthToken(explicitToken = null) {
     }
   } catch {}
 
-  // 3. Fallback: Check if user has an active profile stored (local or demo session)
-  try {
-    const rawProfile = localStorage.getItem("RutaHogar_profile");
-    if (rawProfile) {
-      const parsed = JSON.parse(rawProfile);
-      if (parsed && (parsed.id || parsed.user_id || parsed.email)) {
-        return `local-user-${parsed.id || parsed.user_id || parsed.email}`;
+  // 4. Fallback ONLY when Supabase is not configured (local/demo mode)
+  if (!isSupabaseDataConfigured) {
+    try {
+      const rawProfile = localStorage.getItem("RutaHogar_profile");
+      if (rawProfile) {
+        const parsed = JSON.parse(rawProfile);
+        if (parsed && (parsed.id || parsed.user_id || parsed.email)) {
+          return `local-user-${parsed.id || parsed.user_id || parsed.email}`;
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
   return null;
 }
@@ -92,6 +96,7 @@ export function writeLocalSupportTickets(tickets) {
  * @param {Array<{role: string, content: string, ts?: string}>} [params.history]
  * @param {string} [params.screenId]
  * @param {string} [params.token]
+ * @param {string} [params.userId]
  * @param {string} [params.clientRequestId]
  * @param {typeof fetch} [params.customFetch]
  * @returns {Promise<{
@@ -156,8 +161,9 @@ export async function createSupportTicket({
     client_request_id: reqId,
   };
 
+  let res;
   try {
-    const res = await customFetch(url, {
+    res = await customFetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -165,31 +171,49 @@ export async function createSupportTicket({
       },
       body: JSON.stringify(payload),
     });
+  } catch (networkErr) {
+    // When Supabase is configured in production, never fake ticket creation on network failure
+    if (isSupabaseDataConfigured) {
+      throw new Error(
+        "No se pudo conectar con el servidor de soporte. Verifica tu conexión e inténtalo nuevamente."
+      );
+    }
+    res = null;
+  }
 
+  if (res) {
     if (res.ok) {
       const data = await res.json();
       const ticketToStore = {
         ...data,
         user_id: data.user_id || effectiveUserId,
       };
-      // Cache in local storage for instant offline resilience
       const existing = readLocalSupportTickets();
-      writeLocalSupportTickets([ticketToStore, ...existing.filter((t) => t.id !== ticketToStore.id)]);
+      writeLocalSupportTickets([
+        ticketToStore,
+        ...existing.filter((t) => t.id !== ticketToStore.id),
+      ]);
       return ticketToStore;
     }
 
+    let errBody = null;
+    try {
+      errBody = await res.json();
+    } catch {}
+
     if (res.status === 401) {
-      // If the backend couldn't validate the token (e.g. local mode or mock token),
-      // we still gracefully create the ticket locally rather than failing the user.
-      console.warn("[supportTicketsService] Backend rejected auth token, falling back to local ticket.");
-    } else {
-      console.warn(`[supportTicketsService] API responded with ${res.status}. Falling back.`);
+      throw new Error("unauthenticated");
     }
-  } catch (err) {
-    console.warn("[supportTicketsService] Backend unreachable, creating local ticket:", err);
+
+    const serverMsg =
+      errBody?.detail?.message ||
+      (typeof errBody?.detail === "string" ? errBody.detail : null) ||
+      errBody?.message ||
+      `No se pudo crear el ticket de soporte (error ${res.status}).`;
+    throw new Error(serverMsg);
   }
 
-  // Graceful fallback for offline / local-only mode
+  // Graceful fallback ONLY for local/demo mode (!isSupabaseDataConfigured) when backend is unreachable
   let storedUserName = "Usuario";
   let storedUserEmail = "";
   try {
@@ -305,21 +329,16 @@ export async function getUserSupportTickets({ userId = null, token = null } = {}
           .order("created_at", { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          const map = new Map(data.map((t) => [t.id, t]));
-          for (const lt of matchingLocal) {
-            if (!map.has(lt.id)) {
-              map.set(lt.id, lt);
-            }
-          }
-          return Array.from(map.values());
+          return data;
         }
       }
     } catch (err) {
       console.warn("[supportTicketsService] Supabase user fetch error:", err);
     }
+    return [];
   }
 
-  // Filter local tickets strictly by this user's ID
+  // Filter local tickets strictly by this user's ID in local/demo mode
   return matchingLocal;
 }
 
@@ -350,11 +369,12 @@ export async function updateSupportTicketStatus({
   const nowIso = new Date().toISOString();
 
   // 1. Try FastAPI backend PATCH endpoint if available
-  try {
-    const activeToken = await getActiveAuthToken(token);
-    if (activeToken) {
+  const activeToken = await getActiveAuthToken(token);
+  if (activeToken) {
+    let res = null;
+    try {
       const baseUrl = getAssistantApiBaseUrl();
-      const res = await customFetch(`${baseUrl}/api/support/tickets/${ticketId}`, {
+      res = await customFetch(`${baseUrl}/api/support/tickets/${ticketId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -365,7 +385,11 @@ export async function updateSupportTicketStatus({
           reply: cleanReply,
         }),
       });
+    } catch (err) {
+      console.warn("[supportTicketsService] Backend patch unreachable:", err);
+    }
 
+    if (res) {
       if (res.ok) {
         const data = await res.json();
         const tickets = readLocalSupportTickets();
@@ -387,58 +411,73 @@ export async function updateSupportTicketStatus({
         writeLocalSupportTickets(updated);
         return data;
       }
+
+      if (res.status === 401) {
+        throw new Error("unauthenticated");
+      }
+      if (res.status === 403) {
+        throw new Error("forbidden");
+      }
+      if (res.status === 404) {
+        throw new Error("Ticket no encontrado.");
+      }
+      if (!isSupabaseDataConfigured) {
+        throw new Error(`No se pudo actualizar el ticket (error ${res.status}).`);
+      }
     }
-  } catch (err) {
-    console.warn("[supportTicketsService] Backend patch error, attempting Supabase RPC:", err);
   }
 
-  // 2. Try Supabase RPC
+  // 2. Try Supabase RPC (pass all 3 arguments explicitly to match 3-param signature)
   if (isSupabaseDataConfigured) {
-    try {
-      const rpcParams = {
-        p_ticket_id: ticketId,
-        p_status: status,
-      };
-      if (cleanReply) {
-        rpcParams.p_reply = cleanReply;
-      }
-      const { data, error } = await supabase.rpc("update_support_ticket_status", rpcParams);
+    const { data, error } = await supabase.rpc("update_support_ticket_status", {
+      p_ticket_id: ticketId,
+      p_status: status,
+      p_reply: cleanReply,
+    });
 
-      if (!error) {
-        const tickets = readLocalSupportTickets();
-        const updated = tickets.map((t) => {
-          if (t.id !== ticketId) return t;
-          const currentThread = t.thread || [];
-          const nextThread = cleanReply
-            ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
-            : currentThread;
-          return {
-            ...t,
-            status,
-            admin_reply: cleanReply || t.admin_reply,
-            replied_at: cleanReply ? nowIso : t.replied_at,
-            thread: nextThread,
-            updated_at: nowIso,
-          };
-        });
-        writeLocalSupportTickets(updated);
-        return data || { id: ticketId, status, admin_reply: cleanReply };
-      }
+    if (error) {
       logSupabaseError(error);
-    } catch (err) {
-      console.warn("[supportTicketsService] RPC update error, updating locally:", err);
+      throw new Error(error.message || "No se pudo actualizar el estado del ticket.");
     }
+    if (!data) {
+      throw new Error("Ticket no encontrado.");
+    }
+
+    const tickets = readLocalSupportTickets();
+    const updated = tickets.map((t) => {
+      if (t.id !== ticketId) return t;
+      const currentThread = t.thread || [];
+      const nextThread = cleanReply
+        ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
+        : currentThread;
+      return {
+        ...t,
+        status: data.status || status,
+        admin_reply: cleanReply || t.admin_reply,
+        replied_at: cleanReply ? nowIso : t.replied_at,
+        thread: data.thread || nextThread,
+        updated_at: nowIso,
+      };
+    });
+    writeLocalSupportTickets(updated);
+    return data;
   }
 
-  // 3. Update local storage fallback
+  // 3. Update local storage fallback ONLY when Supabase is not configured
   const tickets = readLocalSupportTickets();
+  const targetExists = tickets.some((t) => t.id === ticketId);
+  if (!targetExists) {
+    throw new Error("Ticket no encontrado.");
+  }
+
+  let updatedTicket = null;
   const updated = tickets.map((t) => {
     if (t.id !== ticketId) return t;
     const currentThread = t.thread || [];
     const nextThread = cleanReply
       ? [...currentThread, { role: "admin", content: cleanReply, created_at: nowIso }]
       : currentThread;
-    return {
+    updatedTicket = {
       ...t,
       status,
       admin_reply: cleanReply || t.admin_reply,
@@ -446,9 +485,10 @@ export async function updateSupportTicketStatus({
       thread: nextThread,
       updated_at: nowIso,
     };
+    return updatedTicket;
   });
   writeLocalSupportTickets(updated);
-  return { id: ticketId, status, admin_reply: cleanReply, replied_at: cleanReply ? nowIso : null };
+  return updatedTicket;
 }
 
 /**
@@ -481,11 +521,12 @@ export async function submitTicketUserFeedback({
   const newStatus = feedback === "helpful" ? "resuelto" : "en_proceso";
 
   // 1. Try FastAPI backend endpoint if available
-  try {
-    const activeToken = await getActiveAuthToken(token);
-    if (activeToken) {
+  const activeToken = await getActiveAuthToken(token);
+  if (activeToken) {
+    let res = null;
+    try {
       const baseUrl = getAssistantApiBaseUrl();
-      const res = await customFetch(`${baseUrl}/api/support/tickets/${ticketId}/feedback`, {
+      res = await customFetch(`${baseUrl}/api/support/tickets/${ticketId}/feedback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -496,7 +537,11 @@ export async function submitTicketUserFeedback({
           reply: cleanReply,
         }),
       });
+    } catch (err) {
+      console.warn("[supportTicketsService] Backend feedback unreachable:", err);
+    }
 
+    if (res) {
       if (res.ok) {
         const data = await res.json();
         const tickets = readLocalSupportTickets();
@@ -511,64 +556,79 @@ export async function submitTicketUserFeedback({
             status: data.status || newStatus,
             user_feedback: feedback,
             user_feedback_at: nowIso,
-            thread: nextThread,
+            thread: data.thread || nextThread,
             updated_at: nowIso,
           };
         });
         writeLocalSupportTickets(updated);
         return data;
       }
+
+      if (res.status === 401) {
+        throw new Error("unauthenticated");
+      }
+      if (res.status === 403) {
+        throw new Error("forbidden");
+      }
+      if (res.status === 404) {
+        throw new Error("Ticket no encontrado.");
+      }
+      if (!isSupabaseDataConfigured) {
+        throw new Error(`No se pudo enviar la respuesta (error ${res.status}).`);
+      }
     }
-  } catch (err) {
-    console.warn("[supportTicketsService] Backend feedback error, attempting RPC:", err);
   }
 
-  // 2. Try Supabase RPC
+  // 2. Try Supabase RPC (pass all 3 arguments explicitly to match 3-param signature)
   if (isSupabaseDataConfigured) {
-    try {
-      const rpcParams = {
-        p_ticket_id: ticketId,
-        p_feedback: feedback,
-      };
-      if (cleanReply) {
-        rpcParams.p_user_reply = cleanReply;
-      }
-      const { data, error } = await supabase.rpc("submit_ticket_user_feedback", rpcParams);
-      if (!error) {
-        const tickets = readLocalSupportTickets();
-        const updated = tickets.map((t) => {
-          if (t.id !== ticketId) return t;
-          const currentThread = t.thread || [];
-          const nextThread = cleanReply
-            ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
-            : currentThread;
-          return {
-            ...t,
-            status: newStatus,
-            user_feedback: feedback,
-            user_feedback_at: nowIso,
-            thread: nextThread,
-            updated_at: nowIso,
-          };
-        });
-        writeLocalSupportTickets(updated);
-        return data || { id: ticketId, status: newStatus, user_feedback: feedback };
-      }
+    const { data, error } = await supabase.rpc("submit_ticket_user_feedback", {
+      p_ticket_id: ticketId,
+      p_feedback: feedback,
+      p_user_reply: cleanReply,
+    });
+    if (error) {
       logSupabaseError(error);
-    } catch (err) {
-      console.warn("[supportTicketsService] RPC feedback error, updating locally:", err);
+      throw new Error(error.message || "No se pudo registrar tu confirmación.");
     }
+    if (!data) {
+      throw new Error("Ticket no encontrado.");
+    }
+
+    const tickets = readLocalSupportTickets();
+    const updated = tickets.map((t) => {
+      if (t.id !== ticketId) return t;
+      const currentThread = t.thread || [];
+      const nextThread = cleanReply
+        ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
+        : currentThread;
+      return {
+        ...t,
+        status: data.status || newStatus,
+        user_feedback: feedback,
+        user_feedback_at: nowIso,
+        thread: data.thread || nextThread,
+        updated_at: nowIso,
+      };
+    });
+    writeLocalSupportTickets(updated);
+    return data;
   }
 
-  // 3. Local storage fallback
+  // 3. Local storage fallback ONLY when Supabase is not configured
   const tickets = readLocalSupportTickets();
+  const targetExists = tickets.some((t) => t.id === ticketId);
+  if (!targetExists) {
+    throw new Error("Ticket no encontrado.");
+  }
+
+  let updatedTicket = null;
   const updated = tickets.map((t) => {
     if (t.id !== ticketId) return t;
     const currentThread = t.thread || [];
     const nextThread = cleanReply
       ? [...currentThread, { role: "user", content: cleanReply, created_at: nowIso }]
       : currentThread;
-    return {
+    updatedTicket = {
       ...t,
       status: newStatus,
       user_feedback: feedback,
@@ -576,14 +636,8 @@ export async function submitTicketUserFeedback({
       thread: nextThread,
       updated_at: nowIso,
     };
+    return updatedTicket;
   });
   writeLocalSupportTickets(updated);
-
-  return {
-    id: ticketId,
-    status: newStatus,
-    user_feedback: feedback,
-    user_feedback_at: nowIso,
-    user_reply: cleanReply,
-  };
+  return updatedTicket;
 }

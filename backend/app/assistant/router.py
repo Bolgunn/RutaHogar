@@ -27,6 +27,15 @@ support_router = APIRouter(prefix="/api/support", tags=["support"])
 bearer = HTTPBearer(auto_error=False)
 
 
+def is_global_admin_user(user: Dict[str, Any]) -> bool:
+    """Checks if the authenticated user is a global RutaHogar administrator.
+
+    Matches the database `public.is_global_admin()` definition:
+    role == 'admin' and inmobiliaria_id is None.
+    """
+    return user.get("role") == "admin" and not user.get("inmobiliaria_id")
+
+
 def check_optional_auth(
     credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
 ) -> bool:
@@ -58,6 +67,52 @@ def check_optional_auth(
         return res.status_code == 200
     except Exception:
         return False
+
+
+def resolve_optional_user_role(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
+) -> Optional[str]:
+    """Resolves the role of the caller if a valid Bearer token is provided."""
+    if credentials is None or not credentials.credentials:
+        return None
+
+    token = credentials.credentials
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    supabase_key = (
+        os.environ.get("SUPABASE_SECRET_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_ANON_KEY")
+    )
+
+    if not supabase_url or not supabase_key:
+        return None
+
+    try:
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {token}",
+        }
+        user_res = httpx.get(f"{supabase_url}/auth/v1/user", headers=headers, timeout=3.0)
+        if user_res.status_code != 200:
+            return None
+
+        user_data = user_res.json()
+        user_id = user_data.get("id")
+        role = (user_data.get("user_metadata") or {}).get("role")
+
+        if user_id:
+            profile_res = httpx.get(
+                f"{supabase_url}/rest/v1/profiles",
+                headers=headers,
+                params={"id": f"eq.{user_id}", "select": "role"},
+                timeout=3.0,
+            )
+            if profile_res.status_code == 200 and profile_res.json():
+                role = profile_res.json()[0].get("role") or role
+
+        return role or "usuario"
+    except Exception:
+        return None
 
 
 def resolve_authenticated_user(
@@ -145,12 +200,17 @@ def resolve_authenticated_user(
 def chat_assistant(
     request: AssistantChatRequest,
     is_authenticated: Annotated[bool, Depends(check_optional_auth)],
+    user_role: Annotated[Optional[str], Depends(resolve_optional_user_role)] = None,
 ) -> AssistantChatResponse:
     """Answers user queries regarding pre-evaluation, interface usage, and financial concepts.
 
     Available to anonymous visitors and authenticated users.
     """
-    return AssistantService.process_chat(request, is_authenticated=is_authenticated)
+    return AssistantService.process_chat(
+        request,
+        is_authenticated=is_authenticated,
+        user_role=user_role if is_authenticated else None,
+    )
 
 
 @router.get("/health")
@@ -169,14 +229,20 @@ def create_support_ticket(
     user: Annotated[Dict[str, Any], Depends(resolve_authenticated_user)],
 ) -> TicketResponse:
     """Creates a new support ticket attached to the authenticated user and their recent chat context."""
-    return TicketService.create_ticket(
-        user_id=user["user_id"],
-        role=user["role"],
-        user_name=user["full_name"],
-        user_email=user["email"],
-        inmobiliaria_id=user.get("inmobiliaria_id"),
-        request=request,
-    )
+    try:
+        return TicketService.create_ticket(
+            user_id=user["user_id"],
+            role=user["role"],
+            user_name=user["full_name"],
+            user_email=user["email"],
+            inmobiliaria_id=user.get("inmobiliaria_id"),
+            request=request,
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "persistence_error", "message": "No se pudo registrar el ticket de soporte."},
+        ) from e
 
 
 @support_router.patch("/tickets/{ticket_id}", status_code=status.HTTP_200_OK)
@@ -185,19 +251,33 @@ def update_support_ticket(
     body: UpdateTicketStatusRequest,
     user: Annotated[Dict[str, Any], Depends(resolve_authenticated_user)],
 ):
-    """Updates support ticket status and/or responds to the user. Restricted to staff/admin."""
-    if user.get("role") not in ("admin", "admin_inmobiliario", "ejecutivo"):
+    """Updates support ticket status and/or responds to the user. Restricted to global admin."""
+    if not is_global_admin_user(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "forbidden", "message": "Solo el equipo de administración puede gestionar tickets."},
+            detail={
+                "code": "forbidden",
+                "message": "Solo el administrador global de RutaHogar puede gestionar tickets.",
+            },
         )
 
-    return TicketService.update_ticket_status(
-        ticket_id=ticket_id,
-        status=body.status,
-        admin_reply=body.reply,
-        admin_id=user["user_id"],
-    )
+    try:
+        return TicketService.update_ticket_status(
+            ticket_id=ticket_id,
+            status=body.status,
+            admin_reply=body.reply,
+            admin_id=user["user_id"],
+        )
+    except LookupError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "not_found", "message": str(e)},
+        ) from e
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "persistence_error", "message": "No se pudo actualizar el ticket de soporte."},
+        ) from e
 
 
 @support_router.post("/tickets/{ticket_id}/feedback", status_code=status.HTTP_200_OK)
@@ -206,10 +286,27 @@ def submit_ticket_feedback(
     body: UserTicketFeedbackRequest,
     user: Annotated[Dict[str, Any], Depends(resolve_authenticated_user)],
 ):
-    """Allows user to confirm resolution of their ticket or send follow-up reply."""
-    return TicketService.submit_user_feedback(
-        ticket_id=ticket_id,
-        user_id=user["user_id"],
-        feedback=body.feedback,
-        user_reply=body.reply,
-    )
+    """Allows the ticket owner (or global admin) to confirm resolution or send a follow-up reply."""
+    try:
+        return TicketService.submit_user_feedback(
+            ticket_id=ticket_id,
+            user_id=user["user_id"],
+            feedback=body.feedback,
+            user_reply=body.reply,
+            is_global_admin=is_global_admin_user(user),
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "forbidden", "message": str(e)},
+        ) from e
+    except LookupError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "not_found", "message": str(e)},
+        ) from e
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "persistence_error", "message": "No se pudo guardar la confirmación del ticket."},
+        ) from e

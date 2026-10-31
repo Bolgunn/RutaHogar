@@ -985,17 +985,34 @@ export default function App() {
   }, [scoreFormDraft]);
 
   useEffect(() => {
+    let subscription = null;
     import("./utils/supabase").then(({ supabase }) => {
       if (!supabase?.auth) return;
       supabase.auth.getSession().then(({ data }) => {
         if (data?.session?.access_token) {
+          try {
+            localStorage.setItem("RutaHogar_session", JSON.stringify(data.session));
+          } catch {}
           setAuth((prev) => ({
             ...prev,
             session: data.session,
           }));
         }
       }).catch(() => {});
+
+      const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+        if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session?.access_token) {
+          try {
+            localStorage.setItem("RutaHogar_session", JSON.stringify(session));
+          } catch {}
+          setAuth((prev) => (prev.profile ? { ...prev, session } : prev));
+        }
+      });
+      subscription = listener?.subscription || null;
     });
+    return () => {
+      subscription?.unsubscribe?.();
+    };
   }, []);
 
   const profile = auth.profile;

@@ -206,6 +206,60 @@
     }
   },
   {
+    "id": "plataforma-mejorar-score",
+    "title": "¿Cómo puedo mejorar mi score o puntaje financiero?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "Para mejorar tu score en RutaHogar puedes actuar sobre cuatro factores principales: 1) Reducir tu carga financiera mensual pagando deudas de tarjetas o créditos de consumo, 2) Aumentar tu ahorro disponible para el pie de la vivienda (idealmente 15% a 20% o más), 3) Mantener continuidad laboral estable (si cambias de trabajo, los bancos suelen evaluar la antigüedad en el nuevo empleo o la continuidad sin lagunas previsionales) y regularizar cualquier morosidad vigente, y 4) Evaluar complementar renta con un codeudor.",
+    "synonyms": [
+      "como puedo mejorar mi score",
+      "como subir mi puntaje",
+      "mejorar mi calificacion",
+      "subir mi score",
+      "aumentar mi puntaje",
+      "que pasa si cambio de trabajo afecta mi score",
+      "cambio de trabajo score",
+      "como mejorar mi preevaluacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ver mi preparación financiera"
+    }
+  },
+  {
+    "id": "plataforma-aprobacion-credito",
+    "title": "¿Qué es la aprobación de un crédito hipotecario?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "La aprobación de un crédito hipotecario es la validación formal que realiza una entidad financiera (banco o mutuaria) sobre tu capacidad de pago, historial comercial (CMF/Dicom), antigüedad laboral y tasación de la propiedad. Recuerda que el score de RutaHogar es una pre-evaluación orientativa para prepararte mejor antes de solicitar la aprobación formal en el banco.",
+    "synonyms": [
+      "que es la aprobacion de un credito hipotecario",
+      "aprobacion de credito hipotecario",
+      "diferencia entre preevaluacion y aprobacion",
+      "quien aprueba el credito hipotecario",
+      "aprobacion comercial hipotecario"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "academia",
+      "label": "Ir a la Academia"
+    },
+    "link": {
+      "type": "academy",
+      "articleId": "que-es-credito-hipotecario",
+      "label": "Leer en Academia: Crédito Hipotecario"
+    }
+  },
+  {
     "id": "preeval-general-pasos",
     "title": "Pasos y funcionamiento de la pre-evaluación financiera",
     "category": "preevaluacion",

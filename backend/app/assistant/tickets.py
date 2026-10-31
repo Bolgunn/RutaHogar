@@ -130,6 +130,7 @@ class TicketService:
                         return TicketResponse(
                             id=ticket_id,
                             code=code,
+                            user_id=row.get("user_id") or user_id,
                             status=row["status"],
                             created_at=row["created_at"],
                             notified_at=row.get("notified_at"),
@@ -160,7 +161,9 @@ class TicketService:
                 if insert_res.status_code >= 400:
                     # In case user_name/user_email columns are not yet in remote table schema cache
                     if "user_name" in insert_res.text or "user_email" in insert_res.text:
-                        fallback_payload = {k: v for k, v in payload.items() if k not in ("user_name", "user_email")}
+                        fallback_payload = {
+                            k: v for k, v in payload.items() if k not in ("user_name", "user_email")
+                        }
                         insert_res = client.post(
                             f"{supabase_url}/rest/v1/support_tickets",
                             headers=headers,
@@ -183,13 +186,14 @@ class TicketService:
                             return TicketResponse(
                                 id=row["id"],
                                 code=row["id"][:8].upper(),
+                                user_id=row.get("user_id") or user_id,
                                 status=row["status"],
                                 created_at=row["created_at"],
                                 notified_at=row.get("notified_at"),
                                 notification_error=row.get("notification_error"),
                             )
 
-                    raise RuntimeError(f"Database error inserting ticket: {insert_res.text}")
+                    raise RuntimeError(f"Database error inserting ticket ({insert_res.status_code})")
 
                 created_rows = insert_res.json()
                 ticket_row = created_rows[0]
@@ -244,7 +248,7 @@ class TicketService:
                 if db_client is None:
                     client.close()
 
-        # Local in-memory fallback for local/test environments
+        # Local in-memory fallback for local/test environments without Supabase
         idempotency_key = f"{user_id}:{client_request_id}"
         if idempotency_key in _LOCAL_TICKETS:
             cached = _LOCAL_TICKETS[idempotency_key]
@@ -308,7 +312,11 @@ class TicketService:
         )
 
         now_iso = datetime.now(timezone.utc).isoformat()
-        clean_reply = redact_pii(admin_reply.strip()[:3000]) if admin_reply and admin_reply.strip() else None
+        clean_reply = (
+            redact_pii(admin_reply.strip()[:3000])
+            if admin_reply and admin_reply.strip()
+            else None
+        )
 
         normalized_status = "en_proceso" if status == "en_curso" else status
         # If admin is providing a reply and status was still abierto, transition automatically to en_proceso
@@ -329,32 +337,38 @@ class TicketService:
 
             client = db_client or httpx.Client(timeout=10.0)
             try:
-                # 1. Fetch current ticket row
+                # 1. Fetch current ticket row and verify existence
                 get_res = client.get(
                     f"{supabase_url}/rest/v1/support_tickets",
                     headers=headers,
                     params={"id": f"eq.{ticket_id}", "select": "*"},
                 )
-                current_thread = []
-                if get_res.status_code == 200 and get_res.json():
-                    ticket_data = get_res.json()[0]
-                    user_email = ticket_data.get("user_email")
-                    user_name = ticket_data.get("user_name")
-                    current_thread = ticket_data.get("thread") or []
-                    if not user_email and ticket_data.get("user_id"):
-                        try:
-                            prof_res = client.get(
-                                f"{supabase_url}/rest/v1/profiles",
-                                headers=headers,
-                                params={"id": f"eq.{ticket_data['user_id']}", "select": "*"},
-                            )
-                            if prof_res.status_code == 200 and prof_res.json():
-                                p = prof_res.json()[0]
-                                user_name = user_name or p.get("full_name")
-                        except Exception:
-                            pass
+                if get_res.status_code >= 400:
+                    raise RuntimeError(f"Database error reading ticket ({get_res.status_code})")
 
-                # 2. Patch status and reply
+                rows = get_res.json()
+                if not rows:
+                    raise LookupError(f"Ticket no encontrado: {ticket_id}")
+
+                ticket_data = rows[0]
+                user_email = ticket_data.get("user_email")
+                user_name = ticket_data.get("user_name")
+                current_thread = ticket_data.get("thread") or []
+
+                if not user_email and ticket_data.get("user_id"):
+                    try:
+                        prof_res = client.get(
+                            f"{supabase_url}/rest/v1/profiles",
+                            headers=headers,
+                            params={"id": f"eq.{ticket_data['user_id']}", "select": "*"},
+                        )
+                        if prof_res.status_code == 200 and prof_res.json():
+                            p = prof_res.json()[0]
+                            user_name = user_name or p.get("full_name")
+                    except Exception:
+                        pass
+
+                # 2. Patch status and reply (never overwrite existing admin_reply with None)
                 patch_payload: Dict[str, Any] = {
                     "status": normalized_status,
                     "status_updated_at": now_iso,
@@ -366,8 +380,11 @@ class TicketService:
                     patch_payload["replied_at"] = now_iso
                     if admin_id:
                         patch_payload["replied_by"] = admin_id
-                    # Append turn to thread
-                    admin_turn = {"role": "admin", "content": clean_reply, "created_at": now_iso}
+                    admin_turn = {
+                        "role": "admin",
+                        "content": clean_reply,
+                        "created_at": now_iso,
+                    }
                     patch_payload["thread"] = current_thread + [admin_turn]
 
                 update_res = client.patch(
@@ -378,32 +395,36 @@ class TicketService:
                 )
 
                 if update_res.status_code >= 400:
-                    # Fallback if admin_reply or thread column is not yet present on remote DB
-                    simple_payload = {"status": normalized_status, "status_updated_at": now_iso}
-                    if "admin_reply" not in update_res.text:
-                        simple_payload["admin_reply"] = clean_reply
-                    client.patch(
-                        f"{supabase_url}/rest/v1/support_tickets",
-                        headers=headers,
-                        params={"id": f"eq.{ticket_id}"},
-                        json=simple_payload,
-                    )
+                    raise RuntimeError(f"Database error updating ticket ({update_res.status_code})")
+
+                updated_rows = update_res.json()
+                if isinstance(updated_rows, list) and not updated_rows:
+                    raise LookupError(f"Ticket no encontrado: {ticket_id}")
+                if isinstance(updated_rows, list) and updated_rows:
+                    ticket_data = updated_rows[0]
             finally:
                 if db_client is None:
                     client.close()
         else:
             updated_row = _LOCAL_TICKETS_BY_ID.get(ticket_id)
-            if updated_row:
-                updated_row["status"] = normalized_status
-                updated_row["status_updated_at"] = now_iso
-                if clean_reply:
-                    updated_row["admin_reply"] = clean_reply
-                    updated_row["replied_at"] = now_iso
-                    thr = updated_row.setdefault("thread", [])
-                    thr.append({"role": "admin", "content": clean_reply, "created_at": now_iso})
-                user_email = updated_row.get("user_email")
-                user_name = updated_row.get("user_name")
-                ticket_data = updated_row
+            if not updated_row:
+                for v in _LOCAL_TICKETS.values():
+                    if v.get("id") == ticket_id:
+                        updated_row = v
+                        break
+            if not updated_row:
+                raise LookupError(f"Ticket no encontrado: {ticket_id}")
+
+            updated_row["status"] = normalized_status
+            updated_row["status_updated_at"] = now_iso
+            if clean_reply:
+                updated_row["admin_reply"] = clean_reply
+                updated_row["replied_at"] = now_iso
+                thr = updated_row.setdefault("thread", [])
+                thr.append({"role": "admin", "content": clean_reply, "created_at": now_iso})
+            user_email = updated_row.get("user_email")
+            user_name = updated_row.get("user_name")
+            ticket_data = updated_row
 
         # 3. If a reply was provided, notify the requester via email (best effort)
         email_sent = False
@@ -420,8 +441,9 @@ class TicketService:
         return {
             "id": ticket_id,
             "status": normalized_status,
-            "admin_reply": clean_reply,
-            "replied_at": now_iso if clean_reply else None,
+            "admin_reply": clean_reply if clean_reply else (ticket_data.get("admin_reply") if ticket_data else None),
+            "replied_at": now_iso if clean_reply else (ticket_data.get("replied_at") if ticket_data else None),
+            "thread": ticket_data.get("thread", []) if ticket_data else [],
             "reply_notified": email_sent,
             "reply_notification_error": reply_error,
         }
@@ -432,13 +454,21 @@ class TicketService:
         user_id: str,
         feedback: str,
         user_reply: Optional[str] = None,
+        is_global_admin: bool = False,
         db_client: Optional[httpx.Client] = None,
     ) -> Dict[str, Any]:
         """User confirms resolution or indicates unresolved with optional follow-up reply."""
+        if not user_id or not str(user_id).strip():
+            raise PermissionError("Debes iniciar sesión para enviar feedback sobre un ticket.")
+
         now_iso = datetime.now(timezone.utc).isoformat()
         normalized_feedback = "helpful" if feedback == "helpful" else "unhelpful"
         new_status = "resuelto" if normalized_feedback == "helpful" else "en_proceso"
-        clean_user_reply = redact_pii(user_reply.strip()[:2000]) if user_reply and user_reply.strip() else None
+        clean_user_reply = (
+            redact_pii(user_reply.strip()[:2000])
+            if user_reply and user_reply.strip()
+            else None
+        )
 
         user_turn = None
         if clean_user_reply:
@@ -463,16 +493,24 @@ class TicketService:
             }
             client = db_client or httpx.Client(timeout=10.0)
             try:
-                # 1. Fetch current ticket to get thread
+                # 1. Fetch current ticket to verify existence and ownership
                 get_res = client.get(
                     f"{supabase_url}/rest/v1/support_tickets",
                     headers=headers,
                     params={"id": f"eq.{ticket_id}", "select": "*"},
                 )
-                current_thread = []
-                if get_res.status_code == 200 and get_res.json():
-                    row = get_res.json()[0]
-                    current_thread = row.get("thread") or []
+                if get_res.status_code >= 400:
+                    raise RuntimeError(f"Database error reading ticket ({get_res.status_code})")
+
+                rows = get_res.json()
+                if not rows:
+                    raise LookupError(f"Ticket no encontrado: {ticket_id}")
+
+                row = rows[0]
+                if row.get("user_id") != user_id and not is_global_admin:
+                    raise PermissionError("Acceso denegado: solo el creador del ticket puede enviar feedback.")
+
+                current_thread = row.get("thread") or []
 
                 patch_payload: Dict[str, Any] = {
                     "status": new_status,
@@ -489,34 +527,51 @@ class TicketService:
                     params={"id": f"eq.{ticket_id}"},
                     json=patch_payload,
                 )
-                if update_res.status_code == 200 and update_res.json():
-                    return update_res.json()[0]
+                if update_res.status_code >= 400:
+                    raise RuntimeError(f"Database error updating ticket feedback ({update_res.status_code})")
+
+                updated_rows = update_res.json()
+                if isinstance(updated_rows, list) and not updated_rows:
+                    raise LookupError(f"Ticket no encontrado: {ticket_id}")
+
+                updated = updated_rows[0] if isinstance(updated_rows, list) and updated_rows else row
+                return {
+                    "id": updated.get("id", ticket_id),
+                    "status": updated.get("status", new_status),
+                    "user_feedback": updated.get("user_feedback", normalized_feedback),
+                    "user_feedback_at": updated.get("user_feedback_at", now_iso),
+                    "thread": updated.get("thread", current_thread + ([user_turn] if user_turn else [])),
+                }
             finally:
                 if db_client is None:
                     client.close()
 
-        # Local storage / mock fallback
+        # Local storage / mock fallback (only when Supabase is not configured)
         local = _LOCAL_TICKETS_BY_ID.get(ticket_id)
         if not local:
-            for k, v in _LOCAL_TICKETS.items():
+            for v in _LOCAL_TICKETS.values():
                 if v.get("id") == ticket_id:
                     local = v
                     break
 
-        if local:
-            local["status"] = new_status
-            local["status_updated_at"] = now_iso
-            local["user_feedback"] = normalized_feedback
-            local["user_feedback_at"] = now_iso
-            thr = local.setdefault("thread", [])
-            if user_turn:
-                thr.append(user_turn)
-            return local
+        if not local:
+            raise LookupError(f"Ticket no encontrado: {ticket_id}")
+
+        if local.get("user_id") != user_id and not is_global_admin:
+            raise PermissionError("Acceso denegado: solo el creador del ticket puede enviar feedback.")
+
+        local["status"] = new_status
+        local["status_updated_at"] = now_iso
+        local["user_feedback"] = normalized_feedback
+        local["user_feedback_at"] = now_iso
+        thr = local.setdefault("thread", [])
+        if user_turn:
+            thr.append(user_turn)
 
         return {
-            "id": ticket_id,
-            "status": new_status,
-            "user_feedback": normalized_feedback,
-            "user_feedback_at": now_iso,
-            "user_reply": clean_user_reply,
+            "id": local["id"],
+            "status": local["status"],
+            "user_feedback": local["user_feedback"],
+            "user_feedback_at": local["user_feedback_at"],
+            "thread": list(thr),
         }

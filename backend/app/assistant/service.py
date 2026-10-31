@@ -1,6 +1,6 @@
 """Assistant service orchestrating guards, retrieval, tiering and response assembly."""
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from .constants import (
@@ -11,7 +11,7 @@ from .constants import (
 from .guard import check_out_of_scope_guard
 from .llm import ask_assistant_groq
 from .redact import redact_pii
-from .retrieval import retrieve_relevant_chunks
+from .retrieval import get_allowed_audiences, retrieve_relevant_chunks
 
 
 class ChatMessage(BaseModel):
@@ -56,6 +56,7 @@ class AssistantService:
     def process_chat(
         request: AssistantChatRequest,
         is_authenticated: bool = False,
+        user_role: Optional[str] = None,
     ) -> AssistantChatResponse:
         raw_message = (request.message or "").strip()
         if not raw_message:
@@ -80,14 +81,20 @@ class AssistantService:
                 sources=["Políticas de Crédito y Seguridad"],
                 links=[],
                 action=None,
-                suggest_escalation=False,
+                suggest_escalation=True,
             )
 
-        # 3. Retrieval
+        # 3. Retrieval (filtered by audience permissions)
+        allowed_audiences = get_allowed_audiences(
+            is_authenticated=is_authenticated,
+            user_role=user_role,
+            screen_id=request.screen_id,
+        )
         scored_chunks = retrieve_relevant_chunks(
             query=clean_query,
             screen_id=request.screen_id,
             field_id=request.field_id,
+            allowed_audiences=allowed_audiences,
         )
 
         # 4. Handle no match (Tier 2 Fallback)
@@ -141,7 +148,15 @@ class AssistantService:
         tier = "tier0_kb"
 
         if is_authenticated:
-            history_dicts = [{"role": h.role, "content": h.content} for h in request.history]
+            bounded_history = request.history[-MAX_HISTORY_MESSAGES:]
+            history_dicts = [
+                {
+                    "role": h.role,
+                    "content": redact_pii((h.content or "")[:MAX_MESSAGE_LENGTH]),
+                }
+                for h in bounded_history
+                if h.role in {"user", "assistant"} and (h.content or "").strip()
+            ]
             answer = ask_assistant_groq(
                 user_query=clean_query,
                 retrieved_chunks=chunks,

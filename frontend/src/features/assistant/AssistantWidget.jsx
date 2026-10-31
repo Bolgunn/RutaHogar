@@ -167,6 +167,7 @@ export default function AssistantWidget({
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [ticketSubject, setTicketSubject] = useState("");
   const [ticketMessage, setTicketMessage] = useState("");
+  const [ticketClientRequestId, setTicketClientRequestId] = useState(null);
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketSuccess, setTicketSuccess] = useState(null);
   const [ticketError, setTicketError] = useState(null);
@@ -243,9 +244,10 @@ export default function AssistantWidget({
     }
 
     try {
+      const activeToken = await getActiveAuthToken(token);
       const userTickets = await getUserSupportTickets({
         userId: profile.id,
-        token,
+        token: activeToken,
       });
 
       if (!userTickets || !Array.isArray(userTickets) || userTickets.length === 0) {
@@ -479,11 +481,12 @@ export default function AssistantWidget({
       content: m.content,
     }));
 
+    const activeToken = await getActiveAuthToken(token);
     const response = await sendAssistantMessage({
       message: text,
       history: historyPayload,
       screenId,
-      token,
+      token: activeToken,
     });
 
     const isUserFrustrated = isEscalationSignal(text);
@@ -528,7 +531,7 @@ export default function AssistantWidget({
     if (!ticketId || submittingFeedback[ticketId]) return;
     setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: true }));
     try {
-      const activeToken = token || (await getActiveAuthToken());
+      const activeToken = await getActiveAuthToken(token);
       await submitTicketUserFeedback({
         ticketId,
         feedback: "helpful",
@@ -559,6 +562,18 @@ export default function AssistantWidget({
       ]);
     } catch (err) {
       console.warn("[AssistantWidget] Error confirming ticket resolution:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ticket-feedback-err-${Date.now()}`,
+          role: "assistant",
+          content: `⚠️ No pudimos actualizar el estado del ticket #${ticketCode}: ${err.message || "Error de conexión"}. Por favor inténtalo nuevamente.`,
+          action: null,
+          links: [],
+          sources: [],
+          feedback: null,
+        },
+      ]);
     } finally {
       setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: false }));
     }
@@ -574,7 +589,7 @@ export default function AssistantWidget({
 
     setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: true }));
     try {
-      const activeToken = token || (await getActiveAuthToken());
+      const activeToken = await getActiveAuthToken(token);
       const nowIso = new Date().toISOString();
       await submitTicketUserFeedback({
         ticketId,
@@ -619,6 +634,18 @@ export default function AssistantWidget({
       setFollowUpOpen((prev) => ({ ...prev, [ticketId]: false }));
     } catch (err) {
       console.warn("[AssistantWidget] Error sending follow-up reply:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `followup-err-${Date.now()}`,
+          role: "assistant",
+          content: `⚠️ No pudimos enviar tu réplica sobre el Ticket #${ticketCode}: ${err.message || "Error de conexión"}. Por favor inténtalo nuevamente.`,
+          action: null,
+          links: [],
+          sources: [],
+          feedback: null,
+        },
+      ]);
     } finally {
       setSubmittingFeedback((prev) => ({ ...prev, [ticketId]: false }));
     }
@@ -640,6 +667,16 @@ export default function AssistantWidget({
       ? `Duda en pantalla ${screenId}`
       : "Consulta sobre la plataforma";
 
+    const newReqId =
+      typeof window !== "undefined" && window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+
+    setTicketClientRequestId(newReqId);
     setTicketSubject(defaultSubject);
     setTicketMessage(
       refMsg
@@ -659,17 +696,19 @@ export default function AssistantWidget({
     setTicketError(null);
 
     try {
-      const activeToken = token || (await getActiveAuthToken());
+      const activeToken = await getActiveAuthToken(token);
       const transcriptHistory = buildTranscriptForTicket(messages, 10);
       const res = await createSupportTicket({
         subject: ticketSubject,
         message: ticketMessage,
         history: transcriptHistory,
         screenId,
-        token: activeToken || "local-authenticated-session",
+        token: activeToken,
         userId: profile?.id || null,
+        clientRequestId: ticketClientRequestId,
       });
 
+      setTicketClientRequestId(null);
       setTicketSuccess(res);
       setActiveTicket(res);
 
@@ -688,9 +727,15 @@ export default function AssistantWidget({
         },
       ]);
     } catch (err) {
-      if (err.message === "unauthenticated" && !isUserAuthenticated) {
-        setTicketModalOpen(false);
-        setAuthModalOpen(true);
+      if (err.message === "unauthenticated") {
+        if (!isUserAuthenticated) {
+          setTicketModalOpen(false);
+          setAuthModalOpen(true);
+        } else {
+          setTicketError(
+            "Tu sesión ha expirado. Por favor vuelve a iniciar sesión para enviar tu ticket."
+          );
+        }
       } else {
         setTicketError(
           err.message || "Ocurrió un error al enviar el ticket. Por favor inténtalo de nuevo."

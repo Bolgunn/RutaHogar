@@ -1,12 +1,11 @@
 """In-process RAG-lite retrieval engine for RutaHogar Virtual Assistant.
 
 Implements fast BM25 / token scoring over the pre-built JSON knowledge base
-with accent normalization, Spanish stopwords removal, and context boosting.
+with accent normalization, Spanish stopwords removal, audience filtering, and context boosting.
 No external vector databases or heavyweight machine learning libraries required.
 """
 
 import json
-import math
 import re
 import unicodedata
 from pathlib import Path
@@ -47,20 +46,42 @@ SPANISH_STOPWORDS: Set[str] = {
 _CACHED_KB: Optional[List[Dict[str, Any]]] = None
 _CACHED_MTIME: float = 0.0
 
+ADMIN_SCREENS = {"admin", "admin-projects", "admin-profile", "admin-reports"}
+EJECUTIVO_SCREENS = {"leads", "metricas", "sales-profile"}
+
+
+def get_allowed_audiences(
+    is_authenticated: bool = False,
+    user_role: Optional[str] = None,
+    screen_id: Optional[str] = None,
+) -> Set[str]:
+    """Determines which KB chunk audiences the caller is authorized to retrieve."""
+    if not is_authenticated:
+        return {"all", "lead"}
+
+    role = (user_role or "").strip().lower()
+    if not role:
+        if screen_id in ADMIN_SCREENS:
+            role = "admin"
+        elif screen_id in EJECUTIVO_SCREENS:
+            role = "ejecutivo"
+        else:
+            role = "usuario"
+
+    if role in {"admin", "admin_inmobiliario"}:
+        return {"all", "lead", "ejecutivo", "admin"}
+    if role == "ejecutivo":
+        return {"all", "lead", "ejecutivo"}
+    return {"all", "lead"}
+
 
 def normalize_text(text: str) -> str:
-    """Lowercases, removes diacritics (accents) except tilde for clarity,
-
-    and replaces non-alphanumeric chars with spaces.
-    """
+    """Lowercases, removes diacritics (accents), and replaces non-alphanumeric chars with spaces."""
     if not text:
         return ""
     text = text.lower()
-    # Normalize unicode to NFD to separate base characters and diacritical marks
     nfkd = unicodedata.normalize("NFKD", text)
-    # Strip diacritical marks (Mn category)
     stripped = "".join(c for c in nfkd if unicodedata.category(c) != "Mn")
-    # Replace non-alphanumeric with spaces
     cleaned = re.sub(r"[^a-z0-9\s]", " ", stripped)
     return " ".join(cleaned.split())
 
@@ -173,6 +194,7 @@ def retrieve_relevant_chunks(
     field_id: Optional[str] = None,
     top_k: int = TOP_K_CHUNKS,
     min_score: float = MIN_RETRIEVAL_SCORE,
+    allowed_audiences: Optional[Set[str]] = None,
 ) -> List[Tuple[float, Dict[str, Any]]]:
     """Retrieves top-k relevant knowledge base chunks for the given query."""
     kb = load_kb()
@@ -191,6 +213,11 @@ def retrieve_relevant_chunks(
 
     scored_chunks: List[Tuple[float, Dict[str, Any]]] = []
     for chunk in kb:
+        if allowed_audiences is not None:
+            chunk_audience = chunk.get("audience") or "all"
+            if chunk_audience not in allowed_audiences:
+                continue
+
         score = score_chunk(chunk, query_tokens, raw_query_norm, screen_id, field_id)
         if score >= min_score:
             scored_chunks.append((score, chunk))
