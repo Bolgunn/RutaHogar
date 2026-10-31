@@ -161,7 +161,7 @@ export async function ensureUserProfile(user) {
     return upsertProfile(
       user.id,
       existingProfile.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "",
-      existingProfile.role || user.user_metadata?.role || "usuario",
+      existingProfile.role,
       existingProfile.onboarding_data || null,
       {
         phone: existingProfile.phone || metadataPhone,
@@ -175,8 +175,8 @@ export async function ensureUserProfile(user) {
   }
 
   const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email || "";
-  const role = normalizeRole(user.user_metadata?.role || "usuario");
-  return upsertProfile(user.id, fullName, role, null, {
+  // user_metadata lo escribe el navegador: un perfil nuevo siempre parte como usuario.
+  return upsertProfile(user.id, fullName, "usuario", null, {
     phone: metadataPhone,
     rut: metadataRut,
     birth_date: metadataBirthDate,
