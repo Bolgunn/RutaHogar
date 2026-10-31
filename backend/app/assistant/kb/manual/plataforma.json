@@ -1,0 +1,257 @@
+[
+  {
+    "id": "plataforma-general",
+    "title": "¿Qué es RutaHogar y cómo usar la plataforma?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "RutaHogar es una plataforma de precalificación y orientación financiera para la compra de vivienda en Chile. Te permite conocer tu capacidad de endeudamiento, estimar tu dividendo, comparar proyectos inmobiliarios compatibles con tu presupuesto y acceder a educación financiera en la Academia.",
+    "synonyms": [
+      "que es rutahogar",
+      "como usar la plataforma",
+      "para que sirve rutahogar",
+      "que puedo hacer aca",
+      "ayuda plataforma"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ir al Inicio"
+    }
+  },
+  {
+    "id": "plataforma-academia",
+    "title": "Academia Financiera de RutaHogar",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "En la sección 'Academia' encontrarás artículos y guías prácticas sobre cómo funciona un crédito hipotecario, cómo ordenar tus deudas, qué es la tasa de interés, el CAE, la UF y los subsidios habitacionales del Estado (DS1, DS19, etc.). Toda la información está basada en fuentes oficiales (SERNAC, CMF, MINVU y Banco Central).",
+    "synonyms": [
+      "academia financiera",
+      "donde aprender de finanzas",
+      "guias financieras",
+      "articulos de educacion",
+      "educacion financiera",
+      "aprender finanzas"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "academia",
+      "label": "Ir a la Academia Financiera"
+    }
+  },
+  {
+    "id": "plataforma-privacidad-datos",
+    "title": "Privacidad de datos y derechos del titular (Ley 21.719)",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "Tus datos financieros y personales están protegidos bajo los más altos estándares de seguridad y en estricto cumplimiento de la Ley 21.719 de Chile. En cualquier momento puedes ingresar a 'Mi Perfil' para descargar una copia completa de tus datos en formato estructurado, rectificarlos o solicitar la eliminación total y revocación de consentimiento.",
+    "synonyms": [
+      "privacidad de datos",
+      "ley de proteccion de datos",
+      "descargar mis datos",
+      "eliminar mis datos",
+      "revocar consentimiento",
+      "seguridad de la informacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil"
+    }
+  },
+  {
+    "id": "plataforma-simulador-credito",
+    "title": "Simulador de crédito hipotecario y dividendos",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "simulation",
+    "content": "En el 'Simulador' de RutaHogar puedes proyectar tu dividendo mensual estimado variando el precio de la propiedad (en UF), el porcentaje de pie disponible (ej. 10%, 15%, 20%), el plazo en años y la tasa de interés referencial. Te ayuda a comparar escenarios y verificar si la cuota mensual se ajusta a tu ingreso.",
+    "synonyms": [
+      "simulador",
+      "simular",
+      "simulacion",
+      "simulador de credito",
+      "simulador hipotecario",
+      "simular credito",
+      "simular hipotecario",
+      "calcular dividendo",
+      "donde simular",
+      "estimar dividendo"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "simulation",
+      "label": "Ir al Simulador de Crédito"
+    }
+  },
+  {
+    "id": "plataforma-catalogo-proyectos",
+    "title": "Búsqueda y catálogo de proyectos inmobiliarios",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "projects",
+    "content": "En la sección 'Proyectos' puedes explorar departamentos y casas según tu presupuesto y capacidad de endeudamiento. Puedes filtrar por comuna, rango de precio en UF, número de dormitorios y entrega inmediata o en blanco/verde.",
+    "synonyms": [
+      "proyectos",
+      "catalogo de proyectos",
+      "buscar proyectos",
+      "catalogo de viviendas",
+      "donde ver casas",
+      "proyectos disponibles",
+      "buscar departamentos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "projects",
+      "label": "Explorar Catálogo de Proyectos"
+    }
+  },
+  {
+    "id": "plataforma-subsidios-habitacionales",
+    "title": "Subsidios habitacionales del Estado (MINVU)",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "subsidios",
+    "content": "En la sección 'Subsidios' puedes revisar los beneficios estatales para la compra de vivienda en Chile: Subsidio DS1 (para sectores medios, tramos 1, 2 y 3) y Subsidio DS19 (integración social y territorial con aplicación automática en proyectos inmobiliarios seleccionados). Conoce sus requisitos de ahorro mínimo y tope de valor de la vivienda.",
+    "synonyms": [
+      "subsidios",
+      "subsidio",
+      "postular a subsidio",
+      "consultar subsidios",
+      "subsidio ds1",
+      "subsidio ds19",
+      "beneficios minvu",
+      "subsidios habitacionales",
+      "requisitos subsidio"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "subsidios",
+      "label": "Consultar Subsidios"
+    },
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-estatales",
+      "label": "Leer en Academia: Subsidios Estatales"
+    }
+  },
+  {
+    "id": "plataforma-codeudor-complementar",
+    "title": "Invitación y gestión de codeudores para complementar renta",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "co-debtor-management",
+    "content": "Si tus ingresos individuales no alcanzan para el dividendo deseado, puedes sumar a un codeudor (pareja, cónyuge, familiar directo o conviviente civil). En la sección de gestión de codeudores puedes enviar una invitación segura por correo electrónico para que ingrese sus datos y autorice la complementación de renta.",
+    "synonyms": [
+      "codeudor",
+      "codeudores",
+      "invitar codeudor",
+      "gestionar codeudor",
+      "agregar pareja",
+      "complementar renta",
+      "invitacion codeudor",
+      "como sumar codeudor"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "co-debtor-management",
+      "label": "Gestionar Codeudor"
+    }
+  },
+  {
+    "id": "plataforma-historial-evaluaciones",
+    "title": "Historial de precalificaciones y evolución de score",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "En 'Mi Perfil' puedes revisar el historial de todas tus precalificaciones realizadas, la fecha de cada cálculo, el score obtenido y las recomendaciones de ahorro o amortización de deuda para mejorar tu perfil financiero en el tiempo.",
+    "synonyms": [
+      "historial de evaluaciones",
+      "mis precalificaciones",
+      "evaluaciones anteriores",
+      "ver scores pasados",
+      "evolucion de score",
+      "donde ver mis resultados"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil e Historial"
+    }
+  },
+  {
+    "id": "plataforma-mejorar-score",
+    "title": "¿Cómo puedo mejorar mi score o puntaje financiero?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "Para mejorar tu score en RutaHogar puedes actuar sobre cuatro factores principales: 1) Reducir tu carga financiera mensual pagando deudas de tarjetas o créditos de consumo, 2) Aumentar tu ahorro disponible para el pie de la vivienda (idealmente 15% a 20% o más), 3) Mantener continuidad laboral estable (si cambias de trabajo, los bancos suelen evaluar la antigüedad en el nuevo empleo o la continuidad sin lagunas previsionales) y regularizar cualquier morosidad vigente, y 4) Evaluar complementar renta con un codeudor.",
+    "synonyms": [
+      "como puedo mejorar mi score",
+      "como subir mi puntaje",
+      "mejorar mi calificacion",
+      "subir mi score",
+      "aumentar mi puntaje",
+      "que pasa si cambio de trabajo afecta mi score",
+      "cambio de trabajo score",
+      "como mejorar mi preevaluacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ver mi preparación financiera"
+    }
+  },
+  {
+    "id": "plataforma-aprobacion-credito",
+    "title": "¿Qué es la aprobación de un crédito hipotecario?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "La aprobación de un crédito hipotecario es la validación formal que realiza una entidad financiera (banco o mutuaria) sobre tu capacidad de pago, historial comercial (CMF/Dicom), antigüedad laboral y tasación de la propiedad. Recuerda que el score de RutaHogar es una pre-evaluación orientativa para prepararte mejor antes de solicitar la aprobación formal en el banco.",
+    "synonyms": [
+      "que es la aprobacion de un credito hipotecario",
+      "aprobacion de credito hipotecario",
+      "diferencia entre preevaluacion y aprobacion",
+      "quien aprueba el credito hipotecario",
+      "aprobacion comercial hipotecario"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-1",
+      "label": "Leer en Academia: Crédito Hipotecario"
+    }
+  }
+]

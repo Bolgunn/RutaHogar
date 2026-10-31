@@ -25,6 +25,7 @@ from .routers import crm_mock
 from .tracking.routes import router as tracking_router
 from .academy_news import router as academy_news_router
 from .lead_changes.routes import router as lead_changes_router
+from .assistant.router import router as assistant_router, support_router
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ app.include_router(lead_changes_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
 app.include_router(tracking_router)
+app.include_router(assistant_router)
+app.include_router(support_router)
 
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",

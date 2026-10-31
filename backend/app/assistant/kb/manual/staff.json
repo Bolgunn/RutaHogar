@@ -1,0 +1,150 @@
+[
+  {
+    "id": "staff-admin-gestion-ejecutivos",
+    "title": "Gestión de ejecutivos inmobiliarios",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin",
+    "content": "En el Panel de Administración de RutaHogar puedes gestionar a los ejecutivos de ventas de tu inmobiliaria: crear cuentas de ejecutivos, asignar proyectos específicos a cada uno, revisar el volumen de leads asignados y monitorear la tasa de contacto y conversión de cada miembro de tu equipo.",
+    "synonyms": [
+      "gestion ejecutivos",
+      "administrar ejecutivos",
+      "crear ejecutivo",
+      "asignar proyectos a ejecutivos",
+      "como agregar ejecutivo",
+      "panel de administracion ejecutivos",
+      "equipo de ventas"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin",
+      "label": "Ir al Panel de Administración"
+    }
+  },
+  {
+    "id": "staff-admin-catalogo-proyectos",
+    "title": "Gestión del catálogo de proyectos inmobiliarios",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin-projects",
+    "content": "Desde la sección 'Proyectos' del Panel de Administración puedes dar de alta nuevos proyectos residenciales, actualizar tipologías, precios desde UF, comunas, etapas de entrega y disponibilidad de unidades para que los leads puedan visualizarlos y simular financiamiento.",
+    "synonyms": [
+      "gestionar proyectos",
+      "administrar proyectos",
+      "crear proyecto",
+      "subir proyecto inmobiliario",
+      "editar tipologias",
+      "catalogo de proyectos admin",
+      "actualizar precios proyectos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin-projects",
+      "label": "Ir a Gestión de Proyectos"
+    }
+  },
+  {
+    "id": "staff-admin-reportes-metricas",
+    "title": "Reportes de gestión y métricas de conversión",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "metricas",
+    "content": "En la sección de 'Métricas' y 'Reportes', los administradores pueden analizar el rendimiento comercial de la inmobiliaria: volumen de precalificaciones generadas, distribución por tramo de score, tiempo promedio de atención y embudo de conversión de leads a ventas efectivas.",
+    "synonyms": [
+      "metricas de conversion",
+      "reportes de ventas",
+      "estadisticas inmobiliaria",
+      "como ver metricas",
+      "rendimiento comercial",
+      "reportes de gestion",
+      "embudo de ventas admin"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "metricas",
+      "label": "Ir a Métricas y Reportes"
+    }
+  },
+  {
+    "id": "staff-admin-tickets-soporte",
+    "title": "Bandeja de tickets y consultas de soporte",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin",
+    "content": "El equipo de soporte y administradores de la plataforma pueden revisar todas las consultas escaladas por los usuarios desde el Asistente Virtual en la pestaña de 'Tickets de Soporte' del panel, ver el historial de la conversación, enviar respuestas directas y gestionar el estado del ticket.",
+    "synonyms": [
+      "tickets de soporte",
+      "bandeja de soporte",
+      "responder tickets",
+      "consultas de usuarios",
+      "atender tickets admin",
+      "soporte a usuarios"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin",
+      "label": "Ir a Tickets de Soporte"
+    }
+  },
+  {
+    "id": "staff-ejecutivo-pipeline-leads",
+    "title": "Gestión del pipeline y seguimiento de leads",
+    "category": "staff",
+    "audience": "ejecutivo",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "leads",
+    "content": "Los ejecutivos comerciales pueden gestionar sus prospectos asignados en la vista de 'Leads' (Pipeline). Aquí pueden revisar la capacidad de compra del cliente, su score orientativo, registrar notas de contacto, agendar reuniones y avanzar el estado del prospecto desde contacto inicial hasta cierre de promesa.",
+    "synonyms": [
+      "pipeline de leads",
+      "mis leads asignados",
+      "como atender leads",
+      "cambiar estado de lead",
+      "gestion comercial ejecutivo",
+      "tablero de leads",
+      "seguimiento de prospectos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "leads",
+      "label": "Ir a Mis Leads (Pipeline)"
+    }
+  },
+  {
+    "id": "staff-ejecutivo-metricas-propias",
+    "title": "Métricas de desempeño para ejecutivos",
+    "category": "staff",
+    "audience": "ejecutivo",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "metricas",
+    "content": "Cada ejecutivo puede visualizar sus métricas personales en la sección 'Métricas': leads contactados a tiempo, porcentaje de avance en el embudo comercial, cotizaciones activas y efectividad de precalificación para optimizar su gestión de ventas.",
+    "synonyms": [
+      "mis metricas",
+      "rendimiento ejecutivo",
+      "estadisticas de ventas ejecutivo",
+      "tasa de contacto ejecutivo",
+      "metricas de ventas ejecutivo"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "metricas",
+      "label": "Ir a Métricas"
+    }
+  }
+]
+

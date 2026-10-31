@@ -1,0 +1,2838 @@
+[
+  {
+    "id": "plataforma-general",
+    "title": "¿Qué es RutaHogar y cómo usar la plataforma?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "RutaHogar es una plataforma de precalificación y orientación financiera para la compra de vivienda en Chile. Te permite conocer tu capacidad de endeudamiento, estimar tu dividendo, comparar proyectos inmobiliarios compatibles con tu presupuesto y acceder a educación financiera en la Academia.",
+    "synonyms": [
+      "que es rutahogar",
+      "como usar la plataforma",
+      "para que sirve rutahogar",
+      "que puedo hacer aca",
+      "ayuda plataforma"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ir al Inicio"
+    }
+  },
+  {
+    "id": "plataforma-academia",
+    "title": "Academia Financiera de RutaHogar",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "En la sección 'Academia' encontrarás artículos y guías prácticas sobre cómo funciona un crédito hipotecario, cómo ordenar tus deudas, qué es la tasa de interés, el CAE, la UF y los subsidios habitacionales del Estado (DS1, DS19, etc.). Toda la información está basada en fuentes oficiales (SERNAC, CMF, MINVU y Banco Central).",
+    "synonyms": [
+      "academia financiera",
+      "donde aprender de finanzas",
+      "guias financieras",
+      "articulos de educacion",
+      "educacion financiera",
+      "aprender finanzas"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "academia",
+      "label": "Ir a la Academia Financiera"
+    }
+  },
+  {
+    "id": "plataforma-privacidad-datos",
+    "title": "Privacidad de datos y derechos del titular (Ley 21.719)",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "Tus datos financieros y personales están protegidos bajo los más altos estándares de seguridad y en estricto cumplimiento de la Ley 21.719 de Chile. En cualquier momento puedes ingresar a 'Mi Perfil' para descargar una copia completa de tus datos en formato estructurado, rectificarlos o solicitar la eliminación total y revocación de consentimiento.",
+    "synonyms": [
+      "privacidad de datos",
+      "ley de proteccion de datos",
+      "descargar mis datos",
+      "eliminar mis datos",
+      "revocar consentimiento",
+      "seguridad de la informacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil"
+    }
+  },
+  {
+    "id": "plataforma-simulador-credito",
+    "title": "Simulador de crédito hipotecario y dividendos",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "simulation",
+    "content": "En el 'Simulador' de RutaHogar puedes proyectar tu dividendo mensual estimado variando el precio de la propiedad (en UF), el porcentaje de pie disponible (ej. 10%, 15%, 20%), el plazo en años y la tasa de interés referencial. Te ayuda a comparar escenarios y verificar si la cuota mensual se ajusta a tu ingreso.",
+    "synonyms": [
+      "simulador",
+      "simular",
+      "simulacion",
+      "simulador de credito",
+      "simulador hipotecario",
+      "simular credito",
+      "simular hipotecario",
+      "calcular dividendo",
+      "donde simular",
+      "estimar dividendo"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "simulation",
+      "label": "Ir al Simulador de Crédito"
+    }
+  },
+  {
+    "id": "plataforma-catalogo-proyectos",
+    "title": "Búsqueda y catálogo de proyectos inmobiliarios",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "projects",
+    "content": "En la sección 'Proyectos' puedes explorar departamentos y casas según tu presupuesto y capacidad de endeudamiento. Puedes filtrar por comuna, rango de precio en UF, número de dormitorios y entrega inmediata o en blanco/verde.",
+    "synonyms": [
+      "proyectos",
+      "catalogo de proyectos",
+      "buscar proyectos",
+      "catalogo de viviendas",
+      "donde ver casas",
+      "proyectos disponibles",
+      "buscar departamentos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "projects",
+      "label": "Explorar Catálogo de Proyectos"
+    }
+  },
+  {
+    "id": "plataforma-subsidios-habitacionales",
+    "title": "Subsidios habitacionales del Estado (MINVU)",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "subsidios",
+    "content": "En la sección 'Subsidios' puedes revisar los beneficios estatales para la compra de vivienda en Chile: Subsidio DS1 (para sectores medios, tramos 1, 2 y 3) y Subsidio DS19 (integración social y territorial con aplicación automática en proyectos inmobiliarios seleccionados). Conoce sus requisitos de ahorro mínimo y tope de valor de la vivienda.",
+    "synonyms": [
+      "subsidios",
+      "subsidio",
+      "postular a subsidio",
+      "consultar subsidios",
+      "subsidio ds1",
+      "subsidio ds19",
+      "beneficios minvu",
+      "subsidios habitacionales",
+      "requisitos subsidio"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "subsidios",
+      "label": "Consultar Subsidios"
+    },
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-estatales",
+      "label": "Leer en Academia: Subsidios Estatales"
+    }
+  },
+  {
+    "id": "plataforma-codeudor-complementar",
+    "title": "Invitación y gestión de codeudores para complementar renta",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "co-debtor-management",
+    "content": "Si tus ingresos individuales no alcanzan para el dividendo deseado, puedes sumar a un codeudor (pareja, cónyuge, familiar directo o conviviente civil). En la sección de gestión de codeudores puedes enviar una invitación segura por correo electrónico para que ingrese sus datos y autorice la complementación de renta.",
+    "synonyms": [
+      "codeudor",
+      "codeudores",
+      "invitar codeudor",
+      "gestionar codeudor",
+      "agregar pareja",
+      "complementar renta",
+      "invitacion codeudor",
+      "como sumar codeudor"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "co-debtor-management",
+      "label": "Gestionar Codeudor"
+    }
+  },
+  {
+    "id": "plataforma-historial-evaluaciones",
+    "title": "Historial de precalificaciones y evolución de score",
+    "category": "plataforma",
+    "audience": "lead",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "profile",
+    "content": "En 'Mi Perfil' puedes revisar el historial de todas tus precalificaciones realizadas, la fecha de cada cálculo, el score obtenido y las recomendaciones de ahorro o amortización de deuda para mejorar tu perfil financiero en el tiempo.",
+    "synonyms": [
+      "historial de evaluaciones",
+      "mis precalificaciones",
+      "evaluaciones anteriores",
+      "ver scores pasados",
+      "evolucion de score",
+      "donde ver mis resultados"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "profile",
+      "label": "Ir a Mi Perfil e Historial"
+    }
+  },
+  {
+    "id": "plataforma-mejorar-score",
+    "title": "¿Cómo puedo mejorar mi score o puntaje financiero?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "home",
+    "content": "Para mejorar tu score en RutaHogar puedes actuar sobre cuatro factores principales: 1) Reducir tu carga financiera mensual pagando deudas de tarjetas o créditos de consumo, 2) Aumentar tu ahorro disponible para el pie de la vivienda (idealmente 15% a 20% o más), 3) Mantener continuidad laboral estable (si cambias de trabajo, los bancos suelen evaluar la antigüedad en el nuevo empleo o la continuidad sin lagunas previsionales) y regularizar cualquier morosidad vigente, y 4) Evaluar complementar renta con un codeudor.",
+    "synonyms": [
+      "como puedo mejorar mi score",
+      "como subir mi puntaje",
+      "mejorar mi calificacion",
+      "subir mi score",
+      "aumentar mi puntaje",
+      "que pasa si cambio de trabajo afecta mi score",
+      "cambio de trabajo score",
+      "como mejorar mi preevaluacion"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "home",
+      "label": "Ver mi preparación financiera"
+    }
+  },
+  {
+    "id": "plataforma-aprobacion-credito",
+    "title": "¿Qué es la aprobación de un crédito hipotecario?",
+    "category": "plataforma",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "La aprobación de un crédito hipotecario es la validación formal que realiza una entidad financiera (banco o mutuaria) sobre tu capacidad de pago, historial comercial (CMF/Dicom), antigüedad laboral y tasación de la propiedad. Recuerda que el score de RutaHogar es una pre-evaluación orientativa para prepararte mejor antes de solicitar la aprobación formal en el banco.",
+    "synonyms": [
+      "que es la aprobacion de un credito hipotecario",
+      "aprobacion de credito hipotecario",
+      "diferencia entre preevaluacion y aprobacion",
+      "quien aprueba el credito hipotecario",
+      "aprobacion comercial hipotecario"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "academia",
+      "label": "Ir a la Academia"
+    },
+    "link": {
+      "type": "academy",
+      "articleId": "que-es-credito-hipotecario",
+      "label": "Leer en Academia: Crédito Hipotecario"
+    }
+  },
+  {
+    "id": "preeval-general-pasos",
+    "title": "Pasos y funcionamiento de la pre-evaluación financiera",
+    "category": "preevaluacion",
+    "step": null,
+    "step_name": "General",
+    "field_id": null,
+    "screen_id": "evaluate",
+    "content": "La pre-evaluación financiera de RutaHogar consta de 4 pasos guiados:\n1. Contexto y edad: Fecha de nacimiento para calcular tu edad y el plazo máximo del crédito.\n2. Tu situación financiera: Ingresos líquidos mensuales, deudas vigentes, ahorros disponibles para el pie, valor estimado de la vivienda y plazo del crédito.\n3. Situación laboral: Tipo de contrato, continuidad laboral, morosidades (Dicom), y opciones de complementar renta o declarar patrimonio.\n4. Autorización y cálculo: Revisión de datos y consentimiento explícito para calcular tu score orientativo.\nEl proceso toma menos de 3 minutos, usa montos aproximados y no solicita contraseñas bancarias.",
+    "synonyms": [
+      "pasos preevaluacion",
+      "como funciona la preevaluacion",
+      "que pasos tiene",
+      "etapas formulario",
+      "cuanto demora",
+      "que me van a pedir",
+      "como precalificar"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "evaluate",
+      "label": "Ir a Pre-evaluación"
+    }
+  },
+  {
+    "id": "preeval-fecha-nacimiento",
+    "title": "Fecha de nacimiento y edad",
+    "category": "preevaluacion",
+    "step": 1,
+    "step_name": "Contexto",
+    "field_id": "birth_day",
+    "screen_id": "evaluate",
+    "content": "En el Paso 1 (o en tu perfil) debes ingresar tu día, mes y año de nacimiento.\n¿Para qué se solicita? La edad determina el plazo máximo de pago del crédito hipotecario. Las entidades bancarias en Chile exigen que la suma de tu edad más los años de plazo del crédito no supere generalmente los 70 o 75 años (por ejemplo, si tienes 50 años, el plazo máximo suele ser de 20 a 25 años).\n¿Dónde se ingresa? En los tres campos 'Día', 'Mes' y 'Año' del Paso 1.",
+    "synonyms": [
+      "fecha de nacimiento",
+      "edad",
+      "ano de nacimiento",
+      "dia mes ano",
+      "cuando naciste",
+      "porque piden mi edad",
+      "plazo maximo edad"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "birth_day",
+      "step": 1,
+      "label": "Ir a Fecha de Nacimiento (Paso 1)"
+    }
+  },
+  {
+    "id": "preeval-ingreso-mensual",
+    "title": "Ingreso mensual líquido",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "ingreso_mensual",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2 'Tu situación financiera', el primer campo es 'Ingreso mensual'.\n¿Qué debes ingresar? Tu sueldo líquido (lo que efectivamente recibes en tu cuenta tras descuentos previsionales y de salud) o la renta promedio mensual de los últimos 6 meses si tienes ingresos variables o trabajas a honorarios.\nImportante: No incluyas bonos esporádicos o propinas no habituales. Usa el valor neto real en pesos chilenos (CLP).",
+    "synonyms": [
+      "ingreso mensual",
+      "sueldo liquido",
+      "renta mensual",
+      "cuanto gano",
+      "que sueldo poner",
+      "remuneracion neta",
+      "ingresos liquidos"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "ingreso_mensual",
+      "step": 2,
+      "label": "Ir al campo Ingreso Mensual (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-deuda-mensual",
+    "title": "Deuda mensual y qué cuotas incluir",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "deuda_mensual",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2, el campo 'Deuda mensual' corresponde a la suma de todas tus cuotas financieras obligatorias al mes.\n¿Qué SÍ debes incluir? Créditos de consumo, automotrices, créditos hipotecarios vigentes, cuota mínima de tarjetas de crédito o casas comerciales, líneas de crédito utilizadas, avances en efectivo, préstamos de cajas de compensación o cooperativas, crédito estudiantil (CAE) y pensiones alimenticias decretadas.\n¿Qué NO debes incluir? Gastos comunes del edificio, cuentas de servicios básicos (luz, agua, gas, internet), alimentación, transporte ni gastos cotidianos.\n¿Dónde se ingresa? En el segundo campo del Paso 2, en pesos (CLP). Si no tienes deudas, pon 0.",
+    "synonyms": [
+      "deuda mensual",
+      "que deudas incluir",
+      "gastos comunes son deuda",
+      "tarjetas de credito",
+      "credito de consumo",
+      "cuotas mensuales",
+      "pension de alimentos",
+      "deudas vigentes",
+      "cuentas basicas"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "deuda_mensual",
+      "step": 2,
+      "label": "Ir al campo Deuda Mensual (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-ahorro-disponible",
+    "title": "Ahorro disponible para el pie",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "ahorro_disponible",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2, 'Ahorro disponible' es el dinero líquido que tienes hoy para pagar el pie y los gastos operacionales de la compra.\n¿Qué puedes considerar? Cuentas de ahorro, depósitos a plazo, fondos mutuos, Cuenta 2 de la AFP o APV que puedas retirar.\nImportante: No consideres promesas de préstamos familiares ni apoyos que aún no estén concretados y disponibles en tu cuenta.\n¿Dónde se ingresa? En el campo 'Ahorro disponible' del Paso 2, en pesos chilenos.",
+    "synonyms": [
+      "ahorro disponible",
+      "pie",
+      "cuanto tengo ahorrado",
+      "plata para el pie",
+      "ahorro para la casa",
+      "deposito a plazo",
+      "cuenta 2",
+      "apv"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "ahorro_disponible",
+      "step": 2,
+      "label": "Ir al campo Ahorro Disponible (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-valor-propiedad",
+    "title": "Monto o valor estimado de la vivienda",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "property_value",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2, en la sección 'Propiedad que buscas', ingresas el precio aproximado de la casa o departamento que deseas comprar.\n¿En qué unidad se ingresa? Puedes alternar entre UF y CLP con el botón junto al campo. El sistema actualizará la conversión automáticamente con el valor oficial de la UF.\n¿Dónde se ingresa? En el campo 'Monto estimado de vivienda' del Paso 2.",
+    "synonyms": [
+      "valor propiedad",
+      "precio vivienda",
+      "monto estimado de vivienda",
+      "cuanto cuesta la propiedad",
+      "precio casa departamento",
+      "ingresar en uf o clp"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "property_value",
+      "step": 2,
+      "label": "Ir a Monto de Vivienda (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-plazo-credito",
+    "title": "Plazo estimado del crédito hipotecario",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "plazo_credito_hipotecario",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2, puedes elegir el número de años en que proyectas pagar el crédito.\nOpciones disponibles: 10, 15, 20, 25 o 30 años.\n¿Cómo influye el plazo? A mayor plazo, la cuota mensual (dividendo) disminuye, pero pagarás más intereses en total a lo largo del crédito. A menor plazo, pagas más al mes pero terminas antes y con menor costo total.\n¿Dónde se selecciona? En los botones selectores de plazo del Paso 2.",
+    "synonyms": [
+      "plazo credito",
+      "cuantos anos",
+      "plazo hipotecario",
+      "anos de credito",
+      "conviene 20 o 30 anos",
+      "tiempo de pago"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "plazo_credito_hipotecario",
+      "step": 2,
+      "label": "Ir a Plazo del Crédito (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-dividendo-estimado",
+    "title": "Dividendo mensual estimado y cálculo automático",
+    "category": "preevaluacion",
+    "step": 2,
+    "step_name": "Finanzas",
+    "field_id": "dividendo_estimado",
+    "screen_id": "evaluate",
+    "content": "En el Paso 2, el campo 'Dividendo mensual estimado' muestra la cuota aproximada en pesos.\n¿Cómo se calcula? El sistema lo calcula en tiempo real considerando el valor de la propiedad, el pie aportado, el plazo seleccionado y la tasa de interés hipotecaria de referencia del mercado.\n¿Puedo modificarlo? Sí, si ya cuentas con una cotización bancaria formal, puedes editar el monto directamente o hacer clic en 'Usar dividendo calculado' para restaurar la estimación automática.",
+    "synonyms": [
+      "dividendo estimado",
+      "cuota mensual",
+      "cuanto voy a pagar de dividendo",
+      "recalcular dividendo",
+      "dividendo en pesos",
+      "tasa dividendo"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "dividendo_estimado",
+      "step": 2,
+      "label": "Ir a Dividendo Estimado (Paso 2)"
+    }
+  },
+  {
+    "id": "preeval-tipo-contrato",
+    "title": "Tipo de contrato laboral",
+    "category": "preevaluacion",
+    "step": 3,
+    "step_name": "Trabajo",
+    "field_id": "tipo_contrato",
+    "screen_id": "evaluate",
+    "content": "En el Paso 3 'Situación laboral', debes indicar tu modalidad de contratación actual:\n- Contrato indefinido: Relación laboral dependiente fija.\n- Independiente o honorarios: Emisión de boletas de honorarios o servicios profesionales.\n- Plazo fijo: Contratos por periodo acotado.\n- Honorarios variable / Empresa propia.\nLas entidades bancarias suelen exigir al menos 1 año de antigüedad con contrato indefinido o 2 a 3 años de declaraciones de renta (Formulario 22) si eres independiente.\n¿Dónde se selecciona? En el primer selector desplegable del Paso 3.",
+    "synonyms": [
+      "tipo de contrato",
+      "indefinido o plazo fijo",
+      "trabajo a honorarios",
+      "soy independiente",
+      "contrato de trabajo",
+      "modalidad laboral"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "tipo_contrato",
+      "step": 3,
+      "label": "Ir a Tipo de Contrato (Paso 3)"
+    }
+  },
+  {
+    "id": "preeval-continuidad-laboral",
+    "title": "Continuidad y antigüedad laboral",
+    "category": "preevaluacion",
+    "step": 3,
+    "step_name": "Trabajo",
+    "field_id": "continuidad_laboral",
+    "screen_id": "evaluate",
+    "content": "En el Paso 3, 'Continuidad laboral' corresponde al tiempo que llevas trabajando sin interrupciones en tu actividad o empleo actual.\nRangos disponibles: Menos de 6 meses, Entre 6 y 12 meses, Entre 1 y 3 años, o Más de 3 años.\nMayor continuidad demuestra estabilidad de ingresos a los bancos y mejora tu score de calificación.",
+    "synonyms": [
+      "continuidad laboral",
+      "antiguedad laboral",
+      "tiempo en el trabajo",
+      "cuanto tiempo llevo trabajando",
+      "meses trabajados"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "continuidad_laboral",
+      "step": 3,
+      "label": "Ir a Continuidad Laboral (Paso 3)"
+    }
+  },
+  {
+    "id": "preeval-morosidad",
+    "title": "Morosidad actual y deudas en Dicom",
+    "category": "preevaluacion",
+    "step": 3,
+    "step_name": "Trabajo",
+    "field_id": "morosidad_actual",
+    "screen_id": "evaluate",
+    "content": "En el Paso 3, en 'Historial y morosidades', debes responder si tienes pagos o cuotas vencidas actualmente impagas (boletín comercial o Dicom).\n- Si seleccionas 'No': continuas normalmente.\n- Si seleccionas 'Sí': se desplegarán dos campos adicionales: 'Monto aproximado de morosidad' y 'Antigüedad de la deuda morosa' (menos de 3 meses, 3 a 12 meses, 1 a 3 años, más de 3 años).\n¿Por qué es importante ser transparente? Declarar morosidades permite a RutaHogar calcular un escenario verídico y sugerirte alternativas de regularización antes de presentar una solicitud bancaria.",
+    "synonyms": [
+      "morosidad",
+      "dicom",
+      "boletin comercial",
+      "deuda impaga",
+      "cuota vencida",
+      "estoy en dicom",
+      "monto morosidad",
+      "antiguedad morosidad"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "morosidad_actual",
+      "step": 3,
+      "label": "Ir a Morosidad Actual (Paso 3)"
+    }
+  },
+  {
+    "id": "preeval-complemento-renta",
+    "title": "Complementar renta con otra persona",
+    "category": "preevaluacion",
+    "step": 3,
+    "step_name": "Trabajo",
+    "field_id": "complemento_renta",
+    "screen_id": "evaluate",
+    "content": "En el Paso 3 puedes activar la casilla 'Quiero complementar renta con otra persona'.\n¿Para qué sirve? Permite sumar tus ingresos a los de un co-deudor (cónyuge, pareja conviviente, padre/madre, hijo/hija o hermano/hermana) para alcanzar una capacidad de compra mayor o acceder a un crédito superior.\n¿Qué datos se pedirán? El RUT y correo electrónico de la persona para enviarle una invitación y su autorización legal, además de sus ingresos líquidos, deudas vigentes, tipo de contrato y continuidad laboral.",
+    "synonyms": [
+      "complementar renta",
+      "sumar rentas",
+      "codeudor",
+      "postular en pareja",
+      "comprar con mi conyuge",
+      "ingreso complementario",
+      "rut codeudor",
+      "correo codeudor"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "complemento_renta",
+      "step": 3,
+      "label": "Ir a Complementar Renta (Paso 3)"
+    }
+  },
+  {
+    "id": "preeval-patrimonio",
+    "title": "Declarar patrimonio adicional (vehículos e inmuebles)",
+    "category": "preevaluacion",
+    "step": 3,
+    "step_name": "Trabajo",
+    "field_id": "declara_patrimonio",
+    "screen_id": "evaluate",
+    "content": "En el Paso 3 puedes activar la casilla 'Declarar patrimonio adicional'.\n¿Para qué sirve? Si posees vehículos o propiedades inmobiliarias a tu nombre, declararlos respalda tu solidez económica y solvencia patrimonial frente a la institución financiera.\n¿Qué campos se solicitan? 'Valor comercial de vehículos' y 'Valor comercial de inmuebles', pudiendo ingresar los valores en pesos (CLP) o en UF.",
+    "synonyms": [
+      "patrimonio adicional",
+      "declarar vehiculos",
+      "inmuebles que poseo",
+      "autos a mi nombre",
+      "bienes raices",
+      "activos"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "declara_patrimonio",
+      "step": 3,
+      "label": "Ir a Declarar Patrimonio (Paso 3)"
+    }
+  },
+  {
+    "id": "preeval-autorizacion-resultado",
+    "title": "Paso 4: Resumen, consentimiento informado y resultado",
+    "category": "preevaluacion",
+    "step": 4,
+    "step_name": "Resultado",
+    "field_id": null,
+    "screen_id": "evaluate",
+    "content": "En el Paso 4 revisas el resumen de antecedentes ingresados antes de calcular.\nAntes de generar el resultado, debes otorgar tu consentimiento explícito según la Ley 21.719 de Protección de Datos Personales de Chile. Este consentimiento te garantiza el derecho a revocar, descargar o eliminar tus datos en cualquier momento desde tu perfil.\nAl presionar 'Calcular precalificación', se procesa tu score en segundos y se muestran tus opciones de financiamiento y proyectos compatibles.",
+    "synonyms": [
+      "paso 4",
+      "autorizacion y calculo",
+      "consentimiento informado",
+      "privacidad de datos",
+      "calcular precalificacion",
+      "como se calcula el score"
+    ],
+    "action": {
+      "type": "focus_field",
+      "field_id": "calcular_precalificacion",
+      "step": 4,
+      "label": "Ir a Autorización y Cálculo (Paso 4)"
+    }
+  },
+  {
+    "id": "staff-admin-gestion-ejecutivos",
+    "title": "Gestión de ejecutivos inmobiliarios",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin",
+    "content": "En el Panel de Administración de RutaHogar puedes gestionar a los ejecutivos de ventas de tu inmobiliaria: crear cuentas de ejecutivos, asignar proyectos específicos a cada uno, revisar el volumen de leads asignados y monitorear la tasa de contacto y conversión de cada miembro de tu equipo.",
+    "synonyms": [
+      "gestion ejecutivos",
+      "administrar ejecutivos",
+      "crear ejecutivo",
+      "asignar proyectos a ejecutivos",
+      "como agregar ejecutivo",
+      "panel de administracion ejecutivos",
+      "equipo de ventas"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin",
+      "label": "Ir al Panel de Administración"
+    }
+  },
+  {
+    "id": "staff-admin-catalogo-proyectos",
+    "title": "Gestión del catálogo de proyectos inmobiliarios",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin-projects",
+    "content": "Desde la sección 'Proyectos' del Panel de Administración puedes dar de alta nuevos proyectos residenciales, actualizar tipologías, precios desde UF, comunas, etapas de entrega y disponibilidad de unidades para que los leads puedan visualizarlos y simular financiamiento.",
+    "synonyms": [
+      "gestionar proyectos",
+      "administrar proyectos",
+      "crear proyecto",
+      "subir proyecto inmobiliario",
+      "editar tipologias",
+      "catalogo de proyectos admin",
+      "actualizar precios proyectos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin-projects",
+      "label": "Ir a Gestión de Proyectos"
+    }
+  },
+  {
+    "id": "staff-admin-reportes-metricas",
+    "title": "Reportes de gestión y métricas de conversión",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "metricas",
+    "content": "En la sección de 'Métricas' y 'Reportes', los administradores pueden analizar el rendimiento comercial de la inmobiliaria: volumen de precalificaciones generadas, distribución por tramo de score, tiempo promedio de atención y embudo de conversión de leads a ventas efectivas.",
+    "synonyms": [
+      "metricas de conversion",
+      "reportes de ventas",
+      "estadisticas inmobiliaria",
+      "como ver metricas",
+      "rendimiento comercial",
+      "reportes de gestion",
+      "embudo de ventas admin"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "metricas",
+      "label": "Ir a Métricas y Reportes"
+    }
+  },
+  {
+    "id": "staff-admin-tickets-soporte",
+    "title": "Bandeja de tickets y consultas de soporte",
+    "category": "staff",
+    "audience": "admin",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "admin",
+    "content": "El equipo de soporte y administradores de la plataforma pueden revisar todas las consultas escaladas por los usuarios desde el Asistente Virtual en la pestaña de 'Tickets de Soporte' del panel, ver el historial de la conversación, enviar respuestas directas y gestionar el estado del ticket.",
+    "synonyms": [
+      "tickets de soporte",
+      "bandeja de soporte",
+      "responder tickets",
+      "consultas de usuarios",
+      "atender tickets admin",
+      "soporte a usuarios"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "admin",
+      "label": "Ir a Tickets de Soporte"
+    }
+  },
+  {
+    "id": "staff-ejecutivo-pipeline-leads",
+    "title": "Gestión del pipeline y seguimiento de leads",
+    "category": "staff",
+    "audience": "ejecutivo",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "leads",
+    "content": "Los ejecutivos comerciales pueden gestionar sus prospectos asignados en la vista de 'Leads' (Pipeline). Aquí pueden revisar la capacidad de compra del cliente, su score orientativo, registrar notas de contacto, agendar reuniones y avanzar el estado del prospecto desde contacto inicial hasta cierre de promesa.",
+    "synonyms": [
+      "pipeline de leads",
+      "mis leads asignados",
+      "como atender leads",
+      "cambiar estado de lead",
+      "gestion comercial ejecutivo",
+      "tablero de leads",
+      "seguimiento de prospectos"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "leads",
+      "label": "Ir a Mis Leads (Pipeline)"
+    }
+  },
+  {
+    "id": "staff-ejecutivo-metricas-propias",
+    "title": "Métricas de desempeño para ejecutivos",
+    "category": "staff",
+    "audience": "ejecutivo",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "metricas",
+    "content": "Cada ejecutivo puede visualizar sus métricas personales en la sección 'Métricas': leads contactados a tiempo, porcentaje de avance en el embudo comercial, cotizaciones activas y efectividad de precalificación para optimizar su gestión de ventas.",
+    "synonyms": [
+      "mis metricas",
+      "rendimiento ejecutivo",
+      "estadisticas de ventas ejecutivo",
+      "tasa de contacto ejecutivo",
+      "metricas de ventas ejecutivo"
+    ],
+    "action": {
+      "type": "navigate",
+      "target": "metricas",
+      "label": "Ir a Métricas"
+    }
+  },
+  {
+    "id": "glossary-pie",
+    "title": "Glosario: pie",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "pie: Parte del valor de la vivienda que no se financia mediante el crédito hipotecario y que debe cubrirse según las condiciones de la operación.",
+    "synonyms": [
+      "pie",
+      "que es pie",
+      "definicion de pie"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-1",
+      "label": "Leer en Academia: pie"
+    }
+  },
+  {
+    "id": "glossary-tasa",
+    "title": "Glosario: tasa",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "tasa: Porcentaje utilizado para determinar el costo financiero asociado al crédito.",
+    "synonyms": [
+      "tasa",
+      "que es tasa",
+      "definicion de tasa"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-1",
+      "label": "Leer en Academia: tasa"
+    }
+  },
+  {
+    "id": "glossary-cae",
+    "title": "Glosario: CAE",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "CAE: Indicador expresado como porcentaje que permite comparar alternativas financieras bajo condiciones comparables.",
+    "synonyms": [
+      "cae",
+      "que es cae",
+      "definicion de cae"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-2",
+      "label": "Leer en Academia: CAE"
+    }
+  },
+  {
+    "id": "glossary-costo-total",
+    "title": "Glosario: costo total",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "costo total: Monto total que se pagará durante la operación bajo las condiciones informadas.",
+    "synonyms": [
+      "costo total",
+      "que es costo total",
+      "definicion de costo total"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-3",
+      "label": "Leer en Academia: costo total"
+    }
+  },
+  {
+    "id": "glossary-subsidio",
+    "title": "Glosario: subsidio",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "subsidio: Beneficio estatal que se entrega bajo las condiciones establecidas por un determinado programa habitacional.",
+    "synonyms": [
+      "subsidio",
+      "que es subsidio",
+      "definicion de subsidio"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-1",
+      "label": "Leer en Academia: subsidio"
+    }
+  },
+  {
+    "id": "glossary-carga-financiera",
+    "title": "Glosario: carga financiera",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "carga financiera: Medida utilizada para analizar qué parte de los ingresos está comprometida con obligaciones financieras.",
+    "synonyms": [
+      "carga financiera",
+      "que es carga financiera",
+      "definicion de carga financiera"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-1",
+      "label": "Leer en Academia: carga financiera"
+    }
+  },
+  {
+    "id": "glossary-rci",
+    "title": "Glosario: RCI",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "RCI: Relación Carga / Ingreso: referencia para comparar obligaciones mensuales con ingresos disponibles.",
+    "synonyms": [
+      "rci",
+      "que es rci",
+      "definicion de rci"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-2",
+      "label": "Leer en Academia: RCI"
+    }
+  },
+  {
+    "id": "glossary-relación-carga-ingreso",
+    "title": "Glosario: Relación Carga / Ingreso",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Relación Carga / Ingreso: Comparación entre carga mensual e ingresos que ayuda a entender el margen disponible antes de asumir nuevas cuotas.",
+    "synonyms": [
+      "relación carga / ingreso",
+      "que es relación carga / ingreso",
+      "definicion de relación carga / ingreso"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-2",
+      "label": "Leer en Academia: Relación Carga / Ingreso"
+    }
+  },
+  {
+    "id": "glossary-deuda/ingreso",
+    "title": "Glosario: deuda/ingreso",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "deuda/ingreso: Lectura referencial de cuánto pesan las obligaciones mensuales frente a los ingresos.",
+    "synonyms": [
+      "deuda/ingreso",
+      "que es deuda/ingreso",
+      "definicion de deuda/ingreso"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-2",
+      "label": "Leer en Academia: deuda/ingreso"
+    }
+  },
+  {
+    "id": "glossary-dividendo",
+    "title": "Glosario: dividendo",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "dividendo: Pago periódico asociado al crédito hipotecario según las condiciones de la operación.",
+    "synonyms": [
+      "dividendo",
+      "que es dividendo",
+      "definicion de dividendo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-3",
+      "label": "Leer en Academia: dividendo"
+    }
+  },
+  {
+    "id": "glossary-uf",
+    "title": "Glosario: UF",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "UF: Unidad de Fomento, un índice de reajustabilidad cuyo valor se expresa en pesos y se ajusta de acuerdo con la variación del IPC.",
+    "synonyms": [
+      "uf",
+      "que es uf",
+      "definicion de uf"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-1",
+      "label": "Leer en Academia: UF"
+    }
+  },
+  {
+    "id": "glossary-ipc",
+    "title": "Glosario: IPC",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "IPC: Índice de Precios al Consumidor, utilizado como referencia para medir la variación de los precios de una canasta de bienes y servicios.",
+    "synonyms": [
+      "ipc",
+      "que es ipc",
+      "definicion de ipc"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-2",
+      "label": "Leer en Academia: IPC"
+    }
+  },
+  {
+    "id": "glossary-codeudor",
+    "title": "Glosario: codeudor",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "codeudor: Persona que participa en una operación de crédito junto con el deudor, según las condiciones establecidas por la institución y el contrato.",
+    "synonyms": [
+      "codeudor",
+      "que es codeudor",
+      "definicion de codeudor"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-4",
+      "label": "Leer en Academia: codeudor"
+    }
+  },
+  {
+    "id": "glossary-rsh",
+    "title": "Glosario: RSH",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "RSH: Registro Social de Hogares, sistema utilizado para apoyar la identificación de personas y hogares que pueden acceder a beneficios estatales.",
+    "synonyms": [
+      "rsh",
+      "que es rsh",
+      "definicion de rsh"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-1",
+      "label": "Leer en Academia: RSH"
+    }
+  },
+  {
+    "id": "glossary-registro-social-de-hogares",
+    "title": "Glosario: Registro Social de Hogares",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Registro Social de Hogares: Sistema que establece la calificación socioeconómica de los hogares para distintos procesos de beneficios estatales.",
+    "synonyms": [
+      "registro social de hogares",
+      "que es registro social de hogares",
+      "definicion de registro social de hogares"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-1",
+      "label": "Leer en Academia: Registro Social de Hogares"
+    }
+  },
+  {
+    "id": "glossary-tasación",
+    "title": "Glosario: tasación",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "tasación: Valoración de una propiedad realizada para la operación correspondiente.",
+    "synonyms": [
+      "tasación",
+      "que es tasación",
+      "definicion de tasación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-2",
+      "label": "Leer en Academia: tasación"
+    }
+  },
+  {
+    "id": "glossary-estudio-de-títulos",
+    "title": "Glosario: estudio de títulos",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "estudio de títulos: Revisión de antecedentes jurídicos relevantes de una propiedad antes de una operación inmobiliaria.",
+    "synonyms": [
+      "estudio de títulos",
+      "que es estudio de títulos",
+      "definicion de estudio de títulos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-3",
+      "label": "Leer en Academia: estudio de títulos"
+    }
+  },
+  {
+    "id": "glossary-gastos-operacionales",
+    "title": "Glosario: gastos operacionales",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "gastos operacionales: Costos asociados a la formalización y operación del financiamiento o de la compra, según corresponda.",
+    "synonyms": [
+      "gastos operacionales",
+      "que es gastos operacionales",
+      "definicion de gastos operacionales"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-4",
+      "label": "Leer en Academia: gastos operacionales"
+    }
+  },
+  {
+    "id": "glossary-seguro-de-desgravamen",
+    "title": "Glosario: seguro de desgravamen",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "seguro de desgravamen: Seguro obligatorio en operaciones hipotecarias que cubre el saldo de la deuda ante el fallecimiento del deudor, según las condiciones de la póliza.",
+    "synonyms": [
+      "seguro de desgravamen",
+      "que es seguro de desgravamen",
+      "definicion de seguro de desgravamen"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-5",
+      "label": "Leer en Academia: seguro de desgravamen"
+    }
+  },
+  {
+    "id": "glossary-seguro-de-incendio",
+    "title": "Glosario: seguro de incendio",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "seguro de incendio: Seguro obligatorio asociado a operaciones hipotecarias que cubre los riesgos establecidos en la póliza.",
+    "synonyms": [
+      "seguro de incendio",
+      "que es seguro de incendio",
+      "definicion de seguro de incendio"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-5",
+      "label": "Leer en Academia: seguro de incendio"
+    }
+  },
+  {
+    "id": "glossary-plazo",
+    "title": "Glosario: plazo",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "plazo: Período establecido para pagar el crédito.",
+    "synonyms": [
+      "plazo",
+      "que es plazo",
+      "definicion de plazo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "plazos-1",
+      "label": "Leer en Academia: plazo"
+    }
+  },
+  {
+    "id": "glossary-preaprobación",
+    "title": "Glosario: preaprobación",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "preaprobación: Evaluación preliminar que puede entregar una referencia sobre la posibilidad de acceder a financiamiento, sin equivaler necesariamente a una aprobación definitiva.",
+    "synonyms": [
+      "preaprobación",
+      "que es preaprobación",
+      "definicion de preaprobación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-3",
+      "label": "Leer en Academia: preaprobación"
+    }
+  },
+  {
+    "id": "glossary-endeudamiento",
+    "title": "Glosario: endeudamiento",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "endeudamiento: Situación financiera asociada a las obligaciones de deuda que mantiene una persona o familia.",
+    "synonyms": [
+      "endeudamiento",
+      "que es endeudamiento",
+      "definicion de endeudamiento"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-4",
+      "label": "Leer en Academia: endeudamiento"
+    }
+  },
+  {
+    "id": "glossary-crédito-hipotecario",
+    "title": "Glosario: crédito hipotecario",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "crédito hipotecario: Financiamiento de largo plazo destinado, entre otros fines, a la compra de una vivienda y garantizado sobre el inmueble.",
+    "synonyms": [
+      "crédito hipotecario",
+      "que es crédito hipotecario",
+      "definicion de crédito hipotecario"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-1",
+      "label": "Leer en Academia: crédito hipotecario"
+    }
+  },
+  {
+    "id": "glossary-ingresos",
+    "title": "Glosario: ingresos",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "ingresos: Dinero que recibe una persona o hogar de forma periódica y que constituye la base para evaluar su capacidad de pago.",
+    "synonyms": [
+      "ingresos",
+      "que es ingresos",
+      "definicion de ingresos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-2",
+      "label": "Leer en Academia: ingresos"
+    }
+  },
+  {
+    "id": "glossary-capacidad-de-pago",
+    "title": "Glosario: capacidad de pago",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "capacidad de pago: Margen que tiene una persona para asumir una nueva obligación financiera considerando sus ingresos y sus deudas actuales.",
+    "synonyms": [
+      "capacidad de pago",
+      "que es capacidad de pago",
+      "definicion de capacidad de pago"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-2",
+      "label": "Leer en Academia: capacidad de pago"
+    }
+  },
+  {
+    "id": "glossary-renta-complementada",
+    "title": "Glosario: renta complementada",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "renta complementada: Suma de ingresos de más de una persona para evaluar un financiamiento, considerando también las obligaciones de cada participante.",
+    "synonyms": [
+      "renta complementada",
+      "que es renta complementada",
+      "definicion de renta complementada"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-4",
+      "label": "Leer en Academia: renta complementada"
+    }
+  },
+  {
+    "id": "glossary-deuda",
+    "title": "Glosario: deuda",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "deuda: Obligación financiera adquirida con una institución u otra persona, que debe pagarse en condiciones definidas.",
+    "synonyms": [
+      "deuda",
+      "que es deuda",
+      "definicion de deuda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-1",
+      "label": "Leer en Academia: deuda"
+    }
+  },
+  {
+    "id": "glossary-endeudamiento-responsable",
+    "title": "Glosario: endeudamiento responsable",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "endeudamiento responsable: Decisión de endeudarse considerando el presupuesto completo, el margen disponible y los posibles imprevistos.",
+    "synonyms": [
+      "endeudamiento responsable",
+      "que es endeudamiento responsable",
+      "definicion de endeudamiento responsable"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-1",
+      "label": "Leer en Academia: endeudamiento responsable"
+    }
+  },
+  {
+    "id": "glossary-presupuesto",
+    "title": "Glosario: presupuesto",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "presupuesto: Comparación entre ingresos y gastos de un hogar que permite conocer cuánto margen hay realmente.",
+    "synonyms": [
+      "presupuesto",
+      "que es presupuesto",
+      "definicion de presupuesto"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-4",
+      "label": "Leer en Academia: presupuesto"
+    }
+  },
+  {
+    "id": "glossary-tarjetas",
+    "title": "Glosario: tarjetas",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "tarjetas: Productos financieros que permiten comprar a crédito; sus compromisos deben incluirse en el análisis del presupuesto.",
+    "synonyms": [
+      "tarjetas",
+      "que es tarjetas",
+      "definicion de tarjetas"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-3",
+      "label": "Leer en Academia: tarjetas"
+    }
+  },
+  {
+    "id": "glossary-línea-de-crédito",
+    "title": "Glosario: línea de crédito",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "línea de crédito: Monto máximo disponible para usar a crédito; solo lo efectivamente utilizado genera obligaciones.",
+    "synonyms": [
+      "línea de crédito",
+      "que es línea de crédito",
+      "definicion de línea de crédito"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-3",
+      "label": "Leer en Academia: línea de crédito"
+    }
+  },
+  {
+    "id": "glossary-cuenta-de-ahorro",
+    "title": "Glosario: cuenta de ahorro",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "cuenta de ahorro: Instrumento utilizado en varios programas habitacionales para acreditar ahorro previo del postulante.",
+    "synonyms": [
+      "cuenta de ahorro",
+      "que es cuenta de ahorro",
+      "definicion de cuenta de ahorro"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-3",
+      "label": "Leer en Academia: cuenta de ahorro"
+    }
+  },
+  {
+    "id": "glossary-fondo-de-emergencia",
+    "title": "Glosario: fondo de emergencia",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "fondo de emergencia: Recursos mantenidos disponibles para enfrentar gastos inesperados sin comprometer la estabilidad del hogar.",
+    "synonyms": [
+      "fondo de emergencia",
+      "que es fondo de emergencia",
+      "definicion de fondo de emergencia"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-4",
+      "label": "Leer en Academia: fondo de emergencia"
+    }
+  },
+  {
+    "id": "glossary-seguros",
+    "title": "Glosario: seguros",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "seguros: Productos de cobertura de riesgos; algunos son obligatorios en operaciones hipotecarias según la normativa.",
+    "synonyms": [
+      "seguros",
+      "que es seguros",
+      "definicion de seguros"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-5",
+      "label": "Leer en Academia: seguros"
+    }
+  },
+  {
+    "id": "glossary-comparación",
+    "title": "Glosario: comparación",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "comparación: Ejercicio de revisar ofertas equivalentes (monto, plazo y condiciones) usando indicadores como CAE y costo total.",
+    "synonyms": [
+      "comparación",
+      "que es comparación",
+      "definicion de comparación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-6",
+      "label": "Leer en Academia: comparación"
+    }
+  },
+  {
+    "id": "glossary-cuota",
+    "title": "Glosario: cuota",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "cuota: Pago periódico que se realiza para pagar un crédito; su valor depende del monto, plazo y condiciones.",
+    "synonyms": [
+      "cuota",
+      "que es cuota",
+      "definicion de cuota"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "plazos-1",
+      "label": "Leer en Academia: cuota"
+    }
+  },
+  {
+    "id": "glossary-inflación",
+    "title": "Glosario: inflación",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "inflación: Aumento generalizado y sostenido de los precios de bienes y servicios, medido a través de variaciones del IPC.",
+    "synonyms": [
+      "inflación",
+      "que es inflación",
+      "definicion de inflación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-2",
+      "label": "Leer en Academia: inflación"
+    }
+  },
+  {
+    "id": "glossary-ds1",
+    "title": "Glosario: DS1",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "DS1: Subsidio habitacional para Sectores Medios cuyos requisitos, montos y fechas se definen en cada llamado.",
+    "synonyms": [
+      "ds1",
+      "que es ds1",
+      "definicion de ds1"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-2",
+      "label": "Leer en Academia: DS1"
+    }
+  },
+  {
+    "id": "glossary-tramo",
+    "title": "Glosario: tramo",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "tramo: Segmento de calificación socioeconómica o de postulación utilizado por distintos programas y beneficios.",
+    "synonyms": [
+      "tramo",
+      "que es tramo",
+      "definicion de tramo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-2",
+      "label": "Leer en Academia: tramo"
+    }
+  },
+  {
+    "id": "glossary-beneficios",
+    "title": "Glosario: beneficios",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "beneficios: Apoyos otorgados por el Estado bajo condiciones establecidas por cada programa específico.",
+    "synonyms": [
+      "beneficios",
+      "que es beneficios",
+      "definicion de beneficios"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-1",
+      "label": "Leer en Academia: beneficios"
+    }
+  },
+  {
+    "id": "glossary-promesa",
+    "title": "Glosario: promesa",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "promesa: Compromiso previo a la escritura de compraventa; conviene revisar bien sus condiciones antes de firmarlo.",
+    "synonyms": [
+      "promesa",
+      "que es promesa",
+      "definicion de promesa"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-5",
+      "label": "Leer en Academia: promesa"
+    }
+  },
+  {
+    "id": "glossary-contrato",
+    "title": "Glosario: contrato",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "contrato: Documento que establece derechos y obligaciones de las partes; debe revisarse completo antes de firmar.",
+    "synonyms": [
+      "contrato",
+      "que es contrato",
+      "definicion de contrato"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-5",
+      "label": "Leer en Academia: contrato"
+    }
+  },
+  {
+    "id": "glossary-ahorro",
+    "title": "Glosario: ahorro",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "ahorro: Parte del ingreso que se destina deliberadamente a metas futuras en lugar de gastarse.",
+    "synonyms": [
+      "ahorro",
+      "que es ahorro",
+      "definicion de ahorro"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-2",
+      "label": "Leer en Academia: ahorro"
+    }
+  },
+  {
+    "id": "glossary-crédito",
+    "title": "Glosario: crédito",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "crédito: Operación en que una institución entrega dinero u otro bien para pagarlo después bajo condiciones definidas.",
+    "synonyms": [
+      "crédito",
+      "que es crédito",
+      "definicion de crédito"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-1",
+      "label": "Leer en Academia: crédito"
+    }
+  },
+  {
+    "id": "glossary-costo",
+    "title": "Glosario: costo",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "costo: Desembolso asociado a una operación financiera; incluye más elementos que la sola tasa de interés.",
+    "synonyms": [
+      "costo",
+      "que es costo",
+      "definicion de costo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-1",
+      "label": "Leer en Academia: costo"
+    }
+  },
+  {
+    "id": "glossary-costos",
+    "title": "Glosario: costos",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "costos: Conjunto de desembolsos asociados a una operación: capital, intereses, seguros, cargos y trámites.",
+    "synonyms": [
+      "costos",
+      "que es costos",
+      "definicion de costos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-4",
+      "label": "Leer en Academia: costos"
+    }
+  },
+  {
+    "id": "glossary-gastos",
+    "title": "Glosario: gastos",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "gastos: Egresos habituales o eventuales del hogar que deben considerarse al construir un presupuesto.",
+    "synonyms": [
+      "gastos",
+      "que es gastos",
+      "definicion de gastos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-4",
+      "label": "Leer en Academia: gastos"
+    }
+  },
+  {
+    "id": "glossary-evaluación",
+    "title": "Glosario: evaluación",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "evaluación: Análisis que realiza la institución financiera sobre la solicitud y sus antecedentes antes de decidir.",
+    "synonyms": [
+      "evaluación",
+      "que es evaluación",
+      "definicion de evaluación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-3",
+      "label": "Leer en Academia: evaluación"
+    }
+  },
+  {
+    "id": "glossary-requisitos",
+    "title": "Glosario: requisitos",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "requisitos: Condiciones exigidas por cada programa o producto; varían entre llamados e instituciones.",
+    "synonyms": [
+      "requisitos",
+      "que es requisitos",
+      "definicion de requisitos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-4",
+      "label": "Leer en Academia: requisitos"
+    }
+  },
+  {
+    "id": "glossary-propiedad",
+    "title": "Glosario: propiedad",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "propiedad: Inmueble objeto de la compra o garantía; sus antecedentes deben revisarse antes de operar.",
+    "synonyms": [
+      "propiedad",
+      "que es propiedad",
+      "definicion de propiedad"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-2",
+      "label": "Leer en Academia: propiedad"
+    }
+  },
+  {
+    "id": "glossary-compra",
+    "title": "Glosario: compra",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "compra: Operación de adquisición de una vivienda, que involucra precio, trámites, financiamiento y costos asociados.",
+    "synonyms": [
+      "compra",
+      "que es compra",
+      "definicion de compra"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-4",
+      "label": "Leer en Academia: compra"
+    }
+  },
+  {
+    "id": "glossary-minvu",
+    "title": "Glosario: MINVU",
+    "category": "glosario",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "MINVU: Ministerio de Vivienda y Urbanismo, autoridad que define los programas habitacionales y publica los llamados oficiales.",
+    "synonyms": [
+      "minvu",
+      "que es minvu",
+      "definicion de minvu"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-1",
+      "label": "Leer en Academia: MINVU"
+    }
+  },
+  {
+    "id": "article-credito-1",
+    "title": "¿Qué es un crédito hipotecario?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es un crédito hipotecario?\n\nEntiende qué financia un crédito hipotecario, cómo se estructura y qué significa comprometer una propiedad como garantía.",
+    "synonyms": [
+      "¿qué es un crédito hipotecario?",
+      "crédito hipotecario",
+      "dividendo",
+      "plazo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-1",
+      "label": "Ver artículo: ¿Qué es un crédito hipotecario?"
+    }
+  },
+  {
+    "id": "article-credito-2",
+    "title": "¿Qué evalúa una institución financiera?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué evalúa una institución financiera?\n\nFortalecer tus ingresos, deudas y respaldos puede ayudarte a llegar mejor preparado a una evaluación hipotecaria.",
+    "synonyms": [
+      "¿qué evalúa una institución financiera?",
+      "crédito hipotecario",
+      "ingresos",
+      "deuda",
+      "capacidad de pago"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-2",
+      "label": "Ver artículo: ¿Qué evalúa una institución financiera?"
+    }
+  },
+  {
+    "id": "article-credito-3",
+    "title": "Simulación, preaprobación y aprobación: ¿qué cambia?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Simulación, preaprobación y aprobación: ¿qué cambia?\n\nDiferencia una simulación, una evaluación preliminar y la aprobación formal de un crédito.",
+    "synonyms": [
+      "simulación, preaprobación y aprobación: ¿qué cambia?",
+      "preaprobación",
+      "crédito hipotecario",
+      "evaluación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-3",
+      "label": "Ver artículo: Simulación, preaprobación y aprobación: ¿qué cambia?"
+    }
+  },
+  {
+    "id": "article-credito-4",
+    "title": "Renta complementada y codeudor",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Renta complementada y codeudor\n\nQué significa complementar ingresos y por qué también deben considerarse las obligaciones de la otra persona.",
+    "synonyms": [
+      "renta complementada y codeudor",
+      "codeudor",
+      "renta complementada",
+      "deuda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "credito-4",
+      "label": "Ver artículo: Renta complementada y codeudor"
+    }
+  },
+  {
+    "id": "article-endeudamiento-1",
+    "title": "Pedir el máximo posible no siempre es la mejor decisión",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Pedir el máximo posible no siempre es la mejor decisión\n\nEl monto máximo que una institución podría prestarte no es necesariamente el monto más conveniente para tu presupuesto.",
+    "synonyms": [
+      "pedir el máximo posible no siempre es la mejor decisión",
+      "endeudamiento responsable",
+      "deuda",
+      "presupuesto"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-1",
+      "label": "Ver artículo: Pedir el máximo posible no siempre es la mejor decisión"
+    }
+  },
+  {
+    "id": "article-endeudamiento-2",
+    "title": "¿Cómo afectan tus otras deudas a un hipotecario?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Cómo afectan tus otras deudas a un hipotecario?\n\nOrdenar tus otras cuotas puede darte más margen para un dividendo y hacer más sostenible tu presupuesto.",
+    "synonyms": [
+      "¿cómo afectan tus otras deudas a un hipotecario?",
+      "deuda",
+      "carga financiera",
+      "tarjetas"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-2",
+      "label": "Ver artículo: ¿Cómo afectan tus otras deudas a un hipotecario?"
+    }
+  },
+  {
+    "id": "article-endeudamiento-3",
+    "title": "Tarjetas y líneas de crédito: ¿por qué importan?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Tarjetas y líneas de crédito: ¿por qué importan?\n\nEntiende por qué tus productos de crédito de consumo deben formar parte de tu presupuesto.",
+    "synonyms": [
+      "tarjetas y líneas de crédito: ¿por qué importan?",
+      "tarjetas",
+      "línea de crédito",
+      "deuda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-3",
+      "label": "Ver artículo: Tarjetas y líneas de crédito: ¿por qué importan?"
+    }
+  },
+  {
+    "id": "article-endeudamiento-4",
+    "title": "Cómo ordenar tus deudas antes de buscar vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Cómo ordenar tus deudas antes de buscar vivienda\n\nOrdenar tus deudas te ayuda a identificar margen real, priorizar decisiones y buscar una vivienda acorde a tu presupuesto.",
+    "synonyms": [
+      "cómo ordenar tus deudas antes de buscar vivienda",
+      "deuda",
+      "presupuesto",
+      "carga financiera"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "endeudamiento-4",
+      "label": "Ver artículo: Cómo ordenar tus deudas antes de buscar vivienda"
+    }
+  },
+  {
+    "id": "article-carga-1",
+    "title": "¿Qué es la carga financiera?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es la carga financiera?\n\nConocer tu carga financiera te ayuda a proteger tu margen mensual antes de sumar un dividendo.",
+    "synonyms": [
+      "¿qué es la carga financiera?",
+      "carga financiera",
+      "deuda",
+      "ingresos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-1",
+      "label": "Ver artículo: ¿Qué es la carga financiera?"
+    }
+  },
+  {
+    "id": "article-carga-2",
+    "title": "RCI: Relación Carga / Ingreso",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "RCI: Relación Carga / Ingreso\n\nUsar la RCI como referencia te ayuda a detectar si conviene ordenar deudas, ajustar la vivienda o revisar el plazo.",
+    "synonyms": [
+      "rci: relación carga / ingreso",
+      "rci",
+      "relación carga ingreso",
+      "deuda/ingreso",
+      "carga financiera",
+      "dividendo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "carga-2",
+      "label": "Ver artículo: RCI: Relación Carga / Ingreso"
+    }
+  },
+  {
+    "id": "article-ahorro-1",
+    "title": "¿Qué es el pie de una vivienda?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es el pie de una vivienda?\n\nPlanificar el pie te ayuda a reducir lo que necesitas financiar y a construir una compra más viable para tu presupuesto.",
+    "synonyms": [
+      "¿qué es el pie de una vivienda?",
+      "pie",
+      "ahorro",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-1",
+      "label": "Ver artículo: ¿Qué es el pie de una vivienda?"
+    }
+  },
+  {
+    "id": "article-ahorro-2",
+    "title": "Cómo planificar el ahorro para una vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Cómo planificar el ahorro para una vivienda\n\nConvertir tu meta en ahorro mensual te ayuda a avanzar con un plan realista y a ajustar a tiempo tu objetivo de vivienda.",
+    "synonyms": [
+      "cómo planificar el ahorro para una vivienda",
+      "ahorro",
+      "pie",
+      "presupuesto"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-2",
+      "label": "Ver artículo: Cómo planificar el ahorro para una vivienda"
+    }
+  },
+  {
+    "id": "article-ahorro-3",
+    "title": "Cuenta de ahorro para la vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Cuenta de ahorro para la vivienda\n\nConoce por qué este instrumento aparece en varios programas habitacionales y cómo acreditar el ahorro.",
+    "synonyms": [
+      "cuenta de ahorro para la vivienda",
+      "ahorro",
+      "cuenta de ahorro",
+      "subsidio"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-3",
+      "label": "Ver artículo: Cuenta de ahorro para la vivienda"
+    }
+  },
+  {
+    "id": "article-ahorro-4",
+    "title": "Pie, ahorro y fondo de emergencia",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Pie, ahorro y fondo de emergencia\n\nSeparar el pie de tu fondo de emergencia te ayuda a comprar sin quedar sin respaldo ante imprevistos.",
+    "synonyms": [
+      "pie, ahorro y fondo de emergencia",
+      "pie",
+      "ahorro",
+      "fondo de emergencia"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "ahorro-4",
+      "label": "Ver artículo: Pie, ahorro y fondo de emergencia"
+    }
+  },
+  {
+    "id": "article-costos-1",
+    "title": "¿Qué es la tasa de interés?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es la tasa de interés?\n\nLa tasa es solo una parte del costo de un crédito. Aprende a distinguirla de otros indicadores.",
+    "synonyms": [
+      "¿qué es la tasa de interés?",
+      "tasa",
+      "crédito",
+      "costo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-1",
+      "label": "Ver artículo: ¿Qué es la tasa de interés?"
+    }
+  },
+  {
+    "id": "article-costos-2",
+    "title": "¿Qué es la CAE?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es la CAE?\n\nComparar la CAE entre ofertas equivalentes te ayuda a elegir mirando el costo, no solo la cuota o la tasa.",
+    "synonyms": [
+      "¿qué es la cae?",
+      "cae",
+      "tasa",
+      "costo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-2",
+      "label": "Ver artículo: ¿Qué es la CAE?"
+    }
+  },
+  {
+    "id": "article-costos-3",
+    "title": "Costo Total del Crédito",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Costo Total del Crédito\n\nRevisar el costo total te ayuda a evitar que una cuota baja esconda un compromiso más caro en el tiempo.",
+    "synonyms": [
+      "costo total del crédito",
+      "costo total",
+      "cae",
+      "dividendo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-3",
+      "label": "Ver artículo: Costo Total del Crédito"
+    }
+  },
+  {
+    "id": "article-costos-4",
+    "title": "Gastos operacionales de un crédito hipotecario",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Gastos operacionales de un crédito hipotecario\n\nEl costo de financiar una vivienda no se limita al pie y al dividendo.",
+    "synonyms": [
+      "gastos operacionales de un crédito hipotecario",
+      "gastos operacionales",
+      "crédito",
+      "costos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-4",
+      "label": "Ver artículo: Gastos operacionales de un crédito hipotecario"
+    }
+  },
+  {
+    "id": "article-costos-5",
+    "title": "Seguros asociados al crédito hipotecario",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Seguros asociados al crédito hipotecario\n\nConoce los seguros que la normativa exige para las operaciones hipotecarias.",
+    "synonyms": [
+      "seguros asociados al crédito hipotecario",
+      "seguro de desgravamen",
+      "seguro de incendio",
+      "seguros"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-5",
+      "label": "Ver artículo: Seguros asociados al crédito hipotecario"
+    }
+  },
+  {
+    "id": "article-costos-6",
+    "title": "Cómo comparar dos créditos hipotecarios",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Cómo comparar dos créditos hipotecarios\n\nComparar las condiciones completas te ayuda a elegir un crédito que cuide tu presupuesto mensual y el costo total.",
+    "synonyms": [
+      "cómo comparar dos créditos hipotecarios",
+      "cae",
+      "costo total",
+      "tasa",
+      "comparación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "costos-6",
+      "label": "Ver artículo: Cómo comparar dos créditos hipotecarios"
+    }
+  },
+  {
+    "id": "article-plazos-1",
+    "title": "El plazo del crédito: cuota baja no siempre es costo bajo",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "El plazo del crédito: cuota baja no siempre es costo bajo\n\nElegir bien el plazo te ayuda a equilibrar una cuota sostenible hoy con el costo que asumirás durante años.",
+    "synonyms": [
+      "el plazo del crédito: cuota baja no siempre es costo bajo",
+      "plazo",
+      "cuota",
+      "costo total"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "plazos-1",
+      "label": "Ver artículo: El plazo del crédito: cuota baja no siempre es costo bajo"
+    }
+  },
+  {
+    "id": "article-uf-1",
+    "title": "¿Qué es la UF?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es la UF?\n\nConoce la Unidad de Fomento y por qué aparece frecuentemente en los créditos hipotecarios en Chile.",
+    "synonyms": [
+      "¿qué es la uf?",
+      "uf",
+      "crédito",
+      "inflación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-1",
+      "label": "Ver artículo: ¿Qué es la UF?"
+    }
+  },
+  {
+    "id": "article-uf-2",
+    "title": "UF e inflación",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "UF e inflación\n\nEntiende la relación entre la UF y el IPC sin confundir ambos conceptos.",
+    "synonyms": [
+      "uf e inflación",
+      "uf",
+      "ipc",
+      "inflación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-2",
+      "label": "Ver artículo: UF e inflación"
+    }
+  },
+  {
+    "id": "article-uf-3",
+    "title": "¿Cómo afecta la UF a tu dividendo?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Cómo afecta la UF a tu dividendo?\n\nEntender la UF te ayuda a preparar un presupuesto que resista cambios del dividendo en pesos.",
+    "synonyms": [
+      "¿cómo afecta la uf a tu dividendo?",
+      "uf",
+      "dividendo",
+      "crédito"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-3",
+      "label": "Ver artículo: ¿Cómo afecta la UF a tu dividendo?"
+    }
+  },
+  {
+    "id": "article-uf-4",
+    "title": "¿Qué significa que un crédito esté en UF?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué significa que un crédito esté en UF?\n\nComprende qué implica expresar una deuda en UF y por qué debes mirar también su equivalente en pesos.",
+    "synonyms": [
+      "¿qué significa que un crédito esté en uf?",
+      "uf",
+      "crédito hipotecario",
+      "dividendo"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "uf-4",
+      "label": "Ver artículo: ¿Qué significa que un crédito esté en UF?"
+    }
+  },
+  {
+    "id": "article-subsidios-1",
+    "title": "¿Qué es un subsidio habitacional?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es un subsidio habitacional?\n\nLos subsidios habitacionales son beneficios estatales que buscan apoyar el acceso a una solución habitacional bajo determinadas condiciones.",
+    "synonyms": [
+      "¿qué es un subsidio habitacional?",
+      "subsidio",
+      "vivienda",
+      "minvu"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-1",
+      "label": "Ver artículo: ¿Qué es un subsidio habitacional?"
+    }
+  },
+  {
+    "id": "article-subsidios-2",
+    "title": "DS1: ¿cómo funciona?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "DS1: ¿cómo funciona?\n\nConoce el propósito general del Subsidio para Sectores Medios y por qué sus requisitos deben revisarse por llamado.",
+    "synonyms": [
+      "ds1: ¿cómo funciona?",
+      "ds1",
+      "subsidio",
+      "rsh",
+      "ahorro"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-2",
+      "label": "Ver artículo: DS1: ¿cómo funciona?"
+    }
+  },
+  {
+    "id": "article-subsidios-3",
+    "title": "Subsidio, ahorro y crédito: ¿cómo se combinan?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Subsidio, ahorro y crédito: ¿cómo se combinan?\n\nUn subsidio puede formar parte de una estructura de financiamiento junto con ahorro propio y, cuando corresponda, crédito hipotecario.",
+    "synonyms": [
+      "subsidio, ahorro y crédito: ¿cómo se combinan?",
+      "subsidio",
+      "pie",
+      "crédito"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-3",
+      "label": "Ver artículo: Subsidio, ahorro y crédito: ¿cómo se combinan?"
+    }
+  },
+  {
+    "id": "article-subsidios-4",
+    "title": "¿Por qué los requisitos de un subsidio pueden cambiar?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Por qué los requisitos de un subsidio pueden cambiar?\n\nDistingue entre las características generales de un programa y las condiciones de un llamado específico.",
+    "synonyms": [
+      "¿por qué los requisitos de un subsidio pueden cambiar?",
+      "subsidio",
+      "minvu",
+      "requisitos"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-4",
+      "label": "Ver artículo: ¿Por qué los requisitos de un subsidio pueden cambiar?"
+    }
+  },
+  {
+    "id": "article-rsh-1",
+    "title": "¿Qué es el Registro Social de Hogares?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es el Registro Social de Hogares?\n\nEl RSH ayuda a determinar la calificación socioeconómica de los hogares para distintos procesos de beneficios estatales.",
+    "synonyms": [
+      "¿qué es el registro social de hogares?",
+      "rsh",
+      "beneficios",
+      "subsidio"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-1",
+      "label": "Ver artículo: ¿Qué es el Registro Social de Hogares?"
+    }
+  },
+  {
+    "id": "article-rsh-2",
+    "title": "¿Qué significa tu porcentaje del RSH?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué significa tu porcentaje del RSH?\n\nEl porcentaje del RSH corresponde a un tramo de calificación socioeconómica y no equivale por sí solo a un beneficio.",
+    "synonyms": [
+      "¿qué significa tu porcentaje del rsh?",
+      "rsh",
+      "tramo",
+      "subsidio"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-2",
+      "label": "Ver artículo: ¿Qué significa tu porcentaje del RSH?"
+    }
+  },
+  {
+    "id": "article-rsh-3",
+    "title": "RSH y subsidios habitacionales",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "RSH y subsidios habitacionales\n\nEl RSH puede ser uno de los requisitos para postular a determinados programas habitacionales.",
+    "synonyms": [
+      "rsh y subsidios habitacionales",
+      "rsh",
+      "subsidio",
+      "ds1"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "rsh-3",
+      "label": "Ver artículo: RSH y subsidios habitacionales"
+    }
+  },
+  {
+    "id": "article-vivienda-1",
+    "title": "Vivienda nueva vs. usada",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Vivienda nueva vs. usada\n\nAmbas alternativas pueden ser válidas, pero debes evaluar costos, condiciones de la propiedad y financiamiento.",
+    "synonyms": [
+      "vivienda nueva vs. usada",
+      "vivienda",
+      "nueva",
+      "usada"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-1",
+      "label": "Ver artículo: Vivienda nueva vs. usada"
+    }
+  },
+  {
+    "id": "article-vivienda-2",
+    "title": "¿Qué es una tasación?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es una tasación?\n\nLa tasación busca determinar un valor de referencia de la propiedad para efectos de la operación financiera.",
+    "synonyms": [
+      "¿qué es una tasación?",
+      "tasación",
+      "vivienda",
+      "crédito"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-2",
+      "label": "Ver artículo: ¿Qué es una tasación?"
+    }
+  },
+  {
+    "id": "article-vivienda-3",
+    "title": "¿Qué es un estudio de títulos?",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "¿Qué es un estudio de títulos?\n\nConoce por qué los antecedentes jurídicos de una propiedad son relevantes antes de comprar.",
+    "synonyms": [
+      "¿qué es un estudio de títulos?",
+      "estudio de títulos",
+      "propiedad",
+      "compra"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-3",
+      "label": "Ver artículo: ¿Qué es un estudio de títulos?"
+    }
+  },
+  {
+    "id": "article-vivienda-4",
+    "title": "Costos que debes considerar al comprar una vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Costos que debes considerar al comprar una vivienda\n\nPresupuestar todos los costos de compra te ayuda a evitar que trámites y cargos desarmen tu plan de vivienda.",
+    "synonyms": [
+      "costos que debes considerar al comprar una vivienda",
+      "gastos",
+      "vivienda",
+      "pie"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-4",
+      "label": "Ver artículo: Costos que debes considerar al comprar una vivienda"
+    }
+  },
+  {
+    "id": "article-vivienda-5",
+    "title": "Qué revisar antes de comprometer la compra",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Qué revisar antes de comprometer la compra\n\nRevisar la operación completa antes de firmar te ayuda a evitar compromisos que no calzan con tu presupuesto o condiciones.",
+    "synonyms": [
+      "qué revisar antes de comprometer la compra",
+      "promesa",
+      "contrato",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "vivienda-5",
+      "label": "Ver artículo: Qué revisar antes de comprometer la compra"
+    }
+  },
+  {
+    "id": "article-subsidios-fogaes",
+    "title": "FOGAES: financiamiento para vivienda nueva",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "FOGAES: financiamiento para vivienda nueva\n\nQué es FOGAES, quién puede postular y cómo esta garantía estatal facilita el acceso a un crédito hipotecario con menor pie.",
+    "synonyms": [
+      "fogaes: financiamiento para vivienda nueva",
+      "subsidio",
+      "pie",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-fogaes",
+      "label": "Ver artículo: FOGAES: financiamiento para vivienda nueva"
+    }
+  },
+  {
+    "id": "article-subsidios-ds49",
+    "title": "DS49: Fondo Solidario de Elección de Vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "DS49: Fondo Solidario de Elección de Vivienda\n\nEl subsidio estatal para familias en situación de vulnerabilidad que buscan su primera vivienda.",
+    "synonyms": [
+      "ds49: fondo solidario de elección de vivienda",
+      "subsidio",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-ds49",
+      "label": "Ver artículo: DS49: Fondo Solidario de Elección de Vivienda"
+    }
+  },
+  {
+    "id": "article-subsidios-padhi",
+    "title": "PADHI: Acompañamiento a Deudores Hipotecarios",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "PADHI: Acompañamiento a Deudores Hipotecarios\n\nPrograma de orientación para personas con deuda hipotecaria vigente que fueron beneficiarias previas de subsidios.",
+    "synonyms": [
+      "padhi: acompañamiento a deudores hipotecarios",
+      "subsidio",
+      "morosidad"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-padhi",
+      "label": "Ver artículo: PADHI: Acompañamiento a Deudores Hipotecarios"
+    }
+  },
+  {
+    "id": "article-subsidios-ds1",
+    "title": "DS1: Subsidio Clase Media para compra de vivienda",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "DS1: Subsidio Clase Media para compra de vivienda\n\nEl subsidio para la clase media que busca facilitar la compra de una primera vivienda con ahorro previo.",
+    "synonyms": [
+      "ds1: subsidio clase media para compra de vivienda",
+      "subsidio",
+      "ahorro",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-ds1",
+      "label": "Ver artículo: DS1: Subsidio Clase Media para compra de vivienda"
+    }
+  },
+  {
+    "id": "article-subsidios-leasing",
+    "title": "Leasing Habitacional: arrendamiento con promesa de compraventa",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Leasing Habitacional: arrendamiento con promesa de compraventa\n\nUna alternativa al crédito hipotecario que te permite arrendar una vivienda con la opción de comprarla eventualmente.",
+    "synonyms": [
+      "leasing habitacional: arrendamiento con promesa de compraventa",
+      "subsidio",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-leasing",
+      "label": "Ver artículo: Leasing Habitacional: arrendamiento con promesa de compraventa"
+    }
+  },
+  {
+    "id": "article-subsidios-ley21748",
+    "title": "Ley 21.748: reducción de tasa para vivienda nueva",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Ley 21.748: reducción de tasa para vivienda nueva\n\nBeneficio que reduce la tasa de interés en 0.60 puntos porcentuales para créditos de vivienda nueva.",
+    "synonyms": [
+      "ley 21.748: reducción de tasa para vivienda nueva",
+      "subsidio",
+      "tasa",
+      "vivienda"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "subsidios-ley21748",
+      "label": "Ver artículo: Ley 21.748: reducción de tasa para vivienda nueva"
+    }
+  },
+  {
+    "id": "article-docs-1",
+    "title": "Guía: Dónde obtener tus documentos para la evaluación hipotecaria",
+    "category": "academia",
+    "audience": "all",
+    "step": null,
+    "step_name": null,
+    "field_id": null,
+    "screen_id": "academia",
+    "content": "Guía: Dónde obtener tus documentos para la evaluación hipotecaria\n\nAprende dónde y cómo conseguir cada uno de los antecedentes necesarios para tu evaluación bancaria.",
+    "synonyms": [
+      "guía: dónde obtener tus documentos para la evaluación hipotecaria",
+      "documentos",
+      "requisitos",
+      "evaluación"
+    ],
+    "link": {
+      "type": "academy",
+      "articleId": "docs-1",
+      "label": "Ver artículo: Guía: Dónde obtener tus documentos para la evaluación hipotecaria"
+    }
+  }
+]

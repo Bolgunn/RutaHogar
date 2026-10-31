@@ -43,6 +43,7 @@ import SetPassword from "./components/SetPassword";
 import SimulationPage from "./components/SimulationPage";
 import SignupOffer from "./components/SignupOffer";
 import PropertySearch from "./components/PropertySearch";
+import AssistantWidget from "./features/assistant/AssistantWidget";
 import {
   acceptEvaluationPlan,
   applyAcceptedPlanEvent,
@@ -982,6 +983,37 @@ export default function App() {
       // El flujo continúa en memoria si el almacenamiento de sesión no existe.
     }
   }, [scoreFormDraft]);
+
+  useEffect(() => {
+    let subscription = null;
+    import("./utils/supabase").then(({ supabase }) => {
+      if (!supabase?.auth) return;
+      supabase.auth.getSession().then(({ data }) => {
+        if (data?.session?.access_token) {
+          try {
+            localStorage.setItem("RutaHogar_session", JSON.stringify(data.session));
+          } catch {}
+          setAuth((prev) => ({
+            ...prev,
+            session: data.session,
+          }));
+        }
+      }).catch(() => {});
+
+      const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+        if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session?.access_token) {
+          try {
+            localStorage.setItem("RutaHogar_session", JSON.stringify(session));
+          } catch {}
+          setAuth((prev) => (prev.profile ? { ...prev, session } : prev));
+        }
+      });
+      subscription = listener?.subscription || null;
+    });
+    return () => {
+      subscription?.unsubscribe?.();
+    };
+  }, []);
 
   const profile = auth.profile;
   const userId = isUUID(profile?.id)
@@ -2032,6 +2064,9 @@ export default function App() {
     setAnonOnboarding(null);
     sessionStorage.removeItem(ANON_ONBOARDING_KEY);
     sessionStorage.removeItem(SCORE_FORM_DRAFT_KEY);
+    try {
+      localStorage.removeItem("rutahogar_assistant_msgs_guest");
+    } catch {}
     navigateToPage("auth", { replace: true });
   };
 
@@ -2062,25 +2097,40 @@ export default function App() {
   if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
   if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
+  const assistantNode = (
+    <AssistantWidget
+      key={profile?.id || "anon"}
+      screenId={page}
+      role={profile?.role || "anon"}
+      profile={profile}
+      token={auth?.session?.access_token || auth?.session?.token || null}
+      onNavigate={navigateToPage}
+      onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
+    />
+  );
+
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
 
     return (
-      <LandingPage
-        profile={profile}
-        onStart={
-          !profile
-            ? () => navigateToPage("anon-onboarding")
-            : profile.role === roles.user
-              ? startEvaluation
-              : openDashboard
-        }
-        onLogin={() => navigateToPage("auth")}
-        onRegister={() => navigateToPage("auth", { authMode: "signup" })}
-        onDashboard={openDashboard}
-        onProfile={profile?.role === roles.user ? () => navigateToPage("profile") : null}
-        onLogout={handleLogout}
-      />
+      <>
+        <LandingPage
+          profile={profile}
+          onStart={
+            !profile
+              ? () => navigateToPage("anon-onboarding")
+              : profile.role === roles.user
+                ? startEvaluation
+                : openDashboard
+          }
+          onLogin={() => navigateToPage("auth")}
+          onRegister={() => navigateToPage("auth", { authMode: "signup" })}
+          onDashboard={openDashboard}
+          onProfile={profile?.role === roles.user ? () => navigateToPage("profile") : null}
+          onLogout={handleLogout}
+        />
+        {assistantNode}
+      </>
     );
   }
 
@@ -2101,6 +2151,7 @@ export default function App() {
             onEvalAnon={() => navigateToPage("anon-onboarding")}
             onPortalAnon={() => navigateToPage("anon-portal")}
           />
+          {assistantNode}
         </div>
       );
     }
@@ -2110,6 +2161,7 @@ export default function App() {
         <div className="anon-shell">
           <AnonHeader onLogin={() => navigateToPage("auth")} onHome={() => navigateToPage("auth")} />
           <PropertySearch onStartEvaluation={startAnonEvaluation} onNavigate={navigateToPage} />
+          {assistantNode}
         </div>
       );
     }
@@ -2133,6 +2185,7 @@ export default function App() {
               onBirthDateSave={handleBirthDateSave}
             />
           </section>
+          {assistantNode}
         </div>
       );
     }
@@ -2191,7 +2244,7 @@ export default function App() {
               onResult={handleAnonResult}
             />
           </section>
-
+          {assistantNode}
         </div>
       );
     }
@@ -2210,6 +2263,7 @@ export default function App() {
               error={signupOfferError}
             />
           </section>
+          {assistantNode}
         </div>
       );
     }
@@ -2219,6 +2273,7 @@ export default function App() {
         <AuthPanel
           onAuth={handleAuth}
         />
+        {assistantNode}
       </div>
     );
   }
@@ -2607,6 +2662,7 @@ export default function App() {
         </section>
       )}
       </div></main>
+      {assistantNode}
     </div>
   );
 }
