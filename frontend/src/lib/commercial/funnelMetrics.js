@@ -3,11 +3,11 @@
 // Función pura: `now` es una entrada, nada fechado después de `now` cuenta. Las bandas son las de
 // ALG-10 (matchLeadToProjects) y la etapa global la de overallStage(); aquí no se declara ningún
 // umbral.
-import { matchLeadToProjects } from "../matching/leadProjectMatching";
-import { overallStage } from "./overallStage";
-import { PRIORITY_ACTIONS, SIN_PRIORIDAD, priorityKeyFromDetail } from "./priorityActions";
-import { periodOf, periodsBetween } from "./santiagoCalendar";
-import { DEFAULT_STAGE, STAGES } from "./stageRules";
+import { matchLeadToProjects } from "../matching/leadProjectMatching.js";
+import { overallStage } from "./overallStage.js";
+import { PRIORITY_ACTIONS, SIN_PRIORIDAD, priorityKeyFromDetail } from "./priorityActions.js";
+import { periodOf, periodsBetween } from "./santiagoCalendar.js";
+import { DEFAULT_STAGE, STAGES } from "./stageRules.js";
 
 export const ALG18_VERSION = "hu15-commercial-funnel-v1";
 
@@ -18,6 +18,8 @@ const ACCIONES = ["favorito", "reprecalificacion", "postulacion", "plan_aceptado
 const AFINIDADES = ["Compatible", "Cercano", "Marginal", "fuera_de_alcance", "requiere_antecedentes"];
 const CAPACIDADES = ["alcanza", "cercano_por_capacidad", "insuficiente", "requiere_antecedentes"];
 const PRIORIDADES = [...Object.keys(PRIORITY_ACTIONS), SIN_PRIORIDAD];
+
+export const FUNNEL_FILTER_OPTIONS = { afinidad: AFINIDADES, capacidad: CAPACIDADES, prioridad: PRIORIDADES };
 const PAIRS = LADDER.slice(0, -1).map((desde, index) => [desde, LADDER[index + 1]]);
 
 const instant = (value) => Date.parse(value);

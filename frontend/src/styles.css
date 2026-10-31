@@ -17856,7 +17856,7 @@ th {
   background: #B42318;
   color: #ffffff;
 }
-.danger-button:hover {
+.danger-button:hover:not(:disabled) {
   background: #9B1C1C;
   opacity: 1;
 }
@@ -17865,11 +17865,12 @@ th {
   color: #B42318;
   border-color: rgba(184,50,50,0.35);
 }
-.danger-button.secondary-button:hover {
+.danger-button.secondary-button:hover:not(:disabled) {
   background: rgba(184,50,50,0.06);
   border-color: #B42318;
   color: #9B1C1C;
 }
+.danger-button:focus-visible { outline: 3px solid var(--rh-navy); outline-offset: 3px; }
 @media (max-width: 640px) {
   .admin-modal-footer {
     flex-direction: column-reverse;
@@ -18695,18 +18696,20 @@ th {
 .co-debtor-public-card__note { padding: 11px 13px; border-left: 3px solid var(--rh-gold); border-radius: 0 var(--rh-radius-sm) var(--rh-radius-sm) 0; background: rgba(212,168,67,.10); font-size: .9rem; }
 .co-debtor-public-form { display: grid; gap: 18px; }
 .co-debtor-public-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
-.co-debtor-public-form__grid label { display: grid; gap: 7px; color: var(--rh-text); font-size: .9rem; font-weight: 800; }
-.co-debtor-public-form__grid label:last-child { grid-column: 1 / -1; max-width: calc(50% - 8px); }
-.co-debtor-public-form__field { display: grid; gap: 7px; }
-.co-debtor-public-form__field:last-child { grid-column: 1 / -1; max-width: calc(50% - 8px); }
+.co-debtor-public-form__field { display: grid; align-content: start; gap: 7px; margin: 0; min-width: 0; }
+.co-debtor-public-form__field .pre-wizard-field-label { margin-bottom: 0; }
+.co-debtor-public-form__field .pre-wizard-field-hint { color: var(--rh-text-secondary); }
+.co-debtor-public-form__section { display: grid; gap: 14px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.co-debtor-public-form__section legend { padding: 0 0 12px; font-size: 1.05rem; font-weight: 700; color: var(--rh-navy); }
 .co-debtor-public-form input,
 .co-debtor-public-form select { width: 100%; margin: 0; }
-.co-debtor-public-form__consent { display: flex; gap: 10px; align-items: flex-start; color: var(--rh-text-secondary); font-size: .9rem; line-height: 1.5; }
+.co-debtor-public-form__consent { display: flex; gap: 10px; align-items: flex-start; color: var(--rh-text-secondary); font-size: .9rem; line-height: 1.5; min-height: 44px; cursor: pointer; }
 .co-debtor-public-form__consent input { width: auto; min-width: 17px; margin: 3px 0 0; }
 .co-debtor-public-form__feedback { margin: 0; }
 .co-debtor-public-form__actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .co-debtor-public-form__actions .primary-button,
-.co-debtor-public-form__actions .secondary-button { margin: 0; }
+.co-debtor-public-form__actions .secondary-button,
+.co-debtor-public-form__actions .danger-button { margin: 0; }
 .co-debtor-public-form .primary-button { justify-self: start; margin: 0; }
 .co-debtor-public-revoke-confirm { display: grid; gap: 11px; padding: 16px; border: 1px solid rgba(154,52,18,.24); border-radius: var(--rh-radius-md); background: #fff8f4; }
 .co-debtor-public-revoke-confirm strong { color: #7c2d12; }
@@ -18724,8 +18727,7 @@ th {
   .co-debtor-public-page { padding: 16px; }
   .co-debtor-public-page__brand { margin-bottom: 20px; }
   .co-debtor-public-form__grid { grid-template-columns: 1fr; }
-  .co-debtor-public-form__grid label:last-child, .co-debtor-public-form__field:last-child { grid-column: auto; max-width: none; }
-  .co-debtor-public-form__actions .primary-button, .co-debtor-public-form__actions .secondary-button { width: 100%; }
+  .co-debtor-public-form__actions .primary-button, .co-debtor-public-form__actions .secondary-button, .co-debtor-public-form__actions .danger-button { width: 100%; }
   .co-debtor-public-form .primary-button { width: 100%; }
   .co-debtor-public-revoke-confirm > div { display: grid; grid-template-columns: 1fr; }
 }
@@ -21203,3 +21205,57 @@ section-heading {
   .cm-funnel__row { grid-template-columns: 110px 1fr 70px; }
   .cm-hbar { grid-template-columns: 150px 1fr 70px; }
 }
+
+/* HU30: owner result, amounts come from the authorized projection. */
+.bipersonal-capacity dd small { display: block; margin-top: .25rem; font-size: .85rem; font-weight: 400; }
+.bipersonal-capacity__pending { margin-top: 1rem; }
+.bipersonal-capacity__pending button { margin-top: .5rem; }
+.bipersonal-capacity .co-debtor-section__status { white-space: normal; }
+
+@media (max-width: 480px) {
+  .bipersonal-capacity .co-debtor-section__header { flex-direction: column; }
+  .bipersonal-capacity .co-debtor-section__details { grid-template-columns: minmax(0, 1fr); }
+  .bipersonal-capacity__pending button { width: 100%; }
+}
+
+/* HU30: staff participation, driven by the authorized projection. */
+.staff-participation-badge { white-space: normal; }
+.staff-participation-badge.is-bipersonal_confirmed { background: #e6f6ec; color: #17633a; }
+.staff-participation-badge.is-individual { background: #edf1f7; color: var(--rh-navy); }
+.staff-participation-badge.is-declared_complement, .staff-participation-badge.is-unverifiable_origin { background: #fff5d8; color: #805b00; }
+.staff-bipersonal__people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.staff-bipersonal__people > section { min-width: 0; }
+.staff-bipersonal > .admin-panel-card__header { flex-wrap: wrap; }
+.staff-bipersonal__people .admin-definition-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.staff-bipersonal h4 { margin: 0 0 10px; }
+.staff-bipersonal dd small { display: block; margin-top: 4px; }
+.staff-bipersonal__risks { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.staff-bipersonal__risk { display: grid; gap: 4px; padding: 10px; border-left: 3px solid #6b7280; background: #f3f4f6; }
+.staff-bipersonal__risk.is-info, .staff-bipersonal__info { border-left: 3px solid #306b99; background: #eef5fa; padding: 10px; }
+.staff-bipersonal__risk.is-warning { border-left-color: #ad6a00; background: #fff5d8; }
+.staff-bipersonal__privacy { border-left: 3px solid var(--rh-gold); padding-left: 10px; }
+@media (max-width: 640px) {
+  .staff-bipersonal__people { grid-template-columns: minmax(0, 1fr); }
+  .staff-bipersonal .admin-definition-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+}
+.hu30-page .co-debtor-public-card {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.hu30-page h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2rem); }
+.hu30-page h2 { margin: 0; font-size: 1.1rem; }
+.hu30-page p { margin: 0; line-height: 1.6; }
+.hu30-page .co-debtor-public-form__actions { align-items: start; }
+.hu30-page button { white-space: normal; max-width: 100%; }
+@media (max-width: 640px) { .hu30-page button { min-height: 44px; } }
+.hu30-participation { display: grid; gap: 12px; padding: 20px 0; border-top: 1px solid var(--rh-border); }
+.hu30-participation button { justify-self: start; }
+.hu30-access-card { min-height: 300px; align-content: start; }
+.hu30-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: hu30-spin 1s linear infinite; }
+@keyframes hu30-spin { to { transform: rotate(360deg); } }
+.recommendation-score-value { display: inline-flex; align-items: baseline; justify-content: center; gap: 6px; white-space: nowrap; }
+.score-visual-card .hu30-score-change { font-size: .8rem; font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.score-visual-card .hu30-score-change--positive { color: #1a6b3d !important; }
+.score-visual-card .hu30-score-change--negative { color: #9a3f2b !important; }
+@media (prefers-reduced-motion: reduce) { .hu30-spinner { animation: none; } }

@@ -1,16 +1,18 @@
+import { protectParticipationRequest } from "./security.ts";
+import { PARTICIPANT_ACTIONS, participantAction } from "./participation.ts";
+import { authorizeInvitationAccess } from "./access.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.2";
 import {
   cleanText, digestToken, invitationExpiry, invitationPublicContext, invitationStatus,
-  isEmail, managementPublicContext, normalizeChileanRut, parseLeadDeclaredComplement, parseSubmission, parseTtlDays, secureToken, timingSafeEqual,
+  isEmail, managementPublicContext, normalizeChileanRut, parseLeadDeclaredComplement, parseDeclaredRelation, parseTtlDays, secureToken, timingSafeEqual,
   type InvitationRow,
 } from "./helpers.ts";
 import {
-  coDebtorConfirmationEmail, expirationEmail, invitationEmail, leadConfirmationEmail,
+  coDebtorConfirmationEmail, leadConfirmationEmail, expirationEmail, invitationEmail,
 } from "./email.ts";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-hu18-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -94,20 +96,17 @@ async function createInvitation(req: Request, body: Record<string, unknown>, adm
     return json({ error: (error as Error).message }, 400);
   }
   let declaredComplement;
-  try { declaredComplement = parseLeadDeclaredComplement(body); } catch (error) {
+  let declaredRelation: string;
+  try { declaredComplement = parseLeadDeclaredComplement(body); declaredRelation = parseDeclaredRelation(body.relacion_complementario); } catch (error) {
     return json({ error: (error as Error).message }, 422);
   }
   const token = secureToken();
   const tokenDigest = await digestToken(token);
   const ttlDays = parseTtlDays(Deno.env.get("CO_DEBTOR_INVITATION_TTL_DAYS"));
   const expiresAt = invitationExpiry(new Date(), ttlDays).toISOString();
-  const { data, error } = await admin.rpc("hu18_create_invitation", {
+  const { data, error } = await admin.rpc("hu30_create_invitation", {
     p_lead_id: leadId, p_recipient_email: recipientEmail, p_recipient_rut: recipientRut, p_token_digest: tokenDigest, p_expires_at: expiresAt,
-    p_ingreso_mensual_complementario: declaredComplement.ingreso_mensual_complementario,
-    p_deuda_mensual_complementario: declaredComplement.deuda_mensual_complementario,
-    p_tipo_contrato_complementario: declaredComplement.tipo_contrato_complementario,
-    p_continuidad_laboral_complementario: declaredComplement.continuidad_laboral_complementario,
-    p_morosidad_complementario: declaredComplement.morosidad_complementario,
+    p_values: declaredComplement, p_relation: declaredRelation,
   }).single();
   if (error || !data) return json({ error: "No se pudo crear la invitaci\u00f3n." }, 500);
   try {
@@ -126,36 +125,6 @@ async function inspectInvitation(body: Record<string, unknown>, admin: AdminClie
   const invitation = token ? await findByToken(admin, "token_digest", token) : null;
   if (!invitation) return json({ status: "invalid", can_submit: false }, 404);
   return json(invitationPublicContext(await materializeExpiry(admin, invitation)));
-}
-
-async function submitConfirmation(body: Record<string, unknown>, admin: AdminClient) {
-  const token = cleanText(body.token, 512);
-  const invitation = token ? await findByToken(admin, "token_digest", token) : null;
-  if (!invitation) return json({ error: "Invitaci\u00f3n inv\u00e1lida." }, 404);
-  const current = await materializeExpiry(admin, invitation);
-  if (current.status !== "pending") return json({ error: "La invitaci\u00f3n no admite una nueva confirmaci\u00f3n." }, 409);
-  let submission;
-  try { submission = parseSubmission(body); } catch (error) { return json({ error: (error as Error).message }, 422); }
-  const managementToken = secureToken();
-  const managementDigest = await digestToken(managementToken);
-  const { data, error } = await admin.rpc("hu18_confirm_invitation", {
-    p_invitation_id: current.id,
-    p_ingreso_mensual_complementario: submission.ingreso_mensual_complementario,
-    p_deuda_mensual_complementario: submission.deuda_mensual_complementario,
-    p_tipo_contrato_complementario: submission.tipo_contrato_complementario,
-    p_continuidad_laboral_complementario: submission.continuidad_laboral_complementario,
-    p_morosidad_complementario: submission.morosidad_complementario,
-    p_treatment_consent_version: submission.treatment_consent_version,
-    p_management_token_digest: managementDigest,
-  }).single();
-  if (error || !data) return json({ error: "No se pudo registrar la confirmaci\u00f3n." }, 409);
-  const managementLink = publicUrl("/co-deudor/consentimiento", managementToken);
-  let coDebtorEmailSent = true;
-  let leadEmailSent = true;
-  try { await sendEmail(data.recipient_email, coDebtorConfirmationEmail(managementLink)); } catch { coDebtorEmailSent = false; }
-  const email = await leadEmail(admin, data.lead_id);
-  try { if (!email) throw new Error("lead email unavailable"); await sendEmail(email, leadConfirmationEmail(appUrl("/recomendaciones"))); } catch { leadEmailSent = false; }
-  return json({ status: "confirmed", confirmation_email_sent: coDebtorEmailSent, lead_email_sent: leadEmailSent });
 }
 
 async function declineInvitation(body: Record<string, unknown>, admin: AdminClient) {
@@ -203,7 +172,7 @@ async function processExpirations(req: Request, admin: AdminClient) {
   return json({ processed: (data || []).length, notification_failures: notificationFailures });
 }
 
-serve(async (req) => {
+async function handleRequest(req: Request) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "M\u00e9todo no permitido." }, 405);
   try {
@@ -213,9 +182,26 @@ serve(async (req) => {
     const body = await req.json() as Record<string, unknown>;
     const action = cleanText(body.action, 64);
     const admin = createClient(supabaseUrl, serviceRoleKey);
+    if (PARTICIPANT_ACTIONS.includes(action)) {
+      const result = await participantAction(req, body, admin, async (actor, id, confirmation) => {
+        const { data: participation } = await admin.from("co_debtor_invitations").select("lead_id").eq("id", id).maybeSingle();
+        const email = participation ? await leadEmail(admin, participation.lead_id) : null;
+        let coDebtorEmailSent = true, leadEmailSent = true;
+        try { await sendEmail(actor.email, coDebtorConfirmationEmail(appUrl(`/co-deudor/invitacion?participation=${encodeURIComponent(id)}`))); } catch { coDebtorEmailSent = false; }
+        try { if (!email) throw new Error("unavailable"); await sendEmail(email, leadConfirmationEmail(appUrl("/recomendaciones"), confirmation.matches_evaluated === true)); } catch { leadEmailSent = false; }
+        return { co_debtor_email_sent: coDebtorEmailSent, lead_email_sent: leadEmailSent };
+      });
+      return json(result.body, result.status);
+    }
+    if (action === "authorize_invitation") {
+      const result = await authorizeInvitationAccess(req, body, admin);
+      return json(result.body, result.status);
+    }
     if (action === "create_invitation") return await createInvitation(req, body, admin, anonKey, supabaseUrl);
     if (action === "inspect_invitation") return await inspectInvitation(body, admin);
-    if (action === "submit_confirmation") return await submitConfirmation(body, admin);
+    // Financial writes use the authenticated participant adapter above.
+    // Never leave the anonymous HU18 overload as a fallback (even before SQL rollout).
+    if (action === "submit_confirmation") return json({ code: "authenticated_confirmation_required", error: "La confirmación requiere el siguiente paso autenticado." }, 409);
     if (action === "decline_invitation") return await declineInvitation(body, admin);
     if (action === "inspect_management") return await inspectManagement(body, admin);
     if (action === "revoke_management") return await revokeManagement(body, admin);
@@ -225,4 +211,7 @@ serve(async (req) => {
     if (error instanceof Response) return error;
     return json({ error: "No se pudo procesar la solicitud de co-deudor." }, 500);
   }
-});
+}
+
+serve((req) => protectParticipationRequest(req, handleRequest,
+  Deno.env.get("APP_PUBLIC_URL") || "", Deno.env.get("CO_DEBTOR_ALLOWED_ORIGINS") || ""));

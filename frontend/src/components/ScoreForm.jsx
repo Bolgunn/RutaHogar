@@ -961,6 +961,7 @@ export default function ScoreForm({
         coDebtorInvitation: {
           recipientEmail: normalizedCoDebtorEmail,
           recipientRut: normalizedCoDebtorRut,
+          declaredRelation: payload.relacion_complementario,
           declaredComplement: {
             ingreso_mensual_complementario: payload.ingreso_mensual_complementario,
             deuda_mensual_complementario: payload.deuda_mensual_complementario,

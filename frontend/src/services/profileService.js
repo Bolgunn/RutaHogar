@@ -34,11 +34,10 @@ function normalizeProfile(row) {
 export function logSupabaseError(error) {
   if (!error) return;
 
-  console.error("Supabase Auth/Profile error:", {
-    message: error?.message,
-    details: error?.details,
-    hint: error?.hint,
-    code: error?.code,
+  // Database detail/hint/message can contain a full row, including email/RUT.
+  const allowedCodes = new Set(["42501", "23505", "23514", "PGRST116"]);
+  console.error("No se pudo completar una operación de perfil.", {
+    code: allowedCodes.has(error?.code) ? error.code : "profile_error",
   });
 }
 
@@ -121,9 +120,15 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
     return normalizeProfile({ ...profile, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .upsert({ ...profile, updated_at: new Date().toISOString(), created_at: new Date().toISOString() })
+  // T3 forbids inserting privileged profiles, including INSERT ON CONFLICT's
+  // preliminary INSERT trigger. Existing profiles must use the UPDATE path.
+  const existing = await getCurrentProfile(userId);
+  const table = supabase.from("profiles");
+  const updated = { ...profile, updated_at: new Date().toISOString() };
+  const mutation = existing
+    ? table.update(updated).eq("id", userId)
+    : table.upsert({ ...updated, created_at: new Date().toISOString() });
+  const { data, error } = await mutation
     .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .maybeSingle();
 

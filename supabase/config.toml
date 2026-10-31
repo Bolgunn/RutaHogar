@@ -1,2 +1,6 @@
 [functions.co-debtor-consent]
 verify_jwt = false
+
+# Auth.getUser and SQL tenant scope are checked inside this aggregate-only handler.
+[functions.commercial-funnel-metrics]
+verify_jwt = false

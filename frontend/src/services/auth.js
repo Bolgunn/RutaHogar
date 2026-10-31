@@ -1,3 +1,4 @@
+import { invitationEmailRedirect } from "./coDebtorAuthContext";
 import { supabase } from "../utils/supabase";
 import { roles } from "../lib/roles";
 import {
@@ -78,12 +79,7 @@ async function getOrCreateProfile(user, preferredRole, { strict = false } = {}) 
     const createdProfile = await ensureUserProfile(user);
     return buildProfile(user, preferredRole, createdProfile);
   } catch (err) {
-    console.error("Supabase Auth/Profile error:", {
-      message: err?.message,
-      details: err?.details,
-      hint: err?.hint,
-      code: err?.code,
-    });
+    logSupabaseError(err);
     if (strict) {
       throw new Error("La cuenta fue creada, pero no se pudo guardar el perfil.");
     }
@@ -108,6 +104,7 @@ export async function signIn({ email, password, role = roles.user }) {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      if (error.code === "email_not_confirmed") return { session: null, profile: null, emailConfirmationRequired: true };
       throw new Error("No se pudo iniciar sesión. Revisa tu correo y contraseña.");
     }
 
@@ -122,7 +119,7 @@ export async function signIn({ email, password, role = roles.user }) {
   return saveSession({ user, access_token: "local-RutaHogar-session" }, buildProfile(user, role));
 }
 
-export async function signUp({ email, password, role = roles.user, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "" }) {
+export async function signUp({ email, password, role = roles.user, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "", invitationContext = null }) {
   const normalizedRole = normalizeRole(role || roles.user);
   const normalizedPhone = normalizePhoneForStorage(phone);
   const normalizedBirthDate = normalizeBirthDateForStorage(birth_date);
@@ -135,7 +132,7 @@ export async function signUp({ email, password, role = roles.user, nombre = "", 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { role: normalizedRole, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
+      options: { ...(invitationContext ? { emailRedirectTo: invitationEmailRedirect(invitationContext) } : {}), data: { role: normalizedRole, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizedPhone, rut, birth_date: normalizedBirthDate } },
     });
     if (error) {
       logSupabaseError(error);
@@ -159,6 +156,9 @@ export async function signUp({ email, password, role = roles.user, nombre = "", 
       throw new Error("Cuenta creada, pero no se pudo obtener el usuario. Revisa tu correo si Supabase requiere confirmación.");
     }
 
+    // With email confirmation enabled, Auth has no session yet: RLS correctly
+    // forbids profile writes. Complete that profile after the verified return.
+    if (!data.session) return { session: null, profile: null, emailConfirmationRequired: true };
     return saveSession(data.session, await getOrCreateProfile(data.user, normalizedRole, { strict: true }));
   }
 
@@ -226,4 +226,14 @@ function clearDataconsentKeys() {
     }
   }
   toRemove.forEach((key) => localStorage.removeItem(key));
+}
+
+// Used by the invitation return, including a verification link opened in a new tab.
+export async function restoreInvitationSession() {
+  if (!supabase || !isSupabaseDataConfigured) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data?.session) return null;
+  const verified = await supabase.auth.getUser();
+  if (verified.error || !verified.data?.user) return null;
+  return saveSession(data.session, await getOrCreateProfile(verified.data.user, roles.user, { strict: true }));
 }

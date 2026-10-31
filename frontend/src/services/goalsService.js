@@ -49,6 +49,7 @@ function normalizeGoal(row) {
 }
 
 function withStoredProgress(goal, userId) {
+  if (goal.progress_data?.hu30_visibility === "hidden") return goal;
   const storedProgress = readLocalProgress()[progressKey(userId, goal.id)];
   return storedProgress ? { ...goal, progress_data: storedProgress } : goal;
 }
@@ -66,22 +67,13 @@ export async function getGoals(userId, evaluationId) {
   }
   await ensureUserProfile(user);
 
-  let query = supabase
-    .from("improvement_goals")
-    .select("id, user_id, evaluation_id, title, description, status, created_at, updated_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
-
-  if (evaluationId) {
-    query = query.eq("evaluation_id", evaluationId);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc("hu30_list_owner_goals");
   if (error) {
     logSupabaseError(error);
     throw error;
   }
-  return (data || []).map(normalizeGoal).map((goal) => withStoredProgress(goal, user.id));
+  return (data || []).filter((row) => !evaluationId || row.evaluation_id === evaluationId)
+    .map(normalizeGoal).map((goal) => withStoredProgress(goal, user.id));
 }
 
 export async function createGoal(userId, evaluationId, goal) {

@@ -5,7 +5,7 @@
 //
 // records: [{ proyecto_id: string | null, stage, at, por_sistema }], uno por registro existente:
 // su etapa vigente, más el instante y por_sistema de su último evento. [] = sin registros.
-import { DEFAULT_STAGE, STAGES } from "./stageRules";
+import { DEFAULT_STAGE, STAGES } from "./stageRules.js";
 
 const RANKED = STAGES.map((stage) => stage.value).filter((value) => value !== "perdido");
 
