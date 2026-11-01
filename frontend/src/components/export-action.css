@@ -1,0 +1,22 @@
+.hu22-overlay { z-index: 1200; }
+.hu22-dialog { width: min(740px, 100%); }
+.hu22-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; min-width: 0; margin: 16px 0; padding: 16px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-md); }
+.hu22-options legend { padding: 0 6px; font-weight: 700; color: var(--rh-navy); }
+.hu22-options label { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0; cursor: pointer; }
+.hu22-options input { position: static; width: 18px; height: 18px; min-width: 18px; margin: 0; accent-color: var(--rh-navy); }
+.hu22-options > p, .hu22-selection { grid-column: 1 / -1; }
+.hu22-selection { max-height: 260px; overflow-y: auto; min-width: 0; padding: 12px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-sm); }
+.hu22-selection p { padding-block: 10px; border-bottom: 1px solid var(--rh-border); overflow-wrap: anywhere; }
+.hu22-note { color: var(--rh-text-secondary); font-size: .875rem; line-height: 1.55; }
+.hu22-filename { display: grid; gap: 8px; margin-top: 16px; font-weight: 600; }
+.hu22-filename > span { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hu22-filename input { flex: 1; min-width: 0; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-sm); font: inherit; font-weight: 400; }
+.hu22-filename small { color: var(--rh-text-secondary); font-weight: 400; }
+.hu22-record { padding: 14px 0; border-bottom: 1px solid var(--rh-border); }
+.hu22-record p { margin: 4px 0; padding: 0; border: 0; }
+.hu22-record summary { cursor: pointer; color: var(--rh-navy); padding: 10px 0; font-weight: 600; }
+.hu22-record dl { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 8px 16px; font-size: .875rem; }
+.hu22-record dt { font-weight: 600; }
+.hu22-record dd { margin: 0; overflow-wrap: anywhere; }
+.hu22-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+@media(max-width:767px) { .hu22-options { grid-template-columns: minmax(0, 1fr); padding: 12px; } .hu22-dialog { padding: 16px; } .hu22-actions > button { width: 100%; min-height: 44px; } }

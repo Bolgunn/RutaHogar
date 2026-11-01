@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import useModalFocus from "./useModalFocus";
+import ExportAction from "./ExportAction";
 import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
 import { getEvaluations } from "../services/evaluationService";
 import { getStaffLeadDetail } from "../services/trackingService";
@@ -529,6 +530,7 @@ export default function LeadDetailModal({
           </button>
         </div>
 
+        <ExportAction kind="dossier" candidates={[{ id: activeLead.id, name: activeLead.full_name }]} projectId={selectedProject?.id} />
         <nav className="executive-lead-detail__nav" aria-label="Secciones de la ficha">
           {[["Resumen", ".executive-lead-brief"], ["Perfil y encaje", ".executive-lead-snapshot"], ["Contacto", ".executive-contact-questions"], ["Historial", ".executive-lead-detail__history"]].map(([label, target]) => (
             <button type="button" key={target} onClick={(event) => {

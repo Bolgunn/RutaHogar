@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import useModalFocus from "./useModalFocus";
+import ExportAction from "./ExportAction";
 import { getAvailableProjects } from "../services/projectService";
 import { syncLeadToSimulatedCrm, getSimulatedCrmLeads, buildCrmPayload } from "../services/crmService";
 import { reportLead } from "../services/leadManagementService";
@@ -543,6 +544,10 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     () => rankLeadsForProject(filtered, selectedProject, sortBy),
     [filtered, selectedProject, sortBy],
   );
+  const exportCandidates = useMemo(() => [...new Map([
+    ...ranked.map(row => row.lead), ...requiereAntecedentes.map(row => row.lead),
+    ...descartados.map(row => row.lead), ...filtered,
+  ].map(lead => [lead.id, lead])).values()].map(lead => ({ id: lead.id, name: lead.full_name || lead.email })), [ranked, requiereAntecedentes, descartados, filtered]);
   const contactOpportunities = useMemo(
     () => detectContactOpportunities(evaluations, projects),
     [evaluations, projects],
@@ -963,7 +968,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           <h2>{selectedProject ? "Leads con mejor encaje" : "Leads para revisar"}</h2>
           <p>{selectedProject ? `${ranked.length} de ${filtered.length} alcanzan ${selectedProject.nombre}.` : `${ranked.length} resultado${ranked.length === 1 ? "" : "s"} según la prioridad y los filtros aplicados.`}</p>
         </div>
-        <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+        <div style={{display: 'flex', flexWrap: 'wrap', maxWidth: '100%', gap: '8px', alignItems: 'center'}}>
+           <ExportAction kind="leads" candidates={exportCandidates} projectId={selectedProject?.id} filters={{ search, classification, commune, age, date, reliabilityStatus, sortBy }} />
            <button type="button" className="secondary-button compact-button" onClick={() => setIsCrmModalOpen(true)}>Auditoría CRM</button>
            <button type="button" className="primary-button compact-button" onClick={handleBulkSync} disabled={syncing || ranked.length === 0}>{syncing ? "Sincronizando..." : "Sincronizar Visibles"}</button>
         </div>
