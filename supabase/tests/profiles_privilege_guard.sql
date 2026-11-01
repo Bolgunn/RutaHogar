@@ -4,15 +4,27 @@
 -- its own role or tenant, while sign-in, onboarding, executive creation and admin assignment
 -- keep working. supabase-js upserts reach Postgres as INSERT ... ON CONFLICT DO UPDATE, and
 -- GoTrue inserts into auth.users as supabase_auth_admin; both are reproduced literally below.
+-- Also runs on a `supabase start` stack, with postgres promoted to superuser in that stack.
 begin;
 
-create role supabase_auth_admin;
-alter table auth.users add column raw_user_meta_data jsonb;
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    create role supabase_auth_admin;
+  end if;
+  if not exists (select 1 from information_schema.columns
+      where table_schema = 'auth' and table_name = 'users' and column_name = 'raw_user_meta_data') then
+    alter table auth.users add column raw_user_meta_data jsonb;
+  end if;
+end $$;
 grant usage on schema auth to supabase_auth_admin;
 grant select, insert on auth.users to supabase_auth_admin;
+-- The fixtures below write their own profiles; the sign-up block installs the trigger again.
+drop trigger if exists on_auth_user_created on auth.users;
 
 -- Hosted Supabase grants table privileges to authenticated and lets RLS decide.
 grant select, insert, update on public.profiles to authenticated;
+grant select, insert on public.evaluations to authenticated;
 
 insert into public.inmobiliarias(id, nombre) values
   ('a3000000-0000-0000-0000-000000000001', 'PG Inmobiliaria A'),
@@ -29,7 +41,17 @@ insert into auth.users(id, email) values
   ('c3000000-0000-0000-0000-000000000007', 'pg-global-admin@example.invalid'),
   ('c3000000-0000-0000-0000-000000000008', 'pg-lead-to-admin@example.invalid'),
   ('c3000000-0000-0000-0000-000000000009', 'pg-lead-to-exec@example.invalid'),
-  ('c3000000-0000-0000-0000-00000000000a', 'pg-legacy-tenant-admin@example.invalid');
+  ('c3000000-0000-0000-0000-00000000000a', 'pg-legacy-tenant-admin@example.invalid'),
+  ('c3000000-0000-0000-0000-000000000015', 'pg-lead-flagged@example.invalid'),
+  ('c3000000-0000-0000-0000-000000000016', 'pg-lead-no-profile@example.invalid'),
+  ('c3000000-0000-0000-0000-000000000017', 'pg-lead-fraud@example.invalid'),
+  ('c3000000-0000-0000-0000-000000000018', 'pg-lead-reported@example.invalid'),
+  ('c3000000-0000-0000-0000-000000000019', 'pg-other-tenant-admin@example.invalid');
+insert into public.profiles(id, full_name, role, inmobiliaria_id, reliability_status) values
+  ('c3000000-0000-0000-0000-000000000015', 'Lead', 'usuario', null, 'sospechoso'),
+  ('c3000000-0000-0000-0000-000000000017', 'Lead', 'usuario', null, 'normal'),
+  ('c3000000-0000-0000-0000-000000000018', 'Lead', 'usuario', null, 'normal'),
+  ('c3000000-0000-0000-0000-000000000019', 'Other Admin', 'admin_inmobiliario', 'a3000000-0000-0000-0000-000000000002', 'normal');
 insert into public.profiles(id, full_name, role, inmobiliaria_id) values
   ('c3000000-0000-0000-0000-000000000001', 'Lead', 'usuario', null),
   ('c3000000-0000-0000-0000-000000000003', 'Exec', 'ejecutivo', 'a3000000-0000-0000-0000-000000000001'),
@@ -80,6 +102,31 @@ begin
   if v_found is not true or v_role is distinct from p_role or v_tenant is distinct from p_tenant then
     raise exception '%: expected %/%, got %/% (found: %)', p_label, p_role, p_tenant, v_role, v_tenant, v_found;
   end if;
+end;
+$$;
+
+create function pg_temp.expect_status(p_label text, p_id uuid, p_status text) returns void language plpgsql as $$
+declare v_status text;
+begin
+  select reliability_status into v_status from public.profiles where id = p_id;
+  if v_status is distinct from p_status then
+    raise exception '%: expected %, got %', p_label, p_status, v_status;
+  end if;
+end;
+$$;
+
+-- p_expected is part of the error text, so a failure for another reason does not pass.
+create function pg_temp.expect_denied(p_label text, p_expected text, p_sql text) returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    if position(p_expected in sqlerrm) = 0 then
+      raise exception '%: denied for another reason: %', p_label, sqlerrm;
+    end if;
+    return;
+  end;
+  raise exception '%: the call was allowed', p_label;
 end;
 $$;
 
@@ -282,6 +329,118 @@ begin
     raise exception 'a lead ran assign_admin';
   end if;
   perform pg_temp.expect_profile('lead after assign_admin attempt', lead, 'usuario', null);
+end $$;
+
+-- reliability_status: nobody clears or sets their own, by any write shape.
+do $$
+declare
+  flagged uuid := 'c3000000-0000-0000-0000-000000000015';
+  no_profile uuid := 'c3000000-0000-0000-0000-000000000016';
+  exec uuid := 'c3000000-0000-0000-0000-000000000003';
+begin
+  perform pg_temp.act_as('authenticated', flagged);
+  perform pg_temp.expect_guard('lead clears own flag',
+    format($q$update public.profiles set reliability_status = 'normal' where id = %L$q$, flagged));
+  perform pg_temp.expect_guard('lead reactivates itself',
+    format($q$update public.profiles set reliability_status = 'reactivado' where id = %L$q$, flagged));
+  perform pg_temp.expect_guard('lead clears own flag by upsert',
+    format($q$insert into public.profiles(id, role, reliability_status) values (%L, 'usuario', 'normal')
+      on conflict (id) do update set reliability_status = excluded.reliability_status$q$, flagged));
+  -- A flagged lead can still sign in and save its profile.
+  perform pg_temp.upsert_own(flagged, 'usuario');
+  perform pg_temp.act_as('authenticated', exec);
+  perform pg_temp.expect_guard('staff changes own status',
+    format($q$update public.profiles set reliability_status = 'silenciado' where id = %L$q$, exec));
+  perform pg_temp.act_as('authenticated', no_profile);
+  perform pg_temp.expect_guard('first insert starts as reactivado, out of the sweeper''s reach',
+    format($q$insert into public.profiles(id, role, reliability_status) values (%L, 'usuario', 'reactivado')$q$, no_profile));
+  perform pg_temp.act_as_system();
+  perform pg_temp.expect_status('flag survived', flagged, 'sospechoso');
+end $$;
+
+-- reliability_status: every legitimate writer keeps working.
+do $$
+declare
+  flagged uuid := 'c3000000-0000-0000-0000-000000000015';
+  fraud uuid := 'c3000000-0000-0000-0000-000000000017';
+  reported uuid := 'c3000000-0000-0000-0000-000000000018';
+  exec uuid := 'c3000000-0000-0000-0000-000000000003';
+  global_admin uuid := 'c3000000-0000-0000-0000-000000000007';
+begin
+  -- check_ml_fraud_on_insert fires inside the lead's own session.
+  perform pg_temp.act_as('authenticated', fraud);
+  insert into public.evaluations(user_id, score, classification, financial_data)
+  values (fraud, 10, 'Bajo', '{"input": {"ingreso_mensual": 100, "deuda_mensual": 200}}');
+  perform pg_temp.act_as_system();
+  perform pg_temp.expect_status('fraud trigger from the lead session', fraud, 'sospechoso');
+
+  perform pg_temp.act_as('authenticated', exec);
+  perform public.update_lead_reliability(p_lead_id => reported, p_new_status => 'en_revision', p_reason => 'test');
+  perform pg_temp.act_as_system();
+  perform pg_temp.expect_status('executive reports a lead', reported, 'en_revision');
+
+  perform pg_temp.act_as('authenticated', global_admin);
+  perform public.update_lead_reliability(p_lead_id => flagged, p_new_status => 'reactivado', p_reason => 'test');
+  perform pg_temp.act_as_system();
+  perform pg_temp.expect_status('admin reactivates a lead', flagged, 'reactivado');
+
+  perform pg_temp.act_as('service_role', null);
+  update public.profiles set reliability_status = 'silenciado' where id = flagged;
+  perform pg_temp.act_as_system();
+  perform pg_temp.expect_status('service_role', flagged, 'silenciado');
+end $$;
+
+-- assign_executive / unassign_executive: authorization must be true, and anon holds no EXECUTE.
+do $$
+declare
+  lead uuid := 'c3000000-0000-0000-0000-000000000001';
+  tenant_admin uuid := 'c3000000-0000-0000-0000-000000000006';
+  other_admin uuid := 'c3000000-0000-0000-0000-000000000019';
+  tenant uuid := 'a3000000-0000-0000-0000-000000000001';
+  project uuid := 'b3000000-0000-0000-0000-000000000001';
+  v_assign text := format($q$select public.assign_executive(%L, 'pg-forged@example.invalid')$q$, project);
+  v_unassign text := format($q$select public.unassign_executive(%L, 'pg-exec-free@example.invalid')$q$, project);
+  v_fn text;
+begin
+  foreach v_fn in array array['public.assign_executive(uuid, text)', 'public.unassign_executive(uuid, text)'] loop
+    if has_function_privilege('anon', v_fn, 'execute') then
+      raise exception 'anon can execute %', v_fn;
+    end if;
+    if not has_function_privilege('authenticated', v_fn, 'execute')
+        or not has_function_privilege('service_role', v_fn, 'execute') then
+      raise exception 'a legitimate role lost EXECUTE on %', v_fn;
+    end if;
+  end loop;
+
+  -- The anon call itself runs over HTTP in profiles_privilege_stack.mjs: on the Supabase image a
+  -- denied EXECUTE after SET ROLE in a superuser session segfaults the backend. PostgREST does not.
+  -- The NULL case itself: a role that can execute, with no user behind it.
+  perform pg_temp.act_as('authenticated', null);
+  if public.can_admin_inmobiliaria(tenant) is not false then
+    raise exception 'can_admin_inmobiliaria must be false, not NULL, with no session';
+  end if;
+  perform pg_temp.expect_denied('no session assign', 'No tienes permisos', v_assign);
+  perform pg_temp.expect_denied('no session unassign', 'No tienes permisos', v_unassign);
+
+  perform pg_temp.act_as('authenticated', lead);
+  perform pg_temp.expect_denied('lead assign', 'No tienes permisos', v_assign);
+  perform pg_temp.expect_denied('lead unassign', 'No tienes permisos', v_unassign);
+  perform pg_temp.act_as('authenticated', other_admin);
+  perform pg_temp.expect_denied('admin of another tenant assign', 'No tienes permisos', v_assign);
+  perform pg_temp.expect_denied('admin of another tenant unassign', 'No tienes permisos', v_unassign);
+
+  perform pg_temp.act_as_system();
+  if exists (select 1 from public.proyecto_ejecutivos where ejecutivo_email = 'pg-forged@example.invalid')
+      or not exists (select 1 from public.proyecto_ejecutivos where ejecutivo_email = 'pg-exec-free@example.invalid') then
+    raise exception 'a denied call changed proyecto_ejecutivos';
+  end if;
+
+  perform pg_temp.act_as('authenticated', tenant_admin);
+  perform public.unassign_executive(project, 'pg-exec-free@example.invalid');
+  perform pg_temp.act_as_system();
+  if exists (select 1 from public.proyecto_ejecutivos where ejecutivo_email = 'pg-exec-free@example.invalid') then
+    raise exception 'a tenant admin could not unassign';
+  end if;
 end $$;
 
 rollback;
