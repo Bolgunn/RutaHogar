@@ -270,6 +270,18 @@ serve(async (req) => {
         p_details: details,
       });
       if (error) console.error("No se pudo registrar el evento:", eventType, error);
+      return !error;
+    };
+
+    // Primero el registro del intento, después el correo: un correo salido no se puede deshacer.
+    // Si sólo falla el resultado, la lista muestra "Correo no enviado" y se puede reenviar.
+    const registerSend = async (subject: string, email: string, fullName: string, reenvio: boolean) => {
+      const details = reenvio ? { reenvio: true } : { rol: "ejecutivo" };
+      if (!(await logEvent(subject, "equipo.invitacion_creada", details))) return { attempted: false };
+      const sent = await deliverInvite(adminClient, email, fullName, inmobiliaria.nombre);
+      const okEvent = reenvio ? "equipo.invitacion_reenviada" : "equipo.invitacion_enviada";
+      const recorded = await logEvent(subject, sent ? okEvent : "equipo.invitacion_fallida", details);
+      return { attempted: true, sent, recorded };
     };
 
     // --- Reenvío: sólo alguien de este equipo que aún no entra ---
@@ -277,7 +289,7 @@ serve(async (req) => {
       const memberId = cleanText(payload.miembro_id, 64);
       const { data: member, error: memberError } = await adminClient
         .from("profiles")
-        .select("id, full_name, role, inmobiliaria_id, estado_acceso")
+        .select("id, full_name, role, inmobiliaria_id, estado_acceso, password_pendiente")
         .eq("id", memberId)
         .eq("inmobiliaria_id", inmobiliaria.id)
         .maybeSingle();
@@ -293,23 +305,29 @@ serve(async (req) => {
         return jsonResponse({ error: "Esta persona está desactivada. Reactívala antes de reenviar la invitación." }, 409);
       }
 
+      if (!member.password_pendiente) {
+        return jsonResponse({ error: "Esta persona ya definió su contraseña: no necesita otra invitación." }, 409);
+      }
+
       const { data: account, error: accountError } = await adminClient.auth.admin.getUserById(member.id);
       if (accountError || !account?.user?.email) {
         console.error("Error leyendo la cuenta:", accountError);
         return jsonResponse({ error: "No se pudo verificar a esta persona." }, 500);
       }
-      if (account.user.last_sign_in_at) {
-        return jsonResponse({ error: "Esta persona ya entró a RutaHogar: no necesita otra invitación." }, 409);
-      }
 
-      const sent = await deliverInvite(adminClient, account.user.email, member.full_name || "", inmobiliaria.nombre);
-      await logEvent(member.id, sent ? "equipo.invitacion_reenviada" : "equipo.invitacion_fallida", { reenvio: true });
+      const send = await registerSend(member.id, account.user.email, member.full_name || "", true);
+      if (!send.attempted) {
+        return jsonResponse({ error: "No se pudo registrar el reenvío y el correo no salió. Inténtalo de nuevo." }, 500);
+      }
+      if (!send.recorded) {
+        return jsonResponse({ error: "No se pudo registrar el resultado del envío. Revisa el correo y reenvía si hace falta." }, 500);
+      }
 
       return jsonResponse({
         ok: true,
         created: false,
         ejecutivo: { id: member.id, email: account.user.email, full_name: member.full_name },
-        email_enviado: sent,
+        email_enviado: send.sent,
       });
     }
 
@@ -365,10 +383,13 @@ serve(async (req) => {
         return jsonResponse({ error: "Este correo pertenece a una persona de otra inmobiliaria." }, 409);
       }
 
-      const { error: linkProfileError } = await adminClient
-        .from("profiles")
-        .update({ inmobiliaria_id: targetInmobiliaria, updated_at: new Date().toISOString() })
-        .eq("id", existingId);
+      // Vínculo y registro van en una transacción: o quedan los dos, o ninguno.
+      const { error: linkProfileError } = await adminClient.rpc("hu28_link_executive", {
+        p_inmobiliaria: inmobiliaria.id,
+        p_member: existingId,
+        p_actor: callerProfile.id,
+        p_actor_role: callerProfile.role,
+      });
 
       if (linkProfileError) {
         console.error("Error vinculando la cuenta:", linkProfileError);
@@ -376,7 +397,6 @@ serve(async (req) => {
       }
 
       const nombre = existingProfile.full_name || fullName;
-      await logEvent(existingId, "equipo.miembro_vinculado", {});
       const sent = await sendEmail(
         email,
         "Te sumaron a un equipo en RutaHogar",
@@ -416,6 +436,7 @@ serve(async (req) => {
       role: "ejecutivo",
       inmobiliaria_id: targetInmobiliaria,
       phone,
+      password_pendiente: true,
       updated_at: new Date().toISOString(),
     });
 
@@ -426,18 +447,22 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo crear el perfil del ejecutivo." }, 500);
     }
 
-    const emailSent = await deliverInvite(adminClient, email, fullName, inmobiliaria.nombre);
-    await logEvent(
-      created.user.id,
-      emailSent ? "equipo.invitacion_enviada" : "equipo.invitacion_fallida",
-      { rol: "ejecutivo" },
-    );
+    const send = await registerSend(created.user.id, email, fullName, false);
+    if (!send.attempted) {
+      // Nada salió todavía: una cuenta sin registro no se queda.
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(created.user.id);
+      if (deleteError) console.error("No se pudo revertir la cuenta sin registro:", deleteError);
+      return jsonResponse({ error: "No se pudo registrar la invitación. Inténtalo de nuevo." }, 500);
+    }
+    if (!send.recorded) {
+      return jsonResponse({ error: "La cuenta se creó, pero el resultado del envío no quedó registrado. Revisa el equipo y reenvía la invitación." }, 500);
+    }
 
     return jsonResponse({
       ok: true,
       created: true,
       ejecutivo: { id: created.user.id, email, full_name: fullName },
-      email_enviado: emailSent,
+      email_enviado: send.sent,
     });
   } catch (error) {
     console.error("create-executive falló:", error);

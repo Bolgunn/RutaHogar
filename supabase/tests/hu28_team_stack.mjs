@@ -7,6 +7,7 @@
 //   SB_URL=http://127.0.0.1:54321 SB_ANON=... SB_SERVICE=... SB_FUNCTIONS=http://127.0.0.1:8000 \
 //     BACKEND_URL=http://127.0.0.1:8010 node supabase/tests/hu28_team_stack.mjs
 import assert from "node:assert/strict";
+import { rmSync, writeFileSync } from "node:fs";
 
 const { SB_URL, SB_ANON, SB_SERVICE, SB_FUNCTIONS, BACKEND_URL } = process.env;
 assert.match(SB_URL, /^http:\/\/(127\.0\.0\.1|localhost):/, "solo un stack local");
@@ -239,6 +240,43 @@ await step("Historial: una asignación pendiente no revela el nombre de la cuent
   }
 });
 
+await step("Historial: \"Ver más\" no repite entradas aunque lleguen nuevas", async () => {
+  const first = (await api("/staff/team/history?limit=3", adminA.token)).json;
+  assert.ok(first.next_cursor, "hacen falta más de 3 entradas");
+  await rest("rpc/assign_executive", { token: adminA.token, method: "POST", body: { p_project_id: project.id, p_email: mail("nuevo-en-medio") } });
+  await rest("rpc/unassign_executive", { token: adminA.token, method: "POST", body: { p_project_id: project.id, p_email: mail("nuevo-en-medio") } });
+  const seen = first.items.map((item) => item.id);
+  let cursor = first.next_cursor;
+  while (cursor) {
+    const page = (await api(`/staff/team/history?limit=3&cursor=${encodeURIComponent(cursor)}`, adminA.token)).json;
+    seen.push(...page.items.map((item) => item.id));
+    cursor = page.next_cursor;
+  }
+  assert.equal(new Set(seen).size, seen.length, "se repitió una entrada");
+});
+
+await step("Historial: quien no tiene nombre se muestra con su correo", async () => {
+  const target = await user("sin-nombre", "ejecutivo", tenantA.id);
+  const cleared = await admin(`/rest/v1/profiles?id=eq.${target.id}`, { method: "PATCH", body: { full_name: null } });
+  assert.ok(cleared.status < 300, cleared.text);
+  const log = await admin("/rest/v1/rpc/hu28_log_event", {
+    method: "POST",
+    body: { p_inmobiliaria: tenantA.id, p_actor: adminA.id, p_actor_role: "admin_inmobiliario", p_subject: target.id, p_event_type: "equipo.acceso_reactivado" },
+  });
+  assert.ok(log.status < 300, log.text);
+  const entry = (await api(`/staff/team/history?miembro_id=${target.id}`, adminA.token)).json.items[0];
+  assert.match(entry.segmentos.map((part) => part.texto).join(""), new RegExp(target.email.replace(/[.+]/g, "\\$&")));
+});
+
+await step("PostgREST: entre compañeros sólo se leen nombres", async () => {
+  assert.deepEqual((await rest("profiles?select=id", { token: adminA.token })).json.map((row) => row.id), [adminA.id]);
+  const names = await rest("rpc/list_staff_names", { token: adminA.token, method: "POST", body: { p_ids: [execA.id, execB.id, lead.id] } });
+  assert.equal(names.status, 200, names.text);
+  assert.deepEqual(names.json.map((row) => row.id), [execA.id]);
+  assert.deepEqual(Object.keys(names.json[0]).sort(), ["full_name", "id"]);
+  assert.equal((await rest("rpc/list_staff_names", { method: "POST", body: { p_ids: [execA.id] } })).status, 401);
+});
+
 await step("Backend: un acceso a medio aplicar se detecta y se reintenta", async () => {
   const target = await user("sync", "ejecutivo", tenantA.id);
   const banned = await admin(`/auth/v1/admin/users/${target.id}`, { method: "PUT", body: { ban_duration: "1h" } });
@@ -275,8 +313,67 @@ if (SB_FUNCTIONS) {
     assert.equal(current.estado, "invitado");
     assert.equal(current.correo_fallido, false);
     assert.equal(current.rol, "ejecutivo");
-    assert.deepEqual((await events(current.id)).map((item) => item.event_type), ["equipo.invitacion_enviada"]);
+    assert.deepEqual((await events(current.id)).map((item) => item.event_type), ["equipo.invitacion_creada", "equipo.invitacion_enviada"]);
   });
+
+  await step("GoTrue: abrir el enlace no termina la invitación; guardar la contraseña sí", async () => {
+    const email = mail("enlace");
+    const invited = await createExecutive(adminA.token, { email, full_name: "Con Enlace" });
+    const id = invited.json.ejecutivo.id;
+    const link = await admin("/auth/v1/admin/generate_link", { method: "POST", body: { type: "recovery", email } });
+    const opened = await fetch(link.json.action_link, { redirect: "manual" });
+    const token = new URLSearchParams(new URL(opened.headers.get("location")).hash.slice(1)).get("access_token");
+    assert.ok(token, "el enlace no abrió sesión");
+
+    const afterOpen = await member(adminA.token, id);
+    assert.equal(afterOpen.estado, "invitado");
+    assert.equal(afterOpen.ultimo_ingreso, null);
+    assert.equal((await createExecutive(adminA.token, { reenviar: true, miembro_id: id })).status, 200);
+
+    const saved = await http(`${SB_URL}/auth/v1/user`, { method: "PUT", token, body: { password: `${password}-nueva` } });
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal((await member(adminA.token, id)).estado, "activo");
+    const again = await createExecutive(adminA.token, { reenviar: true, miembro_id: id });
+    assert.equal(again.status, 409, again.text);
+    assert.match(again.json.error, /ya definió/);
+  });
+
+  if (process.env.HARNESS_AUDIT_FAIL_FILE) {
+    const failAudit = (type) => writeFileSync(process.env.HARNESS_AUDIT_FAIL_FILE, type);
+    const healAudit = () => rmSync(process.env.HARNESS_AUDIT_FAIL_FILE, { force: true });
+
+    await step("Edge Function: sin registro no queda una cuenta nueva", async () => {
+      const email = mail("sin-registro");
+      failAudit("equipo.invitacion_creada");
+      const res = await createExecutive(adminA.token, { email, full_name: "Sin Registro" });
+      healAudit();
+      assert.equal(res.status, 500, res.text);
+      const account = await rest("rpc/find_user_id_by_email", { key: SB_SERVICE, token: SB_SERVICE, method: "POST", body: { p_email: email } });
+      assert.equal(account.json, null, "la cuenta quedó sin registro");
+    });
+
+    await step("Edge Function: un resultado sin registrar queda visible y se puede reenviar", async () => {
+      const email = mail("sin-resultado");
+      failAudit("equipo.invitacion_enviada");
+      const res = await createExecutive(adminA.token, { email, full_name: "Sin Resultado" });
+      healAudit();
+      assert.equal(res.status, 500, res.text);
+      const account = await rest("rpc/find_user_id_by_email", { key: SB_SERVICE, token: SB_SERVICE, method: "POST", body: { p_email: email } });
+      const current = await member(adminA.token, account.json);
+      assert.equal(current.correo_fallido, true);
+      assert.equal((await createExecutive(adminA.token, { reenviar: true, miembro_id: account.json })).json.email_enviado, true);
+    });
+
+    await step("Edge Function: un reenvío sin registro no sale", async () => {
+      const created = await createExecutive(adminA.token, { email: mail("reenvio-sin-registro"), full_name: "Reenvío" });
+      const before = (await events(created.json.ejecutivo.id)).length;
+      failAudit("equipo.invitacion_creada");
+      const res = await createExecutive(adminA.token, { reenviar: true, miembro_id: created.json.ejecutivo.id });
+      healAudit();
+      assert.equal(res.status, 500, res.text);
+      assert.equal((await events(created.json.ejecutivo.id)).length, before);
+    });
+  }
 
   await step("Edge Function: un envío fallido conserva la cuenta y se reenvía", async () => {
     const email = mail("falla");
@@ -314,7 +411,7 @@ if (SB_FUNCTIONS) {
     assert.equal((await createExecutive(adminA.token, { reenviar: true, miembro_id: lead.id })).status, 404);
     const signedIn = await createExecutive(adminA.token, { reenviar: true, miembro_id: execA.id });
     assert.equal(signedIn.status, 409, signedIn.text);
-    assert.match(signedIn.json.error, /ya entró/);
+    assert.match(signedIn.json.error, /ya definió/);
 
     await api(`/staff/team/${execA.id}/access`, adminA.token, { method: "POST", body: { estado: "desactivado" } });
     const off = await createExecutive(adminA.token, { reenviar: true, miembro_id: execA.id });

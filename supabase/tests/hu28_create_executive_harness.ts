@@ -4,10 +4,24 @@
 //     deno run -A supabase/tests/hu28_create_executive_harness.ts
 //
 // Sólo intercepta la llamada a Resend: un destinatario con "falla" recibe un rechazo.
+// HARNESS_AUDIT_FAIL_FILE: si ese archivo existe, hu28_log_event falla para el tipo que contiene.
 const realFetch = globalThis.fetch;
+
+async function auditFails(body: string) {
+  const file = Deno.env.get("HARNESS_AUDIT_FAIL_FILE");
+  if (!file) return false;
+  try {
+    return JSON.parse(body).p_event_type === (await Deno.readTextFile(file)).trim();
+  } catch {
+    return false;
+  }
+}
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url.includes("/rpc/hu28_log_event") && await auditFails(String(init?.body))) {
+    return new Response(JSON.stringify({ message: "audit_unavailable" }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
   if (!url.startsWith("https://api.resend.com/")) return realFetch(input, init);
   const body = JSON.parse(String(init?.body));
   console.log(`resend from=${body.from} to=${body.to} subject=${body.subject}`);
