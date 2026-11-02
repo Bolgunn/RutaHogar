@@ -37,9 +37,15 @@ describe("team counters and filters", () => {
 });
 
 describe("deactivation warning", () => {
-  it("names only projects nobody active keeps", () => {
-    expect(projectsLeftUncovered(camila, team)).toEqual([sur]);
-    expect(projectsLeftUncovered(diego, team)).toEqual([]);
+  it("names projects nobody active keeps, and an invited person keeps none", () => {
+    expect(projectsLeftUncovered(camila, team)).toEqual([altos, sur]);
+    const activo = { ...diego, estado: "activo" };
+    expect(projectsLeftUncovered(camila, [camila, activo, tomas])).toEqual([sur]);
+  });
+
+  it("leaves out agotado projects", () => {
+    const agotado = { id: "p3", nombre: "Agotado", estado: "agotado" };
+    expect(projectsLeftUncovered({ ...camila, proyectos: [agotado] }, team)).toEqual([]);
   });
 });
 

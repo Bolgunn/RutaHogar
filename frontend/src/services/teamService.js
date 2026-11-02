@@ -16,7 +16,7 @@ const member = (id) => `/${encodeURIComponent(id)}`;
 
 export const getTeam = (inmobiliariaId) => trackingRequest(teamPath("", inmobiliariaId), undefined);
 
-export const getTeamHistory = (inmobiliariaId, { miembroId, cursor = 0 } = {}) =>
+export const getTeamHistory = (inmobiliariaId, { miembroId, cursor } = {}) =>
   trackingRequest(teamPath("/history", inmobiliariaId, { miembro_id: miembroId, cursor }), undefined);
 
 export const updateTeamMember = (id, datos, inmobiliariaId) =>

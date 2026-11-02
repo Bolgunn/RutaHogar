@@ -41,10 +41,11 @@ export function filterMembers(members = [], filter = "todos", query = "") {
     && (!needle || `${member.nombre || ""} ${member.email || ""}`.toLowerCase().includes(needle)));
 }
 
-// Proyectos que perderían a su único ejecutivo activo si esta persona se desactiva.
+// Proyectos que quedan sin ejecutivo activo si esta persona se desactiva. Quien sigue invitado no
+// atiende leads, y un proyecto agotado ya no los necesita.
 export function projectsLeftUncovered(member, members = []) {
-  return (member?.proyectos || []).filter((project) => !members.some((other) =>
-    other.id !== member.id && other.estado !== "desactivado"
+  return (member?.proyectos || []).filter((project) => project.estado !== "agotado" && !members.some((other) =>
+    other.id !== member.id && other.estado === "activo"
     && (other.proyectos || []).some((assigned) => assigned.id === project.id)));
 }
 

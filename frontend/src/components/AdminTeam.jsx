@@ -401,7 +401,7 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
     getInmobiliarias().then(setInmobiliarias).catch((error) => setLoadError(error.message || "No se pudieron cargar las inmobiliarias."));
   }, [globalAdmin]);
 
-  const loadHistory = useCallback(async (cursor = 0) => {
+  const loadHistory = useCallback(async (cursor) => {
     const request = ++historyRequest.current;
     setHistory((current) => ({ ...current, loading: true, error: "" }));
     try {

@@ -158,9 +158,9 @@ async function fetchExecutiveNames(ejecutivoIds) {
   const ids = [...new Set(ejecutivoIds.filter(Boolean))];
   if (!ids.length) return {};
 
-  const { data, error } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+  const { data, error } = await supabase.rpc("list_staff_names", { p_ids: ids });
   if (error) {
-    // RLS puede ocultar perfiles de otro tenant: se muestra el correo y listo.
+    // Sólo llegan nombres del propio equipo: de cualquier otro se muestra el correo y listo.
     logSupabaseError(error);
     return {};
   }
