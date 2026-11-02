@@ -20,6 +20,8 @@ def _shared_client(base_url):
 
 
 CO_DEBTOR_INVITATION_SELECTION_LIMIT = 10
+# GoTrue has no permanent ban; a century outlives any account.
+AUTH_BAN_DURATION = "876000h"
 
 
 def select_current_co_debtor_invitation(rows):
@@ -59,7 +61,11 @@ class TrackingRepository:
             # 23505 = unique_violation; only callers that expect a race opt into mapping it.
             if conflict_error and body.get("code") == "23505":
                 raise TrackingError(conflict_error)
-            allowed = {"idempotency_conflict", "lineage_conflict", "owner_mismatch", "not_found", "verifiable_data_contradiction"}
+            allowed = {
+                "idempotency_conflict", "lineage_conflict", "owner_mismatch", "not_found",
+                "verifiable_data_contradiction", "self_change_forbidden", "last_active_admin",
+                "member_deactivated",
+            }
             raise TrackingError(message if message in allowed else "persistence_unavailable")
         return response.json()
 
@@ -107,10 +113,11 @@ class TrackingRepository:
     def staff_actor(self, token):
         """Authenticate the caller and read its server-side staff scope."""
         user_id = self.authenticate(token)
-        query = urlencode({"id": f"eq.{user_id}", "select": "id,role,inmobiliaria_id"})
+        query = urlencode({"id": f"eq.{user_id}", "select": "id,role,inmobiliaria_id,estado_acceso"})
         rows = self.request("GET", f"/rest/v1/profiles?{query}")
         actor = rows[0] if isinstance(rows, list) and rows else None
-        if not actor:
+        # HU 28: same as get_my_role(), which the database no longer answers for this account.
+        if not actor or actor.get("estado_acceso") == "desactivado":
             raise TrackingError("owner_mismatch")
         return actor
 
@@ -198,6 +205,57 @@ class TrackingRepository:
         })
         rows = self.request("GET", f"/rest/v1/proyectos?{query}")
         return {row["id"]: row.get("estado") for row in rows if row.get("id")}
+
+    def team(self, inmobiliaria_id):
+        return self.request("POST", "/rest/v1/rpc/hu28_list_team", payload={"p_inmobiliaria": inmobiliaria_id})
+
+    def team_has_member(self, inmobiliaria_id, member_id):
+        query = urlencode({
+            "id": f"eq.{member_id}",
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            "role": "in.(ejecutivo,admin,admin_inmobiliario)",
+            "select": "id",
+        })
+        return bool(self.request("GET", f"/rest/v1/profiles?{query}"))
+
+    def team_update_member(self, inmobiliaria_id, member_id, nombre, telefono, actor):
+        return self.request("POST", "/rest/v1/rpc/hu28_update_member", payload={
+            "p_inmobiliaria": inmobiliaria_id, "p_member": member_id, "p_nombre": nombre,
+            "p_telefono": telefono, "p_actor": actor["id"], "p_actor_role": actor["role"],
+        })
+
+    def team_set_role(self, inmobiliaria_id, member_id, rol, actor):
+        return self.request("POST", "/rest/v1/rpc/hu28_set_member_role", payload={
+            "p_inmobiliaria": inmobiliaria_id, "p_member": member_id, "p_rol": rol,
+            "p_actor": actor["id"], "p_actor_role": actor["role"],
+        })
+
+    def team_set_access(self, inmobiliaria_id, member_id, estado, actor):
+        return self.request("POST", "/rest/v1/rpc/hu28_set_member_access", payload={
+            "p_inmobiliaria": inmobiliaria_id, "p_member": member_id, "p_estado": estado,
+            "p_actor": actor["id"], "p_actor_role": actor["role"],
+        })
+
+    def set_auth_ban(self, member_id, banned):
+        duration = AUTH_BAN_DURATION if banned else "none"
+        try:
+            self.request("PUT", f"/auth/v1/admin/users/{member_id}", payload={"ban_duration": duration})
+        except TrackingError:
+            raise TrackingError("auth_sync_failed") from None
+
+    def team_events(self, inmobiliaria_id, member_id, offset, limit):
+        filters = {
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            # Deactivating logs one line that names its projects; the per-project rows are for audit.
+            "details->>por_desactivacion": "is.null",
+            "select": "id,occurred_at,actor_id,subject_user_id,event_type,before,after,details",
+            "order": "occurred_at.desc,id.desc",
+            "offset": offset,
+            "limit": limit,
+        }
+        if member_id:
+            filters["subject_user_id"] = f"eq.{member_id}"
+        return self.request("GET", f"/rest/v1/audit_events?{urlencode(filters)}")
 
     def staff_lead_evaluations(self, lead_id):
         query = urlencode({"user_id": f"eq.{lead_id}", "select": "financial_data,created_at"})

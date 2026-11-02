@@ -12,6 +12,7 @@ from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, 
 from .repository import TrackingRepository
 from .service import TrackingService, client_tracking_view
 from .staff import StaffLeadService
+from .team import TeamService
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 bearer = HTTPBearer(auto_error=False)
@@ -34,7 +35,8 @@ def checked(call):
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
             "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
             "co_debtor_consent_revoked": 409, "co_debtor_confirmation_already_applied": 409,
-            "config_version_conflict": 409,
+            "config_version_conflict": 409, "self_change_forbidden": 409, "last_active_admin": 409,
+            "member_deactivated": 409, "auth_sync_failed": 503,
         }.get(error.code, 422)
         raise HTTPException(status_code=status, detail={"code": error.code}) from None
 
@@ -134,6 +136,67 @@ def staff_commercial_config_preview(command: CommercialConfigCommand, ctx=Depend
 def staff_commercial_config_save(command: CommercialConfigCommand, ctx=Depends(commercial_config_context)):
     token, service = ctx
     return checked(lambda: service.save_config(token, command.model_dump()))
+
+
+def team_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                 repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, TeamService(repo)
+
+
+class TeamMemberUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    nombre: str = Field(min_length=1, max_length=160)
+    telefono: str = Field(default="", max_length=20)
+
+
+class TeamRoleCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rol: Literal["ejecutivo", "admin_inmobiliario"]
+
+
+class TeamAccessCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    estado: Literal["activo", "desactivado"]
+
+
+@router.get("/staff/team")
+def staff_team(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.team(token, inmobiliaria_id))
+
+
+@router.get("/staff/team/history")
+def staff_team_history(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None,
+                       miembro_id: UUID | None = None,
+                       cursor: Annotated[int, Query(ge=0)] = 0,
+                       limit: Annotated[int, Query(ge=1, le=200)] = 50):
+    token, service = ctx
+    member = str(miembro_id) if miembro_id else None
+    return checked(lambda: service.history(token, member, cursor, limit, inmobiliaria_id))
+
+
+@router.patch("/staff/team/{member_id}")
+def staff_team_update(member_id: UUID, command: TeamMemberUpdate, ctx=Depends(team_context),
+                      inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.update_member(
+        token, str(member_id), command.nombre, command.telefono, inmobiliaria_id))
+
+
+@router.post("/staff/team/{member_id}/role")
+def staff_team_role(member_id: UUID, command: TeamRoleCommand, ctx=Depends(team_context),
+                    inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.set_role(token, str(member_id), command.rol, inmobiliaria_id))
+
+
+@router.post("/staff/team/{member_id}/access")
+def staff_team_access(member_id: UUID, command: TeamAccessCommand, ctx=Depends(team_context),
+                      inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.set_access(token, str(member_id), command.estado, inmobiliaria_id))
 
 
 @router.get("/staff/leads/{lead_id}")
