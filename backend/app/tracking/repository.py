@@ -218,14 +218,6 @@ class TrackingRepository:
         })
         return bool(self.request("GET", f"/rest/v1/profiles?{query}"))
 
-    def team_member_names(self, inmobiliaria_id):
-        query = urlencode({
-            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
-            "role": "in.(ejecutivo,admin,admin_inmobiliario)",
-            "select": "id,full_name",
-        })
-        return {row["id"]: row.get("full_name") for row in self.request("GET", f"/rest/v1/profiles?{query}")}
-
     def team_update_member(self, inmobiliaria_id, member_id, nombre, telefono, actor):
         return self.request("POST", "/rest/v1/rpc/hu28_update_member", payload={
             "p_inmobiliaria": inmobiliaria_id, "p_member": member_id, "p_nombre": nombre,
@@ -251,18 +243,25 @@ class TrackingRepository:
         except TrackingError:
             raise TrackingError("auth_sync_failed") from None
 
-    def team_events(self, inmobiliaria_id, member_id, offset, limit):
+    def team_events(self, inmobiliaria_id, member_id, after, limit):
         filters = {
             "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            # A send attempt is not a change; its result is the entry people read.
+            "event_type": "neq.equipo.invitacion_creada",
             # Deactivating logs one line that names its projects; the per-project rows are for audit.
             "details->>por_desactivacion": "is.null",
             "select": "id,occurred_at,actor_id,subject_user_id,event_type,before,after,details",
             "order": "occurred_at.desc,id.desc",
-            "offset": offset,
             "limit": limit,
         }
         if member_id:
             filters["subject_user_id"] = f"eq.{member_id}"
+        else:
+            # The team already shows this assignment from when it was created pending, by email.
+            filters["details->>por_vinculacion"] = "is.null"
+        if after:
+            occurred_at, entry_id = after
+            filters["or"] = f'(occurred_at.lt."{occurred_at}",and(occurred_at.eq."{occurred_at}",id.lt.{entry_id}))'
         return self.request("GET", f"/rest/v1/audit_events?{urlencode(filters)}")
 
     def staff_lead_evaluations(self, lead_id):

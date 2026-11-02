@@ -170,7 +170,7 @@ def staff_team(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None):
 @router.get("/staff/team/history")
 def staff_team_history(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None,
                        miembro_id: UUID | None = None,
-                       cursor: Annotated[int, Query(ge=0)] = 0,
+                       cursor: Annotated[str | None, Query(max_length=80)] = None,
                        limit: Annotated[int, Query(ge=1, le=200)] = 50):
     token, service = ctx
     member = str(miembro_id) if miembro_id else None

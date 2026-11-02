@@ -34,6 +34,7 @@ def member(member_id, rol="ejecutivo", estado="activo", ingreso="2026-11-01T10:0
     return {
         "id": member_id, "nombre": member_id, "email": f"{member_id}@example.invalid", "telefono": None,
         "rol": rol, "estado_acceso": estado, "ultimo_ingreso": ingreso,
+        "password_pendiente": ingreso is None,
         "invitado_en": "2026-10-30T10:00:00+00:00", "correo_fallido": False, "proyectos": list(proyectos),
     }
 
@@ -44,8 +45,8 @@ class FakeRepository:
         self.ban_error = None
         self.members = {
             TENANT: {
-                ADMIN: member(ADMIN, "admin_inmobiliario"),
-                EXEC: member(EXEC, proyectos=[PROJECT]),
+                ADMIN: {**member(ADMIN, "admin_inmobiliario"), "nombre": "Ana Admin"},
+                EXEC: {**member(EXEC, proyectos=[PROJECT]), "nombre": "Eva Exec"},
             },
             OTHER_TENANT: {FOREIGN_EXEC: member(FOREIGN_EXEC)},
         }
@@ -83,21 +84,21 @@ class FakeRepository:
         if self.ban_error:
             raise TrackingError(self.ban_error)
 
-    def team_events(self, tenant, member_id, offset, limit):
-        self.calls.append(("events", tenant, member_id, offset, limit))
+    def team_events(self, tenant, member_id, after, limit):
+        self.calls.append(("events", tenant, member_id, after, limit))
         rows = [
-            {"id": str(index), "occurred_at": "2026-11-01T10:00:00+00:00", "actor_id": ADMIN,
-             "subject_user_id": EXEC, "event_type": "equipo.proyecto_asignado", "details": {"proyecto": "Altos", "origen": "proyectos"}}
-            for index in range(3)
+            {"id": f"dddddddd-0000-4000-8000-00000000000{index}", "occurred_at": "2026-11-01T10:00:00+00:00",
+             "actor_id": ADMIN, "subject_user_id": EXEC, "event_type": "equipo.proyecto_asignado",
+             "details": {"proyecto": "Altos", "origen": "proyectos"}}
+            for index in (3, 2, 1)
         ]
-        return rows[offset:offset + limit]
+        if after:
+            rows = [row for row in rows if row["id"] < after[1]]
+        return rows[:limit]
 
     def staff_contacts(self, ids):
         self.calls.append(("contacts", sorted(id_ for id_ in ids if id_)))
-        return {ADMIN: {"full_name": "Ana Admin"}}
-
-    def team_member_names(self, tenant):
-        return {member_id: "Eva Exec" for member_id in self.members[tenant] if member_id == EXEC}
+        return {}
 
 
 def call(fake, method, path, token="admin-a", **kwargs):
@@ -200,6 +201,29 @@ def test_deactivated_people_do_not_cover_a_project():
     assert view["proyectos_sin_ejecutivo"] == [PROJECT]
 
 
+def test_someone_still_invited_does_not_cover_a_project():
+    view = team_view({"miembros": [member("a", ingreso=None, proyectos=[PROJECT])], "proyectos": [PROJECT]}, {"id": "x"})
+    assert view["proyectos_sin_ejecutivo"] == [PROJECT]
+
+
+def test_agotado_projects_need_no_executive():
+    agotado = {**UNCOVERED, "estado": "agotado"}
+    view = team_view({"miembros": [], "proyectos": [agotado]}, {"id": "x"})
+    assert view["proyectos_sin_ejecutivo"] == []
+
+
+def test_an_opened_link_is_not_a_finished_invitation():
+    opened = {**member("a"), "password_pendiente": True}
+    assert member_status(opened) == "invitado"
+
+
+def test_an_admin_who_never_finished_does_not_count_as_active():
+    pending = member("b", "admin_inmobiliario", ingreso=None)
+    view = team_view({"miembros": [member("a", "admin_inmobiliario"), pending], "proyectos": []}, {"id": "x"})
+    assert view["miembros"][0]["bloqueo"] == "ultimo_administrador"
+    assert view["miembros"][1]["bloqueo"] is None
+
+
 def test_status_is_derived_from_sign_in():
     assert member_status(member("a", ingreso=None)) == "invitado"
     assert member_status(member("a")) == "activo"
@@ -279,17 +303,33 @@ def test_update_requires_a_name_and_only_touches_organizational_data():
 
 def test_history_is_paginated_and_named():
     fake = FakeRepository()
-    body = call(fake, "GET", f"/staff/team/history?limit=2&miembro_id={EXEC}").json()
-    assert fake.calls[0] == ("events", TENANT, EXEC, 0, 3)
-    assert body["next_cursor"] == 2
+    body = call(fake, "GET", "/staff/team/history", params={"limit": 2, "miembro_id": EXEC}).json()
+    assert fake.calls[0] == ("events", TENANT, EXEC, None, 3)
     entry = body["items"][0]
     assert entry["actor_nombre"] == "Ana Admin"
     assert entry["origen"] == "Desde Proyectos"
     assert [part["texto"] for part in entry["segmentos"]] == ["asignó ", "Altos", " a ", "Eva Exec"]
 
-    last = call(fake, "GET", "/staff/team/history?limit=2&cursor=2").json()
-    assert len(last["items"]) == 1
+    last = call(fake, "GET", "/staff/team/history", params={"limit": 2, "cursor": body["next_cursor"]}).json()
+    seen = [item["id"] for item in body["items"] + last["items"]]
+    assert len(seen) == len(set(seen)) == 3
     assert last["next_cursor"] is None
+
+
+@pytest.mark.parametrize("cursor", ["2", "nada|nada", "2026-11-01T10:00:00+00:00|no-uuid", "a|b|c"])
+def test_a_malformed_cursor_is_refused(cursor):
+    fake = FakeRepository()
+    response = call(fake, "GET", "/staff/team/history", params={"cursor": cursor})
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_cursor"
+    assert fake.calls == []
+
+
+def test_a_member_without_a_name_shows_their_email():
+    fake = FakeRepository()
+    fake.members[TENANT][EXEC]["nombre"] = None
+    entry = call(fake, "GET", "/staff/team/history").json()["items"][0]
+    assert entry["segmentos"][-1]["texto"] == f"{EXEC}@example.invalid"
 
 
 @pytest.mark.parametrize("details,expected", [
@@ -297,6 +337,7 @@ def test_history_is_paginated_and_named():
     ({"proyecto": "Altos", "email": "alguien@example.invalid"}, "alguien@example.invalid"),
 ])
 def test_history_names_only_this_team(details, expected):
+    # A former member or anyone else named by email has no name here.
     fake = FakeRepository()
     outsider = {"id": "1", "occurred_at": "2026-11-01T10:00:00+00:00", "actor_id": ADMIN,
                 "subject_user_id": FOREIGN_EXEC, "event_type": "equipo.proyecto_asignado", "details": details}
@@ -304,7 +345,7 @@ def test_history_names_only_this_team(details, expected):
     entry = call(fake, "GET", "/staff/team/history").json()["items"][0]
     assert entry["segmentos"][-1]["texto"] == expected
     assert entry["miembro_id"] is None
-    assert ("contacts", [ADMIN]) in fake.calls, "a subject's profile is never looked up"
+    assert not any(FOREIGN_EXEC in str(item) for item in fake.calls if item[0] == "contacts")
 
 
 @pytest.mark.parametrize("estado,baneado,expected", [
@@ -325,6 +366,7 @@ def test_access_out_of_sync_with_the_ban(estado, baneado, expected):
     ({"event_type": "equipo.miembro_vinculado"}, "vinculó a Eva al equipo como Ejecutivo"),
     ({"event_type": "equipo.rol_cambiado", "before": {"rol": "ejecutivo"}, "after": {"rol": "admin_inmobiliario"}},
      "cambió la función de Eva de Ejecutivo a Administrador inmobiliario"),
+    ({"event_type": "equipo.rol_cambiado", "details": {"traslado": True}}, "trasladó a Eva a otra inmobiliaria"),
     ({"event_type": "equipo.datos_actualizados"}, "actualizó los datos de Eva"),
     ({"event_type": "equipo.acceso_desactivado", "details": {"proyectos": [{"nombre": "Altos"}, {"nombre": "Sur"}]}},
      "desactivó a Eva y retiró sus proyectos: Altos, Sur"),
