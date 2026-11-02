@@ -334,4 +334,46 @@ begin
     and event_type = 'equipo.rol_cambiado' and actor_id = global_admin and after ->> 'rol' = 'admin_inmobiliario'), 'assign_admin not logged';
 end $$;
 
+-- A pending assignment never links an account outside the team.
+do $$
+declare
+  admin1 uuid := 'c2800000-0000-0000-0000-000000000001';
+  uno uuid := 'b2800000-0000-0000-0000-000000000001';
+begin
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', admin1::text, true);
+  perform public.assign_executive(uno, 'hu28-lead@example.invalid');
+  perform public.assign_executive(uno, 'hu28-other-admin@example.invalid');
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  assert (select count(*) from public.audit_events where entity_id = uno and event_type = 'equipo.proyecto_asignado'
+    and subject_user_id is null and details ->> 'email' in ('hu28-lead@example.invalid', 'hu28-other-admin@example.invalid')) = 2,
+    'a pending assignment linked someone outside the team';
+end $$;
+
+-- The list reports the ban, and assign_admin leaves a buyer's account alone.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  exec2 uuid := 'c2800000-0000-0000-0000-000000000004';
+  lead uuid := 'c2800000-0000-0000-0000-000000000007';
+  global_admin uuid := 'c2800000-0000-0000-0000-000000000008';
+  v_member jsonb;
+begin
+  update auth.users set banned_until = now() + interval '1 day' where id = exec2;
+  select m into v_member from jsonb_array_elements(public.hu28_list_team(a) -> 'miembros') m where m ->> 'id' = exec2::text;
+  assert (v_member ->> 'baneado')::boolean, 'ban not reported';
+  update auth.users set banned_until = now() - interval '1 day' where id = exec2;
+  select m into v_member from jsonb_array_elements(public.hu28_list_team(a) -> 'miembros') m where m ->> 'id' = exec2::text;
+  assert not (v_member ->> 'baneado')::boolean, 'an expired ban is not a ban';
+
+  insert into public.evaluations(user_id, score, classification) values (lead, 60, 'Medio');
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', global_admin::text, true);
+  perform pg_temp.expect_error(format('select public.assign_admin(%L, %L)', a, 'hu28-lead@example.invalid'), 'comprador');
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  assert (select role from public.profiles where id = lead) = 'usuario';
+end $$;
+
 rollback;
