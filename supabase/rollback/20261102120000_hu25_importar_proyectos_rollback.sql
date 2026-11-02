@@ -3,7 +3,7 @@
 -- catálogo y se quedan donde están.
 begin;
 
-revoke all on function public.importar_proyectos(uuid, jsonb) from public, anon, authenticated;
-drop function if exists public.importar_proyectos(uuid, jsonb);
+revoke all on function public.importar_proyectos(jsonb) from public, anon, authenticated;
+drop function if exists public.importar_proyectos(jsonb);
 
 commit;

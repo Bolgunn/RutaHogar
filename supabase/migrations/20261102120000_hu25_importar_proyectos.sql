@@ -10,9 +10,10 @@
 --   "Proyectos insert/update admin tenant". La función no otorga nada que un
 --   insert directo no permita, y la regla de tenant sigue viviendo en un solo
 --   lugar.
--- · El tenant sale de la sesión. El argumento solo lo usa el admin global, que
---   no tiene inmobiliaria propia; un admin de inmobiliaria siempre escribe en
---   la suya, diga lo que diga quien llama.
+-- · El tenant sale siempre de la sesión: no hay argumento para elegirlo, y una
+--   clave inmobiliaria_id dentro de una fila se ignora. El admin global, que no
+--   tiene inmobiliaria propia, recibe forbidden; cargar proyectos para un
+--   cliente desde RutaHogar es otra historia.
 -- · Un nombre ya existente en la inmobiliaria (sin distinguir mayúsculas)
 --   actualiza ese proyecto; si no, se crea. Es la misma identidad del índice
 --   proyectos_nombre_por_inmobiliaria_idx.
@@ -21,7 +22,7 @@
 -- Se aplica después del merge con `supabase db push` (nunca en el editor SQL).
 begin;
 
-create or replace function public.importar_proyectos(p_inmobiliaria uuid, p_proyectos jsonb)
+create or replace function public.importar_proyectos(p_proyectos jsonb)
 returns jsonb
 language plpgsql
 volatile
@@ -29,7 +30,7 @@ security invoker
 set search_path = public
 as $$
 declare
-  v_tenant uuid := coalesce(public.get_my_inmobiliaria(), p_inmobiliaria);
+  v_tenant uuid := public.get_my_inmobiliaria();
   v_creados integer;
   v_actualizados integer;
 begin
@@ -98,7 +99,7 @@ begin
 end;
 $$;
 
-revoke all on function public.importar_proyectos(uuid, jsonb) from public, anon, authenticated;
-grant execute on function public.importar_proyectos(uuid, jsonb) to authenticated;
+revoke all on function public.importar_proyectos(jsonb) from public, anon, authenticated;
+grant execute on function public.importar_proyectos(jsonb) to authenticated;
 
 commit;

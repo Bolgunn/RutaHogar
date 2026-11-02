@@ -3540,7 +3540,7 @@ EXECUTE FUNCTION public.check_ml_fraud_on_insert();
 -- SECURITY INVOKER: las policies de proyectos deciden cada fila.
 -- =============================================================
 
-create or replace function public.importar_proyectos(p_inmobiliaria uuid, p_proyectos jsonb)
+create or replace function public.importar_proyectos(p_proyectos jsonb)
 returns jsonb
 language plpgsql
 volatile
@@ -3548,7 +3548,7 @@ security invoker
 set search_path = public
 as $$
 declare
-  v_tenant uuid := coalesce(public.get_my_inmobiliaria(), p_inmobiliaria);
+  v_tenant uuid := public.get_my_inmobiliaria();
   v_creados integer;
   v_actualizados integer;
 begin
@@ -3617,5 +3617,5 @@ begin
 end;
 $$;
 
-revoke all on function public.importar_proyectos(uuid, jsonb) from public, anon, authenticated;
-grant execute on function public.importar_proyectos(uuid, jsonb) to authenticated;
+revoke all on function public.importar_proyectos(jsonb) from public, anon, authenticated;
+grant execute on function public.importar_proyectos(jsonb) to authenticated;

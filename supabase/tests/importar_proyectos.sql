@@ -28,12 +28,12 @@ insert into public.profiles(id, role, inmobiliaria_id) values
   ('c2500000-0000-0000-0000-000000000005', 'usuario', null);
 
 -- Raises unless the call fails with the given SQLSTATE (and message, when given).
-create function public.hu25_expect_error(p_inmobiliaria uuid, p_rows jsonb, p_sqlstate text, p_message text default null)
+create function public.hu25_expect_error(p_rows jsonb, p_sqlstate text, p_message text default null)
 returns void
 language plpgsql
 as $$
 begin
-  perform public.importar_proyectos(p_inmobiliaria, p_rows);
+  perform public.importar_proyectos(p_rows);
   raise exception 'expected % but the call succeeded', p_sqlstate;
 exception
   when others then
@@ -48,7 +48,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
 do $$
 declare
-  v_result jsonb := public.importar_proyectos(null, '[
+  v_result jsonb := public.importar_proyectos('[
     {"nombre": "HU25 Nuevo Uno", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 4500,
      "estado": "disponible", "descripcion": "Vista a la cordillera", "entrega_estimada": "2027-06"},
     {"nombre": "HU25 Nuevo Dos", "comuna": "Macul", "tipo": "casa", "precio_min_uf": 2800, "precio_max_uf": 2800,
@@ -76,7 +76,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
 do $$
 declare
-  v_result jsonb := public.importar_proyectos(null, '[
+  v_result jsonb := public.importar_proyectos('[
     {"nombre": "hu25 existente", "comuna": "Macul", "tipo": "casa", "precio_min_uf": 2600, "precio_max_uf": 3600, "estado": "agotado"},
     {"nombre": "HU25 Nuevo Tres", "comuna": "Santiago", "tipo": "departamento", "precio_min_uf": 2000, "precio_max_uf": 2500, "estado": "disponible"}
   ]');
@@ -96,11 +96,12 @@ begin
 end;
 $$;
 
--- Case 3: a tenant admin naming another inmobiliaria still writes to their own.
+-- Case 3: an inmobiliaria_id inside a row is ignored; an admin of A (role admin) writes to A.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000002', true);
-select public.importar_proyectos('a2500000-0000-0000-0000-000000000002', '[
-  {"nombre": "HU25 Intento B", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
+select public.importar_proyectos('[
+  {"nombre": "HU25 Intento B", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible",
+   "inmobiliaria_id": "a2500000-0000-0000-0000-000000000002"}
 ]');
 reset role;
 do $$
@@ -115,15 +116,15 @@ $$;
 -- Case 4: one row breaking a check aborts the call; its valid neighbour is not written.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
-select public.hu25_expect_error(null, '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Valido", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"},
   {"nombre": "HU25 Rango", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 5000, "precio_max_uf": 3100, "estado": "disponible"}
 ]', '23514');
-select public.hu25_expect_error(null, '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Valido", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"},
   {"nombre": "HU25 Entrega", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible", "entrega_estimada": "jun-27"}
 ]', '23514');
-select public.hu25_expect_error(null, '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Valido", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"},
   {"nombre": "HU25 Tipo", "comuna": "Ñuñoa", "tipo": "oficina", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
 ]', '23514');
@@ -138,7 +139,7 @@ $$;
 -- Case 5: a name repeated inside one call aborts it.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
-select public.hu25_expect_error(null, '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Repetido", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"},
   {"nombre": " hu25 repetido ", "comuna": "Macul", "tipo": "casa", "precio_min_uf": 2000, "precio_max_uf": 2100, "estado": "disponible"}
 ]', '22023', 'nombre_repetido');
@@ -149,39 +150,36 @@ begin
 end;
 $$;
 
--- Case 6: the global admin writes where they say; without a target it is forbidden.
+-- Case 6: the global admin has no inmobiliaria of their own, so the load is forbidden even
+-- when a row names one.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000003', true);
-select public.importar_proyectos('a2500000-0000-0000-0000-000000000002', '[
-  {"nombre": "HU25 Global B", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
-]');
-select public.hu25_expect_error(null, '[
-  {"nombre": "HU25 Global sin destino", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
+select public.hu25_expect_error('[
+  {"nombre": "HU25 Global", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible",
+   "inmobiliaria_id": "a2500000-0000-0000-0000-000000000002"}
 ]', '42501', 'forbidden');
 reset role;
 do $$
 begin
-  assert (select inmobiliaria_id = 'a2500000-0000-0000-0000-000000000002' from public.proyectos where nombre = 'HU25 Global B'),
-    'case 6: global admin wrote to B';
-  assert not exists (select 1 from public.proyectos where nombre = 'HU25 Global sin destino'), 'case 6: nothing without target';
+  assert not exists (select 1 from public.proyectos where nombre = 'HU25 Global'), 'case 6: nothing written';
 end;
 $$;
 
 -- Case 7: ejecutivo and lead are forbidden; anon cannot execute.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000004', true);
-select public.hu25_expect_error('a2500000-0000-0000-0000-000000000001', '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Ejecutivo", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
 ]', '42501', 'forbidden');
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000005', true);
-select public.hu25_expect_error('a2500000-0000-0000-0000-000000000001', '[
+select public.hu25_expect_error('[
   {"nombre": "HU25 Lead", "comuna": "Ñuñoa", "tipo": "departamento", "precio_min_uf": 3000, "precio_max_uf": 3100, "estado": "disponible"}
 ]', '42501', 'forbidden');
 reset role;
 do $$
 begin
-  assert not has_function_privilege('anon', 'public.importar_proyectos(uuid, jsonb)', 'execute'), 'case 7: anon cannot execute';
-  assert has_function_privilege('authenticated', 'public.importar_proyectos(uuid, jsonb)', 'execute'), 'case 7: authenticated can';
+  assert not has_function_privilege('anon', 'public.importar_proyectos(jsonb)', 'execute'), 'case 7: anon cannot execute';
+  assert has_function_privilege('authenticated', 'public.importar_proyectos(jsonb)', 'execute'), 'case 7: authenticated can';
   assert not exists (select 1 from public.proyectos where nombre in ('HU25 Ejecutivo', 'HU25 Lead')), 'case 7: nothing written';
 end;
 $$;
@@ -189,11 +187,11 @@ $$;
 -- Case 8: empty, non-array, a non-object element, a blank name and 501 rows are rejected.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
-select public.hu25_expect_error(null, '[]', '22023', 'invalid_import');
-select public.hu25_expect_error(null, '{"nombre": "HU25 Objeto"}', '22023', 'invalid_import');
-select public.hu25_expect_error(null, '[1]', '22023', 'invalid_import');
-select public.hu25_expect_error(null, '[{"nombre": "  ", "comuna": "Ñuñoa"}]', '22023', 'invalid_import');
-select public.hu25_expect_error(null, (
+select public.hu25_expect_error('[]', '22023', 'invalid_import');
+select public.hu25_expect_error('{"nombre": "HU25 Objeto"}', '22023', 'invalid_import');
+select public.hu25_expect_error('[1]', '22023', 'invalid_import');
+select public.hu25_expect_error('[{"nombre": "  ", "comuna": "Ñuñoa"}]', '22023', 'invalid_import');
+select public.hu25_expect_error((
   select jsonb_agg(jsonb_build_object(
     'nombre', 'HU25 Masivo ' || n, 'comuna', 'Ñuñoa', 'tipo', 'departamento',
     'precio_min_uf', 3000, 'precio_max_uf', 3100, 'estado', 'disponible'))
