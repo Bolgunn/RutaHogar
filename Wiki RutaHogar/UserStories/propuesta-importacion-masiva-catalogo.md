@@ -89,7 +89,7 @@ Construida en [[HU25-carga-masiva-proyectos|HU 25]], pendiente de merge.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
-| `E1` | ⚠️ | Plantilla CSV y validación completa antes de escribir: `lib/catalog/projectImport.js`, que reutiliza `validateProject()`. |
+| `E1` | ⚠️ | Plantillas Excel (.xlsx) y CSV, y validación completa antes de escribir: `lib/catalog/projectImport.js`, que reutiliza `validateProject()`. |
 | `E2` | ⚠️ | Confirmación explícita y escritura todo o nada en `importar_proyectos()`; informa creados y actualizados. |
 | `E3` | ⚠️ | El tenant sale de la sesión; una columna `inmobiliaria_id` se ignora. Casos SQL 3 y 6. |
 | `E4` | ❌ | Depende de [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]]. |
