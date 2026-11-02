@@ -478,7 +478,7 @@ export default function AdminSupportTickets() {
                     </p>
                     {selectedTicket.admin_reply && (
                       <div style={{ marginTop: "10px", borderTop: "1px dashed #cbd5e1", paddingTop: "8px" }}>
-                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#065f46" }}>
+                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#132b4a" }}>
                           ✓ Soporte RutaHogar:
                         </span>
                         <p style={{ margin: "4px 0 0" }}>{selectedTicket.admin_reply}</p>

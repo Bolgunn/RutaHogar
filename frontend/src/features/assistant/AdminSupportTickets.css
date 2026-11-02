@@ -118,8 +118,8 @@
 }
 
 .admin-tickets-tab.active {
-  color: #246354;
-  background: #ecfdf5;
+  color: #132b4a;
+  background: #e8edf5;
 }
 
 /* Alerts */
@@ -153,7 +153,7 @@
   width: 28px;
   height: 28px;
   border: 3px solid #e2e8f0;
-  border-top-color: #246354;
+  border-top-color: #132b4a;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 12px;
@@ -361,12 +361,12 @@
 }
 
 .admin-ticket-view-btn {
-  background: #246354;
+  background: #132b4a;
   color: #ffffff;
   border: none;
   border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.76rem;
+  padding: 6px 14px;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -374,7 +374,8 @@
 }
 
 .admin-ticket-view-btn:hover {
-  background: #1b4d41;
+  background: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(19, 43, 74, 0.25);
 }
 
 /* Modal Backdrop & Drawer */
@@ -417,8 +418,8 @@
   font-family: monospace;
   font-size: 0.76rem;
   font-weight: 700;
-  color: #246354;
-  background: #ecfdf5;
+  color: #132b4a;
+  background: #e8edf5;
   padding: 2px 8px;
   border-radius: 6px;
   margin-bottom: 6px;
@@ -546,7 +547,7 @@
 .thread-turn.user-turn {
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid #132b4a;
   align-self: flex-start;
   width: 95%;
 }
@@ -575,7 +576,7 @@
 }
 
 .user-turn .thread-role-badge {
-  color: #1e40af;
+  color: #132b4a;
 }
 
 .admin-turn .thread-role-badge {
@@ -675,8 +676,8 @@
 
 .ticket-reply-textarea:focus {
   outline: none;
-  border-color: #246354;
-  box-shadow: 0 0 0 3px rgba(36, 99, 84, 0.15);
+  border-color: #132b4a;
+  box-shadow: 0 0 0 3px rgba(19, 43, 74, 0.15);
 }
 
 .ticket-actions-row {
@@ -705,21 +706,23 @@
 }
 
 .reply-btn.primary {
-  background: #246354;
+  background: #132b4a;
   color: #ffffff;
 }
 
 .reply-btn.primary:hover:not(:disabled) {
-  background: #1b4d41;
+  background: #1b3b64;
+  box-shadow: 0 2px 8px rgba(19, 43, 74, 0.25);
 }
 
 .reply-btn.success {
-  background: #10b981;
+  background: linear-gradient(135deg, #132b4a 0%, #1d4ed8 100%);
   color: #ffffff;
 }
 
 .reply-btn.success:hover:not(:disabled) {
-  background: #059669;
+  background: linear-gradient(135deg, #0b1a2e 0%, #1e40af 100%);
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
 }
 
 .reply-btn.secondary {
@@ -735,12 +738,12 @@
 
 .reply-btn.outline {
   background: #ffffff;
-  border: 1px solid #246354;
-  color: #246354;
+  border: 1px solid #132b4a;
+  color: #132b4a;
 }
 
 .reply-btn.outline:hover:not(:disabled) {
-  background: #ecfdf5;
+  background: #e8edf5;
 }
 
 /* Status Banners for Terminal States */
@@ -855,6 +858,11 @@
   color: #94a3b8;
 }
 
+.user-row .transcript-role-label {
+  color: #132b4a;
+  font-weight: 700;
+}
+
 .transcript-bubble {
   max-width: 85%;
   border-radius: 10px;
@@ -864,9 +872,15 @@
 }
 
 .user-row .transcript-bubble {
-  background: #246354;
-  color: #ffffff;
+  background: linear-gradient(135deg, #132b4a 0%, #1d4ed8 100%);
+  color: #ffffff !important;
   border-bottom-right-radius: 2px;
+  box-shadow: 0 2px 8px rgba(19, 43, 74, 0.2);
+}
+
+.user-row .transcript-bubble,
+.user-row .transcript-bubble p {
+  color: #ffffff !important;
 }
 
 .bot-row .transcript-bubble {
@@ -874,6 +888,10 @@
   border: 1px solid #e2e8f0;
   color: #1e293b;
   border-bottom-left-radius: 2px;
+}
+
+.bot-row .transcript-bubble p {
+  color: #1e293b;
 }
 
 .transcript-bubble p {
@@ -887,6 +905,11 @@
   opacity: 0.7;
   margin-top: 4px;
   text-align: right;
+}
+
+.user-row .transcript-ts {
+  color: rgba(255, 255, 255, 0.85) !important;
+  opacity: 0.95;
 }
 
 .admin-ticket-modal-footer {
