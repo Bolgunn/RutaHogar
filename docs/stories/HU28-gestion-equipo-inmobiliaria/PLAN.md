@@ -89,7 +89,9 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 **Sender, checked on 2026-11-02:** a real invitation from that address, sent by the function from a local stack, reached a Gmail inbox, not Spam.
 
-**Not verified, needs the live domain or the dashboard:** delivery from production with a working link, and the recovery link lifetime (the CLI cannot read it). If the link lasts about an hour, this plan says to stop and report before release.
+**Link lifetime, decided on 2026-11-02:** the project's Email OTP Expiration was 1800 seconds, so most invitations would have expired unread. It was raised to 86400 in the Supabase dashboard. The setting is project-wide, so lead password-recovery links also last 24 hours. Links stay single-use. The value was reported by the user; the CLI cannot read it.
+
+**Not verified, needs the live domain:** delivery from production with a working link, a link past the old 30-minute limit, and whether corporate mail filters such as Outlook Safe Links use up the single-use link. If they do, the person may show as `Activo`, which blocks "Reenviar invitación".
 
 ## Standing questions
 
