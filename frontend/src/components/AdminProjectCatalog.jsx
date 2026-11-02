@@ -4,6 +4,7 @@ import { paginateRows } from "../lib/adminPagination";
 import "./admin-management.css";
 import React, { useEffect, useMemo, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
+import ProjectBulkImport from "./ProjectBulkImport";
 import { comunasMvp } from "../constants/comunas";
 import {
   estadoProyectoLabels,
@@ -109,6 +110,7 @@ export default function AdminProjectCatalog() {
   const [executiveSubmitAttempted, setExecutiveSubmitAttempted] = useState(false);
 
   const [adminModal, setAdminModal] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [adminInmobiliaria, setAdminInmobiliaria] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [assigningAdmin, setAssigningAdmin] = useState(false);
@@ -269,6 +271,25 @@ export default function AdminProjectCatalog() {
         : tenant?.inmobiliaria_id || "",
     });
     setModal({ mode: "create", project: null });
+  };
+
+  const openBulkImport = () => {
+    setFeedback(null);
+    setBulkImportOpen(true);
+  };
+
+  const handleBulkImported = async ({ creados, actualizados }) => {
+    setBulkImportOpen(false);
+    const partes = [
+      creados ? `${creados} ${creados === 1 ? "proyecto creado" : "proyectos creados"}` : null,
+      actualizados ? `${actualizados} ${actualizados === 1 ? "proyecto actualizado" : "proyectos actualizados"}` : null,
+    ].filter(Boolean);
+    setFeedback({ type: "success", text: `Carga masiva completada: ${partes.join(" y ")}.` });
+    try {
+      await refresh();
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message || "No se pudieron cargar los proyectos." });
+    }
   };
 
   const openEditModal = (project) => {
@@ -657,6 +678,9 @@ export default function AdminProjectCatalog() {
               <div className="admin-control-grid">
                 <button type="button" onClick={openCreateModal} disabled={!tenant}>
                   Nuevo proyecto
+                </button>
+                <button type="button" className="secondary-button" onClick={openBulkImport} disabled={!tenant}>
+                  Carga masiva
                 </button>
                 <button type="button" className="secondary-button" onClick={openExecutiveModal} disabled={!tenant}>
                   Nuevo ejecutivo
@@ -1107,6 +1131,16 @@ export default function AdminProjectCatalog() {
             </div>
           </div>
         </div>
+      )}
+
+      {bulkImportOpen && (
+        <ProjectBulkImport
+          tenant={tenant}
+          inmobiliarias={inmobiliarias}
+          defaultInmobiliariaId={selectedInmobiliaria === "all" ? "" : selectedInmobiliaria}
+          onClose={() => setBulkImportOpen(false)}
+          onImported={handleBulkImported}
+        />
       )}
 
       {/* ── Popup: Nuevo / editar proyecto ───────────────────────────── */}
