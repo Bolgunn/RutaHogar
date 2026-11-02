@@ -23,6 +23,8 @@ type CreateExecutivePayload = {
 
 const DEFAULT_APP_URL = "https://www.rutahogar.cl";
 const ADMIN_ROLES = ["admin", "admin_inmobiliario"];
+// Bajo el límite de la función: un Resend colgado debe alcanzar a quedar en el registro.
+const RESEND_TIMEOUT_MS = 10_000;
 
 function appUrl() {
   return (Deno.env.get("APP_URL") || DEFAULT_APP_URL).replace(/\/$/, "");
@@ -144,6 +146,7 @@ async function sendEmail(email: string, subject: string, html: string) {
         Authorization: `Bearer ${resendApiKey}`,
       },
       body: JSON.stringify({ from: fromEmail, to: [email], subject, html }),
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -373,12 +376,12 @@ serve(async (req) => {
       }
 
       const nombre = existingProfile.full_name || fullName;
+      await logEvent(existingId, "equipo.miembro_vinculado", {});
       const sent = await sendEmail(
         email,
         "Te sumaron a un equipo en RutaHogar",
         buildLinkedEmail(nombre, inmobiliaria.nombre),
       );
-      await logEvent(existingId, "equipo.miembro_vinculado", { email_enviado: sent });
 
       return jsonResponse({
         ok: true,
