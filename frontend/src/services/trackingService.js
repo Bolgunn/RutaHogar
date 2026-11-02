@@ -4,7 +4,7 @@ import { fetchJsonWithTimeout, RequestTimeoutError, withTimeout } from "./httpRe
 const apiBase = () => (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
 
-export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
+export async function trackingRequest(path = "", body, { timeoutMs, method } = {}) {
   if (!supabase) throw new Error("El seguimiento requiere una conexión configurada.");
   let session;
   try {
@@ -21,7 +21,7 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   let response, payload;
   try {
     ({ response, payload } = await fetchJsonWithTimeout(`${apiBase()}/tracking${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: method || (body === undefined ? "GET" : "POST"),
       headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }, { timeoutMs, timeoutMessage: "El seguimiento tardó demasiado. Intenta nuevamente." }));
@@ -49,6 +49,10 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
       owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
       config_version_conflict: "Otro administrador cambió la configuración; revisa los cambios.",
       invalid_criterios: "Revisa los criterios marcados; hay valores no permitidos.",
+      self_change_forbidden: "No puedes cambiar tu propia función ni desactivar tu acceso. Otro administrador debe hacerlo.",
+      last_active_admin: "Es el único administrador activo de esta inmobiliaria. Asigna otro administrador antes de hacer este cambio.",
+      member_deactivated: "Reactiva a esta persona antes de cambiar su función.",
+      auth_sync_failed: "No pudimos completar el cambio de acceso. Inténtalo de nuevo.",
     };
     const failure = new Error(messages[code] || "No se pudo completar la operación.");
     failure.code = code;

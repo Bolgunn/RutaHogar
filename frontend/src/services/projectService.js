@@ -556,7 +556,7 @@ export async function getProjectExecutives(projectId) {
   }));
 }
 
-export async function assignExecutive(projectId, email) {
+export async function assignExecutive(projectId, email, origen) {
   const correo = normalizeEmail(email);
   if (!projectId) throw new Error("ID de proyecto requerido.");
   if (!correo.includes("@")) throw new Error("Ingresa un correo válido.");
@@ -591,6 +591,7 @@ export async function assignExecutive(projectId, email) {
   const { error } = await supabase.rpc("assign_executive", {
     p_project_id: projectId,
     p_email: correo,
+    ...(origen ? { p_origen: origen } : {}),
   });
 
   if (error) {
@@ -600,7 +601,7 @@ export async function assignExecutive(projectId, email) {
   return getProjectExecutives(projectId);
 }
 
-export async function unassignExecutive(projectId, email) {
+export async function unassignExecutive(projectId, email, origen) {
   const correo = normalizeEmail(email);
   if (!projectId || !correo) throw new Error("Proyecto y correo requeridos.");
 
@@ -616,6 +617,7 @@ export async function unassignExecutive(projectId, email) {
   const { error } = await supabase.rpc("unassign_executive", {
     p_project_id: projectId,
     p_email: correo,
+    ...(origen ? { p_origen: origen } : {}),
   });
 
   if (error) {

@@ -36,6 +36,7 @@ import ExecutiveProfile from "./components/ExecutiveProfile";
 import ExecutiveHome from "./components/ExecutiveHome";
 import AdminProfile from "./components/AdminProfile";
 import AdminReportHistory from "./components/AdminReportHistory";
+import AdminTeam from "./components/AdminTeam";
 import Recommendations from "./components/Recommendations";
 import Subsidios from "./components/Subsidios";
 import Result from "./components/Result";
@@ -779,6 +780,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "metricas") return "/metricas";
   if (page === "admin-reports") return "/admin/reportes";
   if (page === "admin-priorizacion") return "/admin/priorizacion";
+  if (page === "admin-equipo") return "/admin/equipo";
   return "/inicio";
 };
 
@@ -2600,6 +2602,10 @@ export default function App() {
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
+      ) : page === "admin-equipo" && canViewStaffPage(page, profile.role) ? (
+        tenantResolved
+          ? <AdminTeam profile={profile} inmobiliariaId={inmobiliariaId} />
+          : <section className="section-block"><p>Cargando equipo…</p></section>
       ) : page === "admin-priorizacion" && canViewStaffPage(page, profile.role, inmobiliariaId) ? (
         <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} />
       ) : page === "admin-priorizacion" && isAdminRole(profile.role) && !tenantResolved ? (
