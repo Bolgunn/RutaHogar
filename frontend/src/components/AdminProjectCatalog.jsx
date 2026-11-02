@@ -679,9 +679,11 @@ export default function AdminProjectCatalog() {
                 <button type="button" onClick={openCreateModal} disabled={!tenant}>
                   Nuevo proyecto
                 </button>
-                <button type="button" className="secondary-button" onClick={openBulkImport} disabled={!tenant}>
-                  Carga masiva
-                </button>
+                {tenant && !isGlobalAdmin && (
+                  <button type="button" className="secondary-button" onClick={openBulkImport}>
+                    Carga masiva
+                  </button>
+                )}
                 <button type="button" className="secondary-button" onClick={openExecutiveModal} disabled={!tenant}>
                   Nuevo ejecutivo
                 </button>
@@ -1136,8 +1138,6 @@ export default function AdminProjectCatalog() {
       {bulkImportOpen && (
         <ProjectBulkImport
           tenant={tenant}
-          inmobiliarias={inmobiliarias}
-          defaultInmobiliariaId={selectedInmobiliaria === "all" ? "" : selectedInmobiliaria}
           onClose={() => setBulkImportOpen(false)}
           onImported={handleBulkImported}
         />

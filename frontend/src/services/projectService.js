@@ -517,21 +517,18 @@ export async function deleteProject(id) {
 
 // HU 25: carga masiva. `proyectos` ya viene validado por lib/catalog/projectImport;
 // importar_proyectos() lo escribe en una transacción, todo o nada, con los
-// permisos de quien llama. Un admin de inmobiliaria siempre escribe en la suya.
-export async function importProjects({ inmobiliariaId, proyectos }) {
+// permisos de quien llama y siempre en la inmobiliaria de la sesión.
+export async function importProjects(proyectos) {
   if (PROVIDER === "local") {
     throw new Error("La carga masiva requiere Supabase configurado.");
   }
 
-  const { data, error } = await supabase.rpc("importar_proyectos", {
-    p_inmobiliaria: inmobiliariaId || null,
-    p_proyectos: proyectos,
-  });
+  const { data, error } = await supabase.rpc("importar_proyectos", { p_proyectos: proyectos });
 
   if (error) {
     logSupabaseError(error);
     if (error.code === "42501") {
-      throw new Error("No tienes permisos para cargar proyectos en esta inmobiliaria.");
+      throw new Error("La carga masiva solo está disponible para el administrador de una inmobiliaria.");
     }
     if (error.code === "22023" && error.message?.includes("nombre_repetido")) {
       throw new Error("El archivo repite el nombre de un proyecto. No se guardó ningún proyecto.");

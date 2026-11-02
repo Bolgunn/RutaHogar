@@ -6,34 +6,27 @@ import {
   IMPORT_MAX_BYTES,
   IMPORT_MAX_ROWS,
   analyzeProjectImport,
+  analyzeProjectRecords,
   buildImportTemplate,
   decodeImportFile,
   toImportPayload,
 } from "../lib/catalog/projectImport";
+import { readXlsxRecords } from "../lib/catalog/readXlsx";
 import { getProjects, importProjects } from "../services/projectService";
 
 // HU 25 — carga masiva del catálogo. Plan: docs/stories/HU25-carga-masiva-proyectos/PLAN.md.
+// Los proyectos van siempre a la inmobiliaria de la sesión; el admin global no ve este modal.
 
-const TEMPLATE_FILENAME = "plantilla-proyectos-rutahogar.csv";
+const XLSX_TEMPLATE_URL = "/plantillas/plantilla-proyectos-rutahogar.xlsx";
+const CSV_TEMPLATE_FILENAME = "plantilla-proyectos-rutahogar.csv";
 const UF_FORMATTER = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 });
 
-const columnGuide = {
-  nombre: { ayuda: "Nombre del proyecto. Si ya existe en tu catálogo, la fila lo actualiza.", ejemplo: "Parque Ñuñoa" },
-  comuna: { ayuda: "Una comuna del catálogo de la Región Metropolitana.", ejemplo: "Ñuñoa" },
-  tipo: { ayuda: "departamento o casa.", ejemplo: "departamento" },
-  precio_min_uf: { ayuda: "Precio en UF de la unidad más barata, mayor que 0.", ejemplo: "3.200" },
-  precio_max_uf: { ayuda: "Precio en UF de la unidad más cara, igual o mayor que el mínimo.", ejemplo: "4.850,5" },
-  estado: { ayuda: "disponible, en_construccion o agotado.", ejemplo: "disponible" },
-  descripcion: { ayuda: `Texto para la vitrina, hasta 500 caracteres.`, ejemplo: "A pasos del metro" },
-  entrega_estimada: { ayuda: "Mes de entrega en formato AAAA-MM. Formatea la columna como Texto en Excel.", ejemplo: "2027-06" },
-};
-
-function downloadTemplate() {
+function downloadCsvTemplate() {
   const blob = new Blob([buildImportTemplate()], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = TEMPLATE_FILENAME;
+  link.download = CSV_TEMPLATE_FILENAME;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -46,12 +39,23 @@ function formatRange(input) {
   return min === max ? `UF ${UF_FORMATTER.format(min)}` : `UF ${UF_FORMATTER.format(min)} – ${UF_FORMATTER.format(max)}`;
 }
 
-export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobiliariaId, onClose, onImported }) {
-  const isGlobalAdmin = Boolean(tenant?.isGlobalAdmin);
-  const [targetId, setTargetId] = useState(isGlobalAdmin ? defaultInmobiliariaId || "" : tenant?.inmobiliaria_id || "");
+async function readRecords(file) {
+  if (/\.xlsx$/i.test(file.name)) return readXlsxRecords(await file.arrayBuffer());
+  if (/\.xls$/i.test(file.name)) {
+    throw new Error("Es un archivo .xls antiguo. En Excel usa Archivo → Guardar como → «Libro de Excel (.xlsx)» y súbelo de nuevo.");
+  }
+  if (/\.(ods|numbers)$/i.test(file.name)) {
+    throw new Error("Ese formato no se puede leer. Guarda la planilla como .xlsx o como CSV y súbela de nuevo.");
+  }
+  return { csv: decodeImportFile(await file.arrayBuffer()) };
+}
+
+export default function ProjectBulkImport({ tenant, onClose, onImported }) {
+  const inmobiliariaId = tenant?.inmobiliaria_id || "";
   const [existingProjects, setExistingProjects] = useState([]);
   const [file, setFile] = useState(null);
-  const [fileText, setFileText] = useState(null);
+  const [content, setContent] = useState(null);
+  const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState("");
   const [importing, setImporting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -62,12 +66,9 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
   useModalFocus(true, requestClose);
 
   useEffect(() => {
-    if (!targetId) {
-      setExistingProjects([]);
-      return undefined;
-    }
+    if (!inmobiliariaId) return undefined;
     let active = true;
-    getProjects({ inmobiliariaId: targetId })
+    getProjects({ inmobiliariaId })
       .then((rows) => {
         if (active) setExistingProjects(rows);
       })
@@ -77,16 +78,13 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
     return () => {
       active = false;
     };
-  }, [targetId]);
+  }, [inmobiliariaId]);
 
-  const analysis = useMemo(
-    () => (fileText === null ? null : analyzeProjectImport(fileText, { inmobiliariaId: targetId, existingProjects })),
-    [fileText, targetId, existingProjects],
-  );
-
-  const targetName = isGlobalAdmin
-    ? inmobiliarias.find((item) => item.id === targetId)?.nombre || ""
-    : tenant?.inmobiliaria_nombre || "tu inmobiliaria";
+  const analysis = useMemo(() => {
+    if (content === null) return null;
+    const options = { inmobiliariaId, existingProjects };
+    return Array.isArray(content) ? analyzeProjectRecords(content, options) : analyzeProjectImport(content.csv, options);
+  }, [content, inmobiliariaId, existingProjects]);
 
   const rowErrors = analysis
     ? analysis.rows.flatMap((row) => row.errors.map((error) => ({ fila: row.fila, ...error })))
@@ -96,23 +94,22 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
     const selected = event.target.files?.[0] || null;
     event.target.value = "";
     setFile(selected);
-    setFileText(null);
+    setContent(null);
     setReadError("");
     setSubmitError("");
     if (!selected) return;
 
-    if (/\.(xlsx|xls|ods|numbers)$/i.test(selected.name)) {
-      setReadError("Ese archivo es una planilla, no un CSV. En Excel usa Archivo → Guardar como → «CSV UTF-8» y súbelo de nuevo.");
-      return;
-    }
     if (selected.size > IMPORT_MAX_BYTES) {
       setReadError("El archivo pesa más de 1 MB. Divídelo en varios archivos.");
       return;
     }
+    setReading(true);
     try {
-      setFileText(decodeImportFile(await selected.arrayBuffer()));
-    } catch {
-      setReadError("No se pudo leer el archivo. Vuelve a guardarlo como CSV e inténtalo otra vez.");
+      setContent(await readRecords(selected));
+    } catch (err) {
+      setReadError(err.message || "No se pudo leer el archivo. Vuelve a guardarlo e inténtalo otra vez.");
+    } finally {
+      setReading(false);
     }
   };
 
@@ -121,8 +118,7 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
     setImporting(true);
     setSubmitError("");
     try {
-      const result = await importProjects({ inmobiliariaId: targetId, proyectos: toImportPayload(analysis) });
-      onImported(result);
+      onImported(await importProjects(toImportPayload(analysis)));
     } catch (err) {
       setSubmitError(err.message || "No se pudo completar la carga. No se guardó ningún proyecto.");
       setImporting(false);
@@ -141,7 +137,7 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
         <div className="admin-modal-header">
           <div className="admin-modal-heading">
             <h2>Carga masiva de proyectos</h2>
-            <p>Sube un CSV con varios proyectos. Nada se guarda hasta que confirmes.</p>
+            <p>Sube una planilla Excel o un CSV con varios proyectos. Nada se guarda hasta que confirmes.</p>
           </div>
           <button type="button" className="secondary-button compact-button" onClick={requestClose} disabled={importing}>
             Cerrar
@@ -149,41 +145,23 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
         </div>
 
         <div className="admin-modal-body">
-          <section className="admin-bulk-step" aria-labelledby="bulk-step-target">
-            <h3 id="bulk-step-target">1. Inmobiliaria</h3>
-            {isGlobalAdmin ? (
-              <div className="field-wrap">
-                <label htmlFor="bulk-import-target">Los proyectos se cargarán en</label>
-                <select
-                  id="bulk-import-target"
-                  value={targetId}
-                  onChange={(event) => setTargetId(event.target.value)}
-                  disabled={importing}
-                >
-                  <option value="">Selecciona una inmobiliaria</option>
-                  {inmobiliarias.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="admin-compact-note">
-                <strong>Los proyectos se cargarán en</strong>
-                <p>{targetName}</p>
-              </div>
-            )}
-          </section>
+          <div className="admin-compact-note">
+            <strong>Los proyectos se cargarán en</strong>
+            <p>{tenant?.inmobiliaria_nombre || "tu inmobiliaria"}</p>
+          </div>
 
           <section className="admin-bulk-step" aria-labelledby="bulk-step-template">
-            <h3 id="bulk-step-template">2. Plantilla</h3>
+            <h3 id="bulk-step-template">1. Plantilla</h3>
             <p className="admin-bulk-hint">
-              Una fila por proyecto, máximo {IMPORT_MAX_ROWS}. Puedes completarla en Excel y guardarla como CSV.
+              Una fila por proyecto, máximo {IMPORT_MAX_ROWS}. La planilla Excel trae listas para elegir comuna, tipo y
+              estado, y una hoja de instrucciones.
             </p>
-            <div>
-              <button type="button" className="secondary-button" onClick={downloadTemplate}>
-                <i className="ti ti-download" aria-hidden="true" /> Descargar plantilla CSV
+            <div className="admin-bulk-actions">
+              <a className="secondary-button" href={XLSX_TEMPLATE_URL} download>
+                <i className="ti ti-file-spreadsheet" aria-hidden="true" /> Plantilla Excel (.xlsx)
+              </a>
+              <button type="button" className="secondary-button" onClick={downloadCsvTemplate}>
+                <i className="ti ti-file-text" aria-hidden="true" /> Plantilla CSV
               </button>
             </div>
             <details className="admin-bulk-guide">
@@ -203,8 +181,8 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
                       <tr key={column.key}>
                         <td><code>{column.key}</code></td>
                         <td>{column.required ? "Sí" : "No"}</td>
-                        <td>{columnGuide[column.key].ayuda}</td>
-                        <td>{columnGuide[column.key].ejemplo}</td>
+                        <td>{column.ayuda}</td>
+                        <td>{column.ejemplo}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -214,25 +192,24 @@ export default function ProjectBulkImport({ tenant, inmobiliarias, defaultInmobi
           </section>
 
           <section className="admin-bulk-step" aria-labelledby="bulk-step-file">
-            <h3 id="bulk-step-file">3. Archivo</h3>
+            <h3 id="bulk-step-file">2. Archivo</h3>
             <div className="field-wrap">
-              <label htmlFor="bulk-import-file">Archivo CSV</label>
+              <label htmlFor="bulk-import-file">Planilla .xlsx o archivo .csv</label>
               <input
                 id="bulk-import-file"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={handleFile}
-                disabled={!targetId || importing}
+                disabled={!inmobiliariaId || importing || reading}
               />
-              {!targetId && <p className="admin-bulk-hint">Elige primero la inmobiliaria.</p>}
-              {file && <p className="admin-bulk-hint">Archivo: {file.name}</p>}
+              {file && <p className="admin-bulk-hint">{reading ? `Leyendo ${file.name}…` : `Archivo: ${file.name}`}</p>}
             </div>
             {readError && <div className="error-message" role="alert">{readError}</div>}
           </section>
 
           {analysis && (
             <section className="admin-bulk-step" aria-labelledby="bulk-step-review" aria-live="polite">
-              <h3 id="bulk-step-review">4. Revisión</h3>
+              <h3 id="bulk-step-review">3. Revisión</h3>
 
               {analysis.fileErrors.length > 0 && (
                 <div className="error-message" role="alert">

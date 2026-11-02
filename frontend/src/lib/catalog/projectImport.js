@@ -2,24 +2,25 @@ import { comunasMvp } from "../../constants/comunas";
 import { estadoProyectoLabels, tipoProyectoLabels } from "../../constants/proyectos";
 import { validateProject } from "../../services/projectValidation";
 
-// HU 25 — carga masiva del catálogo desde CSV. Lógica pura: parsea el archivo y
-// pasa cada fila por validateProject(), la misma regla del formulario, para que
-// el archivo no sea una puerta trasera. Decisiones en
+// HU 25 — carga masiva del catálogo desde CSV o Excel. Lógica pura: recibe las
+// filas del archivo y pasa cada una por validateProject(), la misma regla del
+// formulario, para que el archivo no sea una puerta trasera. Decisiones en
 // docs/stories/HU25-carga-masiva-proyectos/PLAN.md.
 
 // Tope del plan (Local logic); la función importar_proyectos() aplica el mismo.
 export const IMPORT_MAX_ROWS = 500;
 export const IMPORT_MAX_BYTES = 1_000_000;
 
+// `ayuda` y `ejemplo` los muestran el modal y la hoja de instrucciones de la plantilla Excel.
 export const IMPORT_COLUMNS = [
-  { key: "nombre", required: true },
-  { key: "comuna", required: true },
-  { key: "tipo", required: true },
-  { key: "precio_min_uf", required: true },
-  { key: "precio_max_uf", required: true },
-  { key: "estado", required: true },
-  { key: "descripcion", required: false },
-  { key: "entrega_estimada", required: false },
+  { key: "nombre", required: true, ayuda: "Nombre del proyecto. Si ya existe en tu catálogo, la fila lo actualiza.", ejemplo: "Parque Ñuñoa" },
+  { key: "comuna", required: true, ayuda: "Una comuna del catálogo de la Región Metropolitana.", ejemplo: "Ñuñoa" },
+  { key: "tipo", required: true, ayuda: "departamento o casa.", ejemplo: "departamento" },
+  { key: "precio_min_uf", required: true, ayuda: "Precio en UF de la unidad más barata, mayor que 0. El punto separa miles y la coma decimales.", ejemplo: "3.200" },
+  { key: "precio_max_uf", required: true, ayuda: "Precio en UF de la unidad más cara, igual o mayor que el mínimo.", ejemplo: "4.850,5" },
+  { key: "estado", required: true, ayuda: "disponible, en_construccion o agotado.", ejemplo: "disponible" },
+  { key: "descripcion", required: false, ayuda: "Texto para la vitrina, hasta 500 caracteres.", ejemplo: "A pasos del metro" },
+  { key: "entrega_estimada", required: false, ayuda: "Mes de entrega en formato AAAA-MM.", ejemplo: "2027-06" },
 ];
 
 const COLUMN_KEYS = IMPORT_COLUMNS.map((column) => column.key);
@@ -117,18 +118,44 @@ export function parseCsv(input) {
   return { delimiter, records };
 }
 
-// Formato chileno: "3.500" y "3.500,5" llevan punto de miles; "3500", "3500,5"
-// y "3500.5" no. "3,500" se rechaza: puede ser 3,5 o 3.500 y adivinar sería
-// un error de mil veces.
+// Montos al estilo chileno: el punto separa miles y la coma, si aparece, separa
+// decimales ("51.000", "$51.000,00", "UF 3.250,5"). Por tolerancia también se lee
+// un punto decimal que no forma grupos de miles ("9200.5", de planillas en
+// inglés). Una celda numérica de Excel ya llega como número. Cualquier otra
+// cosa devuelve NaN; nunca lanza.
 export function parseImportNumber(raw) {
-  const value = String(raw ?? "").trim().replace(/\s+/g, "");
-  if (!value) return NaN;
-  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(value)) {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : NaN;
+  if (typeof raw !== "string") return NaN;
+  const value = raw
+    .replace(/\s+/g, "")
+    .replace(/^(\$|uf|clp|u\.f\.)/i, "")
+    .replace(/(\$|uf|clp|u\.f\.)$/i, "");
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(value) || /^\d+(,\d+)?$/.test(value)) {
     return Number(value.replace(/\./g, "").replace(",", "."));
   }
-  if (/^\d+,\d{3}$/.test(value)) return NaN;
-  if (/^\d+([.,]\d+)?$/.test(value)) return Number(value.replace(",", "."));
+  if (/^\d+\.\d+$/.test(value)) return Number(value);
   return NaN;
+}
+
+// Excel convierte "2027-06" en una fecha al escribirlo. Se devuelve el mes,
+// que es lo único que guarda el catálogo.
+function dateToText(date, key) {
+  if (Number.isNaN(date.getTime())) return "";
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return key === "entrega_estimada"
+    ? `${date.getUTCFullYear()}-${month}`
+    : `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
+function cellText(value, key) {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return dateToText(value, key);
+  return String(value).trim();
+}
+
+function isBlankRecord(cells) {
+  return !cells.some((cell) => cellText(cell) !== "");
 }
 
 function matchCanonical(raw, options) {
@@ -141,7 +168,7 @@ const tipoOptions = Object.entries(tipoProyectoLabels).map(([value, label]) => (
 const estadoOptions = Object.entries(estadoProyectoLabels).map(([value, label]) => ({ value, label }));
 
 function normalizeRow(values, inmobiliariaId) {
-  const text = (key) => String(values[key] ?? "").trim();
+  const text = (key) => cellText(values[key], key);
   const canonical = (key, options) => {
     const raw = text(key);
     return raw ? matchCanonical(raw, options) ?? raw : "";
@@ -162,9 +189,9 @@ function normalizeRow(values, inmobiliariaId) {
 function rowErrors(values, input) {
   const { errors } = validateProject(input);
   for (const key of PRICE_KEYS) {
-    const raw = String(values[key] ?? "").trim();
+    const raw = cellText(values[key], key);
     if (raw && Number.isNaN(input[key])) {
-      errors[key] = `«${raw}» no es un número válido. Escribe solo cifras, por ejemplo 3500 o 3.500,5.`;
+      errors[key] = `«${raw}» no es un monto válido. Escribe solo cifras, por ejemplo 3500, 3.500 o 3.500,5.`;
     }
   }
   return COLUMN_KEYS.filter((key) => errors[key]).map((key) => ({ columna: key, mensaje: errors[key] }));
@@ -180,18 +207,19 @@ function emptyAnalysis(fileErrors, warnings = []) {
   };
 }
 
-// La fila de cada resultado es la de la planilla: encabezado = 1, primer
-// proyecto = 2. Las filas en blanco se saltan pero se cuentan.
-export function analyzeProjectImport(text, { inmobiliariaId, existingProjects = [] } = {}) {
+// `records` son las filas de la planilla en orden, con las vacías incluidas:
+// el registro i es la fila i + 1 de Excel. El encabezado es la primera fila
+// con contenido. Cada celda puede ser texto, número, booleano, fecha o null.
+export function analyzeProjectRecords(records, { inmobiliariaId, existingProjects = [] } = {}) {
   if (!inmobiliariaId) {
-    return emptyAnalysis(["Elige la inmobiliaria donde se cargarán los proyectos."]);
+    return emptyAnalysis(["No se pudo determinar la inmobiliaria de tu sesión."]);
   }
 
-  const { records } = parseCsv(text);
-  const [header = [], ...body] = records;
-  if (!header.some((cell) => cell.trim())) {
+  const headerIndex = records.findIndex((cells) => !isBlankRecord(cells));
+  if (headerIndex === -1) {
     return emptyAnalysis(["El archivo está vacío. Usa la plantilla y agrega una fila por proyecto."]);
   }
+  const header = records[headerIndex].map((cell) => cellText(cell));
 
   const fileErrors = [];
   const warnings = [];
@@ -202,8 +230,8 @@ export function analyzeProjectImport(text, { inmobiliariaId, existingProjects = 
     if (!COLUMN_KEYS.includes(key)) {
       warnings.push(
         key === "inmobiliaria_id" || key === "inmobiliaria"
-          ? `Se ignoró la columna «${cell.trim()}»: los proyectos siempre se cargan en la inmobiliaria elegida aquí.`
-          : `Se ignoró la columna «${cell.trim()}»: no es parte del catálogo.`,
+          ? `Se ignoró la columna «${cell}»: los proyectos siempre se cargan en la inmobiliaria de tu sesión.`
+          : `Se ignoró la columna «${cell}»: no es parte del catálogo.`,
       );
     } else if (key in columnIndex) {
       fileErrors.push(`La columna «${key}» aparece más de una vez en el encabezado.`);
@@ -225,20 +253,22 @@ export function analyzeProjectImport(text, { inmobiliariaId, existingProjects = 
   );
   const firstRowByName = new Map();
   const rows = [];
+  const lastHeader = header.reduce((last, cell, position) => (cell ? position : last), -1);
 
-  body.forEach((cells, index) => {
-    if (!cells.some((cell) => cell.trim())) return;
-    const fila = index + 2;
+  for (let index = headerIndex + 1; index < records.length; index += 1) {
+    const cells = records[index];
+    if (isBlankRecord(cells)) continue;
+    const fila = index + 1;
     const values = Object.fromEntries(
-      Object.entries(columnIndex).map(([key, position]) => [key, cells[position] ?? ""]),
+      Object.entries(columnIndex).map(([key, position]) => [key, cells[position] ?? null]),
     );
     const input = normalizeRow(values, inmobiliariaId);
     const errors = rowErrors(values, input);
 
-    if (cells.length > header.length && cells.slice(header.length).some((cell) => cell.trim())) {
+    if (cells.slice(lastHeader + 1).some((cell) => cellText(cell) !== "")) {
       errors.push({
         columna: null,
-        mensaje: "La fila tiene más valores que columnas. Si un texto incluye el separador, enciérralo entre comillas.",
+        mensaje: "La fila tiene valores fuera de las columnas del encabezado. Si un texto incluye el separador, enciérralo entre comillas.",
       });
     }
 
@@ -250,7 +280,7 @@ export function analyzeProjectImport(text, { inmobiliariaId, existingProjects = 
     }
 
     rows.push({ fila, input, errors, accion: existing.has(key) ? "actualizar" : "crear" });
-  });
+  }
 
   if (!rows.length) fileErrors.push("El archivo no tiene filas de proyectos debajo del encabezado.");
   if (rows.length > IMPORT_MAX_ROWS) {
@@ -273,6 +303,10 @@ export function analyzeProjectImport(text, { inmobiliariaId, existingProjects = 
     },
     canImport: !fileErrors.length && rows.length > 0 && valid.length === rows.length,
   };
+}
+
+export function analyzeProjectImport(text, options) {
+  return analyzeProjectRecords(parseCsv(text).records, options);
 }
 
 // Lo que recibe importar_proyectos(): los ocho campos del catálogo. El tenant

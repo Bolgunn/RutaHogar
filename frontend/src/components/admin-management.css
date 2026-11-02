@@ -211,3 +211,5 @@
 .admin-bulk-summary > div.is-error dd { color: var(--rh-danger); }
 .admin-bulk-errors { display: grid; gap: 8px; }
 .admin-bulk-errors p { margin: 0; font-size: .85rem; }
+.admin-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-bulk-actions > a.secondary-button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 9px 14px; font-size: .85rem; text-decoration: none; border-radius: var(--rh-radius-sm); }
