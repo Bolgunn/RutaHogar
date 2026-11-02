@@ -100,7 +100,7 @@ def test_hu18_cleanup_rollback_restores_only_the_removed_policy():
 
 def test_final_hu18_schema_denies_direct_staff_history_and_event_reads():
     sql = normalize(SCHEMA.read_text(encoding="utf-8"))
-    final_hu18_state = sql.rsplit("-- hu18 step 8:", 1)[1]
+    final_hu18_state = sql.rsplit("-- hu18 step 8:", 1)[1].split("-- hu 28:", 1)[0]
 
     assert 'drop policy if exists "evaluations select sales" on public.evaluations;' in final_hu18_state
     assert 'drop policy if exists "scoring history select staff" on public.scoring_history;' in final_hu18_state
