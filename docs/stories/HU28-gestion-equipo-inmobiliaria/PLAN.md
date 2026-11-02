@@ -1,7 +1,7 @@
 # PLAN — HU 28: Gestión de equipo de la inmobiliaria
 
 - **Story:** `Wiki RutaHogar/UserStories/HU28-gestion-equipo-inmobiliaria.md` · **Actor:** Administrador inmobiliario (`admin_inmobiliario`, or `admin`)
-- **Status:** 🗓 Planificada · Sprint 3 · 5 SP (the resolved scope is closer to 8; re-estimate before the build) · **Depends on / Required by:** HU 21 (PR #169, open) · PR #171 (open, not applied) · shares `estado_acceso` with HU 27 (partly in prod, not in the repo) · `audit_events` reused by HU 22 and HU 27
+- **Status:** 🔧 Built, not reviewed or deployed · Sprint 3 · 5 SP (the resolved scope is closer to 8; re-estimate before the build) · **Depends on / Required by:** HU 21 (PR #169, open) · PR #171 (open, not applied) · shares `estado_acceso` with HU 27 (partly in prod, not in the repo) · `audit_events` reused by HU 22 and HU 27
 - **Branch:** `feat/hu28-gestion-equipo-inmobiliaria`, cut from HU 21 `a8aecdc` with PR #171 `cb713a8` merged in `c947dda`. PR #170 is left out on purpose.
 
 > **The approved UI is `frontend/mockups/hu28-equipo.html`.** Open it at
@@ -61,6 +61,31 @@ database trigger writing their audit entries.
 | `/admin/equipo` uses tabs for Miembros and Historial. Each person is managed in a pop-up, opened with "Gestionar". | Approved with the mockup, and matches the pop-ups of the rest of the admin area. |
 | The counters at the top are also the status filter. | Approved with the mockup. There is no separate row of filter buttons. |
 | A deactivated person's role and projects can't be changed until they are reactivated. | Shown in the approved mockup. The backend must refuse these too. |
+
+## What changed during the build
+
+Prod was read on 2026-11-02 before writing the migration. The body of `get_my_role()`, `list_inmobiliaria_executives` and the `profiles` policies matched what this plan assumes, with one addition: prod also has `"Profiles select own"` and `hu27_auth_hook_profile_read`, and both stay. No screen needs another tenant's profiles: the browser only reads its own row and `fetchExecutiveNames`, on the feature branch and on `main`.
+
+**Open: `estado_acceso` has not been agreed with Andrés.** The name appears only in the migration, its rollback, `schema.sql`, `hu30_guard_profile_privileges`, `create-executive`, `repository.py`, `team.py` and the tests, so renaming it before deployment is one search and replace.
+
+| Change from the plan | Why |
+| :------------------- | :-- |
+| `is_global_admin()` now returns `false` instead of `NULL`. | With `get_my_role()` returning `NULL`, `update_support_ticket_status` and `submit_ticket_user_feedback` would let a deactivated global admin through their `not is_global_admin()` checks. It is the only `if not` case this change opened. Every other check in prod was read and already fails closed. |
+| `assign_executive` and `unassign_executive` take an optional `p_origen`, default `proyectos`. | Both screens call the same RPCs, and Historial must show "Desde Proyectos" only for catalog changes. Existing two-argument calls keep working. |
+| `assign_executive` also links an admin of the same inmobiliaria. | The mockup offers project assignment to administrators. Before, their email produced a permanently pending row. An admin from outside is never linked, because that branch would write their tenant. |
+| `assign_admin` writes `equipo.rol_cambiado`, refuses a deactivated account and respects the last-admin limit. | It is the other path that changes a role, and the decisions above say every such path is audited and no actor may leave an inmobiliaria without an admin. |
+| Private helpers `hu28_lock_member` and `hu28_is_last_active_admin`. The row lock is on the `inmobiliarias` row. | Three writers share them. One per-tenant lock makes the last-admin race impossible without ordering member rows. |
+| `audit_events.occurred_at` defaults to `clock_timestamp()`. | Entries written in one transaction must keep their order. |
+| Project rows deleted by a deactivation carry `details.por_desactivacion` and Historial hides them. | The audit log keeps one row per project, while Historial shows the single line the mockup draws. |
+| Historial has a "Ver más" link. | The endpoint is paginated and the mockup shows no pager; without it, entries past the first page could not be reached. |
+| New `frontend/public/brand/rutahogar/logo-rutahogar.png`, rendered from the SVG. | Gmail and Outlook do not display SVG in email. |
+| Linked person whose email failed: "ya tenía cuenta y se sumó al equipo, pero no pudimos avisarle por correo." | The mockup has no copy for this case. |
+
+Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`, which is `NULL` for a deactivated account, so that check no longer refuses them. The function still requires a document process owned by the caller, which staff do not have, so nothing is reachable. It has no migration on this branch, so HU 23 should change it to `is distinct from`.
+
+**Deployment order:** PR #171, then this migration, then the backend, frontend and `create-executive` together. `staff_actor` and the function read `estado_acceso`, so either one deployed before the migration fails every staff request. Set `APP_URL` before the function ships.
+
+**Not verified, needs the live domain:** a real email through Resend, the recovery link lifetime, that `https://www.rutahogar.cl/definir-password` is an allowed redirect URL, and which address `EJECUTIVO_FROM_EMAIL` holds. If the link lasts about an hour, this plan says to stop and report before release.
 
 ## Standing questions
 
@@ -150,7 +175,7 @@ Pop-ups close with `Esc`, the backdrop or "Cerrar", and return focus to the butt
    Check three things and report the results in the PR: the project's recovery link lifetime in Supabase Auth, that `https://www.rutahogar.cl/definir-password` is an allowed redirect URL, and that `EJECUTIVO_FROM_EMAIL` sends from a RutaHogar address. If the link lasts about an hour, stop and report, because invited people may often need a resend.
 9. **Frontend.** Build the UI specification. Add `frontend/src/components/AdminTeam.jsx`, `frontend/src/components/admin-team.css` and `frontend/src/services/teamService.js`. Add the `/admin/equipo` route and `"admin-equipo"` guard in `frontend/src/lib/staffRoutes.js`, and register the page in `App.jsx`. Add "Equipo" after "Leads" to the admin menus in `Navbar.jsx`, not hidden for global admins. Unlike `"admin-priorizacion"`, the guard admits global admins. Project assignment reuses `assignExecutive` and `unassignExecutive`. Copy comes from the mockup.
 10. **Tests.** Add SQL tests for policies, limits, immutability and triggers, backend tests for tenant isolation and error codes, and frontend tests for the page. Run the SQL on a local `supabase start` stack, and test anonymous calls over HTTP.
-11. **Wiki and docs.** Update the HU 28 story, and record the `estado_acceso` agreement in the plan.
+11. **Wiki and docs.** Update the HU 28 story, and record the `estado_acceso` agreement in the plan. The agreement is still open: see "What changed during the build".
 
 ## Acceptance criteria map
 
