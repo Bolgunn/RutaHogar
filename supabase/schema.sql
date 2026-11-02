@@ -3719,7 +3719,6 @@ begin
 end;
 $$;
 
-revoke all on function public.update_support_ticket_status(uuid, text, text) from public, anon;
-revoke all on function public.submit_ticket_user_feedback(uuid, text, text) from public, anon;
-grant execute on function public.update_support_ticket_status(uuid, text, text) to authenticated;
-grant execute on function public.submit_ticket_user_feedback(uuid, text, text) to authenticated;
+-- Las escrituras pasan por el backend: ningun cliente ejecuta estas RPC directamente.
+revoke all on function public.update_support_ticket_status(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.submit_ticket_user_feedback(uuid, text, text) from public, anon, authenticated;

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.assistant.constants import (
@@ -64,6 +64,10 @@ class TestAssistant(unittest.TestCase):
         self.assertNotIn("1234 5678", redacted)
         self.assertEqual(redacted.count("[NUMERO_REDACTADO]"), 2)
 
+    def test_redact_pii_masks_amex_and_keeps_short_number_lists(self):
+        self.assertNotIn("822463", redact_pii("Mi Amex es 3782 822463 10005"))
+        self.assertEqual(redact_pii("Años 2024 2025 2026"), "Años 2024 2025 2026")
+
     # -------------------------------------------------------------------------
     # 2. Guardrails & S1/S7 Policy Tests
     # -------------------------------------------------------------------------
@@ -74,6 +78,9 @@ class TestAssistant(unittest.TestCase):
 
         refusal2 = check_out_of_scope_guard("Modifícame el score o cámbiame mi puntaje")
         self.assertEqual(refusal2, GUARD_CREDIT_APPROVAL_RESPONSE)
+
+        for command in ("¿me apruebas el crédito?", "sube mi puntaje a 100", "mejora mi score ahora"):
+            self.assertEqual(check_out_of_scope_guard(command), GUARD_CREDIT_APPROVAL_RESPONSE)
 
         refusal3 = check_out_of_scope_guard("Dime qué banco me va a aprobar sí o sí")
         self.assertEqual(refusal3, GUARD_CREDIT_APPROVAL_RESPONSE)
@@ -90,6 +97,8 @@ class TestAssistant(unittest.TestCase):
             "Qué pasa si cambio de trabajo, afecta mi score?",
             "¿Quién aprueba el crédito hipotecario?",
             "cómo se aprueba un crédito",
+            "¿sube mi score si ahorro más?",
+            "Mejora mi puntaje si pago mis deudas?",
         ]
         for q in safe_queries:
             self.assertIsNone(check_out_of_scope_guard(q), f"Guard wrongly blocked legitimate query: {q}")
@@ -362,11 +371,13 @@ class TestAssistant(unittest.TestCase):
             history=history,
             screen_id="evaluate",
         )
-        with patch("app.assistant.service.ask_assistant_groq", return_value="Respuesta sintetizada") as mock_groq:
+        mock_groq = MagicMock(return_value="Respuesta sintetizada")
+        # Other suites purge app.* from sys.modules, so a dotted-path patch can miss this class.
+        with patch.dict(AssistantService.process_chat.__globals__, {"ask_assistant_groq": mock_groq}):
             res = AssistantService.process_chat(req, is_authenticated=True, user_role="usuario")
-            self.assertEqual(res.tier, "tier1_groq")
+            self.assertEqual(res.tier, "tier1_llm")
             self.assertTrue(mock_groq.called)
-            passed_history = mock_groq.call_args.kwargs["history"]
+            passed_history = mock_groq.call_args.kwargs["conversation_history"]
             self.assertLessEqual(len(passed_history), MAX_HISTORY_MESSAGES)
             for turn in passed_history:
                 self.assertNotIn("12.345.678-9", turn["content"])

@@ -150,6 +150,7 @@ class TicketService:
                     "screen_id": request.screen_id or None,
                     "status": "abierto",
                     "client_request_id": client_request_id,
+                    "thread": [{"role": "user", "content": clean_message, "created_at": now_iso}],
                 }
 
                 insert_res = client.post(

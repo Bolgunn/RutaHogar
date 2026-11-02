@@ -1,6 +1,7 @@
 """Unit tests for Support Tickets (HU24 - E4) using standard library unittest."""
 
 import os
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
@@ -563,6 +564,54 @@ class TestSupportTickets(unittest.TestCase):
             self.assertEqual(ok_res["status"], "resuelto")
             self.assertTrue(mock_http.patch.called)
             self.assertNotIn("user_email", ok_res)
+
+    def test_supabase_insert_seeds_thread_with_original_message(self):
+        mock_http = MagicMock()
+        mock_http.get.return_value = MagicMock(status_code=200, json=lambda: [])
+        mock_http.post.return_value = MagicMock(
+            status_code=201,
+            json=lambda: [
+                {"id": "11111111-aaaa", "status": "abierto", "created_at": "2026-11-02T12:00:00Z"}
+            ],
+        )
+        mock_http.patch.return_value = MagicMock(status_code=200)
+        mailer = MagicMock()
+        mailer.send_ticket_notification.return_value = (True, None)
+
+        with patch.dict(
+            os.environ,
+            {"SUPABASE_URL": "https://fake.supabase.co", "SUPABASE_SECRET_KEY": "fake-secret-key"},
+        ):
+            TicketService.create_ticket(
+                user_id="owner-user-a",
+                role="usuario",
+                user_name="Usuario A",
+                user_email="usera@correo.cl",
+                inmobiliaria_id=None,
+                request=CreateTicketRequest(
+                    message="Mi consulta original",
+                    client_request_id="77777777-7777-4777-8777-777777777777",
+                ),
+                db_client=mock_http,
+                email_client=mailer,
+            )
+
+        thread = mock_http.post.call_args.kwargs["json"]["thread"]
+        self.assertEqual(len(thread), 1)
+        self.assertEqual(thread[0]["role"], "user")
+        self.assertEqual(thread[0]["content"], "Mi consulta original")
+
+    def test_ticket_rpcs_are_not_executable_by_clients(self):
+        root = Path(__file__).resolve().parents[2]
+        schema = (root / "supabase/schema.sql").read_text(encoding="utf-8")
+        hu24 = schema.split("HU24", 1)[1]
+        self.assertNotIn("grant execute on function public.update_support_ticket_status", hu24)
+        self.assertNotIn("grant execute on function public.submit_ticket_user_feedback", hu24)
+        self.assertIn(
+            "revoke all on function public.submit_ticket_user_feedback(uuid, text, text) "
+            "from public, anon, authenticated;",
+            hu24,
+        )
 
     def test_update_and_feedback_nonexistent_ticket_returns_404(self):
         app.dependency_overrides[resolve_authenticated_user] = lambda: {

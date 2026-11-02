@@ -8,8 +8,9 @@ RUT_PATTERN = re.compile(r"\b\d{1,2}(?:\.?\d{3}){2}-?[\dkK]\b")
 # Email regex
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
 
-# Credit/debit card sequences (4 groups of digits separated by spaces or hyphens, 13-19 digits)
-CARD_PATTERN = re.compile(r"\b(?:\d{4}[\s-]){2,3}\d{1,7}\b")
+# Credit/debit card sequences separated by spaces or hyphens: 4 groups, or Amex's 4-6-5 layout.
+# Three groups are left alone so lists of years or amounts are not masked.
+CARD_PATTERN = re.compile(r"\b(?:(?:\d{4}[\s-]){3}\d{1,7}|\d{4}[\s-]\d{6}[\s-]\d{5})\b")
 
 # Chilean phone numbers with spaces or hyphens (e.g. +56 9 1234 5678, +56-9-1234-5678, 9 1234 5678)
 SPACED_PHONE_PATTERN = re.compile(

@@ -435,6 +435,21 @@ export default function AdminSupportTickets() {
                 </h4>
                 {selectedTicket.thread && selectedTicket.thread.length > 0 ? (
                   <div className="ticket-thread-container">
+                    {selectedTicket.thread[0].role !== "user" && (
+                      <div className="thread-turn user-turn">
+                        <div className="thread-turn-header">
+                          <span className="thread-role-badge">
+                            {`👤 ${selectedTicket.user_name || "Usuario"}`}
+                          </span>
+                          {selectedTicket.created_at && (
+                            <span className="thread-turn-date">
+                              {formatFecha(selectedTicket.created_at)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="thread-turn-body">{selectedTicket.message}</div>
+                      </div>
+                    )}
                     {selectedTicket.thread.map((turn, idx) => (
                       <div
                         key={idx}

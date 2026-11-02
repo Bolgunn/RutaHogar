@@ -87,13 +87,6 @@ def resolve_optional_auth_context(
         return {"is_authenticated": False, "role": None}
 
 
-def check_optional_auth(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
-) -> bool:
-    """Backwards-compatible helper returning boolean authentication status."""
-    return bool(resolve_optional_auth_context(credentials).get("is_authenticated"))
-
-
 def resolve_authenticated_user(
     credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
 ) -> Dict[str, Any]:
