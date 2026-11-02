@@ -13,6 +13,10 @@ handbookmd
 
 .agents
 skills-lock.json
+.claude
+.impeccable
+.opencode
+
 
 # Dependencies
 node_modules/

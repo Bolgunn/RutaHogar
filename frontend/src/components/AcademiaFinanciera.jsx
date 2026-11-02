@@ -1,3 +1,4 @@
+import { formatScore, getScoreBadgeClass } from "../utils/helpers";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ACADEMY_ARTICLES,
@@ -296,7 +297,7 @@ function CapsuleCard({ capsule, variant = "row", onOpen }) {
 // MODAL DE CÁPSULA
 // ============================================================================
 
-function CapsuleModal({ capsule, onClose, onOpenArticle }) {
+function CapsuleModal({ capsule, onClose, onOpenArticle, onOpenCapsule }) {
   const scrollRef = useRef(null);
 
   // Al abrir otra cápsula desde un artículo, el modal parte desde arriba.
@@ -307,6 +308,10 @@ function CapsuleModal({ capsule, onClose, onOpenArticle }) {
   if (!capsule) return null;
 
   const topic = ACADEMY_TOPICS.find((t) => t.id === capsule.topicId);
+  const topicCapsules = getCapsulesForTopic(capsule.topicId);
+  const capsuleIndex = topicCapsules.findIndex((item) => item.id === capsule.id);
+  const previousCapsule = topicCapsules[capsuleIndex - 1];
+  const nextCapsule = topicCapsules[capsuleIndex + 1];
   const article = capsule.articleId
     ? ACADEMY_ARTICLES.find((a) => a.id === capsule.articleId)
     : null;
@@ -343,7 +348,7 @@ function CapsuleModal({ capsule, onClose, onOpenArticle }) {
           </span>
 
           <div>
-            <span className="eyebrow" style={{ color: topic?.accent }}>
+            <span className="eyebrow">
               {capsule.videoUrl ? "Video" : "Cápsula"} · {topic?.label}
             </span>
 
@@ -382,6 +387,13 @@ function CapsuleModal({ capsule, onClose, onOpenArticle }) {
           </ol>
         </div>
 
+        {topicCapsules.length > 1 && (
+          <nav className="academy-capsule-navigation" aria-label="Cápsulas del mismo tema">
+            <button type="button" className="secondary-button" disabled={!previousCapsule} onClick={() => onOpenCapsule(previousCapsule.id)}>← Anterior</button>
+            <span>{capsuleIndex + 1} de {topicCapsules.length} · {topic?.label}</span>
+            <button type="button" className="primary-button" disabled={!nextCapsule} onClick={() => onOpenCapsule(nextCapsule.id)}>Siguiente →</button>
+          </nav>
+        )}
         {article && (
           <div className="academy-capsule-footer">
             <p>¿Quieres profundizar? Este tema se explica en detalle aquí:</p>
@@ -406,7 +418,7 @@ function CapsuleModal({ capsule, onClose, onOpenArticle }) {
 // MODAL DE ARTÍCULO
 // ============================================================================
 
-function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related, canGoBack, onBack }) {
+export function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related = [], canGoBack, onBack, onGoToAcademy }) {
   const scrollRef = useRef(null);
 
   // Al abrir un artículo relacionado desde el modal, el contenido nuevo
@@ -505,7 +517,7 @@ function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related,
 
         {/* CÁPSULAS DEL TEMA */}
 
-        {topicCapsules.length > 0 && (
+        {onOpenCapsule && topicCapsules.length > 0 && (
           <div className="academy-modal-capsules">
             <strong>
               {topicCapsules.length === 1
@@ -530,6 +542,7 @@ function ArticleModal({ article, onClose, onOpenArticle, onOpenCapsule, related,
         )}
 
         {/* TÉRMINOS */}
+        {onGoToAcademy && <div className="academy-capsule-footer"><button type="button" className="primary-button" onClick={onGoToAcademy}>Continuar en Academia</button></div>}
 
         {article.tags?.length > 0 && (
           <div className="academy-modal-terms">
@@ -911,30 +924,11 @@ function ActualidadTab() {
 
 // Indicador circular del score (0-100).
 function ScoreDial({ score, classification }) {
-  const RADIUS = 52;
-  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-  const percent = Math.max(0, Math.min(100, Number(score) || 0)) / 100;
-  const toneClass =
-    CLASSIFICATION_CLASS[classification] || "is-medium";
-
   return (
-    <div className={`academy-dial ${toneClass}`}>
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle className="academy-dial-track" cx="60" cy="60" r={RADIUS} />
-        <circle
-          className="academy-dial-value"
-          cx="60"
-          cy="60"
-          r={RADIUS}
-          strokeDasharray={CIRCUMFERENCE}
-          strokeDashoffset={CIRCUMFERENCE * (1 - percent)}
-        />
-      </svg>
-
-      <div className="academy-dial-center">
-        <strong>{score}</strong>
-        <span>{classification}</span>
-      </div>
+    <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(score) || 0))}%` }}>
+      <span>Score orientativo</span>
+      <strong>{formatScore(score, "Sin score")}</strong>
+      <small>{classification || "Sin clasificación"}</small>
     </div>
   );
 }
@@ -1541,6 +1535,7 @@ export default function AcademiaFinanciera({ evaluation, onStartEvaluation, onNa
           capsule={activeCapsule}
           onClose={closeOverlays}
           onOpenArticle={openArticleFromCapsule}
+          onOpenCapsule={openCapsule}
         />
       )}
 

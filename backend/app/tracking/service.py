@@ -325,7 +325,12 @@ class TrackingService:
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
         target_with_price = frozen_target_scoring_snapshot(latest, target)
-        if target_with_price != latest:
+        target_price = (target or {}).get("precio_min_uf") or (target or {}).get("valor_uf")
+        try:
+            has_target_price = isfinite(float(target_price)) and float(target_price) > 0
+        except (TypeError, ValueError):
+            has_target_price = False
+        if has_target_price:
             latest = target_with_price
         elif target_source:
             original = target_source["recorded_complete_snapshot"]

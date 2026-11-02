@@ -1,0 +1,107 @@
+/* Shared presentation for user views; the evaluation form is excluded. */
+.prequalification-panel .tip { align-items: center; }
+.prequalification-panel .tip__icon { align-self: center; }
+.prequalification-panel .tip__text { margin: 0; }
+.prequalification-panel .tip__toggle { align-self: center; }
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) {
+  --rh-text-secondary: #34445a;
+  --rh-text-muted: #43536a;
+  --rh-text-sec: #34445a;
+  font-family: var(--rh-font-body);
+  color: var(--rh-text);
+}
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head) {
+  display: block;
+  margin: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--rh-navy);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-surface);
+  box-shadow: var(--rh-shadow-sm);
+  text-align: left;
+}
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head) .eyebrow { color: var(--rh-yellow-dark); }
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head)::before,
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head)::after { display: none; }
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) h1 {
+  font-family: var(--rh-font-display);
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.15;
+  max-width: none;
+  margin: 8px 0 12px;
+  color: var(--rh-navy);
+}
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) :is(h2, h3, h4) {
+  font-family: var(--rh-font-body);
+  line-height: 1.4;
+  color: var(--rh-navy);
+}
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head) p {
+  margin: 0;
+  max-width: 75ch;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--rh-text-secondary);
+}
+:is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) .eyebrow {
+  font-family: var(--rh-font-body);
+  font-size: .85rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.home-panel--guided :is(.home-situation__head, .home-change-timeline__head) h2,
+.profile-page--guided .profile-section-title,
+.results-panel--guided :is(.results-section-head h2, .recommendation-section-title) { font-size: 1.2rem; font-weight: 700; }
+.home-panel--guided :is(.home-situation__score strong),
+.profile-page--guided .profile-stat__num { font-family: var(--rh-font-body); font-variant-numeric: tabular-nums; }
+.prequalification-panel.prequalification-panel--review { display: grid; gap: 22px; }
+.prequalification-panel--review .evaluation-review-gate {
+  margin: 0;
+  padding: 24px;
+  border: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--rh-navy);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-surface);
+  box-shadow: var(--rh-shadow-sm);
+}
+.prequalification-panel--review .evaluation-review-gate__details { min-width: 0; padding: 0; }
+.prequalification-panel--review .evaluation-review-gate h2 { margin: 0 0 10px; font-size: 1.25rem; }
+.prequalification-panel--review .evaluation-review-gate p { font-size: 1rem; line-height: 1.6; color: var(--rh-text-secondary); }
+.prequalification-panel--review .evaluation-review-gate__answers { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 10px; margin-top: 16px; }
+.prequalification-panel--review .evaluation-review-gate details { display: block; min-width: 0; padding: 0; overflow: hidden; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-md); background: var(--rh-surface); }
+.prequalification-panel--review .evaluation-review-gate summary { padding: 14px 16px; background: var(--rh-blue-light); color: var(--rh-navy); font-family: var(--rh-font-body); font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+.prequalification-panel--review .evaluation-review-gate summary:focus-visible { outline: 3px solid var(--rh-yellow-dark); outline-offset: -3px; }
+.prequalification-panel--review .evaluation-review-gate__answer-content { padding: 4px 16px 10px; }
+.prequalification-panel--review .evaluation-review-gate dl { margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+.prequalification-panel--review .evaluation-review-gate dl > div { padding: 9px 0; border-bottom: 1px solid var(--rh-border); background: transparent; border-radius: 0; }
+.prequalification-panel--review .evaluation-review-gate dl > div:last-child { border-bottom: 0; }
+.prequalification-panel--review .evaluation-review-gate dt { font-size: .9rem; color: var(--rh-text-secondary); text-transform: none; font-weight: 500; }
+.prequalification-panel--review .evaluation-review-gate dd { margin: 4px 0 0; font-size: 1rem; font-weight: 600; color: var(--rh-text); overflow-wrap: anywhere; }
+.prequalification-panel--review .evaluation-review-gate__actions { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rh-border-strong); display: flex; flex-wrap: wrap; gap: 12px; }
+.prequalification-panel--review .evaluation-review-gate details[open] { border-left: 3px solid var(--rh-navy); }
+.prequalification-panel--review .evaluation-review-gate details[open] summary { border-bottom: 1px solid var(--rh-border-strong); }
+.prequalification-panel--review .evaluation-review-gate summary { padding-block: 12px; }
+/* Native details animation in supporting browsers; keep native keyboard behavior. */
+@supports (interpolate-size: allow-keywords) {
+  .prequalification-panel--review .evaluation-review-gate details { interpolate-size: allow-keywords; }
+  .prequalification-panel--review .evaluation-review-gate details::details-content {
+    height: 0;
+    overflow: clip;
+    opacity: 0;
+    transition: height 240ms ease, opacity 180ms ease, content-visibility 240ms allow-discrete;
+  }
+  .prequalification-panel--review .evaluation-review-gate details[open]::details-content { height: auto; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prequalification-panel--review .evaluation-review-gate details::details-content { transition: none; }
+}
+@media (max-width: 760px) {
+  .prequalification-panel--review .evaluation-review-gate__answers { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .prequalification-panel--review .evaluation-review-gate dl { grid-template-columns: minmax(0, 1fr); }
+  :is(.home-panel--guided, .profile-page--guided, .results-panel--guided, .prequalification-panel--review) > :is(.section-heading, .page-head),
+  .prequalification-panel--review .evaluation-review-gate { padding: 18px; }
+}

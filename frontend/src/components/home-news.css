@@ -1,0 +1,124 @@
+/* One container per news group; category headings and actions have separate roles. */
+.home-panel--guided .home-change-timeline__rail { gap: 12px; }
+.home-panel--guided .home-change-group {
+  --news-accent: var(--rh-navy);
+  --news-surface: var(--rh-blue-light);
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--rh-border-strong);
+  border-radius: var(--rh-radius-lg);
+  background: var(--rh-surface);
+  box-shadow: var(--rh-shadow-xs);
+  overflow: hidden;
+}
+.home-panel--guided .home-change-group--uf_reachability_crossed,
+.home-panel--guided .home-change-group--monthly_plan_summary {
+  --news-accent: var(--rh-yellow-dark);
+  --news-surface: var(--rh-yellow-light);
+}
+.home-panel--guided .home-change-group__head {
+  padding: 10px 16px;
+  gap: 10px;
+  border-bottom: 1px solid var(--rh-border-strong);
+  border-top: 3px solid var(--news-accent);
+  background: var(--news-surface);
+}
+.home-panel--guided .home-change-group__icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  border-radius: var(--rh-radius-sm);
+  background: var(--rh-navy);
+  color: var(--rh-white);
+}
+.home-panel--guided .home-change-group__head h3 { font-size: 1.05rem; line-height: 1.4; font-weight: 750; }
+.home-panel--guided .home-change-group__head p { color: var(--rh-text-secondary); font-size: .95rem; line-height: 1.35; margin-top: 0; }
+.home-panel--guided .home-change-group__count {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--rh-border-strong);
+  border-radius: var(--rh-radius-sm);
+  background: var(--rh-surface);
+  color: var(--rh-navy);
+  font-family: var(--rh-font-mono);
+  font-weight: 700;
+}
+.home-panel--guided .home-change-card { padding: 14px 16px; border: 0; border-radius: 0; background: transparent; }
+.home-panel--guided .home-change-card.is-highlighted { box-shadow: inset 0 0 0 2px var(--rh-yellow); }
+.home-panel--guided .home-change-card__body { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 20px; }
+.home-panel--guided .home-change-card__meta { color: var(--rh-text-secondary); font-size: .92rem; font-weight: 600; }
+.home-panel--guided .home-change-card__body > h4 { grid-column: 1; margin: 0; color: var(--rh-navy); font-size: 1.12rem; line-height: 1.35; font-weight: 700; }
+.home-panel--guided .home-change-card p { font-size: 1rem; line-height: 1.45; max-width: 75ch; }
+.home-panel--guided .home-change-card__explain { padding: 10px 0 0; margin-top: 2px; gap: 6px; border: 0; border-top: 1px solid var(--rh-border); border-radius: 0; background: transparent; }
+.home-panel--guided .home-change-card__explain > strong { font-size: .95rem; }
+.home-panel--guided .home-change-card__project { font-size: .9rem; color: var(--rh-navy); font-weight: 600; }
+.home-panel--guided .home-change-card__delta { gap: 10px; margin-top: 4px; }
+.home-panel--guided .home-change-card__delta > div { min-width: 0; padding: 8px 12px; border-radius: var(--rh-radius-sm); background: var(--rh-background); border: 1px solid var(--rh-border-strong); }
+.home-panel--guided .home-change-card__delta > div:last-child { background: var(--rh-blue-light); }
+.home-panel--guided .home-change-card__delta dt { font-size: .85rem; color: var(--rh-text-secondary); letter-spacing: .04em; margin-bottom: 3px; }
+.home-panel--guided .home-change-card__delta dd { font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.home-panel--guided .home-change-card__actions {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.home-panel--guided .home-change-card__actions .compact-button { min-height: 44px; padding: 8px 12px; font-size: .95rem; line-height: 1.4; box-shadow: none; }
+.home-panel--guided .home-change-card__field-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); padding: 12px; gap: 12px; }
+.home-panel--guided .home-change-card__field-row :is(strong, span) { font-size: .85rem; line-height: 1.5; }
+@media (max-width: 900px) {
+  .home-panel--guided .home-change-card__body { grid-template-columns: minmax(0, 1fr); }
+  .home-panel--guided .home-change-card__actions { grid-column: 1; grid-row: auto; margin-top: 6px; }
+}
+@media (max-width: 640px) {
+  .home-panel--guided .home-change-group__head { flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; }
+  .home-panel--guided .home-change-card { padding: 12px; }
+  .home-panel--guided .home-change-card__actions { align-items: stretch; flex-direction: column; }
+  .home-panel--guided .home-change-card__actions button { width: 100%; }
+  .home-panel--guided .home-change-card__field-row { grid-template-columns: 1fr; gap: 6px; }
+}
+@media (max-width: 380px) { .home-panel--guided .home-change-card__delta { grid-template-columns: 1fr; } }
+
+/* The detail dialog is portalled to body, so its styles use an explicit scope. */
+.home-change-detail-modal--compact .home-change-detail-modal__card { width: min(1040px, 100%); max-height: calc(100dvh - 40px); gap: 0; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); }
+.home-change-detail-modal--compact .home-change-detail-modal__head { padding: 16px 20px; background: var(--rh-blue-light); border-bottom: 1px solid var(--rh-border-strong); backdrop-filter: none; }
+.home-change-detail-modal--compact .home-change-detail-modal__head h2 { font-size: 1.4rem; line-height: 1.3; }
+.home-change-detail-modal--compact .home-change-detail-modal__head p { font-size: 1rem; line-height: 1.45; }
+.home-change-detail-modal--compact .home-change-detail-modal__head .eyebrow { font-size: .85rem; }
+.home-change-detail-modal--compact .home-change-detail-modal__list { gap: 16px; padding: 20px; background: var(--rh-blue-light); }
+.home-change-detail-modal--compact .home-change-detail-modal__item,
+.home-change-detail-modal--compact .home-change-detail-modal__item:nth-child(n) { gap: 8px 20px; padding: 18px 20px; border: 1px solid #8293aa; border-left: 4px solid var(--rh-navy); border-radius: var(--rh-radius-md); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
+.home-change-detail-modal--compact .home-change-detail-modal__item time { color: var(--rh-text-secondary); font-size: .9rem; font-weight: 600; }
+.home-change-detail-modal--compact .home-change-detail-modal__item h3 { font-size: 1.2rem; line-height: 1.4; }
+.home-change-detail-modal--compact .home-change-detail-modal__item p { font-size: 1rem; line-height: 1.45; }
+.home-change-detail-modal--compact .home-change-card__explain { gap: 6px; padding: 10px 0 0; margin-top: 2px; border: 0; border-top: 1px solid var(--rh-border); border-radius: 0; background: transparent; }
+.home-change-detail-modal--compact .home-change-card__explain > strong { font-size: .95rem; }
+.home-change-detail-modal--compact .home-change-card__project { color: var(--rh-navy); font-size: .95rem; }
+.home-change-detail-modal--compact .home-change-card__delta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+.home-change-detail-modal--compact .home-change-card__delta > div { min-width: 0; padding: 8px 12px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-sm); background: var(--rh-background); }
+.home-change-detail-modal--compact .home-change-card__delta > div:last-child { background: var(--rh-blue-light); }
+.home-change-detail-modal--compact .home-change-card__delta > div:only-child { grid-column: 1 / -1; }
+.home-change-detail-modal--compact .home-change-card__delta dt { font-size: .85rem; color: var(--rh-text-secondary); margin-bottom: 3px; }
+.home-change-detail-modal--compact .home-change-card__delta dd { font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.home-change-detail-modal--compact .home-change-card__field-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); padding: 8px 10px; }
+.home-change-detail-modal--compact .home-change-card__field-row :is(strong, span) { font-size: .95rem; line-height: 1.45; }
+.home-change-detail-modal--compact .home-change-card__actions { align-self: center; gap: 8px; margin: 0; }
+.home-change-detail-modal--compact .compact-button { min-height: 44px; padding: 8px 12px; font-size: .95rem; line-height: 1.4; }
+.home-change-detail-modal--compact button:focus-visible { outline: 3px solid var(--rh-navy); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .home-change-detail-modal--compact { padding: 12px; }
+  .home-change-detail-modal--compact .home-change-detail-modal__head { padding: 14px; gap: 10px; }
+  .home-change-detail-modal--compact .home-change-detail-modal__list { padding: 12px; }
+  .home-change-detail-modal--compact .home-change-detail-modal__item { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .home-change-detail-modal--compact .home-change-detail-modal__item > .home-change-card__actions { grid-column: 1; grid-row: auto; justify-content: flex-end; margin-top: 6px; }
+  .home-change-detail-modal--compact .home-change-card__field-row { grid-template-columns: 1fr; gap: 5px; }
+}

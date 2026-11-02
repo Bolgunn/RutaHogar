@@ -3,6 +3,9 @@
   "builds": [
     {
       "src": "api/index.py",
+      "config": {
+        "includeFiles": "app/lead_changes/templates/**"
+      },
       "use": "@vercel/python"
     }
   ],

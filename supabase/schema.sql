@@ -282,15 +282,19 @@ returns table (
   id uuid,
   full_name text,
   phone text,
-  reliability_status text
+  reliability_status text,
+  email text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
+  -- evaluations.email no se completa desde HU13: el correo sale de auth.users.
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status,
+         u.email::text as email
   from public.profiles p
+  left join auth.users u on u.id = p.id
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
     and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);

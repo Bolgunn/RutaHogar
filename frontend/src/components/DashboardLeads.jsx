@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import useModalFocus from "./useModalFocus";
 import { getAvailableProjects } from "../services/projectService";
 import { syncLeadToSimulatedCrm, getSimulatedCrmLeads, buildCrmPayload } from "../services/crmService";
 import { reportLead } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
 import { detectContactOpportunities } from "../lib/matching/contactOpportunities";
+import { buildOpportunityChanges } from "../lib/commercial/opportunityChanges";
 import { buildLeadProjectComparison } from "../lib/matching/leadComparison";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { rankLeadsForProject } from "../lib/matching/leadRanking";
@@ -339,7 +341,7 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role }) {
+export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role, highScoreNotification }) {
   const [classification, setClassification] = useState("Alto");
   const [commune, setCommune] = useState("todas");
   const [age, setAge] = useState(0);
@@ -376,6 +378,12 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [crmLeads, setCrmLeads] = useState({});
   const [isCrmModalOpen, setIsCrmModalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  useModalFocus(showOpportunities || showComparison || isCrmModalOpen, () => {
+    if (syncing) return;
+    if (isCrmModalOpen) setIsCrmModalOpen(false);
+    else if (showComparison) setShowComparison(false);
+    else if (showOpportunities) setShowOpportunities(false);
+  });
   
   // Commercial Records State
   const [commercialRecords, setCommercialRecords] = useState({});
@@ -632,6 +640,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
   const leadCard = ({ lead, match }) => {
     const isComparisonSelected = comparisonLeadIds.includes(lead.id);
+    const riskSummary = lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes";
     return (
       <article
         key={lead.id}
@@ -640,6 +649,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         tabIndex="0"
         onClick={() => setSelectedLead(lead)}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             setSelectedLead(lead);
@@ -654,7 +664,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             {selectedProject && match?.reorientable && (
               <span className="executive-lead-card__reorientable">
                 <i className="ti ti-route" aria-hidden="true" />
-                Reorientable para este proyecto
+                Reorientable
               </span>
             )}
           </div>
@@ -682,14 +692,14 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             )}
           </div>
         </div>
-        <dl className="executive-lead-card__facts">
+        <dl className={`executive-lead-card__facts ${selectedProject ? "" : "executive-lead-card__facts--general"}`}>
           <div><dt>Comuna</dt><dd>{lead.input?.comuna_objetivo || lead.onboarding?.comuna_interes || "Sin dato"}</dd></div>
           {selectedProject ? <>
             <div><dt>Afinidad</dt><dd>{match?.afinidad ?? "-"}<small>{match?.clasificacion || "Sin dato"}</small></dd></div>
             <div><dt>Capacidad</dt><dd>{match?.evidencia?.capacidad_uf ?? "Sin dato"} UF<small>{match?.evidencia?.plazo_anios ? `${match.evidencia.plazo_anios} años` : "Sin dato"}</small></dd></div>
             <div><dt>Pie disponible</dt><dd>{match?.evidencia?.pie_disponible_uf ?? "Sin dato"} UF</dd></div>
             <div className="executive-lead-card__fact--wide"><dt>Bloqueador</dt><dd>{match?.bloqueador_principal?.titulo || "Sin bloqueador"}</dd></div>
-          </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd>{lead.result?.risks?.slice(0, 2).map(displayItemText).join(" ") || "Sin riesgos relevantes"}</dd></div>}
+          </> : <div className="executive-lead-card__fact--wide"><dt>Riesgos registrados</dt><dd className="executive-lead-card__risk-summary" title={riskSummary}>{riskSummary}</dd></div>}
         </dl>
         <div className="executive-lead-card__actions">
           {selectedProject && <button type="button" className={`secondary-button compact-button executive-compare-toggle ${isComparisonSelected ? "is-active" : ""}`} onClick={(event) => { event.stopPropagation(); toggleComparisonLead(lead); }}>{isComparisonSelected ? "Seleccionado" : "Comparar"}</button>}
@@ -701,6 +711,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
   const opportunityCard = (opportunity, { showDismiss = false } = {}) => {
     const lead = opportunity.lead;
+    const changes = buildOpportunityChanges(opportunity.previous, lead);
     const phone = lead?.phone || lead?.profile?.phone || "";
     const firstName = lead?.full_name?.split(" ")[0] || "cliente";
     const mailHref = `mailto:${lead?.email || ""}?subject=${encodeURIComponent("Oportunidad RutaHogar detectada")}&body=${encodeURIComponent(`Hola ${firstName},\n\nDetectamos una mejora en tu preparación financiera y queremos revisar alternativas compatibles contigo.\n\nSaludos.`)}`;
@@ -712,6 +723,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     return (
       <article className="executive-opportunity-card" key={opportunity.id}>
         <div className="executive-opportunity-card__main">
+          <div className="executive-opportunity-card__summary">
           <span className="eyebrow">{opportunity.primary.label}</span>
           <h3>{lead.full_name || lead.email || "Lead sin nombre"}</h3>
           <p>{opportunity.primary.detail}</p>
@@ -720,6 +732,17 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             {opportunity.primary.project && <span>{opportunity.primary.project.nombre}</span>}
             {opportunity.primary.match?.afinidad != null && <span>Afinidad {opportunity.primary.match.afinidad}</span>}
           </div>
+          </div>
+          <section className="executive-opportunity-changes" aria-label="Cambios entre evaluaciones">
+            <h4>Cambios entre evaluaciones</h4>
+            {changes.length > 0 ? <dl>
+              {changes.map((change) => <div key={change.key} className={`is-${change.tone}`}>
+                <dt>{change.label}</dt>
+                <dd><strong>{change.difference}</strong><span>{change.before}<i className="ti ti-arrow-right" aria-label="a" />{change.after}</span></dd>
+              </div>)}
+            </dl> : <p>No hay variaciones comparables en los antecedentes financieros y laborales disponibles.</p>}
+            {changes.length > 0 && <small>Variaciones de antecedentes; no representan puntos del score.</small>}
+          </section>
           {secondaryTriggerLabels.length > 0 && (
             <p className="executive-opportunity-card__extra">
               También cumple: {secondaryTriggerLabels.join(", ")}.
@@ -727,28 +750,28 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
           )}
         </div>
         <div className="executive-opportunity-card__actions">
-          <button type="button" className="secondary-button compact-button" onClick={() => setSelectedLead(lead)}>Ver ficha</button>
+          <button type="button" className="secondary-button compact-button executive-opportunity-card__open" onClick={() => setSelectedLead(lead)}>Ver ficha <i className="ti ti-arrow-up-right" aria-hidden="true" /></button>
           {lead.email ? <a className="secondary-button compact-button" href={mailHref}>Correo</a> : <button type="button" className="secondary-button compact-button" disabled>Sin correo</button>}
           {phone ? <a className="primary-button compact-button" href={whatsappHref} target="_blank" rel="noopener noreferrer">WhatsApp</a> : <button type="button" className="secondary-button compact-button" disabled>Sin WhatsApp</button>}
-          {showDismiss && <button type="button" className="secondary-button compact-button" onClick={() => dismissOpportunity(opportunity.id)}>Descartar</button>}
+          {showDismiss && <button type="button" className="secondary-button compact-button executive-opportunity-card__dismiss" onClick={() => dismissOpportunity(opportunity.id)}>Descartar oportunidad</button>}
         </div>
       </article>
     );
   };
 
-  return <section className="section-block leads-panel admin-leads-page">
-    <NotificationToast
-      count={opportunityToastDismissed ? 0 : activeOpportunities.length}
-      title={`${activeOpportunities.length} oportunidad${activeOpportunities.length === 1 ? "" : "es"} nueva${activeOpportunities.length === 1 ? "" : "s"}`}
-      message="Hay leads con mejoras recientes listos para contactar."
-      icon="🚀"
-      className="notification-toast--opportunities"
-      onClick={() => {
+  return <section className="section-block leads-panel admin-leads-page executive-leads-workspace">
+    <NotificationToast items={[
+      ...(highScoreNotification ? [{ ...highScoreNotification, id: "high-score" }] : []),
+      { id: "opportunities", count: opportunityToastDismissed ? 0 : activeOpportunities.length,
+      title: `${activeOpportunities.length} oportunidad${activeOpportunities.length === 1 ? "" : "es"} nueva${activeOpportunities.length === 1 ? "" : "s"}`,
+      message: "Hay leads con mejoras recientes listos para contactar.",
+      className: "notification-toast--opportunities",
+      onClick: () => {
         setShowOpportunities(true);
         setVisibleOpportunityCount(6);
-      }}
-      onClose={() => setOpportunityToastDismissed(true)}
-    />
+      },
+      onClose: () => setOpportunityToastDismissed(true) },
+    ]} />
 
     <header className="executive-leads-heading">
       <div className="section-heading">
@@ -793,15 +816,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
         {activeFilters && <button type="button" className="secondary-button compact-button" onClick={clearFilters}>Restablecer vista</button>}
       </div>
       <div className="executive-leads-controls__guide">
-        <span>Cómo usar esta bandeja</span>
-        <p>Selecciona primero un proyecto. Luego elige si quieres ver antes el mejor encaje o la mayor capacidad de compra; usa los filtros restantes solo para acotar la lista.</p>
+        <i className="ti ti-info-circle" aria-hidden="true" />
+        <p>Selecciona un proyecto para comparar encaje y capacidad. Usa los filtros para acotar la bandeja.</p>
       </div>
       <div className="executive-leads-controls__primary">
-        <label className="executive-leads-controls__project">Proyecto<select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Al elegirlo, calculamos afinidad, capacidad y pie para ese proyecto.</small></label>
-        <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Puedes cambiar el criterio sin perder los filtros aplicados." : "Disponible al seleccionar un proyecto."}</small></label>
+        <label className="executive-leads-controls__project"><span><i className="ti ti-building-estate" aria-hidden="true" />Proyecto a analizar</span><select value={projectId} onChange={(event) => selectProject(event.target.value)} disabled={Boolean(executiveScope) && projectsLoaded && !projects.length}><option value="">Sin proyecto: vista general</option>{projects.map((project) => <option key={project.id} value={String(project.id)}>{project.nombre} · {project.comuna} · {project.precio_min_uf}-{project.precio_max_uf} UF</option>)}</select><small>Compara afinidad, capacidad y pie con este proyecto.</small></label>
+        <label className="executive-leads-controls__sort">Orden de la bandeja<select value={sortBy} onChange={(event) => setSortBy(event.target.value)} disabled={!selectedProject}><option value="afinidad">Mejor afinidad con el proyecto</option><option value="capacidad">Mayor capacidad de compra</option></select><small>{selectedProject ? "Ordena los resultados sin cambiar los filtros." : "Disponible al seleccionar un proyecto."}</small></label>
       </div>
       <div className="executive-leads-controls__priority">
-        <div><span className="eyebrow">Paso 2</span><strong>Prioridad de calificación</strong><p>Selecciona una tarjeta para mostrar solo esa prioridad.</p></div>
+        <div><strong>Prioridad de calificación</strong><p>Filtra por nivel de calificación.</p></div>
         <div className="admin-leads-metric-strip executive-priority-rail" aria-label="Filtrar leads por prioridad">
           {[
             ["todos", "Total", latestEvaluations.length, ""],
@@ -846,7 +869,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
     {showOpportunities && (
       <div className="admin-modal executive-opportunities-modal" onClick={() => setShowOpportunities(false)}>
-        <div className="admin-modal-card admin-modal-card--xl executive-opportunities-modal__card" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-modal-card admin-modal-card--xl executive-opportunities-modal__card" role="dialog" aria-modal="true" aria-label="Oportunidades de contacto" onClick={(event) => event.stopPropagation()}>
           <div className="admin-modal-header executive-opportunities-modal__header">
             <div className="admin-modal-heading">
               <h2>Oportunidades de contacto</h2>
@@ -887,7 +910,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
     {showComparison && selectedProject && leadComparison.length === 2 && (
       <div className="admin-modal executive-comparison-modal" onClick={() => setShowComparison(false)}>
-        <div className="admin-modal-card admin-modal-card--xl executive-comparison-modal__card" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-modal-card admin-modal-card--xl executive-comparison-modal__card" role="dialog" aria-modal="true" aria-label="Comparación de leads" onClick={(event) => event.stopPropagation()}>
           <div className="admin-modal-header executive-comparison-modal__header">
             <div className="admin-modal-heading">
               <span className="eyebrow">Comparación para proyecto</span>
@@ -980,7 +1003,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
     {isCrmModalOpen && (
       <div className="admin-modal" onClick={() => setIsCrmModalOpen(false)}>
-        <div className="admin-modal-card admin-modal-card--xl" onClick={(e) => e.stopPropagation()}>
+        <div className="admin-modal-card admin-modal-card--xl executive-crm-modal" role="dialog" aria-modal="true" aria-label="Auditoría CRM" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-header">
             <div className="admin-modal-heading">
               <span className="eyebrow">Auditoría CRM Simulado</span>

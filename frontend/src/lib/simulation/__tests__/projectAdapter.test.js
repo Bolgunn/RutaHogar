@@ -141,6 +141,7 @@ describe("portalProjectToCatalogCard", () => {
       estado: "en_construccion",
       inmobiliaria: "Euro Inmobiliaria",
       url: "https://www.portalinmobiliario.com/MLC-1",
+      imagen_url: "",
       origen: "portal",
     });
   });

@@ -1,3 +1,7 @@
+import AdminPagination from "./AdminPagination";
+import useModalFocus from "./useModalFocus";
+import { paginateRows } from "../lib/adminPagination";
+import "./admin-management.css";
 import React, { useEffect, useMemo, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
 import { comunasMvp } from "../constants/comunas";
@@ -72,6 +76,9 @@ export default function AdminProjectCatalog() {
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null);
 
+  const [projectPage, setProjectPage] = useState(1);
+  const [teamPage, setTeamPage] = useState(1);
+  const [assignmentPage, setAssignmentPage] = useState(1);
   const [search, setSearch] = useState("");
   const [filterEstado, setFilterEstado] = useState("todos");
   const [filterComuna, setFilterComuna] = useState("todas");
@@ -107,6 +114,9 @@ export default function AdminProjectCatalog() {
   const [assigningAdmin, setAssigningAdmin] = useState(false);
 
   const isGlobalAdmin = Boolean(tenant?.isGlobalAdmin);
+  useEffect(() => { setProjectPage(1); }, [search, filterEstado, filterComuna, selectedInmobiliaria, projectSort.field, projectSort.direction]);
+  useEffect(() => { setTeamPage(1); }, [selectedInmobiliaria]);
+  useEffect(() => { setAssignmentPage(1); }, [modal?.project?.id]);
 
   useEffect(() => {
     let active = true;
@@ -224,6 +234,10 @@ export default function AdminProjectCatalog() {
       return projectSort.direction === "asc" ? comparison : -comparison;
     });
   }, [filtered, projectSort]);
+
+  const projectPagination = paginateRows(sortedProjects, projectPage, 10);
+  const teamPagination = paginateRows(executiveRoster, teamPage, 8);
+  const assignmentPagination = paginateRows(executives, assignmentPage, 6);
 
   const toggleProjectSort = (field) => {
     setProjectSort((current) => ({
@@ -527,7 +541,7 @@ export default function AdminProjectCatalog() {
     );
   }, [visibleProjectInsights]);
 
-  const highlightedProjects = visibleProjectInsights;
+  const highlightedProjects = visibleProjectInsights.slice(0, 3);
 
   const upcomingDelivery = useMemo(() => {
     return visibleProjectInsights
@@ -536,8 +550,17 @@ export default function AdminProjectCatalog() {
       .sort((a, b) => a.entrega_estimada.localeCompare(b.entrega_estimada))[0] || null;
   }, [visibleProjectInsights]);
 
+  useModalFocus(Boolean(modal || executiveModal || confirmDelete || inmobiliariaModal || adminModal), () => {
+    if (saving || assigning || deleting || creatingExecutive || creatingInmobiliaria || assigningAdmin) return;
+    if (modal) closeModal();
+    else if (executiveModal) setExecutiveModal(false);
+    else if (confirmDelete) setConfirmDelete(null);
+    else if (inmobiliariaModal) setInmobiliariaModal(false);
+    else if (adminModal) setAdminModal(false);
+  });
+
   return (
-    <section className="section-block admin-catalog admin-catalog-page">
+    <section className="section-block admin-catalog admin-catalog-page admin-catalog-workspace">
       <div className="section-heading">
         <span className="eyebrow">Administración</span>
         <h1>Catálogo de proyectos</h1>
@@ -578,82 +601,31 @@ export default function AdminProjectCatalog() {
       <section className="admin-catalog-metric-strip admin-section-gap" aria-label="Pulso del catálogo">
         <article className="admin-panel-metric">
           <span>Visibles</span>
-          <strong>{visibleStats.total}</strong>
+          <strong>{loading ? "—" : visibleStats.total}</strong>
         </article>
         <article className="admin-panel-metric">
           <span>Disponibles</span>
-          <strong>{visibleStats.disponibles}</strong>
+          <strong>{loading ? "—" : visibleStats.disponibles}</strong>
         </article>
         <article className="admin-panel-metric">
           <span>En construcción</span>
-          <strong>{visibleStats.construccion}</strong>
+          <strong>{loading ? "—" : visibleStats.construccion}</strong>
         </article>
         <article className="admin-panel-metric">
           <span>Sin cobertura</span>
-          <strong>{visibleStats.sinCobertura}</strong>
+          <strong>{loading ? "—" : visibleStats.sinCobertura}</strong>
         </article>
         <article className="admin-panel-metric">
           <span>Ejecutivos asignados</span>
-          <strong>{executiveStats.asignados}</strong>
+          <strong>{rosterLoading ? "—" : executiveStats.asignados}</strong>
         </article>
       </section>
 
-      <div className="admin-catalog-board admin-section-gap">
-        <article className="admin-surface admin-catalog-radar">
-          <div className="admin-surface__header">
-            <div className="admin-surface__title">
-              <h2>Radar del catálogo</h2>
-              <p>{`${highlightedProjects.length} proyectos en la lista actual`}</p>
-            </div>
-            <span className="admin-tag admin-tag--soft">
-              {hasActiveFilters ? `${filtered.length} resultados` : `${projects.length} en cobertura`}
-            </span>
-          </div>
-
-          {!highlightedProjects.length ? (
-            <div className="admin-compact-empty">
-              <strong>No hay proyectos en esta vista.</strong>
-              <p>Sin resultados para la cobertura actual.</p>
-            </div>
-          ) : (
-            <div className="admin-scroll-panel admin-scroll-panel--radar">
-              <div className="admin-project-highlight-list admin-project-highlight-list--scroll">
-                {highlightedProjects.map(({ project, coverage }) => (
-                  <article className="admin-project-highlight" key={project.id}>
-                    <div className="admin-project-highlight__main">
-                      <div>
-                        <strong>{project.nombre}</strong>
-                        <p>{project.descripcion || "Sin descripción comercial visible todavía."}</p>
-                      </div>
-                      <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
-                        {estadoProyectoLabels[project.estado] || project.estado}
-                      </span>
-                    </div>
-
-                    <div className="admin-project-highlight__meta">
-                      <span>{project.comuna}</span>
-                      <span>{tipoProyectoLabels[project.tipo] || project.tipo}</span>
-                      <span>{formatUfRange(project)}</span>
-                      <span>{formatDeliveryMonth(project.entrega_estimada)}</span>
-                    </div>
-
-                    <div className="admin-project-highlight__foot">
-                      <span>{coverage.vinculados} ejecutivos vinculados</span>
-                      <span>{coverage.pendientes > 0 ? `${coverage.pendientes} pendientes` : "Sin pendientes"}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
-        </article>
-
-        <aside className="admin-catalog-side-stack">
-          <article className="admin-surface admin-surface--soft">
+          <article className="admin-surface admin-catalog-operations">
             <div className="admin-surface__header">
               <div className="admin-surface__title">
                 <h2>Controles del catálogo</h2>
-                <p>{isGlobalAdmin ? "Cobertura y altas" : "Altas del catálogo"}</p>
+                <p>{isGlobalAdmin ? "Elige el ámbito y gestiona las altas." : "Gestiona proyectos y cuentas comerciales."}</p>
               </div>
             </div>
 
@@ -704,6 +676,211 @@ export default function AdminProjectCatalog() {
             </div>
           </article>
 
+      <div className="admin-surface admin-section-gap admin-projects-table-surface">
+        <div className="admin-surface__header">
+          <div className="admin-surface__title">
+            <h2>Mesa de proyectos</h2>
+            <p>
+              {filtered.length === projects.length
+                ? `${projects.length} proyectos visibles en esta cobertura.`
+                : `${filtered.length} de ${projects.length} proyectos coinciden con la búsqueda.`}
+            </p>
+          </div>
+          <div className="admin-surface__actions">
+            {hasActiveFilters && (
+              <button type="button" className="secondary-button compact-button" onClick={clearFilters}>
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="toolbar-filters admin-toolbar-filters admin-projects-toolbar">
+          <label>
+            Buscar por nombre
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Ej: Parque Ñuñoa"
+            />
+          </label>
+
+          <label>
+            Estado
+            <select value={filterEstado} onChange={(event) => setFilterEstado(event.target.value)}>
+              <option value="todos">Todos</option>
+              <option value="disponible">Disponible</option>
+              <option value="en_construccion">En construcción</option>
+              <option value="agotado">Agotado</option>
+            </select>
+          </label>
+
+          <label>
+            Comuna
+            <select value={filterComuna} onChange={(event) => setFilterComuna(event.target.value)}>
+              <option value="todas">Todas las comunas</option>
+              {comunasDisponibles.map((comuna) => (
+                <option key={comuna} value={comuna}>
+                  {comuna}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {loading ? (
+          <div className="admin-table-loading">
+            <span className="admin-skeleton-line full"></span>
+            <span className="admin-skeleton-line full"></span>
+            <span className="admin-skeleton-line medium"></span>
+          </div>
+        ) : (
+          <div className="table-wrap admin-table-scroll admin-table-scroll--projects" tabIndex={0} role="region" aria-label="Lista de proyectos, desplazamiento vertical">
+            <table className="admin-project-table">
+              <thead>
+                <tr>
+                   {isGlobalAdmin && <th aria-sort={projectSort.field === "inmobiliaria" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("inmobiliaria")}>Inmobiliaria <span aria-hidden="true">{sortIndicator("inmobiliaria") === "Ascendente" ? "↑" : sortIndicator("inmobiliaria") === "Descendente" ? "↓" : "↕"}</span></button></th>}
+                   <th>Nombre</th>
+                   <th aria-sort={projectSort.field === "comuna" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("comuna")}>Comuna <span aria-hidden="true">{sortIndicator("comuna") === "Ascendente" ? "↑" : sortIndicator("comuna") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "tipo" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("tipo")}>Tipo <span aria-hidden="true">{sortIndicator("tipo") === "Ascendente" ? "↑" : sortIndicator("tipo") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "precio" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("precio")}>Rango UF <span aria-hidden="true">{sortIndicator("precio") === "Ascendente" ? "↑" : sortIndicator("precio") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                   <th aria-sort={projectSort.field === "estado" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("estado")}>Estado <span aria-hidden="true">{sortIndicator("estado") === "Ascendente" ? "↑" : sortIndicator("estado") === "Descendente" ? "↓" : "↕"}</span></button></th>
+                  <th>Ejecutivos</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                 {projectPagination.rows.map((project) => {
+                  const { total, vinculados, pendientes } = countExecutives(project);
+                  return (
+                    <tr key={project.id} className="admin-project-table__row">
+                      {isGlobalAdmin && <td>{project.inmobiliaria_nombre || "-"}</td>}
+                      <td className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
+                      <td>{project.comuna}</td>
+                      <td>{tipoProyectoLabels[project.tipo] || project.tipo}</td>
+                      <td><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
+                      <td>
+                        <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
+                          {estadoProyectoLabels[project.estado] || project.estado}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="admin-coverage-count"><i className="ti ti-users" aria-hidden="true" />{vinculados}</span>
+                        {pendientes > 0 && <small>{pendientes} pendientes</small>}
+                      </td>
+                      <td className="admin-project-table__actions-cell">
+                        <div className="admin-row-actions admin-project-table__actions">
+                          <button
+                            type="button"
+                            className="secondary-button compact-button admin-project-action-button"
+                            onClick={() => openEditModal(project)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-button compact-button admin-project-action-button"
+                            onClick={() => handleStatusQuickAction(project)}
+                          >
+                            {project.estado === "agotado" ? "Reactivar" : "Agotar"}
+                          </button>
+                          {total === 0 && (
+                            <button
+                              type="button"
+                              className="secondary-button compact-button admin-project-action-button danger-button"
+                              onClick={() => setConfirmDelete(project)}
+                            >
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan={columnCount}>
+                      {hasActiveFilters ? (
+                        "No hay proyectos que coincidan con los filtros aplicados."
+                      ) : (
+                        <div className="empty-state">
+                          <strong>Aún no hay proyectos</strong>
+                          <p>Empieza registrando el primer proyecto para activar el catálogo.</p>
+                          <button type="button" onClick={openCreateModal}>
+                            Crear primer proyecto
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!loading && <AdminPagination pagination={projectPagination} onChange={setProjectPage} label="proyectos" />}
+      </div>
+
+      <div className="admin-catalog-board admin-section-gap">
+        <article className="admin-surface admin-catalog-radar">
+          <div className="admin-surface__header">
+            <div className="admin-surface__title">
+              <h2>Vista rápida de proyectos</h2>
+              <p>{`${highlightedProjects.length} de ${filtered.length} proyectos; consulta la mesa para ver todos`}</p>
+            </div>
+            <span className="admin-tag admin-tag--soft">
+              {hasActiveFilters ? `${filtered.length} resultados` : `${projects.length} en cobertura`}
+            </span>
+          </div>
+
+          {loading ? <div className="admin-compact-empty" role="status">Cargando proyectos…</div> : !highlightedProjects.length ? (
+            <div className="admin-compact-empty">
+              <strong>No hay proyectos en esta vista.</strong>
+              <p>Sin resultados para la cobertura actual.</p>
+            </div>
+          ) : (
+            <div className="admin-scroll-panel admin-scroll-panel--radar" tabIndex={0} role="region" aria-label="Vista rápida de proyectos, desplazamiento vertical">
+              <div className="admin-project-highlight-list admin-project-highlight-list--scroll">
+                {highlightedProjects.map(({ project, coverage }) => (
+                  <article className="admin-project-highlight" key={project.id}>
+                    <div className="admin-project-highlight__main">
+                      <div>
+                        <strong>{project.nombre}</strong>
+                        {project.descripcion?.length > 160 ? (
+                          <details className="admin-project-description">
+                            <summary>{project.descripcion.slice(0, 110)}… <span>Leer descripción</span></summary>
+                            <p>{project.descripcion}</p>
+                          </details>
+                        ) : <p>{project.descripcion || "Sin descripción comercial visible todavía."}</p>}
+                      </div>
+                      <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
+                        {estadoProyectoLabels[project.estado] || project.estado}
+                      </span>
+                    </div>
+
+                    <div className="admin-project-highlight__meta">
+                      <span>{project.comuna}</span>
+                      <span>{tipoProyectoLabels[project.tipo] || project.tipo}</span>
+                      <span>{formatUfRange(project)}</span>
+                      <span>{formatDeliveryMonth(project.entrega_estimada)}</span>
+                    </div>
+
+                    <div className="admin-project-highlight__foot">
+                      <span>{coverage.vinculados} ejecutivos vinculados</span>
+                      <span>{coverage.pendientes > 0 ? `${coverage.pendientes} pendientes` : "Sin pendientes"}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </article>
+
+        <aside className="admin-catalog-side-stack">
+
+
           <article className="admin-surface">
             <div className="admin-surface__header">
               <div className="admin-surface__title">
@@ -739,162 +916,11 @@ export default function AdminProjectCatalog() {
         </aside>
       </div>
 
-      <div className="admin-surface admin-section-gap admin-projects-table-surface">
-        <div className="admin-surface__header">
-          <div className="admin-surface__title">
-            <h2>Mesa de proyectos</h2>
-            <p>
-              {filtered.length === projects.length
-                ? `${projects.length} proyectos visibles en esta cobertura.`
-                : `${filtered.length} de ${projects.length} proyectos coinciden con la búsqueda.`}
-            </p>
-          </div>
-          <div className="admin-surface__actions">
-            {hasActiveFilters && (
-              <button type="button" className="secondary-button compact-button" onClick={clearFilters}>
-                Limpiar filtros
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="toolbar-filters admin-toolbar-filters admin-projects-toolbar">
-          <label style={{ flexBasis: "100%" }}>
-            Buscar por nombre
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Ej: Parque Ñuñoa"
-              style={{ marginTop: "0.5rem" }}
-            />
-          </label>
-
-          <label>
-            Estado
-            <select value={filterEstado} onChange={(event) => setFilterEstado(event.target.value)}>
-              <option value="todos">Todos</option>
-              <option value="disponible">Disponible</option>
-              <option value="en_construccion">En construcción</option>
-              <option value="agotado">Agotado</option>
-            </select>
-          </label>
-
-          <label>
-            Comuna
-            <select value={filterComuna} onChange={(event) => setFilterComuna(event.target.value)}>
-              <option value="todas">Todas las comunas</option>
-              {comunasDisponibles.map((comuna) => (
-                <option key={comuna} value={comuna}>
-                  {comuna}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {loading ? (
-          <div className="admin-table-loading">
-            <span className="admin-skeleton-line full"></span>
-            <span className="admin-skeleton-line full"></span>
-            <span className="admin-skeleton-line medium"></span>
-          </div>
-        ) : (
-          <div className="table-wrap admin-table-scroll admin-table-scroll--projects">
-            <table className="admin-project-table">
-              <thead>
-                <tr>
-                   {isGlobalAdmin && <th aria-sort={projectSort.field === "inmobiliaria" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("inmobiliaria")}>Inmobiliaria <span aria-hidden="true">{sortIndicator("inmobiliaria") === "Ascendente" ? "↑" : sortIndicator("inmobiliaria") === "Descendente" ? "↓" : "↕"}</span></button></th>}
-                   <th>Nombre</th>
-                   <th aria-sort={projectSort.field === "comuna" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("comuna")}>Comuna <span aria-hidden="true">{sortIndicator("comuna") === "Ascendente" ? "↑" : sortIndicator("comuna") === "Descendente" ? "↓" : "↕"}</span></button></th>
-                   <th aria-sort={projectSort.field === "tipo" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("tipo")}>Tipo <span aria-hidden="true">{sortIndicator("tipo") === "Ascendente" ? "↑" : sortIndicator("tipo") === "Descendente" ? "↓" : "↕"}</span></button></th>
-                   <th aria-sort={projectSort.field === "precio" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("precio")}>Rango UF <span aria-hidden="true">{sortIndicator("precio") === "Ascendente" ? "↑" : sortIndicator("precio") === "Descendente" ? "↓" : "↕"}</span></button></th>
-                   <th aria-sort={projectSort.field === "estado" ? projectSort.direction === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="admin-sort-button" onClick={() => toggleProjectSort("estado")}>Estado <span aria-hidden="true">{sortIndicator("estado") === "Ascendente" ? "↑" : sortIndicator("estado") === "Descendente" ? "↓" : "↕"}</span></button></th>
-                  <th>Ejecutivos</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                 {sortedProjects.map((project) => {
-                  const { total, vinculados, pendientes } = countExecutives(project);
-                  return (
-                    <tr key={project.id} className="admin-project-table__row">
-                      {isGlobalAdmin && <td>{project.inmobiliaria_nombre || "-"}</td>}
-                      <td className="admin-project-table__name">{project.nombre}</td>
-                      <td>{project.comuna}</td>
-                      <td>{tipoProyectoLabels[project.tipo] || project.tipo}</td>
-                      <td>{formatUfRange(project)}</td>
-                      <td>
-                        <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
-                          {estadoProyectoLabels[project.estado] || project.estado}
-                        </span>
-                      </td>
-                      <td>
-                        {vinculados}
-                        {pendientes > 0 ? ` · ${pendientes} pend.` : ""}
-                      </td>
-                      <td className="admin-project-table__actions-cell">
-                        <div className="admin-row-actions admin-project-table__actions">
-                          <button
-                            type="button"
-                            className="secondary-button compact-button admin-project-action-button"
-                            onClick={() => openEditModal(project)}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary-button compact-button admin-project-action-button"
-                            onClick={() => handleStatusQuickAction(project)}
-                          >
-                            {project.estado === "agotado" ? "Reactivar" : "Agotar"}
-                          </button>
-                          {total === 0 ? (
-                            <button
-                              type="button"
-                              className="secondary-button compact-button admin-project-action-button danger-button"
-                              onClick={() => setConfirmDelete(project)}
-                            >
-                              Eliminar
-                            </button>
-                          ) : (
-                            <span className="admin-project-action-note">
-                              {`${total} asignado${total > 1 ? "s" : ""}`}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!filtered.length && (
-                  <tr>
-                    <td colSpan={columnCount}>
-                      {hasActiveFilters ? (
-                        "No hay proyectos que coincidan con los filtros aplicados."
-                      ) : (
-                        <div className="empty-state">
-                          <strong>Aún no hay proyectos</strong>
-                          <p>Empieza registrando el primer proyecto para activar el catálogo.</p>
-                          <button type="button" onClick={openCreateModal}>
-                            Crear primer proyecto
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       <div className="admin-surface admin-projects-team-surface">
         <div className="admin-surface__header">
           <div className="admin-surface__title">
             <h2>Equipo comercial</h2>
-            <p>{`${executiveStats.total} ejecutivos cargados`}</p>
+            <p>{rosterLoading ? "Cargando equipo…" : "Consulta contactos y distribución de proyectos."}</p>
           </div>
           <div className="admin-surface__actions">
             <button type="button" onClick={openExecutiveModal} disabled={!tenant}>
@@ -904,9 +930,9 @@ export default function AdminProjectCatalog() {
         </div>
 
         <div className="admin-inline-summary">
-          <span className="admin-tag admin-tag--soft">Asignados: {executiveStats.asignados}</span>
-          <span className="admin-tag admin-tag--soft">Sin asignación: {executiveStats.sinAsignacion}</span>
-          <span className="admin-tag admin-tag--soft">Total: {executiveStats.total}</span>
+          <span><strong>{rosterLoading ? "—" : executiveStats.total}</strong> Ejecutivos</span>
+          <span><strong>{rosterLoading ? "—" : executiveStats.asignados}</strong> Con proyectos</span>
+          <span><strong>{rosterLoading ? "—" : executiveStats.sinAsignacion}</strong> Sin asignación</span>
         </div>
 
         {rosterLoading ? (
@@ -915,8 +941,14 @@ export default function AdminProjectCatalog() {
             <span className="admin-skeleton-line full"></span>
             <span className="admin-skeleton-line medium"></span>
           </div>
+        ) : !executiveRoster.length ? (
+          <div className="admin-team-empty">
+            <span className="admin-row-icon" aria-hidden="true"><i className="ti ti-users" /></span>
+            <div><strong>Aún no hay ejecutivos</strong><p>Crea una cuenta para comenzar a distribuir los proyectos.</p></div>
+            <button type="button" onClick={openExecutiveModal} disabled={!tenant}>Crear primer ejecutivo</button>
+          </div>
         ) : (
-          <div className="table-wrap admin-table-scroll admin-table-scroll--team">
+          <div className="table-wrap admin-table-scroll admin-table-scroll--team" tabIndex={0} role="region" aria-label="Equipo comercial, desplazamiento vertical">
             <table className="admin-team-table">
               <thead>
                 <tr>
@@ -927,31 +959,19 @@ export default function AdminProjectCatalog() {
                 </tr>
               </thead>
               <tbody>
-                {executiveRoster.map((executive) => (
+                {teamPagination.rows.map((executive) => (
                   <tr key={executive.id}>
                     {isGlobalAdmin && <td>{executive.inmobiliaria_nombre || "-"}</td>}
-                    <td>{executive.full_name || "-"}</td>
-                    <td>{executive.email}</td>
-                    <td>{executive.proyectos_asignados}</td>
+                    <td><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className="ti ti-user" /></span><strong>{executive.full_name || "Sin nombre"}</strong></div></td>
+                    <td><a href={`mailto:${executive.email}`}>{executive.email}</a></td>
+                    <td><span className="admin-coverage-count"><i className="ti ti-building" aria-hidden="true" />{executive.proyectos_asignados}</span></td>
                   </tr>
                 ))}
-                {!executiveRoster.length && (
-                  <tr>
-                    <td colSpan={isGlobalAdmin ? 4 : 3}>
-                      <div className="empty-state">
-                        <strong>Aún no hay ejecutivos</strong>
-                        <p>Cuando crees cuentas comerciales aparecerán aquí con su carga de proyectos.</p>
-                        <button type="button" onClick={openExecutiveModal} disabled={!tenant}>
-                          Crear primer ejecutivo
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         )}
+        {!rosterLoading && <AdminPagination pagination={teamPagination} onChange={setTeamPage} label="ejecutivos" />}
       </div>
 
       {/* ── Popup: Nuevo ejecutivo ───────────────────────────────────── */}
@@ -962,7 +982,7 @@ export default function AdminProjectCatalog() {
             if (!creatingExecutive) setExecutiveModal(false);
           }}
         >
-          <div className="admin-modal-card admin-modal-card--md admin-executive-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-card admin-modal-card--md admin-executive-modal" role="dialog" aria-modal="true" aria-label="Nuevo ejecutivo" onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>Nuevo ejecutivo</h2>
@@ -1093,7 +1113,7 @@ export default function AdminProjectCatalog() {
       {/* ── Popup: Nuevo / editar proyecto ───────────────────────────── */}
       {modal && (
         <div className="admin-modal" onClick={closeModal}>
-          <div className={`admin-modal-card admin-modal-card--lg admin-project-modal ${modal.mode === "create" ? "is-create" : "is-edit"}`} onClick={(event) => event.stopPropagation()}>
+          <div className={`admin-modal-card admin-modal-card--lg admin-project-modal ${modal.mode === "create" ? "is-create" : "is-edit"}`} role="dialog" aria-modal="true" aria-label={modal.mode === "create" ? "Nuevo proyecto" : "Editar proyecto"} onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>{modal.mode === "create" ? "Nuevo proyecto" : "Editar proyecto"}</h2>
@@ -1305,8 +1325,8 @@ export default function AdminProjectCatalog() {
                         <p>Ingresa un correo para vincular al primer ejecutivo de este proyecto.</p>
                       </div>
                     ) : (
-                      <ul className="admin-list admin-list--dense">
-                        {executives.map((executive) => (
+                      <div className="admin-assigned-list"><ul className="admin-list admin-list--dense">
+                        {assignmentPagination.rows.map((executive) => (
                           <li key={executive.email} className="admin-list-item admin-list-item--dense">
                             <div className="admin-list-item__main">
                               <strong>{executive.nombre || executive.email}</strong>
@@ -1329,7 +1349,7 @@ export default function AdminProjectCatalog() {
                             </div>
                           </li>
                         ))}
-                      </ul>
+                      </ul><AdminPagination pagination={assignmentPagination} onChange={setAssignmentPage} label="asignaciones" /></div>
                     )}
 
                     {executives.some((executive) => executive.estado === "pendiente") && (
@@ -1362,7 +1382,7 @@ export default function AdminProjectCatalog() {
             if (!deleting) setConfirmDelete(null);
           }}
         >
-          <div className="admin-modal-card admin-modal-card--sm" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-card admin-modal-card--sm" role="dialog" aria-modal="true" aria-label="Eliminar proyecto" onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>Eliminar proyecto</h2>
@@ -1401,7 +1421,7 @@ export default function AdminProjectCatalog() {
             if (!creatingInmobiliaria) setInmobiliariaModal(false);
           }}
         >
-          <div className="admin-modal-card admin-modal-card--sm" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-card admin-modal-card--sm" role="dialog" aria-modal="true" aria-label="Nueva inmobiliaria" onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>Nueva inmobiliaria</h2>
@@ -1452,7 +1472,7 @@ export default function AdminProjectCatalog() {
             if (!assigningAdmin) setAdminModal(false);
           }}
         >
-          <div className="admin-modal-card admin-modal-card--sm" onClick={(event) => event.stopPropagation()}>
+          <div className="admin-modal-card admin-modal-card--sm" role="dialog" aria-modal="true" aria-label="Asignar administrador" onClick={(event) => event.stopPropagation()}>
             <div className="admin-modal-header">
               <div className="admin-modal-heading">
                 <h2>Asignar administrador</h2>

@@ -10,6 +10,7 @@
   ],
   "functions": {
     "api/score.py": {
+      "includeFiles": "backend/app/lead_changes/templates/**",
       "maxDuration": 60
     }
   },

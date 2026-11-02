@@ -104,6 +104,12 @@ function ProjectImagePlaceholder({ result, compact = false }) {
   const name = getScenarioName(result);
   const commune = getScenarioPlace(result);
   const type = getScenarioType(result);
+  if (compact) return (
+    <div className="project-image-placeholder is-compact simulation-alternative__location">
+      <i className="ti ti-building" aria-hidden="true" />
+      <span>{commune} · {type}</span>
+    </div>
+  );
   return (
     <div className={`project-image-placeholder ${compact ? "is-compact" : ""}`} aria-label={`Espacio para imagen de ${name}`}>
       <span>{type}</span>
@@ -1023,17 +1029,17 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                   <span className={`simulation-status ${statusClass[item.status] || "adjust"}`}>{item.status}</span>
                   {isCurrentGoal ? <span className="project-goal-badge">Meta actual</span> : null}
                   <h3>{item.project.nombre}</h3>
-                  <p>{item.project.comuna} · {propertyLabels[item.project.tipo_vivienda] || item.project.tipo_vivienda}</p>
                 </div>
-                <strong>{formatProjectPrice(item.project)} · {formatClp(item.valueClp)}</strong>
-                <p>Brecha principal: {getGapLabel(item.mainGap)}</p>
-                <p>Pie mínimo: {formatUfClp(item.pieMinimoUf, item.pieMinimo)}</p>
-                {item.preference.communeMatch ? <span className="alternative-benefit">Coincide con tu comuna objetivo</span> : null}
-                {item.preference.typeMatch ? <span className="alternative-benefit">Coincide con tu tipo de vivienda</span> : null}
-                {item.project.entrega_estimada ? (
-                  <p>Entrega estimada: {formatDeliveryMonth(item.project.entrega_estimada)}</p>
-                ) : null}
-                <small>{item.project.descripcion_corta}</small>
+                <div className="simulation-alternative__price"><strong>{formatProjectPrice(item.project)}</strong><span>{formatClp(item.valueClp)}</span></div>
+                <p className="simulation-alternative__deposit">Pie mínimo <strong>{formatUfClp(item.pieMinimoUf, item.pieMinimo)}</strong></p>
+                <details className="simulation-alternative__details">
+                  <summary>Ver detalles</summary>
+                  <p>Ajuste principal: {getGapLabel(item.mainGap)}</p>
+                  {item.preference.communeMatch ? <span className="alternative-benefit">Coincide con tu comuna</span> : null}
+                  {item.preference.typeMatch ? <span className="alternative-benefit">Coincide con tu tipo de vivienda</span> : null}
+                  {item.project.entrega_estimada ? <p>Entrega: {formatDeliveryMonth(item.project.entrega_estimada)}</p> : null}
+                  {item.project.descripcion_corta ? <p>{item.project.descripcion_corta}</p> : null}
+                </details>
                 <div className="alternative-actions">
                   <button
                     className="secondary-button compact-button"
@@ -1042,14 +1048,14 @@ export default function SimulationPage({ evaluation, onboarding, onStartEvaluati
                     title={mode === "project" && item.project.id === selectedProjectId ? "Este es el escenario actual." : undefined}
                     onClick={() => handleCompareAlternative(item)}
                   >
-                    {mode === "project" && item.project.id === selectedProjectId ? "Escenario actual" : "Comparar con escenario actual"}
+                    {mode === "project" && item.project.id === selectedProjectId ? "Escenario actual" : "Comparar"}
                   </button>
                   <button
                     className={`compact-button target-project-button ${targetProjectId === item.project.id ? "is-selected" : ""}`}
                     type="button"
                     onClick={() => handleSelectTargetProject(item)}
                   >
-                    {targetProjectId === item.project.id ? "Proyecto objetivo seleccionado" : "Seleccionar como proyecto objetivo"}
+                    {targetProjectId === item.project.id ? "Objetivo seleccionado" : "Elegir como objetivo"}
                   </button>
                 </div>
               </article>

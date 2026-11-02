@@ -5,6 +5,7 @@ import { formatClp } from "../services/housingSavingsPlanService";
 import { propertyLabels } from "../constants";
 import { getCurrentProjectGoal } from "../lib/projectGoalDisplay";
 import BankingChecklist from "./BankingChecklist";
+import AiExplanationBlock from "./AiExplanationBlock";
 import FieldTooltip from "./FieldTooltip";
 
 function ProjectGoalSummary({ projectGoal }) {
@@ -164,6 +165,7 @@ const CircularProgress = ({ percentage = 0, color = "var(--color-primary)", size
 };
 
 export default function FinancialTracking({
+  onRetryExplanation,
   evaluation,
   trackingState,
   goals = [],
@@ -248,7 +250,7 @@ export default function FinancialTracking({
   }
 
   const indicators = evaluation?.result?.financial_indicators || {};
-  
+
   if (indicators.ahorro_mensual_acelerado === undefined) {
     return (
       <section className="section-block tracking-panel">
@@ -367,55 +369,55 @@ export default function FinancialTracking({
           </div>
         )}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", marginTop: "1.5rem" }}>
+        <div className="tracking-plan-options">
           {/* Plan Acelerado */}
-          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "1px solid #cbd5e1", backgroundColor: "#fff", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.02)" }}>
-            <h2 style={{ fontSize: "1.25rem", color: "var(--color-primary)", margin: "0 0 1rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <article className="tracking-plan-option tracking-plan-option--accelerated">
+            <h2>
               Plan Acelerado
-              <span style={{ fontSize: "0.75rem", backgroundColor: "var(--color-primary)", color: "#fff", padding: "4px 8px", borderRadius: "12px" }}>Recomendado</span>
+              <span>Recomendado</span>
             </h2>
-            <p style={{ fontSize: "0.9rem", color: "var(--color-neutral-600)", margin: "0 0 1rem 0" }}>
+            <p>
               Alcanza tu meta de pie en el menor tiempo posible.
             </p>
-            <ul style={{ paddingLeft: "1.2rem", margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "var(--color-neutral-700)", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", lineHeight: "1.4" }}>
-              <li><strong>Pros:</strong> Alcanzas tu meta de pie más rápido y estás listo antes para postular.</li>
-              <li><strong>Pros:</strong> Saneas deudas o morosidad rápidamente, reduciendo los intereses que pagas al banco.</li>
-              <li><strong>Contras:</strong> Exige un alto nivel de ahorro mensual ({formatCurrency(ahorro_mensual_acelerado)}/m).</li>
-              <li><strong>Contras:</strong> Requiere un presupuesto mensual estricto, dejando poca holgura para imprevistos.</li>
+            <ul>
+              <li className="plan-tradeoff plan-tradeoff--pro"><strong>Pros:</strong> Alcanzas tu meta de pie más rápido y estás listo antes para postular.</li>
+              <li className="plan-tradeoff plan-tradeoff--pro"><strong>Pros:</strong> Saneas deudas o morosidad rápidamente, reduciendo los intereses que pagas al banco.</li>
+              <li className="plan-tradeoff plan-tradeoff--con"><strong>Contras:</strong> Exige un alto nivel de ahorro mensual ({formatCurrency(ahorro_mensual_acelerado)}/m).</li>
+              <li className="plan-tradeoff plan-tradeoff--con"><strong>Contras:</strong> Requiere un presupuesto mensual estricto, dejando poca holgura para imprevistos.</li>
             </ul>
             <button
               type="button"
               className="primary-button"
-              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
+
               onClick={() => choosePlan("acelerado")}
               disabled={acceptingPlan}
             >
               {acceptingPlan ? "Activando plan..." : "Elegir Plan Acelerado"}
             </button>
-          </div>
+          </article>
 
           {/* Plan Conservador */}
-          <div style={{ flex: "1 1 300px", padding: "1.5rem", borderRadius: "12px", border: "1px solid #cbd5e1", backgroundColor: "#fff", display: "flex", flexDirection: "column", boxShadow: "0 4px 6px rgba(0,0,0,0.02)" }}>
-            <h2 style={{ fontSize: "1.25rem", color: "var(--color-neutral-800)", margin: "0 0 1rem 0" }}>Plan Conservador</h2>
-            <p style={{ fontSize: "0.9rem", color: "var(--color-neutral-600)", margin: "0 0 1rem 0" }}>
+          <article className="tracking-plan-option tracking-plan-option--conservative">
+            <h2>Plan Conservador</h2>
+            <p>
               Cuota de ahorro menor y más cómoda, pero tomará más tiempo.
             </p>
-            <ul style={{ paddingLeft: "1.2rem", margin: "0 0 1.5rem 0", fontSize: "0.9rem", color: "var(--color-neutral-700)", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem", lineHeight: "1.4" }}>
-              <li><strong>Pros:</strong> Ahorro mensual más cómodo y realista ({formatCurrency(ahorro_mensual_conservador)}/m).</li>
-              <li><strong>Pros:</strong> Mayor holgura financiera mes a mes para destinar a otros gastos o imprevistos familiares.</li>
-              <li><strong>{conservadorPieTimelineIsResolved ? "Pros" : "Contras"}:</strong> {conservadorPieTimelineMessage}</li>
-              <li><strong>Contras:</strong> Si tienes deudas o morosidad, tardarás más en sanearlas, arrastrando intereses.</li>
+            <ul>
+              <li className="plan-tradeoff plan-tradeoff--pro"><strong>Pros:</strong> Ahorro mensual más cómodo y realista ({formatCurrency(ahorro_mensual_conservador)}/m).</li>
+              <li className="plan-tradeoff plan-tradeoff--pro"><strong>Pros:</strong> Mayor holgura financiera mes a mes para destinar a otros gastos o imprevistos familiares.</li>
+              <li className={`plan-tradeoff ${conservadorPieTimelineIsResolved ? "plan-tradeoff--pro" : "plan-tradeoff--con"}`}><strong>{conservadorPieTimelineIsResolved ? "Pros" : "Contras"}:</strong> {conservadorPieTimelineMessage}</li>
+              <li className="plan-tradeoff plan-tradeoff--con"><strong>Contras:</strong> Si tienes deudas o morosidad, tardarás más en sanearlas, arrastrando intereses.</li>
             </ul>
             <button
               type="button"
               className="primary-button"
-              style={{ width: "100%", padding: "0.75rem", fontSize: "1rem" }}
+
               onClick={() => choosePlan("conservador")}
               disabled={acceptingPlan}
             >
               {acceptingPlan ? "Activando plan..." : "Elegir Plan Conservador"}
             </button>
-          </div>
+          </article>
         </div>
         <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />
       </section>
@@ -436,8 +438,9 @@ export default function FinancialTracking({
           <span className="eyebrow">Plan de Mejora {planType === "acelerado" ? "(Acelerado)" : "(Conservador)"}</span>
           <h1>Progreso del plan financiero</h1>
           <p>Una lectura referencial de las condiciones que conviene preparar antes de una evaluación bancaria.</p>
-          <ProjectGoalSummary projectGoal={projectGoal} />
         </div>
+        <div className="tracking-page-head__toolbar">
+        <ProjectGoalSummary projectGoal={projectGoal} />
         <div className="tracking-page-head__actions">
           {progressButton}
           {onNavigate && (
@@ -465,6 +468,7 @@ export default function FinancialTracking({
             Cambiar de Plan
           </button>}
         </div>
+        </div>
       </div>
 
       {successMessage && (
@@ -487,6 +491,10 @@ export default function FinancialTracking({
           <div className="recommendation-summary">
             <span className="tracking-overview__label">Estado del plan</span>
             <p>{tracking.message}</p>
+            <div className="tracking-overview__explanation">
+              <h3>Explicación de tu resultado</h3>
+              <AiExplanationBlock text={evaluation?.result?.ai_explanation} onRetry={onRetryExplanation} actionLabel="Generar explicación" />
+            </div>
             {adjustment ? (
               <div className="score-adjustment-note">
                 <strong>{adjustment.message}</strong>
@@ -804,7 +812,7 @@ export default function FinancialTracking({
         <div className="tracking-improvement-heading">
           <div>
             <h2><i className="ti ti-road"></i> Pasos sugeridos para mejorar</h2>
-            <p>Priorizadas para mejorar tu aprobación bancaria. Actualiza tus avances para recalcular tu score.</p>
+            <p>Acciones priorizadas para fortalecer tu perfil referencial. Registra tus avances para revisar tu progreso.</p>
           </div>
         <div className="tracking-goals-filters">
           <span className="tracking-goals-filters__label">Filtrar acciones</span>

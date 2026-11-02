@@ -1,4 +1,7 @@
 import os
+from html import escape
+from pathlib import Path
+from string import Template
 
 import httpx
 
@@ -6,6 +9,22 @@ from .contracts import LeadChangeError
 
 
 DISCLAIMER = "La informacion es referencial: no constituye aprobacion bancaria ni garantia de condiciones comerciales."
+
+
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+
+
+def _render_template(name, **values):
+    template = (TEMPLATE_DIR / f"{name}.html").read_text(encoding="utf-8")
+    return Template(template).substitute(values)
+
+
+def _email_shell(content):
+    return _render_template('shell', content=content)
+
+
+def _safe(value):
+    return escape(str(value), quote=True)
 
 
 class ResendEmailClient:
@@ -94,27 +113,12 @@ def build_html(lead, event):
     score = lead.get("score")
     classification = lead.get("classification") or "Sin tramo"
     project = event.get("project_name") or "tu proyecto objetivo"
-    previous_value = _format_value(event.get("previous_value"))
-    current_value = _format_value(event.get("current_value"))
+    previous_value = _safe(_format_value(event.get("previous_value")))
+    current_value = _safe(_format_value(event.get("current_value")))
     delta = ""
     if previous_value or current_value:
-        delta = f"<p><strong>Antes:</strong> {previous_value or 'Sin dato'}<br><strong>Ahora:</strong> {current_value or 'Sin dato'}</p>"
-    return f"""
-    <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;color:#132b4a;line-height:1.55">
-      <p style="color:#246354;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RutaHogar</p>
-      <h1 style="font-size:26px;line-height:1.1;margin:0 0 14px">{event['title']}</h1>
-      <p>{event['summary']}</p>
-      {delta}
-      <div style="padding:14px;border:1px solid #e5ded0;border-radius:12px;background:#fbf7ef;margin:18px 0">
-        <strong>Resumen de tu perfil</strong><br>
-        Proyecto de referencia: {project}<br>
-        Score: {score if score is not None else 'Sin dato'} · Tramo: {classification}
-      </div>
-      <p><a href="{event_url}" style="display:inline-block;background:#132b4a;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">Ver cambios</a></p>
-      <p style="font-size:12px;color:#64748b">{DISCLAIMER}</p>
-      <p style="font-size:12px;color:#64748b"><a href="{opt_out_url}">Desactivar este tipo de aviso</a></p>
-    </div>
-    """
+        delta = _render_template("comparacion", previous=previous_value or "Sin dato", current=current_value or "Sin dato")
+    return _email_shell(_render_template('novedad', title=_safe(event['title']), summary=_safe(event['summary']), delta=delta, project=_safe(project), score=_safe(score if score is not None else 'Sin dato'), classification=_safe(classification), event_url=_safe(event_url), disclaimer=DISCLAIMER, opt_out_url=_safe(opt_out_url)))
 
 
 def build_digest_html(lead, events):
@@ -123,21 +127,7 @@ def build_digest_html(lead, events):
     classification = lead.get("classification") or "Sin tramo"
     groups = _group_events(events)
     sections = "".join(_render_group(event_type, items) for event_type, items in groups)
-    return f"""
-    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#132b4a;line-height:1.55;background:#ffffff">
-      <p style="color:#246354;font-weight:700;text-transform:uppercase;letter-spacing:.06em">RutaHogar</p>
-      <h1 style="font-size:28px;line-height:1.12;margin:0 0 10px">Tienes novedades desde tu ultima visita</h1>
-      <p style="margin:0 0 18px;color:#526276">Agrupamos los cambios relevantes para que revises solo lo que puede afectar tu preparacion.</p>
-      <div style="padding:14px;border:1px solid #e5ded0;border-radius:14px;background:#fbf7ef;margin:18px 0">
-        <strong>Resumen de tu perfil</strong><br>
-        Score: {score if score is not None else 'Sin dato'} · Tramo: {classification}
-      </div>
-      {sections}
-      <p style="margin:22px 0"><a href="{app_url}/inicio" style="display:inline-block;background:#132b4a;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">Ver novedades en Inicio</a></p>
-      <p style="font-size:12px;color:#64748b">{DISCLAIMER}</p>
-      <p style="font-size:12px;color:#64748b">Puedes ajustar estos correos desde Perfil, en Novedades desde tu ultima visita.</p>
-    </div>
-    """
+    return _email_shell(_render_template('resumen', score=_safe(score if score is not None else 'Sin dato'), classification=_safe(classification), sections=sections, app_url=_safe(app_url), disclaimer=DISCLAIMER))
 
 
 def _group_events(events):
@@ -154,24 +144,23 @@ def _group_events(events):
 
 def _render_group(event_type, items):
     label = _event_type_label(event_type)
-    cards = "".join(_render_event(event) for event in items)
+    if len(items) > 1:
+        summary = {
+            "project_compatible_unlocked": "Hay nuevas alternativas compatibles con tus datos disponibles.",
+            "score_band_improved": "Registramos cambios favorables en tu perfil referencial.",
+            "monthly_plan_summary": "Tienes nuevos resúmenes para revisar el avance de tu plan.",
+            "uf_reachability_crossed": "Registramos cambios en el alcance referencial de tu objetivo.",
+            "quick_update_submitted": "Registramos actualizaciones de tus datos.",
+        }.get(event_type, "Registramos nuevas novedades para tu proceso de vivienda.")
+        cards = _render_template("grupo_resumen", summary=_safe(summary))
+    else:
+        cards = "".join(_render_event(event) for event in items)
     count_text = "1 novedad" if len(items) == 1 else f"{len(items)} novedades"
-    return f"""
-      <section style="margin:18px 0;padding:14px;border:1px solid #dce3ea;border-radius:14px;background:#ffffff">
-        <h2 style="font-size:17px;margin:0 0 2px;color:#132b4a">{label}</h2>
-        <p style="margin:0 0 12px;color:#64748b;font-size:13px">{count_text}</p>
-        {cards}
-      </section>
-    """
+    return _render_template('grupo', label=label, count=count_text, cards=cards)
 
 
 def _render_event(event):
-    return f"""
-      <article style="padding:12px;border-left:4px solid #38bdf8;border-radius:12px;background:#f8fafc;margin-top:10px">
-        <strong style="display:block;color:#132b4a">{event.get('title', 'Cambio detectado')}</strong>
-        <p style="margin:5px 0 0;color:#526276;font-size:14px">{event.get('summary', '')}</p>
-      </article>
-    """
+    return _render_template('evento', title=_safe(event.get('title', 'Cambio detectado')), summary=_safe(event.get('summary', '')))
 
 
 def _event_type_label(event_type):

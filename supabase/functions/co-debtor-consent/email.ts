@@ -16,7 +16,7 @@ const COLORS = {
   page: "#F4F7FA",
   info: "#EAF4FC",
   text: "#243B53",
-  muted: "#627D98",
+  muted: "#43566B",
   border: "#D9E2EC",
 };
 
@@ -36,14 +36,12 @@ function emailShell(preheader: string, content: string): string {
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:${COLORS.page};">
       <tr><td align="center" style="padding:32px 16px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid ${COLORS.border};border-radius:12px;overflow:hidden;">
-          <tr><td style="padding:20px 36px;background:${COLORS.navy};">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="background:#FFFFFF;border-radius:6px;"><tr><td style="padding:8px 12px;">
+        <table role="presentation" width="720" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:720px;background:#FFFFFF;border:1px solid ${COLORS.navy};border-radius:12px;overflow:hidden;">
+          <tr><td style="padding:24px 28px;background:${COLORS.info};border-bottom:4px solid ${COLORS.navy};">
               <img src="${RUTAHOGAR_LOGO_URL}" alt="RutaHogar" width="172" style="display:block;width:172px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">
-            </td></tr></table>
           </td></tr>
-          <tr><td style="padding:36px;">${content}</td></tr>
-          <tr><td style="padding:20px 36px;border-top:1px solid ${COLORS.border};font-size:13px;line-height:20px;color:${COLORS.muted};">RutaHogar · Orientación para tu proceso de vivienda</td></tr>
+          <tr><td style="padding:28px;">${content}</td></tr>
+          <tr><td style="padding:20px 28px;background:${COLORS.navy};border-top:1px solid ${COLORS.navy};font-size:14px;line-height:21px;color:#FFFFFF;">RutaHogar · Orientación para tu proceso de vivienda</td></tr>
         </table>
       </td></tr>
     </table>
@@ -52,7 +50,7 @@ function emailShell(preheader: string, content: string): string {
 }
 
 function cta(label: string, url: string, tone: CtaTone): string {
-  const background = tone === "gold" ? COLORS.gold : COLORS.blue;
+  const background = tone === "gold" ? COLORS.gold : COLORS.navy;
   const color = tone === "gold" ? COLORS.goldText : "#FFFFFF";
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:28px 0;">
   <tr><td align="center" bgcolor="${background}" style="border-radius:7px;">
@@ -62,7 +60,7 @@ function cta(label: string, url: string, tone: CtaTone): string {
 }
 
 function infoBlock(items: string[]): string {
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:24px 0;background:${COLORS.info};border-radius:8px;">
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:24px 0;background:${COLORS.info};border-left:4px solid ${COLORS.navy};border-radius:8px;">
   <tr><td style="padding:20px 22px;font-size:15px;line-height:23px;color:${COLORS.text};">
     ${items.map((item) => `<div style="padding:3px 0;">&#10003;&nbsp; ${escapeHtml(item)}</div>`).join("")}
   </td></tr>

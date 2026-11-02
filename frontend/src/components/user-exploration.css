@@ -1,0 +1,163 @@
+/* Exploration and simulation retain their existing data and interaction flows. */
+:is(.simulation-page, .projects-catalog-page, .portal-page) { --rh-text-secondary: #34445a; --rh-text-muted: #43536a; font-family: var(--rh-font-body); color: var(--rh-text); }
+.section-block.simulation-page, .section-block.simulation-panel.projects-catalog-page, .portal-page { width: 100%; min-width: 0; display: grid; gap: 16px; }
+.content-inner .simulation-page > .section-heading,
+.content-inner .projects-catalog-page > .projects-catalog-hero,
+.content-inner .portal-page > .portal-page__header { margin: 0; padding: 22px; border: 1px solid var(--rh-border-strong); border-top: 3px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); background-image: none; box-shadow: var(--rh-shadow-sm); }
+.content-inner .simulation-page > .section-heading::before,
+.content-inner .simulation-page > .section-heading::after,
+.content-inner .projects-catalog-hero::before,
+.content-inner .projects-catalog-hero::after,
+.content-inner .portal-page__header::before,
+.content-inner .portal-page__header::after { display: none; }
+.content-inner :is(.simulation-page, .projects-catalog-page, .portal-page) h1 { margin: 12px 0 10px; max-width: none; font-family: var(--rh-font-display); font-size: clamp(1.75rem, 3vw, 2.1rem); line-height: 1.2; color: var(--rh-navy); }
+.content-inner :is(.simulation-page, .projects-catalog-page, .portal-page) :is(h2, h3, h4) { font-family: var(--rh-font-body); line-height: 1.4; color: var(--rh-navy); }
+.content-inner :is(.simulation-page > .section-heading, .projects-catalog-hero, .portal-page__header) p { margin: 0; max-width: 80ch; font-size: 1rem; line-height: 1.6; color: var(--rh-text-secondary); }
+.content-inner :is(.simulation-page, .projects-catalog-page, .portal-page) .eyebrow { font-family: var(--rh-font-body); font-size: .8rem; color: var(--rh-yellow-dark); }
+.projects-catalog-page .projects-catalog-hero .section-heading { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; max-width: none; }
+.projects-catalog-page .projects-catalog-hero .section-heading::before,
+.projects-catalog-page .projects-catalog-hero .section-heading::after { display: none; }
+.content-inner :is(.portal-search-section, .projects-catalog-discovery) { padding: 18px; margin: 0; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); background: var(--rh-blue-light); box-shadow: none; }
+.portal-page .portal-filters-row, .projects-catalog-page .projects-catalog-filters { gap: 12px; margin-top: 12px; }
+.projects-catalog-page .projects-catalog-discovery__top { gap: 14px; align-items: center; }
+.content-inner :is(.portal-page, .projects-catalog-page, .simulation-page) :is(input, select, textarea) { font-family: var(--rh-font-body); font-size: .95rem; border-radius: var(--rh-radius-sm); border-color: var(--rh-border-strong); }
+.content-inner :is(.portal-page, .projects-catalog-page, .simulation-page) button:focus-visible { outline: 3px solid var(--rh-yellow-dark); outline-offset: 3px; }
+.projects-catalog-page .projects-catalog-type-tabs button,
+.simulation-page .simulation-section-tabs button { padding: 10px 14px; font-size: .95rem; border-radius: var(--rh-radius-sm); }
+.projects-catalog-page .projects-catalog-type-tabs button.is-active,
+.simulation-page .simulation-section-tabs button.is-active { background: var(--rh-navy); color: #fff; box-shadow: none; }
+.projects-catalog-page .projects-current-goal { margin: 0; padding: 16px 18px; border: 1px solid var(--rh-border-strong); border-left: 3px solid var(--rh-yellow-dark); border-radius: var(--rh-radius-md); background: var(--rh-yellow-light); }
+.projects-catalog-page .projects-catalog-results { gap: 10px; }
+.projects-catalog-page .projects-catalog-results__heading { margin: 0; }
+.projects-catalog-page .project-catalog-card,
+.portal-page .portal-property-card { border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); overflow: hidden; }
+.projects-catalog-page .project-catalog-card__body { display: flex; flex-direction: column; flex: 0 0 auto; height: auto; padding: 14px; gap: 6px; }
+.portal-page .portal-card-body { padding: 16px; gap: 10px; }
+.projects-catalog-page .project-catalog-card__body h2 { margin: 0; font-size: 1.1rem; line-height: 1.35; }
+.portal-page .portal-card-title { margin: 6px 0 8px; font-size: 1.15rem; line-height: 1.4; }
+.portal-page .portal-card-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: .95rem; line-height: 1.55; color: var(--rh-text-secondary); }
+.projects-catalog-page .project-catalog-card__price,
+.portal-page .portal-price-uf { font-family: var(--rh-font-body); font-size: 1.35rem; color: var(--rh-navy); font-variant-numeric: tabular-nums; }
+.projects-catalog-page .project-catalog-card__actions { display: grid; grid-template-columns: 1fr; gap: 6px; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--rh-border); }
+.projects-catalog-page .project-catalog-card__actions .compact-button { min-height: 40px; margin: 0; }
+.projects-catalog-page .project-catalog-card__range { margin-bottom: 4px; }
+.projects-catalog-page .project-catalog-card__meta { gap: 4px 6px; align-items: center; min-height: 0; }
+.projects-catalog-page .project-catalog-card__media { aspect-ratio: 1 / 1; height: auto; flex-shrink: 0; }
+.projects-catalog-page .project-catalog-card__media.is-placeholder { aspect-ratio: 1 / 1; height: auto; padding: 12px; }
+.projects-catalog-page .projects-catalog-carousel-shell { margin: 0; }
+.projects-catalog-page .projects-catalog-carousel-shell .projects-catalog-carousel-strip { align-items: flex-start; padding: 3px 2px 6px; }
+.projects-catalog-page .projects-catalog-carousel-shell .projects-catalog-carousel-strip > .project-catalog-card { height: auto; min-height: 0; }
+.projects-catalog-page .projects-catalog-disclaimer { margin-block: 0; }
+.portal-page .portal-card-actions { padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--rh-border); display: flex; flex-wrap: wrap; gap: 8px; }
+.simulation-page :is(.simulation-preferences-card, .simulation-base-card, .comparison-summary-panel, .alternatives-block, .compatibility-summary, .financing-step, .financing-hero) { padding: 20px; margin-top: 0; border: 1px solid var(--rh-border-strong); border-top: 3px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); background-image: none; box-shadow: var(--rh-shadow-sm); }
+.simulation-page :is(.simulation-preferences-card, .simulation-base-card, .comparison-summary-panel, .alternatives-block, .financing-hero)::before,
+.simulation-page :is(.simulation-preferences-card, .simulation-base-card, .comparison-summary-panel, .alternatives-block, .financing-hero)::after { display: none; }
+.simulation-page :is(.simulation-layout, .simulation-config-stack, .financing-panel) { gap: 14px; }
+.simulation-page .simulation-panel-heading { margin-bottom: 14px; }
+.simulation-page :is(.simulation-preference-item, .scenario-check, .simulation-alternative) { padding: 14px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-md); background: var(--rh-blue-light); box-shadow: none; }
+.simulation-page :is(.comparison-analysis, .housing-metrics, .scenario-checklist) { gap: 12px; }
+.simulation-page .financing-hero h2 { margin: 8px 0; font-size: 1.25rem; }
+.simulation-page .financing-hero p { margin: 0; font-size: 1rem; line-height: 1.55; color: var(--rh-text-secondary); }
+.simulation-page .financing-hero + .financing-property-step { margin-top: 18px; }
+.simulation-page .financing-selected-property { padding: 14px; background: var(--rh-blue-light); border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-md); }
+.simulation-page :is(.subsidy-dashboard__main, .subsidy-detail) { padding: 18px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
+.simulation-page .subsidy-detail { border-top: 3px solid var(--rh-navy); }
+.simulation-page .subsidy-detail__section { padding-block: 12px; }
+.simulation-page .subsidy-detail__section p,
+.simulation-page .subsidy-detail__section li { font-size: .95rem; line-height: 1.55; color: var(--rh-text-secondary); }
+.simulation-page .subsidy-detail__summary article { padding: 12px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-sm); background: var(--rh-blue-light); }
+.simulation-page .subsidy-detail__actions { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--rh-border); }
+.simulation-page :is(.scenario-status__card, .suggested-configuration__card) { padding: 18px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); background: var(--rh-surface); box-shadow: var(--rh-shadow-sm); }
+.simulation-page .scenario-status__accordions summary { font-size: .95rem; padding: 12px; background: var(--rh-blue-light); border-radius: var(--rh-radius-sm); }
+.financing-comparison-dialog { font-family: var(--rh-font-body); border: 1px solid var(--rh-border-strong); border-top: 3px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); }
+.financing-comparison-dialog h3 { font-family: var(--rh-font-body); font-size: 1.25rem; color: var(--rh-navy); }
+.financing-comparison-table { font-size: .95rem; }
+.financing-comparison-table__head { background: var(--rh-blue-light); }
+/* Detail surfaces also use the same hierarchy, including portalled dialogs. */
+.project-evaluation-modal__card,
+.portal-modal-content,
+.financing-confirmation { font-family: var(--rh-font-body); padding: 22px; border: 1px solid var(--rh-border-strong); border-top: 3px solid var(--rh-navy); border-radius: var(--rh-radius-lg); background: var(--rh-surface); color: var(--rh-text); }
+.project-evaluation-modal__card :is(h2, h3),
+.portal-modal-content :is(h2, h3),
+.financing-confirmation h3 { font-family: var(--rh-font-body); font-size: 1.3rem; line-height: 1.4; color: var(--rh-navy); }
+.project-evaluation-modal__card p,
+.portal-modal-content p,
+.financing-confirmation p { font-size: .95rem; line-height: 1.6; color: #34445a; }
+.portal-modal-content { padding: 0; overflow: auto; }
+.portal-modal-body { padding: 22px; }
+.portal-modal-image-container { max-height: 260px; overflow: hidden; }
+.portal-modal-image { width: 100%; height: 260px; object-fit: cover; }
+.project-evaluation-result,
+.portal-modal-price-box { padding: 16px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-md); background: var(--rh-blue-light); }
+.project-evaluation-result__metrics { gap: 12px; }
+.project-evaluation-modal__actions,
+.portal-modal-actions,
+.financing-confirmation__actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--rh-border); }
+.project-evaluation-modal__close,
+.portal-modal-close { min-width: 40px; min-height: 40px; }
+@media (max-width: 760px) {
+  .simulation-page .simulation-layout { grid-template-columns: minmax(0, 1fr); }
+  .portal-modal-body, .project-evaluation-modal__card { padding: 18px; }
+}
+
+/* Compact alternatives: essential facts first, supporting details on demand. */
+.simulation-page .simulation-alternative { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--rh-border-strong); background: var(--rh-surface); }
+.simulation-page .simulation-alternative::before { display: none; }
+.simulation-page .simulation-alternative__location { display: flex; align-items: center; gap: 8px; min-height: 0; height: auto; padding: 9px 10px; background: var(--rh-blue-light); border: 0; border-radius: var(--rh-radius-sm); }
+.simulation-page .simulation-alternative__location i { color: var(--rh-navy); font-size: 1.1rem; }
+.simulation-page .simulation-alternative__location > span { color: var(--rh-text-secondary); font-size: .8rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.simulation-page .simulation-alternative__heading h3 { margin: 8px 0 0; font-size: 1.05rem; line-height: 1.4; }
+.simulation-page .simulation-alternative__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.simulation-page .simulation-alternative__price strong { font-size: 1.15rem; color: var(--rh-navy); }
+.simulation-page .simulation-alternative__price span { font-size: .85rem; color: var(--rh-text-secondary); }
+.simulation-page .simulation-alternative__deposit { display: grid; gap: 3px; margin: 0; font-size: .8rem; color: var(--rh-text-secondary); }
+.simulation-page .simulation-alternative__deposit strong { font-size: .9rem; color: var(--rh-navy); }
+.simulation-page .simulation-alternative__details { border-top: 1px solid var(--rh-border); padding-top: 8px; }
+.simulation-page .simulation-alternative__details summary { padding: 4px 0; cursor: pointer; color: var(--rh-navy); font-size: .85rem; font-weight: 600; }
+.simulation-page .simulation-alternative__details summary:focus-visible { outline: 2px solid var(--rh-gold); outline-offset: 3px; }
+.simulation-page .simulation-alternative__details p { margin: 8px 0; font-size: .85rem; line-height: 1.5; }
+.simulation-page .simulation-alternative__details .alternative-benefit { display: block; margin-top: 6px; font-size: .8rem; }
+.simulation-page .simulation-alternative .alternative-actions { display: grid; gap: 8px; margin-top: auto; padding-top: 10px; }
+.simulation-page .simulation-alternative .alternative-actions button { width: 100%; min-height: 40px; font-size: .85rem; }
+
+/* Keep labels beside their fields and use the footer for summary + actions. */
+.simulation-page .financing-adjustments { padding: 16px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); box-shadow: none; }
+.simulation-page .financing-adjustments header { padding-bottom: 10px; }
+.simulation-page .financing-adjustments__grid { padding-top: 12px; gap: 12px; align-items: start; }
+.simulation-page .financing-adjustments__grid label { margin: 0; gap: 6px; align-content: start; font-size: .8rem; }
+.simulation-page .financing-adjustments__grid label > span { margin: 0; min-height: 20px; }
+.simulation-page .financing-adjustments__grid :is(input:not([type="checkbox"]), select) { margin: 0; min-height: 40px; font-size: .9rem; }
+.simulation-page .financing-adjustments__grid .financing-adjustments__toggle { align-self: end; margin: 0; padding: 8px 10px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius-sm); background: var(--rh-blue-light); }
+.simulation-page .financing-adjustments__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--rh-border); }
+.simulation-page .financing-adjustments__footer .financing-income-composition { display: grid; flex: 1 1 280px; gap: 3px; margin: 0; padding: 0; border: 0; background: transparent; }
+.simulation-page .financing-adjustments__actions { display: flex; align-items: center; gap: 8px; }
+.simulation-page .suggested-alternatives { margin: 18px 0 0; }
+.simulation-page .suggested-alternatives > p { margin: 4px 0 12px; }
+.simulation-page .suggested-alternatives > div { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.simulation-page .suggested-alternatives article { gap: 12px; padding: 16px; background: var(--rh-surface); border-color: var(--rh-border-strong); }
+.simulation-page .suggested-alternatives article header { display: flex; align-items: center; gap: 10px; }
+.simulation-page .suggested-alternatives__icon { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; background: var(--rh-gold-light); color: #8a5b00; }
+.simulation-page .suggested-alternatives dl { gap: 12px; padding: 12px; background: var(--rh-blue-light); border-radius: var(--rh-radius-sm); }
+.simulation-page .suggested-alternatives dl > div { gap: 4px; min-width: 0; }
+.simulation-page .suggested-alternatives dd { font-size: .95rem; overflow-wrap: anywhere; }
+.simulation-page .suggested-alternatives article footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.simulation-page .suggested-alternatives article footer p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.simulation-page .suggested-alternatives article footer p > span:last-child { color: var(--rh-navy); font-size: .8rem; font-weight: 600; }
+.simulation-page .suggested-alternatives article footer button { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.simulation-page .financing-save { margin: 18px 0 0; padding: 14px 16px; gap: 12px; border-color: var(--rh-border-strong); background: var(--rh-blue-light); }
+.simulation-page .financing-save > div { min-width: 0; flex: 1 1 240px; }
+.simulation-page .financing-save > span { flex-basis: 100%; }
+.simulation-page .financing-saved { margin: 18px 0 0; padding: 16px; border: 1px solid var(--rh-border-strong); border-radius: var(--rh-radius-lg); background: var(--rh-surface); }
+.simulation-page .financing-saved h3 { margin: 0 0 10px; }
+.simulation-page .financing-saved > p { margin: 0; padding: 12px; border-radius: var(--rh-radius-sm); background: var(--rh-blue-light); font-size: .9rem; }
+@media (max-width: 650px) {
+  .simulation-page .financing-adjustments__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .simulation-page .financing-adjustments__grid .financing-adjustments__toggle { grid-column: 1 / -1; }
+  .simulation-page .financing-adjustments__actions { margin-left: auto; }
+  .simulation-page .financing-save input { flex: 1 1 180px; max-width: none; }
+}
+@media (max-width: 380px) {
+  .simulation-page .financing-adjustments__grid { grid-template-columns: minmax(0, 1fr); }
+  .simulation-page .suggested-alternatives dl { gap: 8px; padding: 10px; }
+  .simulation-page .suggested-alternatives dd { font-size: .85rem; }
+}
