@@ -698,6 +698,11 @@ export default function AdminProjectCatalog() {
                   </button>
                 )}
               </div>
+              {isGlobalAdmin && (
+                <p className="admin-bulk-hint">
+                  La carga masiva de proyectos la hace el administrador de cada inmobiliaria desde su propia cuenta.
+                </p>
+              )}
             </div>
           </article>
 

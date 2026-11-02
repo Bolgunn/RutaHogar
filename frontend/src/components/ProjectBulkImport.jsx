@@ -145,16 +145,14 @@ export default function ProjectBulkImport({ tenant, onClose, onImported }) {
         </div>
 
         <div className="admin-modal-body">
-          <div className="admin-compact-note">
-            <strong>Los proyectos se cargarán en</strong>
-            <p>{tenant?.inmobiliaria_nombre || "tu inmobiliaria"}</p>
-          </div>
-
-          <section className="admin-bulk-step" aria-labelledby="bulk-step-template">
-            <h3 id="bulk-step-template">1. Plantilla</h3>
+          <section className="admin-panel-card admin-panel-card--soft admin-bulk-step" aria-labelledby="bulk-step-template">
+            <div className="admin-panel-card__header">
+              <h3 id="bulk-step-template">Plantilla</h3>
+              <span className="admin-tag admin-tag--soft">Máximo {IMPORT_MAX_ROWS} proyectos</span>
+            </div>
             <p className="admin-bulk-hint">
-              Una fila por proyecto, máximo {IMPORT_MAX_ROWS}. La planilla Excel trae listas para elegir comuna, tipo y
-              estado, y una hoja de instrucciones.
+              Descárgala, completa una fila por proyecto y súbela abajo. La planilla Excel trae listas para elegir
+              comuna, tipo y estado, y una hoja de instrucciones.
             </p>
             <div className="admin-bulk-actions">
               <a className="secondary-button" href={XLSX_TEMPLATE_URL} download>
@@ -191,25 +189,38 @@ export default function ProjectBulkImport({ tenant, onClose, onImported }) {
             </details>
           </section>
 
-          <section className="admin-bulk-step" aria-labelledby="bulk-step-file">
-            <h3 id="bulk-step-file">2. Archivo</h3>
-            <div className="field-wrap">
-              <label htmlFor="bulk-import-file">Planilla .xlsx o archivo .csv</label>
+          <section className="admin-panel-card admin-panel-card--soft admin-bulk-step" aria-labelledby="bulk-step-file">
+            <div className="admin-panel-card__header">
+              <h3 id="bulk-step-file">Archivo</h3>
+              <span className="admin-tag admin-tag--soft">Se carga en {tenant?.inmobiliaria_nombre || "tu inmobiliaria"}</span>
+            </div>
+            <div className="admin-bulk-file">
               <input
                 id="bulk-import-file"
+                className="visually-hidden"
                 type="file"
                 accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={handleFile}
                 disabled={!inmobiliariaId || importing || reading}
               />
-              {file && <p className="admin-bulk-hint">{reading ? `Leyendo ${file.name}…` : `Archivo: ${file.name}`}</p>}
+              <label htmlFor="bulk-import-file" className="secondary-button" aria-disabled={!inmobiliariaId || importing || reading}>
+                <i className="ti ti-upload" aria-hidden="true" /> {file ? "Elegir otro archivo" : "Elegir archivo"}
+              </label>
+              <p className="admin-bulk-hint">
+                {file ? (reading ? `Leyendo ${file.name}…` : file.name) : "Planilla .xlsx o archivo .csv, hasta 1 MB."}
+              </p>
             </div>
             {readError && <div className="error-message" role="alert">{readError}</div>}
           </section>
 
           {analysis && (
-            <section className="admin-bulk-step" aria-labelledby="bulk-step-review" aria-live="polite">
-              <h3 id="bulk-step-review">3. Revisión</h3>
+            <section className="admin-panel-card admin-panel-card--soft admin-bulk-step" aria-labelledby="bulk-step-review" aria-live="polite">
+              <div className="admin-panel-card__header">
+                <h3 id="bulk-step-review">Revisión</h3>
+                <span className={analysis.canImport ? "admin-tag admin-tag--soft" : "admin-tag"}>
+                  {analysis.canImport ? "Lista para cargar" : "Con errores, no se puede cargar"}
+                </span>
+              </div>
 
               {analysis.fileErrors.length > 0 && (
                 <div className="error-message" role="alert">
