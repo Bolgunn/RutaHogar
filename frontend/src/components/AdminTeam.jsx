@@ -5,6 +5,7 @@ import "./admin-management.css";
 import "./admin-team.css";
 import { createExecutive, resendExecutiveInvitation } from "../services/executiveService";
 import { assignExecutive, getInmobiliarias, unassignExecutive } from "../services/projectService";
+import { emailPattern } from "../services/projectValidation";
 import {
   getTeam,
   getTeamHistory,
@@ -27,8 +28,6 @@ import {
   statusCounts,
   statusLine,
 } from "../lib/teamView";
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function ModalHeader({ title, text, onClose }) {
   return (
@@ -151,7 +150,7 @@ function HistoryPanel({ members, memberFilter, onFilter, entries, nextCursor, lo
   );
 }
 
-function MemberModal({ member, projects, error, busy, onClose, onSave, onResend, onRole, onAssign, onUnassign, onDeactivate, onReactivate, onHistory }) {
+function MemberModal({ member, projects, error, busy, onClose, onSave, onResend, onRole, onAssign, onUnassign, onDeactivate, onReactivate, onRetryAccess, onHistory }) {
   const [nombre, setNombre] = useState(member.nombre || "");
   const [telefono, setTelefono] = useState(member.telefono || "");
   const assigned = new Set(member.proyectos.map((project) => project.id));
@@ -240,6 +239,13 @@ function MemberModal({ member, projects, error, busy, onClose, onSave, onResend,
 
           <section className="eq-block">
             <h3>Acceso</h3>
+            {member.acceso_pendiente && !member.es_propio ? (
+              <div className="eq-alert eq-alert--danger eq-alert--modal">
+                <i className="ti ti-alert-triangle" aria-hidden="true" />
+                <span>El último cambio de acceso quedó incompleto.</span>
+                <button type="button" className="secondary-button compact-button" disabled={busy} onClick={onRetryAccess}>Reintentar</button>
+              </div>
+            ) : null}
             {reason ? (
               <div className="eq-alert eq-alert--info eq-alert--modal">
                 <i className="ti ti-lock" aria-hidden="true" />
@@ -356,6 +362,9 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
   const cardRef = useRef(null);
+  // Sólo la última petición pinta: una respuesta lenta no reemplaza a la inmobiliaria elegida después.
+  const teamRequest = useRef(0);
+  const historyRequest = useRef(0);
 
   // Solo el admin global declara la inmobiliaria: a los demás se la resuelve el backend.
   const tenantParam = globalAdmin ? selectedTenant : undefined;
@@ -374,12 +383,14 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
   };
 
   const loadTeam = useCallback(async () => {
+    const request = ++teamRequest.current;
     if (!ready) { setTeam(null); return; }
     setLoadError("");
     try {
-      setTeam(await getTeam(tenantParam));
+      const data = await getTeam(tenantParam);
+      if (request === teamRequest.current) setTeam(data);
     } catch (error) {
-      setLoadError(error.message || "No se pudo cargar el equipo.");
+      if (request === teamRequest.current) setLoadError(error.message || "No se pudo cargar el equipo.");
     }
   }, [ready, tenantParam]);
 
@@ -391,9 +402,11 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
   }, [globalAdmin]);
 
   const loadHistory = useCallback(async (cursor = 0) => {
+    const request = ++historyRequest.current;
     setHistory((current) => ({ ...current, loading: true, error: "" }));
     try {
       const page = await getTeamHistory(tenantParam, { miembroId: historyMember, cursor });
+      if (request !== historyRequest.current) return;
       setHistory((current) => ({
         items: cursor ? [...current.items, ...page.items] : page.items,
         next_cursor: page.next_cursor,
@@ -401,6 +414,7 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
         error: "",
       }));
     } catch (error) {
+      if (request !== historyRequest.current) return;
       setHistory((current) => ({ ...current, loading: false, error: error.message || "No se pudo cargar el historial." }));
     }
   }, [tenantParam, historyMember]);
@@ -488,6 +502,10 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
     run(() => setTeamMemberAccess(openMember.id, "activo", tenantParam), { success: `${name} puede volver a entrar.` });
   };
 
+  const retryAccess = () => run(() => setTeamMemberAccess(openMember.id, openMember.estado_acceso, tenantParam), {
+    success: "Acceso actualizado.",
+  });
+
   const showMemberHistory = () => {
     setHistoryMember(openMember.id);
     setTab("historial");
@@ -550,6 +568,7 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
       onUnassign={unassign}
       onDeactivate={() => { setModalError(""); setModal({ kind: "deactivate", id: openMember.id }); }}
       onReactivate={reactivate}
+      onRetryAccess={retryAccess}
       onHistory={showMemberHistory}
     />
   ) : null;

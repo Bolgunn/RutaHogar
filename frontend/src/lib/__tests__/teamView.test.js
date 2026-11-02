@@ -83,6 +83,8 @@ describe("presentation helpers", () => {
     expect(historyIcon({ event_type: "equipo.rol_cambiado", rol_nuevo: "admin_inmobiliario" })).toBe("shield-up");
     expect(historyIcon({ event_type: "equipo.invitacion_enviada" })).toBe("mail-forward");
     expect(historyIcon({ event_type: "equipo.invitacion_fallida" })).toBe("mail-off");
+    expect(historyIcon({ event_type: "equipo.proyecto_asignado" })).toBe("circle-plus");
+    expect(historyIcon({ event_type: "equipo.proyecto_retirado" })).toBe("circle-minus");
   });
 });
 

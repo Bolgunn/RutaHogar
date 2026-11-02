@@ -1,5 +1,6 @@
 import { supabase } from "../utils/supabase";
 import { fetchJsonWithTimeout, RequestTimeoutError, withTimeout } from "./httpRequest";
+import { LOCK_MESSAGES } from "../lib/teamView";
 
 const apiBase = () => (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
@@ -49,8 +50,8 @@ export async function trackingRequest(path = "", body, { timeoutMs, method } = {
       owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
       config_version_conflict: "Otro administrador cambió la configuración; revisa los cambios.",
       invalid_criterios: "Revisa los criterios marcados; hay valores no permitidos.",
-      self_change_forbidden: "No puedes cambiar tu propia función ni desactivar tu acceso. Otro administrador debe hacerlo.",
-      last_active_admin: "Es el único administrador activo de esta inmobiliaria. Asigna otro administrador antes de hacer este cambio.",
+      self_change_forbidden: LOCK_MESSAGES.propio,
+      last_active_admin: LOCK_MESSAGES.ultimo_administrador,
       member_deactivated: "Reactiva a esta persona antes de cambiar su función.",
       auth_sync_failed: "No pudimos completar el cambio de acceso. Inténtalo de nuevo.",
     };

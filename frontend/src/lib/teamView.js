@@ -70,8 +70,9 @@ export function inviteToast({ nombre, email, data }) {
 
 export function historyIcon(entry) {
   const icons = {
-    "equipo.proyecto_asignado": "building-plus",
-    "equipo.proyecto_retirado": "building-minus",
+    // index.html carga una versión de Tabler sin building-plus ni building-minus.
+    "equipo.proyecto_asignado": "circle-plus",
+    "equipo.proyecto_retirado": "circle-minus",
     "equipo.invitacion_fallida": "mail-off",
     "equipo.datos_actualizados": "pencil",
     "equipo.acceso_desactivado": "user-off",
