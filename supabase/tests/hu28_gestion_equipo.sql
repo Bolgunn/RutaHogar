@@ -4,6 +4,9 @@
 -- last-admin race are in hu28_team_stack.mjs: they need PostgREST and two connections.
 begin;
 
+-- The fixtures write their own profiles; the production sign-up trigger would write them first.
+drop trigger if exists on_auth_user_created on auth.users;
+
 -- Hosted Supabase grants table privileges to authenticated and lets RLS decide.
 grant select, insert, update on public.profiles to authenticated;
 grant select on public.proyecto_ejecutivos, public.proyectos to authenticated;
