@@ -87,7 +87,7 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 **Redirect, checked on 2026-11-02:** `https://www.rutahogar.cl/definir-password` is allowed. A `/auth/v1/authorize` call kept it in `auth.flow_state.referrer`, while an unlisted URL fell back to the Site URL, `https://www.rutahogar.cl`.
 
-**Sender, checked on 2026-11-02:** Resend accepted a real invitation from that address, sent by the function from a local stack.
+**Sender, checked on 2026-11-02:** a real invitation from that address, sent by the function from a local stack, reached a Gmail inbox, not Spam.
 
 **Not verified, needs the live domain or the dashboard:** delivery from production with a working link, and the recovery link lifetime (the CLI cannot read it). If the link lasts about an hour, this plan says to stop and report before release.
 
