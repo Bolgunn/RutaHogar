@@ -87,6 +87,9 @@ Archivos de ejemplo en `docs/stories/HU25-carga-masiva-proyectos/samples/`.
 
 **Requisito:** la migración `20261102120000_hu25_importar_proyectos.sql` aplicada en un Supabase de
 pruebas (no producción) y una cuenta `admin_inmobiliario` de una inmobiliaria con algunos proyectos.
+Si solo tienes el administrador global: en `/admin/proyectos` usa **Asignar administrador** con una
+cuenta de prueba ya registrada y una inmobiliaria demo, y entra con esa cuenta. Sin la migración
+todo funciona hasta **Confirmar carga**, que mostrará "No se pudo completar la carga".
 
 1. **E1.** Entrar como administrador de la inmobiliaria → `/admin/proyectos` → **Carga masiva** →
    **Plantilla Excel (.xlsx)**. Abrirla: ver las ocho columnas, las listas desplegables en comuna,
