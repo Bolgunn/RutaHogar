@@ -64,6 +64,7 @@
   .eq-state--activo{background:var(--rh-score-alto-bg);color:#1F6B3A}
   .eq-state--invitado{background:var(--rh-score-medio-bg);color:#8A5B10}
   .eq-state--desactivado{background:var(--rh-surface-alt);color:var(--rh-text-secondary)}
+  .eq-state-note{display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--rh-danger);font-size:.76rem;font-weight:700}
   .eq-projects{color:var(--rh-text-secondary);font-size:.84rem}
   .eq-projects strong{color:var(--rh-text)}
   .eq-actions{text-align:right;white-space:nowrap}
@@ -261,7 +262,7 @@ function memberRows() {
     <tr class="${m.estado === "desactivado" ? "is-off" : ""}">
       <td class="eq-td-person"><div class="eq-person"><span class="eq-avatar" aria-hidden="true">${esc(initials(m.nombre))}</span><div><strong>${esc(m.nombre)}${isSelf(m) ? '<span class="eq-you">Tú</span>' : ""}</strong><small>${esc(m.email)}</small></div></div></td>
       <td data-label="Función">${ROLE[m.rol]}</td>
-      <td data-label="Estado"><span class="eq-state eq-state--${m.estado}">${STATE[m.estado]}</span></td>
+      <td data-label="Estado"><div><span class="eq-state eq-state--${m.estado}">${STATE[m.estado]}</span>${m.correoFallido ? '<span class="eq-state-note"><i class="ti ti-mail-off" aria-hidden="true"></i>Correo no enviado</span>' : ""}</div></td>
       <td data-label="Proyectos" class="eq-projects">${m.proyectos.length ? `<strong>${m.proyectos.length}</strong> · ${esc(m.proyectos.join(", "))}` : "Sin proyectos"}</td>
       <td data-label="Último ingreso" class="eq-projects">${m.ingreso ? m.ingreso.slice(0, 10) : "Nunca"}</td>
       <td class="eq-actions"><button type="button" class="secondary-button compact-button" data-open="${m.id}">Gestionar</button></td>
@@ -316,7 +317,8 @@ function memberModal(id) {
   const off = m.estado === "desactivado";
   const free = team().proyectos.filter((p) => !m.proyectos.includes(p));
   const roleCard = (key, text) => `<button type="button" class="eq-role ${m.rol === key ? "is-active" : ""}" data-role="${key}" aria-pressed="${m.rol === key}" ${reason || off ? "disabled" : ""}><strong>${ROLE[key]}</strong><span>${text}</span></button>`;
-  const status = m.estado === "invitado" ? `Invitación enviada el ${m.invitada?.slice(0, 10) || NOW.slice(0, 10)}. Aún no define su contraseña.`
+  const status = m.correoFallido ? "La invitación no llegó a enviarse."
+    : m.estado === "invitado" ? `Invitación enviada el ${m.invitada?.slice(0, 10) || NOW.slice(0, 10)}. Aún no define su contraseña.`
     : off ? "No puede entrar a RutaHogar. Su historial se conserva." : m.ingreso ? `Último ingreso: ${m.ingreso}.` : "";
   const access = reason ? `<div class="eq-alert eq-alert--info eq-alert--modal"><i class="ti ti-lock" aria-hidden="true"></i><span>${reason}</span></div>`
     : off ? `<div class="eq-row-end"><span>Volverá a entrar con su contraseña. Sus proyectos anteriores no se recuperan.</span><button type="button" data-reactivate="${m.id}">Reactivar acceso</button></div>`
@@ -328,7 +330,7 @@ function memberModal(id) {
         <label class="eq-field">Teléfono<input id="edit-telefono" value="${esc(m.telefono)}" placeholder="+56 9 ..."></label>
         <label class="eq-field eq-field--wide">Correo<input value="${esc(m.email)}" readonly></label></div>
         <div class="eq-row-end"><span></span><button type="button" class="secondary-button compact-button" data-save="${m.id}">Guardar datos</button></div></section>
-      ${m.estado === "invitado" ? `<section class="eq-block"><h3>Invitación</h3><div class="eq-row-end"><span>El enlace anterior deja de ser necesario.</span><button type="button" class="secondary-button compact-button" data-resend="${m.id}">Reenviar invitación</button></div></section>` : ""}
+      ${m.estado === "invitado" ? `<section class="eq-block"><h3>Invitación</h3>${m.correoFallido ? '<div class="eq-alert eq-alert--danger eq-alert--modal"><i class="ti ti-mail-off" aria-hidden="true"></i><span>No pudimos enviar el correo. Revisa la dirección y reenvía la invitación.</span></div>' : ""}<div class="eq-row-end"><span>${m.correoFallido ? "La cuenta ya está creada, pero aún no recibe el enlace." : "Si el enlace venció, reenvía la invitación para enviar uno nuevo."}</span><button type="button" class="secondary-button compact-button" data-resend="${m.id}">Reenviar invitación</button></div></section>` : ""}
       <section class="eq-block"><h3>Función</h3>${reason ? "" : "<p>Define qué puede hacer en RutaHogar.</p>"}<div class="eq-roles">
         ${roleCard("ejecutivo", "Gestiona leads de sus proyectos asignados.")}
         ${roleCard("admin_inmobiliario", "Además administra el equipo, los proyectos y la priorización.")}</div></section>
@@ -357,6 +359,7 @@ function deactivateModal(id) {
 
 const CASES = {
   nuevo: { email: "nueva.persona@ejemplo.cl", label: "Correo nuevo" },
+  fallo: { email: "correo.rebotado@ejemplo.cl", label: "Falla el envío" },
   sin: { email: "sin.inmobiliaria@ejemplo.cl", label: "Ejecutivo sin inmobiliaria" },
   equipo: { email: "camila.soto@ejemplo.cl", label: "Ya en el equipo", error: "Esta persona ya es parte de tu equipo." },
   lead: { email: "comprador@ejemplo.cl", label: "Lead", error: "Este correo pertenece a una cuenta de comprador en RutaHogar. Usa otro correo, como el laboral." },
@@ -388,11 +391,12 @@ function sendInvite() {
   if (refused) return fail(refused.error);
   if (team().members.some((m) => m.email === email)) return fail(CASES.equipo.error);
   const linked = email === CASES.sin.email;
-  const m = { id: `n${Date.now()}`, nombre, email, telefono: document.getElementById("invite-telefono").value.trim(), rol: "ejecutivo", estado: linked ? "activo" : "invitado", proyectos: [...document.querySelectorAll("[data-invite-project]:checked")].map((n) => n.value), ingreso: linked ? "28-10-2026 13:15" : null, invitada: NOW };
+  const failed = email === CASES.fallo.email;
+  const m = { id: `n${Date.now()}`, nombre, email, telefono: document.getElementById("invite-telefono").value.trim(), rol: "ejecutivo", estado: linked ? "activo" : "invitado", proyectos: [...document.querySelectorAll("[data-invite-project]:checked")].map((n) => n.value), ingreso: linked ? "28-10-2026 13:15" : null, invitada: NOW, correoFallido: failed };
   team().members.push(m);
-  log(m, "mail-forward", linked ? `vinculó a <strong>${esc(nombre)}</strong> al equipo como Ejecutivo` : `invitó a <strong>${esc(nombre)}</strong> como Ejecutivo`);
+  log(m, failed ? "mail-off" : "mail-forward", linked ? `vinculó a <strong>${esc(nombre)}</strong> al equipo como Ejecutivo` : failed ? `invitó a <strong>${esc(nombre)}</strong> como Ejecutivo, pero el correo no se pudo enviar` : `invitó a <strong>${esc(nombre)}</strong> como Ejecutivo`);
   closeModal(); render();
-  toast(linked ? `${nombre} ya tenía cuenta: se sumó al equipo y le avisamos por correo.` : `Invitación enviada a ${email}.`);
+  toast(linked ? `${nombre} ya tenía cuenta: se sumó al equipo y le avisamos por correo.` : failed ? `La cuenta se creó, pero no pudimos enviar el correo a ${email}.` : `Invitación enviada a ${email}.`);
 }
 
 document.addEventListener("input", (event) => {
@@ -426,7 +430,7 @@ document.addEventListener("click", (event) => {
     log(m, "pencil", `actualizó los datos de <strong>${esc(m.nombre)}</strong>`);
     render(); memberModal(m.id); toast("Datos guardados."); return;
   }
-  if (d.resend) { const m = memberById(d.resend); m.invitada = NOW; log(m, "mail-forward", `reenvió la invitación de <strong>${esc(m.nombre)}</strong>`); render(); memberModal(m.id); toast(`Invitación reenviada a ${m.email}.`); return; }
+  if (d.resend) { const m = memberById(d.resend); m.invitada = NOW; m.correoFallido = false; log(m, "mail-forward", `reenvió la invitación de <strong>${esc(m.nombre)}</strong>`); render(); memberModal(m.id); toast(`Invitación reenviada a ${m.email}.`); return; }
   if (d.role) {
     const m = memberById(openMemberId);
     if (m.rol === d.role) return;

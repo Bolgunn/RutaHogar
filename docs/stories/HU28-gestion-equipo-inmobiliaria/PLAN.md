@@ -49,6 +49,7 @@ database trigger writing their audit entries.
 | Global admins pick an inmobiliaria first, then see the same page. Only they may send `inmobiliaria_id`. | RutaHogar can support an inmobiliaria without any caller reaching another tenant by editing a request. HU 21 excluded them; this story does not. |
 | Admins cannot change or deactivate themselves. No change may leave an inmobiliaria without an active admin, for any actor. | One mistake must not lock an inmobiliaria out of its own team page. |
 | Invitations stay in `create-executive`. Everyone else goes through the backend. | It is live, sends the email and was secured by #171. Moving it would add another Resend copy with no user-visible gain. |
+| Invitation problems are in scope: a failed email is visible, an expired link has a way forward, and the email and link use RutaHogar. | The invitation is the story's first step, so it has to work end to end. The account exists before the email is sent, so a silent failure would show a person as `Invitado` who never received anything. |
 | An invited email belonging to a lead is refused. | A lead's account holds personal finances, and a typo must not turn a buyer into staff. This reverses today's behaviour and #171's "a lead still converts" test. |
 | Deactivation has two layers: `profiles.estado_acceso` cuts staff access from the next request, and a Supabase Auth ban stops new logins. | A ban alone leaves access for up to about an hour. A status field alone leaves a working login until HU 27 ships. |
 | Deactivation removes the person's project assignments. Reactivation does not restore them. | Product decision. The audit log keeps each removed project, and the confirmation lists them and warns if a project is left with no executive. |
@@ -90,11 +91,15 @@ database trigger writing their audit entries.
 | `POST /tracking/staff/team/{member_id}/role` | **new** | `{ rol }`. |
 | `POST /tracking/staff/team/{member_id}/access` | **new** | `{ estado }`. Calls the RPC, then the Auth admin API. |
 | `GET /tracking/staff/team/history` | **new** | Paginated, optional `miembro_id`. Each entry has actor name, a sentence built from the event, time and origin, so that catalog changes show "Desde Proyectos". |
-| `create-executive` | existing | Adds resend, lead refusal, already-on-team response, email to linked executives and audit entries. Refuses a deactivated caller. |
+| `create-executive` | existing | Adds resend, lead refusal, already-on-team response, email to linked executives and audit entries. Records a failed send. Uses RutaHogar branding and name. Refuses a deactivated caller. |
+| `.github/workflows/deploy-supabase-functions.yml` | existing | Adds a `create-executive` deploy step. Today the workflow deploys only `submit-feedback` and `co-debtor-consent`, plus `commercial-funnel-metrics` in PR #170, so changes to this function never reach production by themselves. |
+| `APP_URL` secret | existing | Set to `https://www.rutahogar.cl` when the function ships. It currently points to `score-leads-one.vercel.app`, which redirects. The code's fallback changes too. |
 
 **Status shown:** `Invitado` (never signed in), `Activo`, `Desactivado`. `Invitado` is derived from `auth.users.last_sign_in_at`, not stored, so someone reactivated without ever signing in returns to `Invitado`. 13 of 47 production executives have never signed in and will show as `Invitado`.
 
-**Audit event types:** `equipo.invitacion_enviada`, `equipo.invitacion_reenviada`, `equipo.miembro_vinculado`, `equipo.rol_cambiado`, `equipo.datos_actualizados`, `equipo.acceso_desactivado`, `equipo.acceso_reactivado`, `equipo.proyecto_asignado`, `equipo.proyecto_retirado`.
+**Failed email:** `create-executive` keeps the account when the send fails, writes `equipo.invitacion_fallida` and returns `email_enviado: false`. `GET /tracking/staff/team` marks a member as failed when their latest invitation event is that one. A successful resend clears it. No new column is needed.
+
+**Audit event types:** `equipo.invitacion_enviada`, `equipo.invitacion_reenviada`, `equipo.invitacion_fallida`, `equipo.miembro_vinculado`, `equipo.rol_cambiado`, `equipo.datos_actualizados`, `equipo.acceso_desactivado`, `equipo.acceso_reactivado`, `equipo.proyecto_asignado`, `equipo.proyecto_retirado`.
 
 ## Algorithms
 
@@ -111,7 +116,6 @@ None referenced.
 - Individual permissions: not planned.
 - Removing an account or deleting its history: not offered.
 - `profiles.reliability_status` and `update_lead_reliability(uuid, text)`: PR #171 and its follow-up.
-- The ScoreLeads branding in the invitation email: separate fix.
 - The project catalog's existing team table and "Nuevo ejecutivo" button stay as they are.
 - From the mockup, the bottom "Ver como" bar, the "Solo mockup" email buttons and the fake data: review aids, not product.
 
@@ -127,7 +131,8 @@ The mockup is binding. Its CSS moves to `frontend/src/components/admin-team.css`
 | Gestionar | Header with status. Blocks for Datos, Invitación (only `Invitado`), Función, Proyectos and Acceso. The email is read-only. "Ver historial de esta persona" opens Historial filtered. |
 | Locked states | Self and last active admin: Función disabled, and Acceso replaced by the exact explanation in the mockup. Deactivated: Función and project assignment disabled. |
 | Deactivation | Confirmation listing lost access, the projects removed, kept history, and a red warning naming projects left with no active executive. |
-| Invite | Name, optional phone, email and optional projects. Each refused case shows its error inside the pop-up. A linked executive shows the "ya tenía cuenta" message. |
+| Invite | Name, optional phone, email and optional projects. Each refused case shows its error inside the pop-up. A linked executive shows the "ya tenía cuenta" message. A failed send says the account exists but the email didn't go out. |
+| Failed email | "Correo no enviado" under the status in the list, plus the red message and "Reenviar invitación" in Gestionar. |
 | Historial | "Ver cambios de" filter, then entries with newest first. |
 
 Pop-ups close with `Esc`, the backdrop or "Cerrar", and return focus to the button that opened them.
@@ -141,7 +146,8 @@ Pop-ups close with `Esc`, the backdrop or "Cerrar", and return focus to the butt
 5. **Assignment audit.** Add both triggers. Actor is `auth.uid()` for browser calls and the RPC's actor for backend calls. Update `list_inmobiliaria_executives` and `assign_executive`.
 6. **Backend.** Add `backend/app/tracking/team.py` with a `TeamService`, repository methods, and routes in `routes.py`. Resolve the tenant from `staff_actor`, and accept `inmobiliaria_id` only from a global admin. Add the new error codes to `checked()`.
 7. **Ban handling.** To deactivate, commit the RPC first and then set the ban. To reactivate, lift the ban first and then commit the RPC. If the Auth call fails, return a retryable error, and make both directions idempotent.
-8. **`create-executive`.** Make the Entities changes. Update `supabase/tests/profiles_privilege_stack.mjs`, where a lead is now refused.
+8. **`create-executive`.** Make the Entities changes, including the failed send, the RutaHogar email text, logo, subject and sender fallback, and the `APP_URL` fallback. Add its deploy step to the workflow. Update `supabase/tests/profiles_privilege_stack.mjs`, where a lead is now refused.
+   Check three things and report the results in the PR: the project's recovery link lifetime in Supabase Auth, that `https://www.rutahogar.cl/definir-password` is an allowed redirect URL, and that `EJECUTIVO_FROM_EMAIL` sends from a RutaHogar address. If the link lasts about an hour, stop and report, because invited people may often need a resend.
 9. **Frontend.** Build the UI specification. Add `frontend/src/components/AdminTeam.jsx`, `frontend/src/components/admin-team.css` and `frontend/src/services/teamService.js`. Add the `/admin/equipo` route and `"admin-equipo"` guard in `frontend/src/lib/staffRoutes.js`, and register the page in `App.jsx`. Add "Equipo" after "Leads" to the admin menus in `Navbar.jsx`, not hidden for global admins. Unlike `"admin-priorizacion"`, the guard admits global admins. Project assignment reuses `assignExecutive` and `unassignExecutive`. Copy comes from the mockup.
 10. **Tests.** Add SQL tests for policies, limits, immutability and triggers, backend tests for tenant isolation and error codes, and frontend tests for the page. Run the SQL on a local `supabase start` stack, and test anonymous calls over HTTP.
 11. **Wiki and docs.** Update the HU 28 story, and record the `estado_acceso` agreement in the plan.
@@ -150,7 +156,7 @@ Pop-ups close with `Esc`, the backdrop or "Cerrar", and return focus to the butt
 
 | Criterion | Step(s) | Verified by |
 | :-------- | :------ | :---------- |
-| `E1` — invite by email, see onboarding status, manage organizational data | 4, 6, 8, 9 | `create-executive` stack tests for each existing-account case · backend team list and update tests · invite, resend and edit in the running app |
+| `E1` — invite by email, see onboarding status, manage organizational data | 4, 6, 8, 9 | `create-executive` stack tests for each existing-account case and a failed send · backend team list and update tests · a real invitation opened from the email, password set and first login on the deployed domain · an expired link shows `SetPassword.jsx`'s existing "pide a tu administrador" message · invite, resend and edit in the running app |
 | `E2` — change role, assign or remove projects, deactivate and reactivate without deleting history | 2, 4, 5, 6, 7, 9 | SQL tests for the limits and last admin race · test that a deactivated account loses access on its next request · ban and unban checked with real GoTrue · confirm history survives reactivation |
 | `E3` — keep who, when and what; block other inmobiliarias | 1, 3, 4, 5, 6 | SQL tests that entries exist for each event and cannot be changed · trigger tests from the catalog and on project deletion · cross-tenant tests on every endpoint and policy |
 | Approved UI | 9 | Reviewer compares `/admin/equipo` with `frontend/mockups/hu28-equipo.html`, as tenant admin and global admin, at desktop and phone widths |
