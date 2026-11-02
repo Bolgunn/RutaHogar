@@ -21,6 +21,13 @@ def member_status(member):
     return "activo" if member.get("ultimo_ingreso") else "invitado"
 
 
+def access_out_of_sync(member):
+    """The status committed but the Auth ban did not follow; None until the list reports the ban."""
+    if member.get("baneado") is None:
+        return False
+    return (member.get("estado_acceso") == "desactivado") != member["baneado"]
+
+
 def locked_reason(member, actor, active_admins):
     if member["id"] == actor["id"]:
         return "propio"
@@ -47,6 +54,7 @@ def team_view(team, actor):
                 "estado": member_status(member),
                 "es_propio": member["id"] == actor["id"],
                 "bloqueo": locked_reason(member, actor, active_admins),
+                "acceso_pendiente": access_out_of_sync(member),
             }
             for member in members
         ],
@@ -149,21 +157,21 @@ class TeamService:
         _, tenant = self._scope(token, inmobiliaria_id)
         rows = self.repository.team_events(tenant, miembro_id, cursor, limit + 1)
         page = rows[:limit]
-        contacts = self.repository.staff_contacts(
-            [row.get("actor_id") for row in page] + [row.get("subject_user_id") for row in page]
-        )
-        names = {profile_id: contact.get("full_name") for profile_id, contact in contacts.items()}
+        contacts = self.repository.staff_contacts([row.get("actor_id") for row in page])
+        actors = {profile_id: contact.get("full_name") for profile_id, contact in contacts.items()}
+        # An assignment may name any email: only this team's people are shown by name.
+        team = self.repository.team_member_names(tenant)
         items = []
         for row in page:
             details = row.get("details") or {}
-            subject = row.get("subject_user_id")
+            subject = row.get("subject_user_id") if row.get("subject_user_id") in team else None
             items.append({
                 "id": row.get("id"),
                 "event_type": row.get("event_type"),
                 "ocurrido_en": row.get("occurred_at"),
                 "miembro_id": subject,
-                "actor_nombre": names.get(row.get("actor_id")) or "RutaHogar",
-                "segmentos": event_sentence(row, names.get(subject) or details.get("email") or "una persona"),
+                "actor_nombre": actors.get(row.get("actor_id")) or "RutaHogar",
+                "segmentos": event_sentence(row, team.get(subject) or details.get("email") or "una persona"),
                 "origen": "Desde Proyectos" if details.get("origen") == "proyectos" else None,
                 "rol_nuevo": (row.get("after") or {}).get("rol"),
             })

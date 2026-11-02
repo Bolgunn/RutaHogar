@@ -93,7 +93,11 @@ class FakeRepository:
         return rows[offset:offset + limit]
 
     def staff_contacts(self, ids):
-        return {ADMIN: {"full_name": "Ana Admin"}, EXEC: {"full_name": "Eva Exec"}}
+        self.calls.append(("contacts", sorted(id_ for id_ in ids if id_)))
+        return {ADMIN: {"full_name": "Ana Admin"}}
+
+    def team_member_names(self, tenant):
+        return {member_id: "Eva Exec" for member_id in self.members[tenant] if member_id == EXEC}
 
 
 def call(fake, method, path, token="admin-a", **kwargs):
@@ -276,7 +280,7 @@ def test_update_requires_a_name_and_only_touches_organizational_data():
 def test_history_is_paginated_and_named():
     fake = FakeRepository()
     body = call(fake, "GET", f"/staff/team/history?limit=2&miembro_id={EXEC}").json()
-    assert fake.calls == [("events", TENANT, EXEC, 0, 3)]
+    assert fake.calls[0] == ("events", TENANT, EXEC, 0, 3)
     assert body["next_cursor"] == 2
     entry = body["items"][0]
     assert entry["actor_nombre"] == "Ana Admin"
@@ -286,6 +290,31 @@ def test_history_is_paginated_and_named():
     last = call(fake, "GET", "/staff/team/history?limit=2&cursor=2").json()
     assert len(last["items"]) == 1
     assert last["next_cursor"] is None
+
+
+@pytest.mark.parametrize("details,expected", [
+    ({"proyecto": "Altos"}, "una persona"),
+    ({"proyecto": "Altos", "email": "alguien@example.invalid"}, "alguien@example.invalid"),
+])
+def test_history_names_only_this_team(details, expected):
+    fake = FakeRepository()
+    outsider = {"id": "1", "occurred_at": "2026-11-01T10:00:00+00:00", "actor_id": ADMIN,
+                "subject_user_id": FOREIGN_EXEC, "event_type": "equipo.proyecto_asignado", "details": details}
+    fake.team_events = lambda *_args: [outsider]
+    entry = call(fake, "GET", "/staff/team/history").json()["items"][0]
+    assert entry["segmentos"][-1]["texto"] == expected
+    assert entry["miembro_id"] is None
+    assert ("contacts", [ADMIN]) in fake.calls, "a subject's profile is never looked up"
+
+
+@pytest.mark.parametrize("estado,baneado,expected", [
+    ("desactivado", True, False), ("activo", False, False),
+    ("desactivado", False, True), ("activo", True, True),
+    ("desactivado", None, False),
+])
+def test_access_out_of_sync_with_the_ban(estado, baneado, expected):
+    view = team_view({"miembros": [{**member("a", estado=estado), "baneado": baneado}], "proyectos": []}, {"id": "x"})
+    assert view["miembros"][0]["acceso_pendiente"] is expected
 
 
 @pytest.mark.parametrize("event,expected", [

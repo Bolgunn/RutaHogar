@@ -218,6 +218,14 @@ class TrackingRepository:
         })
         return bool(self.request("GET", f"/rest/v1/profiles?{query}"))
 
+    def team_member_names(self, inmobiliaria_id):
+        query = urlencode({
+            "inmobiliaria_id": f"eq.{inmobiliaria_id}",
+            "role": "in.(ejecutivo,admin,admin_inmobiliario)",
+            "select": "id,full_name",
+        })
+        return {row["id"]: row.get("full_name") for row in self.request("GET", f"/rest/v1/profiles?{query}")}
+
     def team_update_member(self, inmobiliaria_id, member_id, nombre, telefono, actor):
         return self.request("POST", "/rest/v1/rpc/hu28_update_member", payload={
             "p_inmobiliaria": inmobiliaria_id, "p_member": member_id, "p_nombre": nombre,

@@ -224,6 +224,32 @@ await step("GoTrue: reactivar devuelve el login, no los proyectos, y conserva el
   assert.equal(deactivated.segmentos.at(-1).texto, project.nombre);
 });
 
+await step("Historial: una asignación pendiente no revela el nombre de la cuenta", async () => {
+  for (const target of [lead, adminB]) {
+    const res = await rest("rpc/assign_executive", { token: adminA2.token, method: "POST", body: { p_project_id: project.id, p_email: target.email } });
+    assert.equal(res.status, 200, res.text);
+  }
+  const history = (await api("/staff/team/history", adminA2.token)).json.items;
+  const text = history.slice(0, 2).map((item) => item.segmentos.map((part) => part.texto).join("")).join(" | ");
+  assert.ok(!/\blead\b|admin-b/.test(text.replaceAll(mail("lead"), "").replaceAll(mail("admin-b"), "")), text);
+  assert.ok(text.includes(lead.email) && text.includes(adminB.email), text);
+  assert.ok(history.slice(0, 2).every((item) => item.miembro_id === null));
+  for (const target of [lead, adminB]) {
+    await rest("rpc/unassign_executive", { token: adminA2.token, method: "POST", body: { p_project_id: project.id, p_email: target.email } });
+  }
+});
+
+await step("Backend: un acceso a medio aplicar se detecta y se reintenta", async () => {
+  const target = await user("sync", "ejecutivo", tenantA.id);
+  const banned = await admin(`/auth/v1/admin/users/${target.id}`, { method: "PUT", body: { ban_duration: "1h" } });
+  assert.equal(banned.status, 200, banned.text);
+  assert.equal((await member(adminA.token, target.id)).acceso_pendiente, true);
+  const retry = await api(`/staff/team/${target.id}/access`, adminA.token, { method: "POST", body: { estado: "activo" } });
+  assert.equal(retry.status, 200, retry.text);
+  assert.equal((await member(adminA.token, target.id)).acceso_pendiente, false);
+  assert.equal((await login(target.email)).status, 200);
+});
+
 await step("PostgREST: la asignación desde el catálogo queda en el historial con su origen", async () => {
   const res = await rest("rpc/assign_executive", { token: adminA2.token, method: "POST", body: { p_project_id: project.id, p_email: execA.email } });
   assert.equal(res.status, 200, res.text);
