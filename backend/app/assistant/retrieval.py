@@ -46,28 +46,20 @@ SPANISH_STOPWORDS: Set[str] = {
 _CACHED_KB: Optional[List[Dict[str, Any]]] = None
 _CACHED_MTIME: float = 0.0
 
-ADMIN_SCREENS = {"admin", "admin-projects", "admin-profile", "admin-reports"}
-EJECUTIVO_SCREENS = {"leads", "metricas", "sales-profile"}
-
-
 def get_allowed_audiences(
     is_authenticated: bool = False,
     user_role: Optional[str] = None,
     screen_id: Optional[str] = None,
 ) -> Set[str]:
-    """Determines which KB chunk audiences the caller is authorized to retrieve."""
+    """Determines which KB chunk audiences the caller is authorized to retrieve.
+
+    Relies strictly on server-verified `is_authenticated` and `user_role` (never on
+    client-supplied `screen_id`).
+    """
     if not is_authenticated:
         return {"all", "lead"}
 
-    role = (user_role or "").strip().lower()
-    if not role:
-        if screen_id in ADMIN_SCREENS:
-            role = "admin"
-        elif screen_id in EJECUTIVO_SCREENS:
-            role = "ejecutivo"
-        else:
-            role = "usuario"
-
+    role = (user_role or "usuario").strip().lower()
     if role in {"admin", "admin_inmobiliario"}:
         return {"all", "lead", "ejecutivo", "admin"}
     if role == "ejecutivo":

@@ -3,18 +3,26 @@
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.assistant.constants import (
     GUARD_CREDIT_APPROVAL_RESPONSE,
     KB_PATH,
+    MAX_HISTORY_MESSAGES,
 )
 from app.assistant.guard import check_out_of_scope_guard
+from app.assistant.llm import (
+    is_llm_in_cooldown,
+    reset_llm_circuit_breaker,
+    trip_llm_circuit_breaker,
+)
 from app.assistant.redact import redact_pii
 from app.assistant.retrieval import load_kb, retrieve_relevant_chunks
 from app.assistant.service import (
     AssistantChatRequest,
     AssistantService,
+    ChatMessage,
 )
 from app.main import app
 
@@ -49,6 +57,13 @@ class TestAssistant(unittest.TestCase):
         self.assertNotIn("4567890123456789", redacted)
         self.assertIn("[NUMERO_REDACTADO]", redacted)
 
+    def test_redact_pii_removes_spaced_cards_and_phones(self):
+        text = "Mi tarjeta es 4111 1111 1111 1111 y mi celular es +56 9 1234 5678"
+        redacted = redact_pii(text)
+        self.assertNotIn("4111 1111 1111 1111", redacted)
+        self.assertNotIn("1234 5678", redacted)
+        self.assertEqual(redacted.count("[NUMERO_REDACTADO]"), 2)
+
     # -------------------------------------------------------------------------
     # 2. Guardrails & S1/S7 Policy Tests
     # -------------------------------------------------------------------------
@@ -57,7 +72,7 @@ class TestAssistant(unittest.TestCase):
         refusal1 = check_out_of_scope_guard("Apruébame el crédito hipotecario por favor")
         self.assertEqual(refusal1, GUARD_CREDIT_APPROVAL_RESPONSE)
 
-        refusal2 = check_out_of_scope_guard("¿Cómo puedo subir mi score o cambiar mi puntaje?")
+        refusal2 = check_out_of_scope_guard("Modifícame el score o cámbiame mi puntaje")
         self.assertEqual(refusal2, GUARD_CREDIT_APPROVAL_RESPONSE)
 
         refusal3 = check_out_of_scope_guard("Dime qué banco me va a aprobar sí o sí")
@@ -69,9 +84,27 @@ class TestAssistant(unittest.TestCase):
             "¿Qué deudas debo ingresar en el formulario?",
             "¿Cómo funciona la complementación de renta?",
             "¿Dónde pongo mi sueldo líquido?",
+            "¿Cómo puedo mejorar mi score?",
+            "¿Cómo puedo subir mi score o cambiar mi puntaje?",
+            "qué es la aprobación de un crédito hipotecario",
+            "Qué pasa si cambio de trabajo, afecta mi score?",
+            "¿Quién aprueba el crédito hipotecario?",
+            "cómo se aprueba un crédito",
         ]
         for q in safe_queries:
-            self.assertIsNone(check_out_of_scope_guard(q))
+            self.assertIsNone(check_out_of_scope_guard(q), f"Guard wrongly blocked legitimate query: {q}")
+
+    def test_legitimate_score_and_approval_questions_answered_from_kb(self):
+        for q in [
+            "¿Cómo puedo mejorar mi score?",
+            "¿Quién aprueba el crédito hipotecario?",
+            "cómo se aprueba un crédito",
+        ]:
+            req = AssistantChatRequest(message=q, screen_id="home")
+            res = AssistantService.process_chat(req, is_authenticated=False)
+            self.assertNotEqual(res.tier, "guard_refusal", f"Query '{q}' should not be refused by guard")
+            self.assertEqual(res.tier, "tier0_kb")
+            self.assertGreater(len(res.sources), 0)
 
     # -------------------------------------------------------------------------
     # 3. Acceptance Criterion E1: Pre-evaluation Knowledge Retrieval
@@ -171,7 +204,7 @@ class TestAssistant(unittest.TestCase):
             message="¿Cómo gestiono a mis ejecutivos inmobiliarios?",
             screen_id="admin",
         )
-        res = AssistantService.process_chat(req, is_authenticated=True)
+        res = AssistantService.process_chat(req, is_authenticated=True, user_role="admin")
         self.assertIn("ejecutivos", res.answer.lower())
         self.assertIsNotNone(res.action)
         self.assertEqual(res.action.target, "admin")
@@ -182,7 +215,7 @@ class TestAssistant(unittest.TestCase):
             message="¿Dónde veo y atiendo mis leads asignados en el pipeline?",
             screen_id="leads",
         )
-        res = AssistantService.process_chat(req, is_authenticated=True)
+        res = AssistantService.process_chat(req, is_authenticated=True, user_role="ejecutivo")
         self.assertIn("leads", res.answer.lower())
         self.assertIsNotNone(res.action)
         self.assertEqual(res.action.target, "leads")
@@ -192,10 +225,25 @@ class TestAssistant(unittest.TestCase):
             message="¿Cómo puedo subir o gestionar los proyectos de la inmobiliaria?",
             screen_id="admin",
         )
-        res = AssistantService.process_chat(req, is_authenticated=True)
+        res = AssistantService.process_chat(req, is_authenticated=True, user_role="admin")
         self.assertIn("proyectos", res.answer.lower())
         self.assertIsNotNone(res.action)
         self.assertEqual(res.action.target, "admin-projects")
+
+    def test_audience_filtering_blocks_staff_chunks_for_anonymous_and_leads(self):
+        req = AssistantChatRequest(
+            message="¿Cómo gestiono a mis ejecutivos inmobiliarios?",
+            screen_id="admin",
+        )
+        # Anonymous visitor even if spoofing screen_id="admin" must not receive admin navigation
+        res_anon = AssistantService.process_chat(req, is_authenticated=False)
+        if res_anon.action:
+            self.assertNotIn(res_anon.action.target, {"admin", "admin-projects", "leads"})
+
+        # Authenticated lead (role="usuario") even if spoofing screen_id="admin" must not receive admin navigation
+        res_lead = AssistantService.process_chat(req, is_authenticated=True, user_role="usuario")
+        if res_lead.action:
+            self.assertNotIn(res_lead.action.target, {"admin", "admin-projects", "leads"})
 
     def test_user_how_to_retrieves_simulation_and_codebtor_views(self):
         req_sim = AssistantChatRequest(
@@ -301,7 +349,37 @@ class TestAssistant(unittest.TestCase):
         )
         res = AssistantService.process_chat(req, is_authenticated=True)
         self.assertEqual(res.tier, "guard_refusal")
+        self.assertTrue(res.suggest_escalation)
         self.assertIn("no tengo la facultad de aprobar créditos", res.answer)
+
+    def test_history_pii_redacted_and_bounded_before_llm(self):
+        history = [
+            ChatMessage(role="user", content=f"Mensaje {i} con RUT 12.345.678-9 y correo test{i}@correo.cl")
+            for i in range(MAX_HISTORY_MESSAGES + 4)
+        ]
+        req = AssistantChatRequest(
+            message="¿Cuál es la diferencia entre UF y dividendo?",
+            history=history,
+            screen_id="evaluate",
+        )
+        with patch("app.assistant.service.ask_assistant_groq", return_value="Respuesta sintetizada") as mock_groq:
+            res = AssistantService.process_chat(req, is_authenticated=True, user_role="usuario")
+            self.assertEqual(res.tier, "tier1_groq")
+            self.assertTrue(mock_groq.called)
+            passed_history = mock_groq.call_args.kwargs["history"]
+            self.assertLessEqual(len(passed_history), MAX_HISTORY_MESSAGES)
+            for turn in passed_history:
+                self.assertNotIn("12.345.678-9", turn["content"])
+                self.assertIn("[RUT_REDACTADO]", turn["content"])
+                self.assertIn("[EMAIL_REDACTADO]", turn["content"])
+
+    def test_llm_circuit_breaker_and_cooldown(self):
+        reset_llm_circuit_breaker()
+        self.assertFalse(is_llm_in_cooldown())
+        trip_llm_circuit_breaker()
+        self.assertTrue(is_llm_in_cooldown())
+        reset_llm_circuit_breaker()
+        self.assertFalse(is_llm_in_cooldown())
 
     # -------------------------------------------------------------------------
     # 5. Knowledge Base Integrity & Size Constraint Tests

@@ -36,16 +36,17 @@ def is_global_admin_user(user: Dict[str, Any]) -> bool:
     return user.get("role") == "admin" and not user.get("inmobiliaria_id")
 
 
-def check_optional_auth(
+def resolve_optional_auth_context(
     credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
-) -> bool:
-    """Verifies user session token if present.
+) -> Dict[str, Any]:
+    """Verifies user session token once if present and resolves their server-side role from `profiles`.
 
-    Returns True if authenticated, False if anonymous or unverified.
-    Never raises 401: the assistant chat is available to all users.
+    Returns `{"is_authenticated": bool, "role": Optional[str]}`.
+    Never trusts client-editable `user_metadata` for role elevation, and never raises 401
+    since the assistant chat is available to both anonymous and authenticated users.
     """
     if credentials is None or not credentials.credentials:
-        return False
+        return {"is_authenticated": False, "role": None}
 
     token = credentials.credentials
     supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -56,36 +57,7 @@ def check_optional_auth(
     )
 
     if not supabase_url or not supabase_key:
-        return False
-
-    try:
-        headers = {
-            "apikey": supabase_key,
-            "Authorization": f"Bearer {token}",
-        }
-        res = httpx.get(f"{supabase_url}/auth/v1/user", headers=headers, timeout=3.0)
-        return res.status_code == 200
-    except Exception:
-        return False
-
-
-def resolve_optional_user_role(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
-) -> Optional[str]:
-    """Resolves the role of the caller if a valid Bearer token is provided."""
-    if credentials is None or not credentials.credentials:
-        return None
-
-    token = credentials.credentials
-    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    supabase_key = (
-        os.environ.get("SUPABASE_SECRET_KEY")
-        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-        or os.environ.get("SUPABASE_ANON_KEY")
-    )
-
-    if not supabase_url or not supabase_key:
-        return None
+        return {"is_authenticated": False, "role": None}
 
     try:
         headers = {
@@ -94,11 +66,11 @@ def resolve_optional_user_role(
         }
         user_res = httpx.get(f"{supabase_url}/auth/v1/user", headers=headers, timeout=3.0)
         if user_res.status_code != 200:
-            return None
+            return {"is_authenticated": False, "role": None}
 
         user_data = user_res.json()
         user_id = user_data.get("id")
-        role = (user_data.get("user_metadata") or {}).get("role")
+        role = "usuario"
 
         if user_id:
             profile_res = httpx.get(
@@ -108,11 +80,18 @@ def resolve_optional_user_role(
                 timeout=3.0,
             )
             if profile_res.status_code == 200 and profile_res.json():
-                role = profile_res.json()[0].get("role") or role
+                role = profile_res.json()[0].get("role") or "usuario"
 
-        return role or "usuario"
+        return {"is_authenticated": True, "role": role}
     except Exception:
-        return None
+        return {"is_authenticated": False, "role": None}
+
+
+def check_optional_auth(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer)]
+) -> bool:
+    """Backwards-compatible helper returning boolean authentication status."""
+    return bool(resolve_optional_auth_context(credentials).get("is_authenticated"))
 
 
 def resolve_authenticated_user(
@@ -199,17 +178,18 @@ def resolve_authenticated_user(
 @router.post("/chat", response_model=AssistantChatResponse)
 def chat_assistant(
     request: AssistantChatRequest,
-    is_authenticated: Annotated[bool, Depends(check_optional_auth)],
-    user_role: Annotated[Optional[str], Depends(resolve_optional_user_role)] = None,
+    auth_ctx: Annotated[Dict[str, Any], Depends(resolve_optional_auth_context)],
 ) -> AssistantChatResponse:
     """Answers user queries regarding pre-evaluation, interface usage, and financial concepts.
 
     Available to anonymous visitors and authenticated users.
     """
+    is_authenticated = bool(auth_ctx.get("is_authenticated"))
+    user_role = auth_ctx.get("role") if is_authenticated else None
     return AssistantService.process_chat(
         request,
         is_authenticated=is_authenticated,
-        user_role=user_role if is_authenticated else None,
+        user_role=user_role,
     )
 
 

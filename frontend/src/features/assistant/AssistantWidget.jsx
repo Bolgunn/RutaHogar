@@ -210,9 +210,9 @@ export default function AssistantWidget({
     }
   }, [profile?.id, profile?.email]);
 
-  // Safety purge: If user has no active ticket, remove any foreign ticket inquiry / admin reply messages
+  // Safety purge: Only purge ticket messages if user is unauthenticated (guest)
   useEffect(() => {
-    if (!activeTicket) {
+    if (!profile?.id) {
       setMessages((prev) => {
         const hasTicketArtifacts = prev.some(
           (m) =>
@@ -233,7 +233,7 @@ export default function AssistantWidget({
         return cleaned.length === 0 ? [DEFAULT_WELCOME] : cleaned;
       });
     }
-  }, [activeTicket]);
+  }, [profile?.id]);
 
   // Sync tickets and admin responses
   const syncTicketsAndReplies = async () => {

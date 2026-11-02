@@ -439,6 +439,152 @@ class TestSupportTickets(unittest.TestCase):
         thread = res.get("thread", [])
         self.assertTrue(any(t.get("content") == "Sigo sin entender cómo opera la tasa mixta." for t in thread))
 
+    def test_api_patch_support_ticket_forbidden_for_ejecutivo_and_tenant_admin(self):
+        non_global_staff = [
+            {
+                "user_id": "exec-user-1",
+                "email": "ejecutivo@inmobiliaria.cl",
+                "full_name": "Ejecutivo Comercial",
+                "role": "ejecutivo",
+                "inmobiliaria_id": "inmob-001",
+            },
+            {
+                "user_id": "admin-inmob-1",
+                "email": "admin@inmobiliaria.cl",
+                "full_name": "Admin Inmobiliario",
+                "role": "admin_inmobiliario",
+                "inmobiliaria_id": "inmob-001",
+            },
+            {
+                "user_id": "scoped-admin-1",
+                "email": "scoped@inmobiliaria.cl",
+                "full_name": "Admin Con Tenant",
+                "role": "admin",
+                "inmobiliaria_id": "inmob-001",
+            },
+        ]
+
+        for staff_user in non_global_staff:
+            app.dependency_overrides[resolve_authenticated_user] = lambda u=staff_user: u
+            response = self.client.patch(
+                "/api/support/tickets/some-ticket-id",
+                json={"status": "resuelto", "reply": "Intento no autorizado"},
+            )
+            self.assertEqual(
+                response.status_code,
+                403,
+                f"Expected 403 for role={staff_user['role']} inmobiliaria_id={staff_user['inmobiliaria_id']}",
+            )
+
+    def test_user_feedback_idor_blocked_local_and_supabase(self):
+        # 1. Local route: User A creates a ticket, User B attempts to submit feedback via HTTP API
+        req = CreateTicketRequest(
+            subject="Ticket privado de Usuario A",
+            message="Consulta privada",
+            history=[],
+            client_request_id="req-idor-check-001",
+        )
+        created = TicketService.create_ticket(
+            user_id="owner-user-a",
+            role="usuario",
+            user_name="Usuario A",
+            user_email="usera@correo.cl",
+            inmobiliaria_id=None,
+            request=req,
+        )
+
+        app.dependency_overrides[resolve_authenticated_user] = lambda: {
+            "user_id": "other-user-b",
+            "email": "userb@correo.cl",
+            "full_name": "Usuario B",
+            "role": "usuario",
+            "inmobiliaria_id": None,
+        }
+
+        res_http = self.client.post(
+            f"/api/support/tickets/{created.id}/feedback",
+            json={"feedback": "helpful"},
+        )
+        self.assertEqual(res_http.status_code, 403)
+
+        # 2. Supabase route: verify ownership check blocks another user before any PATCH
+        mock_http = MagicMock()
+        mock_get_res = MagicMock()
+        mock_get_res.status_code = 200
+        mock_get_res.json.return_value = [
+            {
+                "id": "supa-ticket-owner-a",
+                "user_id": "owner-user-a",
+                "status": "en_proceso",
+                "thread": [],
+            }
+        ]
+        mock_http.get.return_value = mock_get_res
+
+        with patch.dict(
+            os.environ,
+            {
+                "SUPABASE_URL": "https://fake.supabase.co",
+                "SUPABASE_SECRET_KEY": "fake-secret-key",
+            },
+        ):
+            with self.assertRaises(PermissionError):
+                TicketService.submit_user_feedback(
+                    ticket_id="supa-ticket-owner-a",
+                    user_id="attacker-user-b",
+                    feedback="helpful",
+                    is_global_admin=False,
+                    db_client=mock_http,
+                )
+            self.assertFalse(mock_http.patch.called)
+
+            # Owner A succeeds on Supabase route
+            mock_patch_res = MagicMock()
+            mock_patch_res.status_code = 200
+            mock_patch_res.json.return_value = [
+                {
+                    "id": "supa-ticket-owner-a",
+                    "user_id": "owner-user-a",
+                    "status": "resuelto",
+                    "user_feedback": "helpful",
+                    "user_feedback_at": "2026-10-30T12:00:00Z",
+                    "thread": [],
+                }
+            ]
+            mock_http.patch.return_value = mock_patch_res
+
+            ok_res = TicketService.submit_user_feedback(
+                ticket_id="supa-ticket-owner-a",
+                user_id="owner-user-a",
+                feedback="helpful",
+                is_global_admin=False,
+                db_client=mock_http,
+            )
+            self.assertEqual(ok_res["status"], "resuelto")
+            self.assertTrue(mock_http.patch.called)
+            self.assertNotIn("user_email", ok_res)
+
+    def test_update_and_feedback_nonexistent_ticket_returns_404(self):
+        app.dependency_overrides[resolve_authenticated_user] = lambda: {
+            "user_id": "admin-global-1",
+            "email": "admin@rutahogar.cl",
+            "full_name": "Admin Global",
+            "role": "admin",
+            "inmobiliaria_id": None,
+        }
+
+        patch_res = self.client.patch(
+            "/api/support/tickets/nonexistent-ticket-999",
+            json={"status": "resuelto"},
+        )
+        self.assertEqual(patch_res.status_code, 404)
+
+        fb_res = self.client.post(
+            "/api/support/tickets/nonexistent-ticket-999/feedback",
+            json={"feedback": "helpful"},
+        )
+        self.assertEqual(fb_res.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

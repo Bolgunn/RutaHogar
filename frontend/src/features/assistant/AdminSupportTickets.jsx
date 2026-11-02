@@ -90,37 +90,41 @@ export default function AdminSupportTickets() {
     setFeedbackMsg("");
     setError("");
     try {
-      await updateSupportTicketStatus({
+      const res = await updateSupportTicketStatus({
         ticketId: selectedTicket.id,
         status: targetStatus,
         reply: trimmedReply,
       });
 
-      const updatedRepliedAt = new Date().toISOString();
-      const updatedThread = [
-        ...(selectedTicket.thread && selectedTicket.thread.length > 0
-          ? selectedTicket.thread
+      const updatedRepliedAt = res?.replied_at || new Date().toISOString();
+      const updatedReplyText = res?.admin_reply || trimmedReply;
+      const updatedThread =
+        Array.isArray(res?.thread) && res.thread.length > 0
+          ? res.thread
           : [
+              ...(selectedTicket.thread && selectedTicket.thread.length > 0
+                ? selectedTicket.thread
+                : [
+                    {
+                      role: "user",
+                      content: selectedTicket.message,
+                      created_at: selectedTicket.created_at,
+                    },
+                  ]),
               {
-                role: "user",
-                content: selectedTicket.message,
-                created_at: selectedTicket.created_at,
+                role: "admin",
+                content: updatedReplyText,
+                created_at: updatedRepliedAt,
               },
-            ]),
-        {
-          role: "admin",
-          content: trimmedReply,
-          created_at: updatedRepliedAt,
-        },
-      ];
+            ];
 
       setTickets((prev) =>
         prev.map((t) =>
           t.id === selectedTicket.id
             ? {
                 ...t,
-                status: targetStatus,
-                admin_reply: trimmedReply,
+                status: res?.status || targetStatus,
+                admin_reply: updatedReplyText,
                 replied_at: updatedRepliedAt,
                 thread: updatedThread,
               }
@@ -131,18 +135,30 @@ export default function AdminSupportTickets() {
         prev
           ? {
               ...prev,
-              status: targetStatus,
-              admin_reply: trimmedReply,
+              status: res?.status || targetStatus,
+              admin_reply: updatedReplyText,
               replied_at: updatedRepliedAt,
               thread: updatedThread,
             }
           : null
       );
       setReplyText("");
-      const successMsg = resolve
-        ? "✓ Respuesta enviada al usuario y ticket marcado como Resuelto."
-        : "✓ Respuesta enviada con éxito. El ticket pasó automáticamente a 'En Proceso'.";
-      setFeedbackMsg(successMsg);
+
+      if (res && res.reply_notified === false) {
+        setFeedbackMsg(
+          resolve
+            ? "✓ Respuesta guardada en el chat del ticket y marcado como Resuelto."
+            : "✓ Respuesta guardada en el chat del ticket (pasó a 'En Proceso')."
+        );
+        setError(
+          `Aviso: La respuesta se guardó en el chat del usuario, pero no se pudo enviar la notificación por correo (${res.reply_notification_error || "servicio de correo no disponible"}).`
+        );
+      } else {
+        const successMsg = resolve
+          ? "✓ Respuesta enviada al usuario y ticket marcado como Resuelto."
+          : "✓ Respuesta enviada con éxito. El ticket pasó automáticamente a 'En Proceso'.";
+        setFeedbackMsg(successMsg);
+      }
       setTimeout(() => setFeedbackMsg(""), 4500);
     } catch (err) {
       setError(err.message || "Error al enviar la respuesta.");

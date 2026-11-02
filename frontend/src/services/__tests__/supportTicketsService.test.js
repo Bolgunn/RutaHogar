@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Mock supabase before imports so Node environment doesn't fail
-vi.mock("../utils/supabase", () => ({
+// Mock supabase and profileService with the exact relative paths from __tests__/
+vi.mock("../../utils/supabase", () => ({
   supabase: null,
 }));
 
-vi.mock("../services/profileService", () => ({
+vi.mock("../profileService", () => ({
   isSupabaseDataConfigured: false,
   logSupabaseError: vi.fn(),
 }));
@@ -128,26 +128,44 @@ describe("supportTicketsService.js (HU24 - E4)", () => {
     expect(local[0].message).toBe("Consulta guardada offline");
   });
 
-  it("falls back to local storage ticket if backend returns 401 for local/demo user", async () => {
+  it("throws unauthenticated when backend returns 401 instead of creating a fake local ticket", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
+      json: async () => ({ detail: { code: "unauthenticated" } }),
     });
 
-    const res = await createSupportTicket({
-      subject: "Usuario demo local",
-      message: "El ticket no debe perderse si el backend rechaza el token demo",
-      token: "local-user-demo",
-      customFetch: mockFetch,
-    });
-
-    expect(res.id).toBeTruthy();
-    expect(res.code).toHaveLength(8);
-    expect(res.status).toBe("abierto");
+    await expect(
+      createSupportTicket({
+        subject: "Token expirado",
+        message: "No debe crearse un ticket local falso en 401",
+        token: "expired-jwt-token",
+        customFetch: mockFetch,
+      })
+    ).rejects.toThrow("unauthenticated");
 
     const local = readLocalSupportTickets();
-    expect(local).toHaveLength(1);
-    expect(local[0].subject).toBe("Usuario demo local");
+    expect(local).toHaveLength(0);
+  });
+
+  it("throws error when backend returns 500 instead of creating a fake local ticket", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: { message: "Error interno del servidor." } }),
+    });
+
+    await expect(
+      createSupportTicket({
+        subject: "Error 500",
+        message: "No debe crearse un ticket local falso en 500",
+        token: "valid-jwt-token",
+        customFetch: mockFetch,
+      })
+    ).rejects.toThrow("Error interno del servidor.");
+
+    const local = readLocalSupportTickets();
+    expect(local).toHaveLength(0);
   });
 
   it("filters tickets by status in local storage", () => {
@@ -334,5 +352,46 @@ describe("supportTicketsService.js (HU24 - E4)", () => {
 
     const local = readLocalSupportTickets();
     expect(local.find((t) => t.id === "t-fb-3").status).toBe("resuelto");
+  });
+
+  it("throws forbidden or not_found on failed backend update or feedback", async () => {
+    const mockForbidden = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ detail: { code: "forbidden" } }),
+    });
+
+    await expect(
+      updateSupportTicketStatus({
+        ticketId: "t-any",
+        status: "resuelto",
+        token: "non-admin-token",
+        customFetch: mockForbidden,
+      })
+    ).rejects.toThrow("forbidden");
+
+    await expect(
+      submitTicketUserFeedback({
+        ticketId: "t-other-user",
+        feedback: "helpful",
+        token: "attacker-token",
+        customFetch: mockForbidden,
+      })
+    ).rejects.toThrow("forbidden");
+
+    const mockNotFound = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ detail: { code: "not_found" } }),
+    });
+
+    await expect(
+      updateSupportTicketStatus({
+        ticketId: "t-missing",
+        status: "resuelto",
+        token: "admin-token",
+        customFetch: mockNotFound,
+      })
+    ).rejects.toThrow("Ticket no encontrado.");
   });
 });
