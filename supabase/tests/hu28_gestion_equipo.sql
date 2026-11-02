@@ -122,13 +122,15 @@ begin
 
   perform set_config('request.jwt.claim.sub', 'c2800000-0000-0000-0000-000000000003', true);
   v_seen := array(select id from public.profiles order by id);
-  assert v_seen = array['c2800000-0000-0000-0000-000000000001', 'c2800000-0000-0000-0000-000000000002',
-    'c2800000-0000-0000-0000-000000000003', 'c2800000-0000-0000-0000-000000000004']::uuid[], 'exec: ' || v_seen::text;
+  assert v_seen = array['c2800000-0000-0000-0000-000000000003']::uuid[], 'exec: ' || v_seen::text;
+  v_seen := array(select id from public.list_staff_names(array[
+    'c2800000-0000-0000-0000-000000000001', 'c2800000-0000-0000-0000-000000000006',
+    'c2800000-0000-0000-0000-000000000007']::uuid[]));
+  assert v_seen = array['c2800000-0000-0000-0000-000000000001']::uuid[], 'names cross a team: ' || v_seen::text;
 
   perform set_config('request.jwt.claim.sub', 'c2800000-0000-0000-0000-000000000001', true);
   v_seen := array(select id from public.profiles order by id);
-  assert v_seen = array['c2800000-0000-0000-0000-000000000001', 'c2800000-0000-0000-0000-000000000002',
-    'c2800000-0000-0000-0000-000000000003', 'c2800000-0000-0000-0000-000000000004']::uuid[], 'admin: ' || v_seen::text;
+  assert v_seen = array['c2800000-0000-0000-0000-000000000001']::uuid[], 'admin: ' || v_seen::text;
   update public.profiles set full_name = 'x' where id = 'c2800000-0000-0000-0000-000000000003';
   assert not found, 'tenant admin updated a colleague through the table';
 
@@ -301,6 +303,10 @@ declare
   v_team jsonb;
   v_member jsonb;
 begin
+  perform public.hu28_log_event(a, admin1, 'admin_inmobiliario', exec2, 'equipo.invitacion_creada');
+  v_team := public.hu28_list_team(a);
+  select m into v_member from jsonb_array_elements(v_team -> 'miembros') m where m ->> 'id' = exec2::text;
+  assert (v_member ->> 'correo_fallido')::boolean, 'a send with no recorded result looks sent';
   perform public.hu28_log_event(a, admin1, 'admin_inmobiliario', exec2, 'equipo.invitacion_fallida');
   v_team := public.hu28_list_team(a);
   select m into v_member from jsonb_array_elements(v_team -> 'miembros') m where m ->> 'id' = exec2::text;
@@ -349,6 +355,153 @@ begin
   assert (select count(*) from public.audit_events where entity_id = uno and event_type = 'equipo.proyecto_asignado'
     and subject_user_id is null and details ->> 'email' in ('hu28-lead@example.invalid', 'hu28-other-admin@example.invalid')) = 2,
     'a pending assignment linked someone outside the team';
+end $$;
+
+-- Only saving a password ends an invitation. A sign-in date does not, and a browser cannot clear it.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  exec2 uuid := 'c2800000-0000-0000-0000-000000000004';
+  v_member jsonb;
+begin
+  update public.profiles set password_pendiente = true where id = exec2;
+  update auth.users set last_sign_in_at = now() where id = exec2;
+  select m into v_member from jsonb_array_elements(public.hu28_list_team(a) -> 'miembros') m where m ->> 'id' = exec2::text;
+  assert (v_member ->> 'password_pendiente')::boolean, 'a sign-in date ended the invitation';
+  assert v_member ->> 'ultimo_ingreso' is null, 'an opened link shows as a sign-in';
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', exec2::text, true);
+  perform pg_temp.expect_error(
+    $q$update public.profiles set password_pendiente = false where id = auth.uid()$q$,
+    'profile_privilege_change_forbidden');
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  update auth.users set encrypted_password = 'nueva' where id = exec2;
+  assert not (select password_pendiente from public.profiles where id = exec2), 'saving a password did not end the invitation';
+end $$;
+
+-- An admin who never finished signing up is not an active admin.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  admin1 uuid := 'c2800000-0000-0000-0000-000000000001';
+  admin2 uuid := 'c2800000-0000-0000-0000-000000000002';
+  global_admin uuid := 'c2800000-0000-0000-0000-000000000008';
+begin
+  assert not public.hu28_is_last_active_admin(a, admin1);
+  update public.profiles set password_pendiente = true where id = admin2;
+  assert public.hu28_is_last_active_admin(a, admin1), 'an unfinished admin counted';
+  perform pg_temp.expect_error(format('select public.hu28_set_member_access(%L, %L, %L, %L, %L)', a, admin1, 'desactivado', global_admin, 'admin'), 'last_active_admin');
+  update public.profiles set password_pendiente = false where id = admin2;
+end $$;
+
+-- A name edit does not leave the old name in the split fields; a phone edit keeps them.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  admin1 uuid := 'c2800000-0000-0000-0000-000000000001';
+  exec2 uuid := 'c2800000-0000-0000-0000-000000000004';
+begin
+  update public.profiles set nombre = 'Exec', apellido_paterno = 'Viejo', apellido_materno = 'Antiguo' where id = exec2;
+  perform public.hu28_update_member(a, exec2, 'Exec Nuevo', '+56 9 2222', admin1, 'admin_inmobiliario');
+  assert (select nombre from public.profiles where id = exec2) = 'Exec', 'a phone edit touched the split fields';
+  perform public.hu28_update_member(a, exec2, 'Otra Persona', '+56 9 2222', admin1, 'admin_inmobiliario');
+  assert (select nombre is null and apellido_paterno is null and apellido_materno is null from public.profiles where id = exec2),
+    'the split fields kept the old name';
+end $$;
+
+-- Every entry into a team leaves a record, and a pending assignment is not counted twice.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  admin1 uuid := 'c2800000-0000-0000-0000-000000000001';
+  loose uuid := 'c2800000-0000-0000-0000-000000000009';
+  pending uuid := 'c280000a-0000-0000-0000-00000000000a';
+  uno uuid := 'b2800000-0000-0000-0000-000000000001';
+  dos uuid := 'b2800000-0000-0000-0000-000000000002';
+begin
+  insert into auth.users(id, email) values (pending, 'hu28-pending@example.invalid');
+  insert into public.profiles(id, full_name, role, inmobiliaria_id) values (pending, 'Pendiente', 'ejecutivo', null);
+  insert into public.proyecto_ejecutivos(proyecto_id, ejecutivo_id, ejecutivo_email, source, estado)
+    values (dos, null, 'hu28-pending@example.invalid', 'manual', 'pendiente');
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', admin1::text, true);
+  perform public.assign_executive(uno, 'hu28-loose@example.invalid', 'equipo');
+  perform set_config('request.jwt.claim.sub', pending::text, true);
+  perform public.resolve_pending_executives();
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  assert (select inmobiliaria_id from public.profiles where id = loose) = a;
+  assert exists (select 1 from public.audit_events where subject_user_id = loose and event_type = 'equipo.miembro_vinculado'
+    and actor_id = admin1 and inmobiliaria_id = a), 'assign_executive joined a team silently';
+  assert exists (select 1 from public.audit_events where subject_user_id = pending and event_type = 'equipo.miembro_vinculado'
+    and actor_id = pending and inmobiliaria_id = a), 'resolve_pending_executives joined a team silently';
+  assert (select count(*) from public.audit_events where subject_user_id = pending and event_type = 'equipo.proyecto_asignado'
+    and details ->> 'por_vinculacion' = 'true' and entity_id = dos) = 1, 'the link to the pending assignment is missing';
+  assert (select count(*) from public.audit_events where event_type = 'equipo.proyecto_asignado' and entity_id = dos
+    and details ->> 'email' = 'hu28-pending@example.invalid' and details ->> 'por_vinculacion' is null) = 1,
+    'the team history would count this assignment twice';
+end $$;
+
+-- A link and its record commit together, and only for an executive with no team.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  b uuid := 'a2800000-0000-0000-0000-00000000000b';
+  admin1 uuid := 'c2800000-0000-0000-0000-000000000001';
+  free uuid := 'c280000b-0000-0000-0000-00000000000b';
+begin
+  insert into auth.users(id, email) values (free, 'hu28-free@example.invalid');
+  insert into public.profiles(id, full_name, role, inmobiliaria_id) values (free, 'Libre', 'ejecutivo', null);
+  perform public.hu28_link_executive(a, free, admin1, 'admin_inmobiliario');
+  assert (select inmobiliaria_id from public.profiles where id = free) = a;
+  assert (select count(*) from public.audit_events where subject_user_id = free and event_type = 'equipo.miembro_vinculado') = 1;
+  perform pg_temp.expect_error(format('select public.hu28_link_executive(%L, %L, %L, %L)', b, free, admin1, 'admin_inmobiliario'), 'not_found');
+  perform pg_temp.expect_error(format('select public.hu28_link_executive(%L, %L, %L, %L)', a, 'c2800000-0000-0000-0000-000000000007', admin1, 'admin_inmobiliario'), 'not_found');
+end $$;
+
+-- assign_admin never reaches the caller, a global admin or an admin of that same inmobiliaria.
+-- A move leaves the old team's projects behind and a record in the old team.
+do $$
+declare
+  a uuid := 'a2800000-0000-0000-0000-00000000000a';
+  b uuid := 'a2800000-0000-0000-0000-00000000000b';
+  admin2 uuid := 'c2800000-0000-0000-0000-000000000002';
+  global_admin uuid := 'c2800000-0000-0000-0000-000000000008';
+  mover uuid := 'c280000c-0000-0000-0000-00000000000c';
+  other_global uuid := 'c280000d-0000-0000-0000-00000000000d';
+  uno uuid := 'b2800000-0000-0000-0000-000000000001';
+begin
+  insert into auth.users(id, email) values (mover, 'hu28-mover@example.invalid'), (other_global, 'hu28-global2@example.invalid');
+  insert into public.profiles(id, full_name, role, inmobiliaria_id) values
+    (mover, 'Se Muda', 'ejecutivo', a), (other_global, 'Global Dos', 'admin', null);
+  insert into public.proyecto_ejecutivos(proyecto_id, ejecutivo_id, ejecutivo_email, source, estado)
+    values (uno, mover, 'hu28-mover@example.invalid', 'manual', 'vinculado');
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claim.sub', global_admin::text, true);
+  perform pg_temp.expect_error(format('select public.assign_admin(%L, %L)', a, 'hu28-global@example.invalid'), 'propia función');
+  perform pg_temp.expect_error(format('select public.assign_admin(%L, %L)', a, 'hu28-global2@example.invalid'), 'administrador global');
+  perform public.assign_admin(a, 'hu28-admin2@example.invalid');
+  perform public.assign_admin(b, 'hu28-mover@example.invalid');
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  assert (select role from public.profiles where id = admin2) = 'admin', 'a tenant admin was rewritten';
+  assert not exists (select 1 from public.audit_events where subject_user_id = admin2 and event_type = 'equipo.rol_cambiado' and actor_id = global_admin),
+    'a no-op left an entry';
+  assert (select inmobiliaria_id from public.profiles where id = mover) = b;
+  assert not exists (select 1 from public.proyecto_ejecutivos where ejecutivo_id = mover), 'old assignments stayed';
+  assert exists (select 1 from public.audit_events where subject_user_id = mover and event_type = 'equipo.proyecto_retirado'
+    and inmobiliaria_id = a and actor_id = global_admin), 'the removal has no entry in the old team';
+  assert exists (select 1 from public.audit_events where subject_user_id = mover and event_type = 'equipo.rol_cambiado'
+    and inmobiliaria_id = a and details ->> 'traslado' = 'true'), 'the old team has no record of the move';
+  assert exists (select 1 from public.audit_events where subject_user_id = mover and event_type = 'equipo.rol_cambiado'
+    and inmobiliaria_id = b and details ->> 'traslado' is null), 'the new team has no record of the move';
 end $$;
 
 -- The list reports the ban, and assign_admin leaves a buyer's account alone.
