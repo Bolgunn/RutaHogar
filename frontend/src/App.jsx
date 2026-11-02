@@ -8,6 +8,7 @@ import AdminPanel from "./components/AdminPanel";
 import AdminProjectCatalog from "./components/AdminProjectCatalog";
 import AnonHeader from "./components/AnonHeader";
 import AuthPanel from "./components/AuthPanel";
+import AccessFeedback from "./components/AccessFeedback";
 import CommercialMetrics from "./components/CommercialMetrics";
 import DashboardLeads from "./components/DashboardLeads";
 import DataConsent from "./components/DataConsent";
@@ -61,7 +62,9 @@ import { fetchJsonWithTimeout } from "./services/httpRequest";
 
 import { useLeads } from "./hooks/useLeads";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "./utils/text";
-import { getStoredAuth, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
+import { assertAccountSession, roles, signOut, signUp, updateStoredProfile } from "./services/auth";
+import SessionAccess from "./components/SessionAccess";
+import CompleteAccessProfile from "./components/CompleteAccessProfile";
 import { buildHousingPlanSnapshot, calculateHousingSavings, getHousingPropertyPrice } from "./services/housingSavingsPlanService";
 import { appendScoringEvent } from "./services/getScoringHistory";
 import { getTenantContext } from "./services/projectService";
@@ -781,6 +784,7 @@ const getPrivatePathForPage = (page) => {
 };
 
 const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
+  if (pathname === "/auth/callback") return { page: "auth-callback" };
   // La sección de beneficios habitacionales antes vivía en /simulacion; hoy
   // es /subsidios. Redirigir para no romper bookmarks/URLs previas.
   if (pathname && normalizePathname(pathname) === "/simulacion") {
@@ -907,7 +911,17 @@ function AppBackButton({ onBack }) {
 }
 
 export default function App() {
-  const storedAuth = useMemo(() => getStoredAuth(), []);
+  if (window.location.pathname === "/definir-password") return <SetPassword onGoToLogin={() => window.location.replace("/login")} />;
+  if (window.location.pathname === "/co-deudor/invitacion") return <CoDebtorInvitationPage />;
+  if (["/co-deudor/gestion", "/co-deudor/consentimiento"].includes(window.location.pathname)) return <CoDebtorManagementPage />;
+  return <SessionAccess>{(account, acceptAccount) => account.profile?.role === roles.user && (!account.profile.rut || !account.profile.phone || !account.profile.birth_date)
+    ? <CompleteAccessProfile profile={account.profile} onComplete={acceptAccount} />
+    : <Application key={account.profile ? `${account.profile.id}:${account.profile.role}` : "public"} initialAuth={account} onAuthAccepted={acceptAccount} />}</SessionAccess>;
+}
+
+function Application({ initialAuth, onAuthAccepted }) {
+  const storedAuth = useMemo(() => initialAuth, []);
+  const initialCallback = useMemo(() => window.location.pathname === "/auth/callback", []);
   const initialAnonOnboarding = useMemo(() => readSessionJson(ANON_ONBOARDING_KEY), []);
   const initialAnonResult = useMemo(() => readSessionJson(ANON_RESULT_KEY), []);
   const initialAnonInput = useMemo(() => readSessionJson(ANON_INPUT_KEY), []);
@@ -967,6 +981,7 @@ export default function App() {
   const [anonCoDebtorInvitation, setAnonCoDebtorInvitation] = useState(initialAnonCoDebtorInvitation);
   const [signupOfferLoading, setSignupOfferLoading] = useState(false);
   const [signupOfferError, setSignupOfferError] = useState("");
+  const [signupOfferNotice, setSignupOfferNotice] = useState("");
   const [inmobiliariaId, setInmobiliariaId] = useState(null);
   const [leadChanges, setLeadChanges] = useState([]);
   const [leadChangesLoading, setLeadChangesLoading] = useState(false);
@@ -1394,6 +1409,7 @@ export default function App() {
   };
 
   const migrateAnonymousSession = async (nextAuth) => {
+    await assertAccountSession(nextAuth.profile.id);
     const pendingOnboarding = anonOnboarding;
     const pendingResult = anonResult;
     const pendingInput = anonInput;
@@ -1419,6 +1435,7 @@ export default function App() {
     let migratedProfile = nextProfile;
 
     if (nextUserId && onboardingToSave) {
+      await assertAccountSession(nextUserId);
       const savedProfile = await updateProfileOnboarding(nextUserId, onboardingToSave);
       migratedProfile = updateStoredProfile({
         ...nextProfile,
@@ -1434,6 +1451,7 @@ export default function App() {
     }
 
     if (nextUserId && !migratedProfile.birth_date && anonymousBirthDate) {
+      await assertAccountSession(nextUserId);
       const savedProfile = await upsertProfile(
         nextUserId,
         migratedProfile.full_name,
@@ -1455,6 +1473,7 @@ export default function App() {
       if (existingEvaluation) {
         savedEvaluation = existingEvaluation;
       } else {
+        await assertAccountSession(nextUserId);
         savedEvaluation = await createEvaluation(nextUserId, {
           email: migratedProfile?.email || "sin-email",
           onboarding: onboardingToSave || null,
@@ -1467,6 +1486,7 @@ export default function App() {
 
     if (pendingCoDebtorInvitation) {
       try {
+        await assertAccountSession(nextUserId);
         await createCoDebtorInvitation(
           pendingCoDebtorInvitation.recipientEmail,
           pendingCoDebtorInvitation.recipientRut,
@@ -1481,6 +1501,7 @@ export default function App() {
       } catch { /* The persisted delivery-failure state provides the retry UI. */ }
     }
 
+    await assertAccountSession(nextUserId);
     clearAnonSession();
     return {
       auth: migratedAuth,
@@ -1525,6 +1546,7 @@ export default function App() {
   const handleSignupFromOffer = async ({ nombre, apellido_paterno, apellido_materno, rut, email, phone, password, birth_date, consentData }) => {
     setSignupOfferLoading(true);
     setSignupOfferError("");
+    setSignupOfferNotice("");
     let nextAuth = null;
     try {
       const full_name = `${nombre} ${apellido_paterno} ${apellido_materno}`.trim();
@@ -1541,6 +1563,10 @@ export default function App() {
         role: roles.user,
       });
       trackSignUp({ method: "signup_offer" });
+      if (nextAuth.confirmationRequired) {
+        setSignupOfferNotice("Revisa tu correo para confirmar la cuenta. Tu precalificación permanece en esta pestaña; inicia sesión aquí después de confirmar.");
+        return;
+      }
 
       const newProfile = nextAuth.profile;
       const newUserId = isUUID(newProfile?.id) ? newProfile.id
@@ -1560,6 +1586,7 @@ export default function App() {
       }
       setAuth(nextAuth);
       navigateToPageForProfile(migration.targetPage, nextAuth.profile, { replace: true });
+      onAuthAccepted(nextAuth);
     } catch (err) {
       console.error(err);
       if (nextAuth?.profile) {
@@ -1610,13 +1637,14 @@ export default function App() {
     setDataError("");
     setTrackingState(null);
     setConsentGranted(false);
-    migrateAnonymousSession(nextAuth)
+    assertAccountSession(nextAuth.profile.id).then(() => migrateAnonymousSession(nextAuth))
       .then((migration) => {
         if (migration.savedEvaluation) {
           prependEvaluation(migration.savedEvaluation);
         }
         setAuth(migration.auth);
         navigateToPageForProfile(migration.targetPage, migration.auth.profile, { replace: true });
+        onAuthAccepted(migration.auth);
       })
       .catch((err) => {
         console.error(err);
@@ -1626,6 +1654,7 @@ export default function App() {
         );
         const fallbackPage = getInitialPageForProfile(nextAuth.profile);
         navigateToPageForProfile(fallbackPage, nextAuth.profile, { replace: true });
+        onAuthAccepted(nextAuth);
       });
   };
 
@@ -2014,7 +2043,8 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    try { await signOut("local"); }
+    catch { setDataError("No pudimos cerrar la sesión. Intenta nuevamente."); return; }
     setAuth({ session: null, profile: null });
     setEvaluations([]);
     setTrackingState(null);
@@ -2035,6 +2065,10 @@ export default function App() {
 
   const handleDismissNotification = () => markLeadsSeen();
 
+  useEffect(() => {
+    if (initialCallback && initialAuth.profile) handleAuth(initialAuth);
+  }, []);
+
   if (page === "set-password") {
     return (
       <div className="app-shell auth-shell">
@@ -2042,6 +2076,8 @@ export default function App() {
       </div>
     );
   }
+
+  if (page === "auth-callback") return <AccessFeedback message="Completando tu acceso…" />;
 
   if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
   if (page === "co-debtor-management") return <CoDebtorManagementPage />;
@@ -2192,6 +2228,7 @@ export default function App() {
               onContinueWithout={handleContinueWithout}
               loading={signupOfferLoading}
               error={signupOfferError}
+              notice={signupOfferNotice}
             />
           </section>
         </div>

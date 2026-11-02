@@ -4,7 +4,7 @@ import { fetchJsonWithTimeout, RequestTimeoutError, withTimeout } from "./httpRe
 const apiBase = () => (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
 
-export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
+export async function trackingRequest(path = "", body, { timeoutMs, expectedUserId } = {}) {
   if (!supabase) throw new Error("El seguimiento requiere una conexión configurada.");
   let session;
   try {
@@ -18,6 +18,7 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   }
   const { data, error } = session;
   if (error || !data?.session?.access_token) throw new Error("Inicia sesión para acceder a tu progreso.");
+  if (expectedUserId && data.session.user?.id !== expectedUserId) throw new Error("La cuenta cambió. Vuelve a iniciar el proceso.");
   let response, payload;
   try {
     ({ response, payload } = await fetchJsonWithTimeout(`${apiBase()}/tracking${path}`, {
@@ -51,7 +52,7 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
 
 export const getTracking = (options) => trackingRequest("", undefined, options);
 export const getProjection = (options) => trackingRequest("/projection", undefined, options);
-export const appendTrackingEvent = (command) => trackingRequest("/events", command);
+export const appendTrackingEvent = (command, options) => trackingRequest("/events", command, options);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
 export const updateScoreWithConfirmedCoDebtor = () =>

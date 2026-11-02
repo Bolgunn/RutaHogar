@@ -1,0 +1,36 @@
+.access-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(19, 43, 73, .12);
+}
+.access-feedback-window {
+  width: min(100%, 460px);
+  margin: auto;
+  padding: 32px;
+  border-radius: 16px;
+  border-top: 3px solid var(--rh-primary, #132b49);
+  background: #fff;
+  box-shadow: 0 16px 48px rgba(19, 43, 73, .16);
+  text-align: center;
+  color: var(--rh-primary, #132b49);
+}
+.access-feedback-logo { display: block; width: 144px; height: 48px; object-fit: contain; margin: 0 auto 24px; }
+.access-feedback-window h1 { font-family: inherit; font-size: 20px; line-height: 1.35; margin: 16px 0 10px; }
+.access-feedback-window p { font-size: 14px; line-height: 1.65; margin: 0; overflow-wrap: anywhere; }
+.access-feedback-actions { display: grid; gap: 10px; margin-top: 24px; }
+.access-feedback-actions button { width: 100%; min-height: 44px; }
+.access-password { text-align: left; }
+.access-password .section-heading { margin-bottom: 20px; }
+.access-password label { display: block; font-size: 14px; margin-bottom: 6px; }
+.access-password input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--rh-border, #d5d9df); border-radius: 8px; padding: 10px 12px; font: inherit; }
+.access-password button { min-height: 44px; width: 100%; margin-top: 12px; }
+.access-password .field-warning { display: block; margin-top: 6px; font-size: 13px; }
+.access-feedback-spinner { display: block; width: 28px; height: 28px; margin: auto; border: 3px solid #e7ecf4; border-top-color: #c99b2c; border-radius: 50%; animation: access-feedback-spin .9s linear infinite; }
+@keyframes access-feedback-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .access-feedback-spinner { animation: none; } }
+@media (max-width: 480px) { .access-feedback { padding: 20px; } .access-feedback-window { padding: 28px 22px; } }

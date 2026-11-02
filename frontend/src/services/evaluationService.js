@@ -177,12 +177,12 @@ export async function createEvaluation(userId, evaluationPayload) {
   await ensureUserProfile(user);
   let command = pendingCommands.get(evaluationPayload);
   if (!command) {
-    const tracking = await getTracking();
+    const tracking = await getTracking({ expectedUserId: user.id });
     command = newTrackingCommand(evaluationPayload.input || {}, tracking.latest_event_id, "evaluation");
     pendingCommands.set(evaluationPayload, command);
   }
   // Client score is a preview only. The authenticated backend calculates the saved result.
-  const saved = await appendTrackingEvent(command);
+  const saved = await appendTrackingEvent(command, { expectedUserId: user.id });
   const evaluation = saved.evaluation;
   return normalizeEvaluation({
     id: evaluation.id, user_id: user.id, created_at: command.effective_at,

@@ -639,3 +639,16 @@
   }
 }
 
+.auth-root .auth-recovery-link { display: block; width: fit-content; min-height: 44px; margin: 6px auto 0; padding: 8px 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--rh-navy, #132b49); font: inherit; font-size: 13px; cursor: pointer; transition: color .15s ease; }
+.auth-root .auth-recovery-link:hover { color: #966b0c; background: none; box-shadow: none; }
+.auth-root .auth-provider-divider { display: flex; align-items: center; gap: 14px; margin: 20px 0; color: #596779; font-size: 12px; }
+.auth-provider-divider::before, .auth-provider-divider::after { content: ""; flex: 1; height: 1px; background: #dde2e8; }
+.auth-root .auth-google-button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 48px; margin: 0; padding: 12px 18px; border: 1px solid #dce3f0; border-radius: 999px; background: #fff; box-shadow: none; color: #252525; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+.auth-root .auth-google-button:hover { background: #f7f9fc; border-color: #afbdd2; box-shadow: none; }
+.auth-root .auth-access-notice { margin: 18px 0 6px; padding: 14px 16px; border: 1px solid #ba902e; border-radius: 10px; background: #fcf5df; color: #654a10; font-size: 14px; line-height: 1.65; }
+.auth-root .auth-error { flex-wrap: wrap; row-gap: 10px; }
+.auth-root .auth-confirmation-link { flex-basis: 100%; width: fit-content; padding: 4px 0; min-height: 36px; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; font-weight: 700; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.auth-root .auth-confirmation-link:hover { color: #132b49; background: none; }
+.auth-google-button svg { flex: 0 0 20px; }
+.auth-root :is(.auth-recovery-link, .auth-google-button):focus-visible { outline: 2px solid #b48923; outline-offset: 3px; }
+.auth-root :is(.auth-recovery-link, .auth-google-button):disabled { opacity: .6; cursor: wait; }

@@ -1,1 +1,1 @@
-"""HU22: authorized export snapshots and download-attempt audit."""
+"""Authorized export snapshots and download-attempt audit."""

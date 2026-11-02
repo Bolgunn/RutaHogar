@@ -145,7 +145,7 @@ export default function FinancingSimulatorPanel({ evaluation, projects = [], onN
       setSaved(scenarios);
       return scenarios;
     } catch {
-      setNotice("No pudimos cargar los escenarios guardados. Reintenta después de aplicar la migración de HU17.");
+      setNotice("No pudimos cargar los escenarios guardados. Intenta nuevamente más tarde.");
       return null;
     }
   };
