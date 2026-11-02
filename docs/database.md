@@ -102,7 +102,7 @@ con `inmobiliaria_id` en `NULL` es **admin global** y ve todos los tenants.
 
 | Tabla | `usuario` | `ejecutivo` | `admin` |
 | :---- | :-------- | :---------- | :------ |
-| `profiles` | lo suyo | lo suyo y el personal de su inmobiliaria | lo suyo y el personal de su inmobiliaria; todo si es global |
+| `profiles` | lo suyo | lo suyo; de su equipo sólo el nombre, por `list_staff_names` | lo suyo; de su equipo sólo el nombre; todo si es global |
 | `evaluations` | las suyas | **todas** ⚠️ | **todas** ⚠️ |
 | `improvement_goals` | las suyas | — | — |
 | `scoring_history` | lo suyo | lectura de staff | lectura de staff |
@@ -217,6 +217,10 @@ nunca lleva valores financieros: los cambios de datos guardan qué campos cambia
 Las asignaciones se registran con triggers porque también se hacen desde el catálogo. En un borrado
 en cascada el proyecto ya no existe cuando cae la fila hija, así que escribe el trigger `BEFORE
 DELETE` de `proyectos` y el de `proyecto_ejecutivos` se salta esa fila.
+
+`profiles.password_pendiente` marca a quien recibió una invitación y aún no guarda su contraseña. Lo
+limpia un trigger sobre `auth.users` cuando cambia `encrypted_password`. `last_sign_in_at` no sirve
+para esto: GoTrue lo escribe al abrir el enlace de recuperación, aunque lo abra un filtro de correo.
 
 Pruebas: `supabase/tests/hu28_gestion_equipo.sql` y `supabase/tests/hu28_team_stack.mjs`. El orden de
 despliegue está en `docs/stories/HU28-gestion-equipo-inmobiliaria/PLAN.md`.
