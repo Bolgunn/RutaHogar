@@ -158,8 +158,6 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
         <div className="simulation-benefits-grid">
           {benefits.map((benefit) => {
             const benefitNotes = getBenefitNotes(benefit);
-            const guideId = ACADEMY_BENEFIT_CAPSULES[benefit.academy_module];
-            const guide = ACADEMY_ARTICLES.find((article) => article.id === guideId);
             return (
           <article
             key={benefit.type}
@@ -203,7 +201,6 @@ export default function Subsidios({ evaluation, onNavigate, focusBenefitId }) {
                 </button>
               </div>
             )}
-
           </article>
             );
           })}
