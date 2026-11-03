@@ -16,7 +16,7 @@ from .ocr import OcrService
 from .parsing import ParsingService
 from .score_update import DocumentScoreService
 from .backing import DocumentBackingService
-from .contracts import DocumentBackingProjection
+from .contracts import DocumentBackingProjection, StaffBackingBatchRequest
 from .contracts import DocumentScoreResult, DocumentScoreStatus, UpdateValidatedScore
 from .contracts import StartOcr, PollOcr, OcrView
 from .config import public_limits
@@ -200,6 +200,16 @@ def update_document_score(command: UpdateValidatedScore, ctx=Depends(context)):
 def own_document_backing(ctx=Depends(context)):
     user, service = ctx
     return checked(lambda: DocumentBackingService(service.repository).owner(user))
+
+
+@router.post('/staff/backing/batch', response_model=dict[str, DocumentBackingProjection])
+def staff_document_backing_batch(command: StaffBackingBatchRequest,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(401, detail={'code': 'unauthenticated'})
+    subjects = list(dict.fromkeys(str(value) for value in command.lead_ids))
+    return checked(lambda: DocumentBackingService(repo).staff_batch(credentials.credentials, subjects))
 
 
 @router.get('/staff/leads/{lead_id}/backing', response_model=DocumentBackingProjection)

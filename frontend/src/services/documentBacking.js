@@ -21,3 +21,11 @@ export async function getStaffDocumentBacking(leadId) {
   if (!leadId) throw new Error('missing_lead');
   return documentBackingProjection(await trackingRequest(`/documents/staff/leads/${encodeURIComponent(leadId)}/backing`));
 }
+
+export async function getStaffDocumentBackings(leadIds) {
+  if (!Array.isArray(leadIds) || !leadIds.length || leadIds.length > 100) throw new Error('invalid_leads');
+  const result = await trackingRequest('/documents/staff/backing/batch', { lead_ids: leadIds });
+  if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('invalid_backing');
+  return Object.fromEntries(Object.entries(result).filter(([id]) => leadIds.includes(id))
+    .map(([id, value]) => [id, documentBackingProjection(value)]));
+}

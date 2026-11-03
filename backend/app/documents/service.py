@@ -33,12 +33,13 @@ class DocumentService:
         view = public_view(bundle)
         if view["evidence"]:
             tracking = self.repository.load_tracking(user)
-            current = current_declaration(tracking, user)
+            now = self.clock()
+            current = current_declaration(tracking, user, at=now)
             sources = {}
             for row in view["evidence"]:
                 source_id = row["source_event_id"]
                 if source_id not in sources:
-                    sources[source_id] = current_declaration(tracking, user, through_revision=source_id)
+                    sources[source_id] = current_declaration(tracking, user, through_revision=source_id, at=now)
                 original = sources[source_id].get(row["field"])
                 row["current_backing"] = (current_backing(
                     row["backing_at_confirmation"], current.get(row["field"]), original,
@@ -73,7 +74,7 @@ class DocumentService:
         tracking = self.repository.load_tracking(user)
         if process["base_revision"] != tracking["revision"]:
             raise DocumentError("lineage_conflict")
-        declared = current_declaration(tracking, user)
+        declared = current_declaration(tracking, user, at=self.clock())
         payload = result.model_dump(mode="json", exclude={"identity"})
         if parse_token is not None:
             payload["parse_token"] = parse_token

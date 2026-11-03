@@ -289,3 +289,7 @@ class DocumentBackingProjection(Contract):
         if {row.field for row in self.fields} != set(get_args(FieldName)):
             raise ValueError('projection must include each allowed field exactly once')
         return self
+
+
+class StaffBackingBatchRequest(Contract):
+    lead_ids: list[UUID] = Field(min_length=1, max_length=100)

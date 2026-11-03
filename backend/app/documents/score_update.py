@@ -5,11 +5,9 @@ import json
 from uuid import NAMESPACE_URL, uuid5
 
 from ..tracking.contracts import TrackingError, parse_time
-from ..tracking.lineage import reconstruct
-from ..tracking.scoring_adapter import financial_field_contract
-from ..tracking.service import TrackingService, source_events
+from ..tracking.service import TrackingService
 from .contracts import DocumentError
-from .tracking_adapter import current_declaration
+from .tracking_adapter import current_declaration, effective_declaration
 from .upload import UploadService
 
 REASON = 'hu23_datos_validados'
@@ -20,9 +18,7 @@ def pending_context(data, now):
     if not bundle.get('plan'):
         return {'pending': False, 'revision': bundle.get('revision'), 'validation_token': None,
                 'fields': [], 'cleanup_required': False, 'evaluation_id': None}
-    lineage = reconstruct(source_events(bundle), data['user_id'], financial_field_contract())
-    applicable = [row for row in lineage['active_line'] if parse_time(row['effective_at']) <= now]
-    current = applicable[-1]['snapshot'] if applicable else {}
+    lineage, applicable, current = effective_declaration(bundle, data['user_id'], at=now)
     last = next((row for row in reversed(applicable) if row.get('evaluation_id') and row.get('evaluation')), None)
     history = {row['event_id']: row for row in bundle['events']}
     evaluated = next((row.get('financial_data') or {} for row in bundle.get('evaluations', [])
@@ -42,8 +38,8 @@ def pending_context(data, now):
         source = history.get(row['source_event_id'])
         if not source or parse_time(source['effective_at']) > now:
             continue
-        original = current_declaration(bundle, data['user_id'], through_revision=row['source_event_id'])
-        if row['field'] in original and original[row['field']] == current.get(row['field']):
+        original = current_declaration(bundle, data['user_id'], through_revision=row['source_event_id'], at=now)
+        if row['field'] in original and row['field'] in current and original[row['field']] == current[row['field']]:
             selected_by_field[row['field']] = row
     selected = list(selected_by_field.values())
     selected.sort(key=lambda row: (row['process_id'], row['field']))
@@ -56,7 +52,7 @@ def pending_context(data, now):
             'cleanup_required': any(row['deletion_state'] != 'deleted' for row in selected),
             'evaluation_id': last['evaluation_id'] if last else None,
             '_sources': sources, '_selected': selected, '_evidence_count': len(evidence),
-            '_previous': lineage['active_line'][-1]['event_id'], '_snapshot': current,
+            '_previous': lineage['active_line'][-1]['event_id'] if lineage['active_line'] else None, '_snapshot': current,
             '_plan_id': bundle['plan']['id']}
 
 

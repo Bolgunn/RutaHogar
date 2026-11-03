@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 vi.mock('../trackingService',()=>({trackingRequest:vi.fn()}));
 import { trackingRequest } from '../trackingService';
-import { DOCUMENT_BACKING_FIELDS, documentBackingProjection, getOwnDocumentBacking, getStaffDocumentBacking } from '../documentBacking';
+import { DOCUMENT_BACKING_FIELDS, documentBackingProjection, getOwnDocumentBacking, getStaffDocumentBacking, getStaffDocumentBackings } from '../documentBacking';
 
 const legacy=()=>({fields:DOCUMENT_BACKING_FIELDS.map(field=>({field,status:'sin_respaldo',confirmed_on:null}))});
 beforeEach(()=>vi.clearAllMocks());
@@ -31,4 +31,14 @@ it('acepta sólo campo/estado/fecha en el modelo de presentación',()=>{
   const parsed=documentBackingProjection(value);
   expect(parsed.fields[0]).toEqual({field:'ingreso_mensual',status:'respaldado',confirmed_on:'2026-10-25'});
   expect(JSON.stringify(parsed)).not.toContain('DO_NOT_RENDER');
+});
+
+it('el batch envía una lista acotada y conserva únicamente campos sanitizados',async()=>{
+  const value=legacy(); value.fields[0].private_secret='must-not-propagate';
+  trackingRequest.mockResolvedValue({ lead:value, outsider:legacy() });
+  const result=await getStaffDocumentBackings(['lead']);
+  expect(trackingRequest).toHaveBeenCalledWith('/documents/staff/backing/batch',{lead_ids:['lead']});
+  expect(Object.keys(result)).toEqual(['lead']);
+  expect(JSON.stringify(result)).not.toContain('must-not-propagate');
+  await expect(getStaffDocumentBackings(Array(101).fill('x'))).rejects.toThrow('invalid_leads');
 });

@@ -50,3 +50,19 @@ def test_invalid_full_snapshot_cannot_be_prepared():
         prepare_update(repo.bundle,'u1',str(uuid4()),str(uuid4()),{'ingreso_mensual':-1},'2026-03-01Z')
     with pytest.raises(DocumentError,match='tracking_baseline_required'):
         prepare_update({'plan':None},'u1',str(uuid4()),str(uuid4()),{},'2026-03-01Z')
+
+
+def test_current_declaration_reconstructs_real_corrections_before_cutoff():
+    from app.documents.tracking_adapter import current_declaration
+    repo, tracking = service()
+    first = tracking.execute('u1', command(valid_snapshot()))
+    second = tracking.execute('u1', command({'ahorro_disponible': 2_000_000}, first['event_id'], '2026-02-01T00:00:00Z'))
+    correction = {'event_id': str(uuid4()), 'effective_at': '2026-03-01T00:00:00Z',
+                  'reason':'correction', 'correction_effect':'replace', 'patch':{'ahorro_disponible':1_500_000}}
+    tracking.execute('u1', correction, second['event_id'])
+    latest = repo.bundle['revision']
+    tracking.execute('u1', command({'ahorro_disponible':9_000_000}, latest, '2026-12-01T00:00:00Z'))
+    cutoff = datetime(2026, 4, 1, tzinfo=timezone.utc)
+    assert current_declaration(repo.bundle, 'u1', at=cutoff)['ahorro_disponible'] == 1_500_000
+    assert current_declaration(repo.bundle, 'u1', through_revision=second['event_id'], at=cutoff)['ahorro_disponible'] == 2_000_000
+    assert current_declaration(repo.bundle, 'u1', at=datetime(2025,1,1,tzinfo=timezone.utc)) == {}

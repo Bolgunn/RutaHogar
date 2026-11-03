@@ -32,7 +32,7 @@ OVERLAYS = (
     "20261024120500_security_lead_change_events.sql",
     "20261024130000_hu15_funnel_plan_accepted.sql",
     "20261024130100_hu19_proyectos_rag_tipo_singular.sql",
-    "20261029120000_hu23_identity_guard.sql",
+    "20261029120001_hu23_identity_guard.sql",
 )
 
 

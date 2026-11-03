@@ -63,7 +63,7 @@ El snapshot solo no bastaba. El ensamblado local incorpora:
 - las correcciones HU16, incluido el sweeper y la sobrecarga de confiabilidad;
 - la firma final de contactos con nombres, RUT y email;
 - las definiciones de seguridad de octubre y el funnel vigente;
-- `20261029120000_hu23_identity_guard.sql`, ausente del snapshot.
+- `20261029120001_hu23_identity_guard.sql`, ausente del snapshot.
 
 `OVERLAYS` enumera las fuentes exactas. No se editan ni se despliegan esas fuentes.
 Se desactiva `check_function_bodies` sólo durante la carga para permitir funciones

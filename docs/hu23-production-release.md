@@ -48,9 +48,10 @@ Los parámetros de bind/puerto del contenedor no sustituyen la URL HTTPS de Verc
 
 ## Base de datos
 
-`20261029120000_hu23_identity_guard.sql` ya está aplicada en remoto. No editarla ni
-volver a aplicarla. Antes del commit se comprobaron `migration list --linked` y
-`db push --linked --dry-run`: historial alineado, sin migraciones pendientes.
+La función y el constraint HU23 existen en remoto por aplicación manual. La versión
+`20261029120001_hu23_identity_guard.sql` no está reconciliada en el ledger: no ejecutar
+`migration repair` ni aplicarla de nuevo. La revisión del ledger y la reconciliación se
+realizarán posteriormente y de forma coordinada; esta corrección no consulta producción.
 El bootstrap y los fixtures locales no forman parte de esta entrega productiva.
 
 ## Después del commit y push
@@ -86,3 +87,12 @@ El bootstrap y los fixtures locales no forman parte de esta entrega productiva.
    ausencia de candidatos y cambios de perfil/score ante identidad contradictoria.
 
 Esta preparación no publica imágenes, no despliega Vercel ni actualiza el host OCR.
+
+
+## Comparación de fallos de la suite backend global (2026-11-03)
+
+La suite global ejecutada contra PostgreSQL local terminó con 827 pruebas aprobadas, 11 omitidas y ocho fallos. En una copia limpia del HEAD anterior a los fixes HU23 se reprodujeron seis: cuatro del CRM mock con respuestas 422/estado vacío, uno de embeddings por ausencia de `sentence_transformers` y uno de expectativas de pie mínimo HU18 (2.200 frente a 2.737,185 UF). Son fallos preexistentes, fuera del alcance de esta corrección.
+
+Los otros dos fueron `test_confirmed_co_debtor_evaluation_uses_authenticated_owner_only` y `test_baseline_partial_update_correction_and_read_only_projection`: ambos recibieron HTTP 503 `market_data_unavailable` donde esperaban 200. Pasaron individualmente, juntos tres veces y después de las pruebas unitarias HU23 (12 pruebas aprobadas). Ejecutar antes `tests/test_cors.py` reprodujo ambos fallos tanto en la rama de trabajo como en la copia limpia de HEAD (tres CORS aprobados, dos tracking fallidos). El test CORS elimina `app.*` de `sys.modules`; el fixture de tracking parchea el módulo reimportado mientras la aplicación recolectada conserva las rutas y globals del módulo anterior. El resolver sintético no alcanza esa instancia y se intenta resolver market data real, deshabilitada en la prueba aislada. Es contaminación preexistente por orden de importación, sin evidencia de regresión HU23. No se modificaron tracking/market-data de producción para ocultarla.
+
+El test de ruta OCR fija `HU23_OCR_PROVIDER=azure` con `monkeypatch`, que restaura el entorno. También pasó al ejecutarlo con `HU23_OCR_PROVIDER=local` heredado.

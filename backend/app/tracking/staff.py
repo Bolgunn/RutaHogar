@@ -5,6 +5,7 @@ dashboard receives redacted evaluation/history snapshots plus a deliberately
 small, current-consent projection for the selected lead.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -115,6 +116,18 @@ class StaffLeadService:
         if not self.repository.staff_can_access(actor, lead_id):
             # Deliberately do not disclose whether another lead exists.
             raise TrackingError("owner_mismatch")
+
+    def authorize_lead(self, token, lead_id):
+        actor = self._actor(token)
+        self._authorize(actor, lead_id)
+        return actor
+
+    def authorized_leads(self, token, lead_ids):
+        """Authenticate once; omit denied IDs without distinguishing their cause."""
+        actor = self._actor(token)
+        with ThreadPoolExecutor(max_workers=min(8, max(1, len(lead_ids)))) as pool:
+            permitted = pool.map(lambda lead_id: self.repository.staff_can_access(actor, lead_id), lead_ids)
+            return [lead_id for lead_id, allowed in zip(lead_ids, permitted) if allowed]
 
     def evaluations(self, token):
         actor = self._actor(token)

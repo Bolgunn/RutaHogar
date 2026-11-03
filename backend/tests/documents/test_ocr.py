@@ -176,6 +176,7 @@ def test_http_start_rejects_forged_parameters_and_requires_consent(api,extra):
 
 
 def test_public_routes_only_return_safe_status_and_allow_cancellation(api,monkeypatch):
+    monkeypatch.setenv('HU23_OCR_PROVIDER', 'azure')
     request,(user,pid,repo,_)=api
     admit_upload(user,pid,repo)
     azure,storage=Azure(),Storage()

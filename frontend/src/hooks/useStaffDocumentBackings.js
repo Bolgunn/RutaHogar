@@ -1,20 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getStaffDocumentBacking } from '../services/documentBacking';
+import { getStaffDocumentBackings } from '../services/documentBacking';
 
-// Owned by one commercial list/scope, never shared between authenticated sessions.
-// Detail and cards reuse the same sanitized projection and in-flight request.
-export function createStaffBackingLoader(request = getStaffDocumentBacking) {
+// A loader belongs to one staff scope. Calls made together share a bounded request.
+export function createStaffBackingLoader(request = getStaffDocumentBackings) {
   const cache = new Map();
-  return (leadId, { refresh = false } = {}) => {
-    if (refresh) cache.delete(leadId);
-    if (!cache.has(leadId)) {
-      const pending = Promise.resolve().then(() => request(leadId)).catch(error => {
-        if (cache.get(leadId) === pending) cache.delete(leadId);
-        throw error;
-      });
-      cache.set(leadId, pending);
+  let queue = [];
+  let scheduled = false;
+  async function flush() {
+    scheduled = false;
+    const pending = queue; queue = [];
+    for (let offset = 0; offset < pending.length; offset += 100) {
+      const chunk = pending.slice(offset, offset + 100);
+      try {
+        const result = await request(chunk.map(item => item.id));
+        for (const item of chunk) {
+          if (Object.hasOwn(result, item.id)) item.resolve(result[item.id]);
+          else { if (cache.get(item.id) === item.promise) cache.delete(item.id); item.reject(new Error('backing_unavailable')); }
+        }
+      } catch (error) {
+        for (const item of chunk) {
+          if (cache.get(item.id) === item.promise) cache.delete(item.id);
+          item.reject(error);
+        }
+      }
     }
-    return cache.get(leadId);
+  }
+  return (id, { refresh = false } = {}) => {
+    if (refresh) cache.delete(id);
+    if (!cache.has(id)) {
+      let resolve, reject;
+      const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+      cache.set(id, promise); queue.push({ id, promise, resolve, reject });
+      if (!scheduled) { scheduled = true; queueMicrotask(flush); }
+    }
+    return cache.get(id);
   };
 }
 
@@ -24,19 +43,13 @@ export default function useStaffDocumentBackings(leadIds, scope) {
   const key = JSON.stringify([...new Set(leadIds.filter(Boolean))].sort());
   useEffect(() => {
     let active = true;
-    const queue = JSON.parse(key);
-    const worker = async () => {
-      while (active && queue.length) {
-        const id = queue.shift();
-        try {
-          const projection = await load(id);
-          if (active) setState(old => ({ load, projections: { ...(old?.load === load ? old.projections : {}), [id]: projection } }));
-        } catch { /* Unknown/unauthorized is never displayed as "Sin respaldo" or validated. */ }
-      }
-    };
-    // Bound parallelism; only request leads actually rendered in the list.
-    const workers = Math.min(4, queue.length);
-    for (let i = 0; i < workers; i++) worker();
+    const ids = JSON.parse(key);
+    Promise.allSettled(ids.map(id => load(id))).then(results => {
+      if (!active) return;
+      const projections = {};
+      results.forEach((result, index) => { if (result.status === 'fulfilled') projections[ids[index]] = result.value; });
+      setState({ load, projections });
+    });
     return () => { active = false; };
   }, [key, load]);
   return { projections: state?.load === load ? state.projections : {}, load };

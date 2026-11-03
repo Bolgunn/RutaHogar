@@ -1,14 +1,12 @@
 """E4: field/status/date only. Commercial authorization precedes every subject read."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from ..tracking.contracts import parse_time, TrackingError
-from ..tracking.lineage import reconstruct
-from ..tracking.scoring_adapter import financial_field_contract
-from ..tracking.service import source_events
 from ..tracking.staff import StaffLeadService
 from .domain import current_backing
-from .tracking_adapter import current_declaration
+from .tracking_adapter import current_declaration, effective_declaration
 
 BACKING_FIELDS = ('ingreso_mensual','ahorro_disponible','tipo_contrato','continuidad_laboral')
 BUSINESS_TIMEZONE = ZoneInfo('America/Santiago')
@@ -31,16 +29,14 @@ class DocumentBackingService:
             return {'fields':list(fields.values())}
         now = self.clock()
         history = {row['event_id']:row for row in bundle['events']}
-        lineage = reconstruct(source_events(bundle),subject,financial_field_contract())
-        applicable = [row for row in lineage['active_line'] if parse_time(row['effective_at'])<=now]
-        current = applicable[-1]['snapshot'] if applicable else {}
+        _, _, current = effective_declaration(bundle, subject, at=now)
         originals = {}
         for row in rows:
             field, source_id = row['field'], row['source_event_id']
             if field not in fields or source_id not in history or parse_time(history[source_id]['effective_at'])>now:
                 continue
             if source_id not in originals:
-                originals[source_id] = current_declaration(bundle,subject,through_revision=source_id)
+                originals[source_id] = current_declaration(bundle,subject,through_revision=source_id,at=now)
             source_value = originals[source_id].get(field)
             if source_value is None or current.get(field) is None:
                 continue
@@ -58,6 +54,14 @@ class DocumentBackingService:
         if transport is None:
             raise TrackingError('persistence_unavailable')
         authorization = StaffLeadService(transport)
-        actor = authorization._actor(token)
-        authorization._authorize(actor,subject)
+        authorization.authorize_lead(token,subject)
         return self._projection(subject,owner=False)
+
+    def staff_batch(self, token, subjects):
+        transport = getattr(self.repository, 'tracking', None)
+        if transport is None:
+            raise TrackingError('persistence_unavailable')
+        allowed = StaffLeadService(transport).authorized_leads(token, subjects)
+        with ThreadPoolExecutor(max_workers=min(8, max(1, len(allowed)))) as pool:
+            projections = pool.map(lambda subject: self._projection(subject, owner=False), allowed)
+            return dict(zip(allowed, projections))
