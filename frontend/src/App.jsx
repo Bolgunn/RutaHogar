@@ -27,6 +27,8 @@ import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
 import UserHomeOverview from "./components/UserHomeOverview";
 import NotificationToast from "./components/NotificationToast";
+import PendingScoreNotice from "./components/PendingScoreNotice";
+import { useDocumentScorePending } from "./hooks/useDocumentScorePending";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
@@ -465,7 +467,10 @@ function LeadChangeDetail({ change }) {
 
 function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
   const [detailGroup, setDetailGroup] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(highlightedId));
+  useEffect(() => {
+    if (highlightedId) setExpanded(true);
+  }, [highlightedId]);
   if (loading) {
     return (
       <section className="home-change-timeline is-loading" aria-live="polite">
@@ -789,8 +794,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
-  // These token-gated pages belong to the co-debtor, never to a RutaHogar
-  // account. Resolve them before any profile or session redirect.
+  // Keep invitation context ahead of profile redirects, including Auth callbacks.
+  // The invitation page validates the recipient session before allowing access.
   if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
   if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
     return { page: "co-debtor-management" };
@@ -1008,6 +1013,16 @@ export default function App() {
 
   const userEvaluations = profile ? evaluations : [];
   const currentEvaluation = currentTrackingEvaluation(trackingState, userEvaluations, userId);
+  const [scoreUpdateFeedback, setScoreUpdateFeedback] = useState(null);
+  const [scoreUpdateFocus, setScoreUpdateFocus] = useState(null);
+  useEffect(() => { setScoreUpdateFeedback(null); setScoreUpdateFocus(null); }, [userId]);
+  const documentScorePending = useDocumentScorePending(profile?.role === roles.user ? userId : null,
+    `${trackingRevision}:${trackingState?.latest_event_id || ''}:${currentEvaluation?.id || ''}`);
+  const pendingScoreSource = documentScorePending.pending ? 'documents' : null;
+  const openPendingScoreUpdate = () => {
+    setScoreUpdateFocus(pendingScoreSource);
+    navigateToPage('profile');
+  };
   useEffect(() => {
     let active = true;
     setTrackingState(null);
@@ -1022,22 +1037,36 @@ export default function App() {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const evaluationOwnerRef = useRef(userId);
+  const evaluationReadRef = useRef(0);
+  evaluationOwnerRef.current = userId;
   const refreshEvaluationView = async () => {
+    const requestedOwner = userId;
+    const requestRevision = ++evaluationReadRef.current;
     const [nextTracking, nextEvaluations] = await Promise.all([
       getTracking(),
       getEvaluations(userId, profile?.role),
     ]);
+    if (evaluationOwnerRef.current !== requestedOwner || requestRevision !== evaluationReadRef.current) throw new Error("La sesión cambió. Vuelve a cargar tu evaluación.");
     setTrackingState(nextTracking);
     setEvaluations(nextEvaluations);
     return { tracking: nextTracking, evaluations: nextEvaluations };
   };
-  const refreshScoreAfterCoDebtorConfirmation = async () => {
-    try {
-      return await refreshEvaluationView();
-    } catch {
-      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
-      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
-    }
+  const refreshScorePresentation = async (source, expectedEvaluationId = null) => {
+    const previousScore = currentEvaluation?.result?.score;
+    const view = await refreshEvaluationView();
+    const updated = expectedEvaluationId
+      ? view.evaluations.find((row) => row.id === expectedEvaluationId)
+      : currentTrackingEvaluation(view.tracking, view.evaluations, userId);
+    if (!updated) throw new Error('La nueva evaluación todavía no está disponible.');
+    setResult(null);
+    setResultSaved(null);
+    setScoreUpdateFeedback({ userId, evaluationId: updated.id, previousScore, source });
+    return view;
+  };
+  const showDocumentScoreResult = async (next) => {
+    await refreshScorePresentation('documents', next.evaluation_id);
+    navigateToPage('recommendations');
   };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
@@ -1480,8 +1509,11 @@ export default function App() {
             continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
             morosidad_complementario: pendingInput?.morosidad_complementario,
           },
+          pendingCoDebtorInvitation.declaredRelation || pendingInput?.relacion_complementario,
         );
-      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
+      } catch (failure) {
+        setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
+      }
     }
 
     clearAnonSession();
@@ -1543,6 +1575,10 @@ export default function App() {
         birth_date,
         role: roles.user,
       });
+      if (nextAuth.emailConfirmationRequired) {
+        setSignupOfferError("Revisa tu correo para confirmar la cuenta. Después inicia sesión para continuar.");
+        return;
+      }
       trackSignUp({ method: "signup_offer" });
 
       const newProfile = nextAuth.profile;
@@ -1733,6 +1769,7 @@ export default function App() {
   }, [result]);
 
   const handleResult = async (scoreResult, input, metadata = {}) => {
+    setScoreUpdateFeedback(null);
     setScoreFormDraft(null);
     setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
@@ -1775,9 +1812,11 @@ export default function App() {
             metadata.coDebtorInvitation.recipientEmail,
             metadata.coDebtorInvitation.recipientRut,
             metadata.coDebtorInvitation.declaredComplement,
+            metadata.coDebtorInvitation.declaredRelation || financialInput.relacion_complementario,
           );
-        } catch {
+        } catch (failure) {
           // A delivery failure must never roll back or hide the saved score.
+          setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
         }
       }
 
@@ -2244,6 +2283,7 @@ export default function App() {
       />
       <main className="content"><div className="content-inner">
         {showInternalBack && <AppBackButton onBack={handleInternalBack} />}
+        {profile.role === roles.user && <PendingScoreNotice pending={Boolean(pendingScoreSource)} onUpdate={openPendingScoreUpdate} />}
 
         {visibleError && (
           <div className="error-message dismissible-message">
@@ -2486,6 +2526,11 @@ export default function App() {
             onboarding={userOnboarding}
             evaluations={userEvaluations}
             onSaveOnboarding={handleProfileOnboardingSave}
+            onDocumentConfirmed={refreshTracking}
+            onDocumentScoreUpdated={showDocumentScoreResult}
+            onDocumentPendingChange={documentScorePending.report}
+            focusDocumentScoreUpdate={scoreUpdateFocus === 'documents'}
+            onScoreUpdateFocused={() => setScoreUpdateFocus(null)}
             onProfileUpdate={handleProfileUpdate}
             onRetryExplanation={handleRetryAiExplanation}
           />
@@ -2529,11 +2574,14 @@ export default function App() {
         />
       ) : page === "recommendations" && profile.role === roles.user ? (
         <Recommendations
+          key={userId || "preview"}
+          ownerId={userId}
+          onRefreshEvaluation={refreshEvaluationView}
           evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
-          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
+          scoreUpdate={scoreUpdateFeedback?.userId === userId ? scoreUpdateFeedback : null}
           trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
@@ -2579,15 +2627,18 @@ export default function App() {
           />
       ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
+          key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
+          staffScopeKey={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
           highScoreNotification={{ count: newHighLeadsCount, onClick: handleNotificationClick,
             onClose: handleDismissNotification, className: "notification-toast--high-score" }}
           evaluations={evaluations}
+          userId={userId}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           role={profile.role}
         />
       ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
-        <CommercialMetrics role={profile.role} onNavigate={navigateToPage} />
+        <CommercialMetrics key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`} role={profile.role} onNavigate={navigateToPage} />
       ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}

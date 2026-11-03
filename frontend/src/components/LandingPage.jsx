@@ -22,7 +22,7 @@ const faqs = [
   { q: "¿Es gratis?", a: "Sí. RutaHogar es una herramienta orientativa completamente gratuita. No se requiere pago ni tarjeta de crédito." },
   { q: "¿Necesito crear cuenta?", a: "No. Puedes obtener tu resultado sin registrarte. Si quieres guardar tu progreso, puedes crear una cuenta." },
   { q: "¿Reemplaza una evaluación bancaria?", a: "No. RutaHogar es orientativo. Te da una idea de tu posición financiera, pero no constituye una precalificación formal." },
-  { q: "¿Mis datos están seguros?", a: "Sí. No consultamos bases de datos bancarias. Los datos que ingresas se procesan localmente y no se comparten." },
+  { q: "¿Mis datos están seguros?", a: "No consultamos bases de datos bancarias. El respaldo documental es opcional: los originales se guardan temporalmente en almacenamiento privado y se procesan temporalmente con tu autorización para reconocer su texto. Los ejecutivos sólo ven el estado del respaldo, nunca el documento." },
   { q: "¿Qué es el score?", a: "Es un número de 0 a 100 que refleja qué tan preparado estás para un crédito hipotecario, basado en ingresos, ahorro, deuda y contexto." },
 ];
 

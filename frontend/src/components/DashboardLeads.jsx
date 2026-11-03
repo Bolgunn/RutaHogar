@@ -15,6 +15,12 @@ import { displayItemBenefit, displayItemText } from "../utils/text";
 import NotificationToast from "./NotificationToast";
 import CommercialStagePanel, { CommercialStageBadge } from "./CommercialStagePanel";
 import LeadDetailModal from "./LeadDetailModal";
+import DocumentLeadBadges from "./documents/DocumentLeadBadges";
+import useStaffDocumentBackings from "../hooks/useStaffDocumentBackings";
+import StaffParticipationBadge from "./StaffParticipationBadge";
+import useStaffProjectionRead from "../hooks/useStaffProjectionRead";
+import { getEvaluations } from "../services/evaluationService";
+import { matchesParticipationFilter, participationFilters } from "../lib/commercial/bipersonalProjection";
 import { getCommercialRecords } from "../services/commercialStageService";
 import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
 import { formatFormValue } from "../constants";
@@ -24,6 +30,8 @@ import {
   getClassificationClass,
   translateSeverity,
 } from "../utils/helpers";
+
+const EMPTY_STAFF_ROWS = [];
 
 function getReliabilityBadge(status) {
   switch (status) {
@@ -351,7 +359,14 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo, role, highScoreNotification }) {
+export default function DashboardLeads({ userId, inmobiliariaId, ejecutivo, role, highScoreNotification, staffScopeKey }) {
+  const feed = useStaffProjectionRead({
+    scopeKey: staffScopeKey || `${ejecutivo?.id || ejecutivo?.email || "staff"}:${role}:${inmobiliariaId || "global"}`,
+    load: () => getEvaluations(null, role),
+    projections: (rows) => rows.map((row) => row.co_debtor),
+  });
+  const evaluations = feed.data || EMPTY_STAFF_ROWS;
+  const [participationFilter, setParticipationFilter] = useState("all");
   const [priority, setPriority] = useState("contact_now");
   const [classification, setClassification] = useState("todos");
   const [commune, setCommune] = useState("todas");
@@ -378,14 +393,12 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
   const [opportunityToastDismissed, setOpportunityToastDismissed] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [history, setHistory] = useState([]);
-  const [localEvaluations, setLocalEvaluations] = useState(evaluations || []);
-
-  useEffect(() => {
-    setLocalEvaluations(evaluations || []);
-  }, [evaluations]);
+  const [reliabilityOverrides, setReliabilityOverrides] = useState({});
+  const localEvaluations = useMemo(() => evaluations.map((row) => reliabilityOverrides[row.user_id || row.id]
+    ? { ...row, reliability_status: reliabilityOverrides[row.user_id || row.id] } : row), [evaluations, reliabilityOverrides]);
 
   // HU 21: la proyección staff trae junto a las evaluaciones lo que R9 necesita de los criterios.
-  const commercialConfig = useMemo(() => getStaffCommercialConfig(), [evaluations]);
+  const commercialConfig = useMemo(() => getStaffCommercialConfig(userId), [evaluations, userId]);
   const defaultSortBy = commercialConfig?.orden_desempate || "afinidad";
   useEffect(() => {
     setSortBy(defaultSortBy);
@@ -544,6 +557,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     const ageRange = AGE_RANGES[age];
     const term = search.trim().toLowerCase();
     return latestEvaluations.filter((item) => {
+      if (!matchesParticipationFilter(item.co_debtor, participationFilter)) return false;
       const mainCommune = item.input?.comuna_objetivo || item.onboarding?.comuna_interes;
       if (priority !== "todos" && actionKeyOf(item) !== priority) return false;
       if (classification !== "todos" && item.result?.classification !== classification) return false;
@@ -562,11 +576,16 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
 
       return !term || `${item.full_name || ""} ${item.email || ""}`.toLowerCase().includes(term);
     });
-  }, [latestEvaluations, priority, classification, commune, age, date, search, reliabilityStatus]);
+  }, [latestEvaluations, priority, classification, commune, age, date, search, reliabilityStatus, participationFilter]);
   const { ranked, descartados, requiereAntecedentes } = useMemo(
     () => rankLeadsForProject(filtered, selectedProject, sortBy, { proyectos: projects, commercialConfig }),
     [filtered, selectedProject, sortBy, projects, commercialConfig],
   );
+  const documentScope = JSON.stringify([executiveId, executiveEmail, inmobiliariaId, role,
+    latestEvaluations.map(row => row.id).sort()]);
+  const documentLeadIds = [...ranked, ...(showRequiresDocuments ? requiereAntecedentes : []),
+    ...(showExcluded ? descartados : [])].map(({ lead }) => lead.user_id).filter(Boolean);
+  const documentBackings = useStaffDocumentBackings(documentLeadIds, documentScope);
   const contactOpportunities = useMemo(
     () => detectContactOpportunities(evaluations, projects),
     [evaluations, projects],
@@ -630,8 +649,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     [comparisonLeads, selectedProject],
   );
   const visibleContactQuestions = showAllContactQuestions ? contactQuestions : contactQuestions.slice(0, 5);
-  const activeFilters = priority !== defaultPriority || classification !== "todos" || commune !== "todas" || age || date !== "todos" || search || reliabilityStatus !== "default" || sortBy !== defaultSortBy;
-  const clearFilters = () => { setPriority(defaultPriority); setClassification("todos"); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); setReliabilityStatus("default"); setSortBy(defaultSortBy); };
+  const activeFilters = participationFilter !== "all" || priority !== defaultPriority || classification !== "todos" || commune !== "todas" || age || date !== "todos" || search || reliabilityStatus !== "default" || sortBy !== defaultSortBy;
+  const clearFilters = () => { setParticipationFilter("all"); setPriority(defaultPriority); setClassification("todos"); setCommune("todas"); setAge(0); setDate("todos"); setSearch(""); setReliabilityStatus("default"); setSortBy(defaultSortBy); };
   const selectProject = (nextId) => {
     setProjectId(nextId);
     setPriority(nextId ? "todos" : "contact_now");
@@ -692,6 +711,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
             {getReliabilityBadgeCard(lead.reliability_status || "normal")}
             <span className={`status-pill ${getClassificationClass(lead.result?.classification)}`}>{lead.result?.classification || "Sin dato"}</span>
             <span className="status-pill">{PRIORITY_ACTIONS[actionKeyOf(lead)] || "Sin prioridad"}</span>
+            <DocumentLeadBadges projection={documentBackings.projections[lead.user_id]} />
+            <StaffParticipationBadge projection={lead.co_debtor} />
             <CommercialStageBadge records={commercialRecords[lead.user_id]} />
             <small>{formatDate(lead.created_at)}</small>
             {lead.email && crmLeads[lead.email] ? (
@@ -861,6 +882,7 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
       <div className="toolbar-filters admin-toolbar-filters executive-leads-controls__secondary">
         <label>Buscar por nombre o correo<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ej: Camila Retamal" /></label>
         <label>Clasificación financiera<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="todos">Todas</option><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select></label>
+        <label>Participación financiera<select value={participationFilter} onChange={(event) => setParticipationFilter(event.target.value)}>{participationFilters.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>Comuna<select value={commune} onChange={(event) => setCommune(event.target.value)}><option value="todas">Todas las comunas</option>{communes.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label>Confiabilidad<select value={reliabilityStatus} onChange={(event) => setReliabilityStatus(event.target.value)}><option value="default">Oportunidades confiables</option><option value="todos">Todos los leads activos</option><option value="normal">Solo normales</option><option value="sospechoso">Solo sospechosos</option><option value="en_revision">En revisión</option><option value="reactivado">Reactivados</option></select></label>
         <label>Edad<select value={age} onChange={(event) => setAge(Number(event.target.value))}>{AGE_RANGES.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
@@ -993,6 +1015,8 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
            <button type="button" className="primary-button compact-button" onClick={handleBulkSync} disabled={syncing || ranked.length === 0}>{syncing ? "Sincronizando..." : "Sincronizar Visibles"}</button>
         </div>
       </div>
+      {feed.loading && <p role="status">Consultando leads autorizados...</p>}
+      {feed.error && <div role="alert"><p>{feed.error}</p><button type="button" onClick={feed.refresh}>Reintentar</button></div>}
       <div className="executive-leads-list executive-leads-list--scroll" aria-label="Bandeja de leads">{ranked.map(leadCard)}{!ranked.length && <div className="executive-leads-empty"><strong>No hay leads en esta vista.</strong><span>Ajusta los filtros o restablece la vista para recuperar resultados.</span></div>}</div>
     </section>
 
@@ -1001,19 +1025,15 @@ export default function DashboardLeads({ evaluations, inmobiliariaId, ejecutivo,
     {selectedLead && (
       <LeadDetailModal
         lead={selectedLead}
+        staffScopeKey={staffScopeKey}
         onClose={() => setSelectedLead(null)}
         evaluations={localEvaluations}
         selectedProject={selectedProject}
         role={role}
         executiveScope={executiveScope}
+        loadDocumentBacking={documentBackings.load}
         onLeadUpdated={(updatedLead) => {
-          setLocalEvaluations((prev) =>
-            prev.map((item) =>
-              item.user_id === updatedLead.user_id || item.id === updatedLead.id
-                ? { ...item, ...updatedLead }
-                : item
-            )
-          );
+          setReliabilityOverrides((prev) => ({ ...prev, [updatedLead.user_id || updatedLead.id]: updatedLead.reliability_status }));
           setSelectedLead((prev) => (prev ? { ...prev, ...updatedLead } : null));
         }}
         commercialRecords={commercialRecords}

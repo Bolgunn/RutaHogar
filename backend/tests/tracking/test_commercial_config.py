@@ -11,6 +11,7 @@ from app.scoring_engine.commercial_criteria import normalize_criterios
 from app.scoring_engine.constants import COMMERCIAL_ACTIONS, COMMERCIAL_PRIORITY_ALG_VERSION
 from app.tracking.commercial_config import CommercialConfigService, InvalidCriteria
 from app.tracking.contracts import TrackingError
+from app.tracking import routes as tracking_routes
 from app.tracking.routes import repository
 from app.tracking.service import TrackingService
 from app.tracking.staff import StaffLeadService
@@ -86,6 +87,9 @@ class ConfigRepository:
 
     def staff_contacts(self, ids):
         return {str(i): {"full_name": f"Nombre {i}", "phone": None} for i in ids if i}
+
+    def staff_co_debtor_invitation(self, lead_id):
+        return None
 
     def lead_reliability_statuses(self, ids):
         return {i: ("descartado" if i == "descartado" else "normal") for i in ids}
@@ -381,7 +385,7 @@ def test_http_status_codes(api):
 
 def test_lead_endpoints_identical_with_config(inline, monkeypatch):
     monkeypatch.setattr(
-        "app.tracking.routes.TrackingService",
+        tracking_routes, "TrackingService",
         lambda repo: TrackingService(repo, market_snapshot_resolver=market_snapshot),
     )
     repo = MemoryRepository()

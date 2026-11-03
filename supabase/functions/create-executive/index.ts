@@ -220,11 +220,22 @@ serve(async (req) => {
 
     // --- Cuenta ya existente: se promueve y se vincula, no se recrea ---
     if (existingId) {
-      const { data: existingProfile } = await adminClient
+      const { data: existingProfile, error: existingProfileError } = await adminClient
         .from("profiles")
         .select("id, role, inmobiliaria_id, full_name")
         .eq("id", existingId)
         .maybeSingle();
+
+      if (existingProfileError) {
+        console.error("Error leyendo la cuenta existente:", existingProfileError);
+        return jsonResponse({ error: "No se pudo verificar la cuenta existente." }, 500);
+      }
+
+      // service_role salta el guard de profiles: este es el único freno para no
+      // degradar a un administrador, global o de otra inmobiliaria.
+      if (existingProfile?.role === "admin" || existingProfile?.role === "admin_inmobiliario") {
+        return jsonResponse({ error: "Esta cuenta es de un administrador: no se puede vincular como ejecutivo." }, 409);
+      }
 
       if (
         existingProfile?.inmobiliaria_id &&

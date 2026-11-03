@@ -1,0 +1,30 @@
+name: HU23 temporary document cleanup
+
+on:
+  schedule:
+    # Avoid the start-of-hour peak. Schedule runs from the default branch.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hu23-document-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # No Supabase/Azure credentials or application dependencies in this runner.
+      - name: Invoke protected cleanup and check recovery counters
+        run: python scripts/run-hu23-cleanup.py
+        env:
+          HU23_CLEANUP_URL: ${{ secrets.HU23_CLEANUP_URL }}
+          HU23_CLEANUP_CRON_TOKEN: ${{ secrets.HU23_CLEANUP_CRON_TOKEN }}
