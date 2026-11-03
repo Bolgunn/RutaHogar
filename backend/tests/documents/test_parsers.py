@@ -16,7 +16,7 @@ FIXTURES=Path(__file__).parent/'fixtures'
 
 
 def fixture(name):
-    return json.loads((FIXTURES/(name+'.json')).read_text())
+    return json.loads((FIXTURES/(name+'.json')).read_text(encoding='utf-8'))
 
 
 def layout(*lines):
