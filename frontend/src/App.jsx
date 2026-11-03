@@ -26,6 +26,8 @@ import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
 import UserHomeOverview from "./components/UserHomeOverview";
 import NotificationToast from "./components/NotificationToast";
+import PendingScoreNotice from "./components/PendingScoreNotice";
+import { useDocumentScorePending } from "./hooks/useDocumentScorePending";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
@@ -1008,6 +1010,16 @@ export default function App() {
 
   const userEvaluations = profile ? evaluations : [];
   const currentEvaluation = currentTrackingEvaluation(trackingState, userEvaluations, userId);
+  const [scoreUpdateFeedback, setScoreUpdateFeedback] = useState(null);
+  const [scoreUpdateFocus, setScoreUpdateFocus] = useState(null);
+  useEffect(() => { setScoreUpdateFeedback(null); setScoreUpdateFocus(null); }, [userId]);
+  const documentScorePending = useDocumentScorePending(profile?.role === roles.user ? userId : null,
+    `${trackingRevision}:${trackingState?.latest_event_id || ''}:${currentEvaluation?.id || ''}`);
+  const pendingScoreSource = documentScorePending.pending ? 'documents' : null;
+  const openPendingScoreUpdate = () => {
+    setScoreUpdateFocus(pendingScoreSource);
+    navigateToPage('profile');
+  };
   useEffect(() => {
     let active = true;
     setTrackingState(null);
@@ -1036,6 +1048,22 @@ export default function App() {
     setTrackingState(nextTracking);
     setEvaluations(nextEvaluations);
     return { tracking: nextTracking, evaluations: nextEvaluations };
+  };
+  const refreshScorePresentation = async (source, expectedEvaluationId = null) => {
+    const previousScore = currentEvaluation?.result?.score;
+    const view = await refreshEvaluationView();
+    const updated = expectedEvaluationId
+      ? view.evaluations.find((row) => row.id === expectedEvaluationId)
+      : currentTrackingEvaluation(view.tracking, view.evaluations, userId);
+    if (!updated) throw new Error('La nueva evaluación todavía no está disponible.');
+    setResult(null);
+    setResultSaved(null);
+    setScoreUpdateFeedback({ userId, evaluationId: updated.id, previousScore, source });
+    return view;
+  };
+  const showDocumentScoreResult = async (next) => {
+    await refreshScorePresentation('documents', next.evaluation_id);
+    navigateToPage('recommendations');
   };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
@@ -1738,6 +1766,7 @@ export default function App() {
   }, [result]);
 
   const handleResult = async (scoreResult, input, metadata = {}) => {
+    setScoreUpdateFeedback(null);
     setScoreFormDraft(null);
     setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
@@ -2251,6 +2280,7 @@ export default function App() {
       />
       <main className="content"><div className="content-inner">
         {showInternalBack && <AppBackButton onBack={handleInternalBack} />}
+        {profile.role === roles.user && <PendingScoreNotice pending={Boolean(pendingScoreSource)} onUpdate={openPendingScoreUpdate} />}
 
         {visibleError && (
           <div className="error-message dismissible-message">
@@ -2493,6 +2523,11 @@ export default function App() {
             onboarding={userOnboarding}
             evaluations={userEvaluations}
             onSaveOnboarding={handleProfileOnboardingSave}
+            onDocumentConfirmed={refreshTracking}
+            onDocumentScoreUpdated={showDocumentScoreResult}
+            onDocumentPendingChange={documentScorePending.report}
+            focusDocumentScoreUpdate={scoreUpdateFocus === 'documents'}
+            onScoreUpdateFocused={() => setScoreUpdateFocus(null)}
             onProfileUpdate={handleProfileUpdate}
             onRetryExplanation={handleRetryAiExplanation}
           />
@@ -2543,6 +2578,7 @@ export default function App() {
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
+          scoreUpdate={scoreUpdateFeedback?.userId === userId ? scoreUpdateFeedback : null}
           trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (

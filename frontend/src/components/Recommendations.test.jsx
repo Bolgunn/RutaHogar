@@ -14,6 +14,23 @@ describe("HU18 refreshed score presentation", () => {
   });
 });
 
+describe("shared refreshed evaluation feedback", () => {
+  const evaluation = { id: "new-evaluation", input: {}, result: { score: 95.5, classification: "Alto" } };
+  it("presents the new score and delta for documents", () => {
+    const source = "documents";
+    const html = renderToStaticMarkup(<RecommendationsView evaluation={evaluation}
+      scoreUpdate={{ evaluationId: evaluation.id, previousScore: 87.5, source }} />);
+    expect(html).toContain("+8,0");
+    expect(html).toContain("is-score-updated");
+    expect(html).toContain("nuevos antecedentes validados");
+  });
+  it("does not attach an old success message or delta to another evaluation", () => {
+    const html = renderToStaticMarkup(<RecommendationsView evaluation={evaluation}
+      scoreUpdate={{ evaluationId: "older-evaluation", previousScore: 87.5, source: "documents" }} />);
+    expect(html).not.toContain("score-update-feedback");
+    expect(html).not.toContain("is-score-updated");
+  });
+});
 
 describe("HU30 active owner result integration", () => {
   it("renders the projection without a permanent incorporation success block", () => {

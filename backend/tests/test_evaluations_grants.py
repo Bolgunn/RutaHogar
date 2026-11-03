@@ -105,7 +105,12 @@ def test_final_hu18_schema_denies_direct_staff_history_and_event_reads():
     assert 'drop policy if exists "evaluations select sales" on public.evaluations;' in final_hu18_state
     assert 'drop policy if exists "scoring history select staff" on public.scoring_history;' in final_hu18_state
     assert 'drop policy if exists "evaluation events select staff" on public.evaluation_events;' in final_hu18_state
-    assert final_hu18_state.count("create policy") == 1
+    # Later HUs may append policies for their own tables; keep the HU18 tables protected.
+    policies = re.findall(r"create policy .*?;", final_hu18_state)
+    protected = [policy for policy in policies if re.search(
+        r"\bon public\.(evaluations|scoring_history|evaluation_events)\b", policy)]
+    assert len(protected) == 1
+    assert 'on public.evaluations' in protected[0]
     assert 'create policy "evaluations select own"' in final_hu18_state
 
 
