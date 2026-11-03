@@ -464,7 +464,10 @@ function LeadChangeDetail({ change }) {
 
 function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
   const [detailGroup, setDetailGroup] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(highlightedId));
+  useEffect(() => {
+    if (highlightedId) setExpanded(true);
+  }, [highlightedId]);
   if (loading) {
     return (
       <section className="home-change-timeline is-loading" aria-live="polite">

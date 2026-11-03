@@ -15,6 +15,11 @@ export function serializePatch(controls) {
       const rawValue = control.type === "currency"
         ? String(control.value).replaceAll(".", "")
         : control.value;
+      // Emptying an optional amount clears it, like the explicit clear control.
+      if (String(rawValue ?? "").trim() === "" && control.nullable) {
+        patch[name] = null;
+        continue;
+      }
       if (String(rawValue).trim() === "" || !Number.isFinite(Number(rawValue)))
         throw new Error("Ingresa un número válido.");
       patch[name] = Number(rawValue);
