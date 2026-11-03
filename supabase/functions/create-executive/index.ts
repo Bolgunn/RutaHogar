@@ -59,7 +59,7 @@ function buildInviteEmail(fullName: string, inmobiliariaNombre: string, actionLi
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;border-collapse:collapse;background-color:#ffffff;border:1px solid #d7e0ea;border-radius:12px;">
               <tr>
                 <td style="padding:28px 32px;background-color:#246354;border-radius:12px 12px 0 0;">
-                  <img src="https://www.rutahogar.cl/Logo%20ScoreLeads.png" alt="ScoreLeads" width="160" style="display:block;width:100%;max-width:160px;height:auto;border:0;margin:0 0 16px;">
+                  <img src="https://score-leads-one.vercel.app/Logo%20ScoreLeads.png" alt="ScoreLeads" width="160" style="display:block;width:100%;max-width:160px;height:auto;border:0;margin:0 0 16px;">
                   <div style="font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.4px;color:#ffffff;">ScoreLeads</div>
                 </td>
               </tr>
