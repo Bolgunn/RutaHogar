@@ -53,3 +53,39 @@
 @media (prefers-reduced-motion: no-preference) { .hu22-options label, .export-close { transition: background-color .15s ease, border-color .15s ease; } }
 
 .export-dialog-body > .hu22-selection { margin-top: 20px; }
+.export-main-content { display: flex; flex-direction: column; min-height: 0; }
+.export-main-content[hidden] { display: none; }
+.export-history { margin-top: 24px; padding-top: 22px; border-top: 1px solid #dce1e7; }
+.export-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.export-history-heading h3 { margin: 0; font-family: inherit; font-size: 16px; }
+.export-history-heading > span { color: #52647b; font-size: 12px; }
+.export-history .hu22-record { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 18px 0; }
+.export-record-icon { display: grid; place-items: center; width: 38px; height: 44px; border-radius: 8px; background: #edf2f8; color: #234c76; font-size: 22px; }
+.export-record-info { min-width: 0; }
+.export-record-info strong { display: block; font-size: 14px; }
+.export-record-info p { margin: 4px 0 0; }
+.export-record-actions { display: flex; align-items: flex-end; flex-direction: column; gap: 12px; }
+.export-record-status { display: inline-flex; align-items: center; flex-shrink: 0; padding: 5px 9px; border: 1px solid #c4ddcf; border-radius: 6px; background: #eef7f2; color: #216343; font-size: 11px; font-weight: 600; line-height: 1.4; }
+.export-record-status.is-prepared { border-color: #e0cf9c; background: #fcf6e5; color: #775813; }
+.hu22-dialog .export-record-details { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 0 4px 8px; margin: 0; border: 0; background: transparent; box-shadow: none; color: #234c76; font: inherit; font-size: 12px; font-weight: 600; }
+.hu22-dialog .export-record-details:hover { color: #132b49; text-decoration: underline; text-underline-offset: 4px; }
+.export-record-overview { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 18px; border: 1px solid #d2dbe6; border-radius: 10px; background: #f0f4f9; }
+.export-record-overview h3 { margin: 0; font-family: inherit; font-size: 17px; }
+.export-record-overview p { margin: 6px 0 0; color: #52647b; font-size: 12px; }
+.export-detail-section { margin-top: 24px; }
+.export-detail-section h3 { margin: 0 0 12px; font-family: inherit; font-size: 14px; font-weight: 700; }
+.export-block-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.export-block-tags span { padding: 6px 10px; border: 1px solid #d2dbe6; border-radius: 6px; background: #f7f9fc; font-size: 12px; line-height: 1.5; }
+.export-detail-list { display: grid; margin: 0; font-size: 13px; line-height: 1.6; }
+.export-detail-list > div { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid #e5e9ee; }
+.export-detail-list dt { color: #52647b; font-weight: 400; }
+.export-detail-list dd { margin: 0; overflow-wrap: anywhere; }
+.export-detail-muted, .export-record-count, .export-history-empty { margin: 12px 0 0; color: #52647b; font-size: 13px; line-height: 1.6; }
+.hu22-dialog .export-detail-footer { justify-content: flex-end; }
+@media (max-width: 600px) {
+  .export-history .hu22-record { grid-template-columns: 32px minmax(0, 1fr); gap: 10px; }
+  .export-record-icon { width: 32px; height: 40px; font-size: 20px; }
+  .export-record-actions { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .export-detail-list > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .export-record-overview { padding: 16px; }
+}

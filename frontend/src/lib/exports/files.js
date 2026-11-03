@@ -152,12 +152,11 @@ export async function makeWorkbook(snapshot, metrics) {
     sheet.eachRow((row, rowNumber) => {
       row.eachCell(cell => {
         cell.font = { name: "Calibri", size: 11, color: { argb: "FF243B55" } };
-        cell.alignment = { vertical: "top", wrapText: true };
+        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
         if (rowNumber > 1 && rowNumber % 2 === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F4F8" } };
         if (typeof cell.value === "number") {
           const meaning = keyValue ? String(rows[rowNumber - 1][0]) : String(rows[0][cell.col - 1]);
           cell.numFmt = /tasa|rate/i.test(meaning) ? "0.0%" : /CLP/.test(meaning) ? "#,##0" : "#,##0.##";
-          cell.alignment = { vertical: "top", horizontal: "right", wrapText: true };
         }
         if (typeof cell.value === "string" && /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:\d{2}))?$/.test(cell.value)) {
           const date = new Date(cell.value);
@@ -165,13 +164,11 @@ export async function makeWorkbook(snapshot, metrics) {
             const withTime = cell.value.includes("T");
             cell.value = date;
             cell.numFmt = withTime ? "dd-mm-yyyy hh:mm" : "dd-mm-yyyy";
-            if (withTime) cell.note = "Fecha y hora en UTC.";
           }
         }
         if (rowNumber === 1 || (keyValue && cell.col === 1)) {
           const full = String(cell.value ?? "");
           cell.value = concise(full);
-          if (cell.value !== full) cell.note = full;
         }
       });
     });
@@ -188,7 +185,7 @@ export async function makeWorkbook(snapshot, metrics) {
     sheet.views = [{ state: "frozen", ySplit: 1, xSplit: keyValue ? 0 : 1, showGridLines: false }];
     sheet.getRow(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
     sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF132B4A" } };
-    sheet.getRow(1).alignment = { vertical: "middle", wrapText: true };
+    sheet.getRow(1).alignment = { vertical: "middle", horizontal: "left", wrapText: true };
     sheet.pageSetup = { orientation: keyValue ? "portrait" : "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
     sheet.headerFooter.oddFooter = "&LRutaHogar&R&P / &N";
     if (!keyValue && rows.length > 1 && rows[0].length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: rows[0].length } };

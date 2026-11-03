@@ -22,6 +22,26 @@ For implementation, review and deployment. Standing instructions remain in `agen
 
 ## Goal
 
+### Post-merge export presentation and ledger follow-up
+
+The owner verified the deployed columns, RPCs, policy, indexes, constraints and
+grants against the export migration. The owner also confirmed that the ledger now
+records HU21 as `20261029120000` and HU22 as `20261103195023`. The rename is already
+in develop; do not recreate the export table or revert HU21's history entry.
+
+Recent exports use compact rows and a dedicated detail view grouped into content,
+projects/filters and generation data. Returning preserves export selections and
+filename; Escape and keyboard focus return to the history control. History uses
+the dialog body scroll rather than a nested scrolling panel. Spreadsheet cells
+and headers align left; workbooks contain no cell comments. Numeric, percentage
+and date formats remain native.
+
+Verification before integration: eight workbook/PDF tests passed. Browser fixtures
+covered all three export dialogs at 393 and 1280 px, zero-lead/empty-block guards,
+filename entry, history toggling, details, Escape and focus restoration without
+horizontal overflow. Requests were simulated; these checks do not prove hosted
+file delivery.
+
 An executive or real-estate administrator can download a selected lead's commercial dossier in PDF,
 export filtered leads to XLSX and export dashboard sections into separate workbook sheets. They
 choose the included information and filename. RutaHogar checks access before releasing data and
