@@ -31,3 +31,18 @@ Deno.test("HU30 fails closed on invalid public URL or allowed-origin configurati
   check(response.status === 503 && response.headers.get("Cache-Control") === "private, no-store","configuration leaked/fail open");
  }
 });
+
+Deno.test("both production origins work without allowing unrelated origins", async () => {
+ for (const base of ["https://rutahogar.cl", "https://www.rutahogar.cl"]) {
+  for (const origin of ["https://rutahogar.cl", "https://www.rutahogar.cl"]) {
+   for (const method of ["POST", "OPTIONS"]) {
+    const response = await protectParticipationRequest(new Request("https://edge.test", {method, headers:{Origin:origin}}),
+      async()=>new Response("ok"), base);
+    check(response.status === (method === "OPTIONS" ? 204 : 200), "canonical origin denied");
+    check(response.headers.get("Access-Control-Allow-Origin") === origin, "origin mismatch");
+   }
+  }
+  const denied = await protectParticipationRequest(new Request("https://edge.test",{headers:{Origin:"https://rutahogar.cl.evil.test"}}), async()=>new Response(), base);
+  check(denied.status === 403 && !denied.headers.has("Access-Control-Allow-Origin"), "untrusted origin allowed");
+ }
+});

@@ -13,6 +13,12 @@ export async function protectParticipationRequest(
     const base = new URL(publicUrl);
     if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) throw new Error();
     allowed = new Set([base.origin]);
+    // Both canonical production hostnames are controlled by RutaHogar.
+    // Other deployments still opt in to additional origins explicitly.
+    const productionOrigins = ["https://rutahogar.cl", "https://www.rutahogar.cl"];
+    if (productionOrigins.includes(base.origin)) {
+      for (const origin of productionOrigins) allowed.add(origin);
+    }
     for (const value of extraOrigins.split(",").map(value => value.trim()).filter(Boolean)) {
       const parsed = new URL(value);
       if (!["http:", "https:"].includes(parsed.protocol) || parsed.origin !== value) throw new Error();

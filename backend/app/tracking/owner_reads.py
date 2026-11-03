@@ -72,6 +72,14 @@ class OwnerReadService:
                 row["declared_relation"] = max(relations, key=lambda event: event["relation_revision"]).get("relation_value")
             yield row
 
+    def projection_evidence(self):
+        """Return persisted visible evaluation inputs when any history is hidden."""
+        rows = [row for row in self.repository.owner_evaluations(self.user_id)
+                if row.get("user_id", self.user_id) == self.user_id and row.get("id")]
+        visible = {row["id"]: row.get("financial_data") or {} for row in rows
+                   if can_show_snapshot(row.get("financial_data"), self.invitations, self.now, owner=True)}
+        return None if len(visible) == len(rows) else visible
+
     def tracking_view(self, value):
         snapshots = {row["id"]: row.get("financial_data") or {}
                      for row in self.repository.owner_evaluations(self.user_id) if row.get("user_id", self.user_id) == self.user_id}

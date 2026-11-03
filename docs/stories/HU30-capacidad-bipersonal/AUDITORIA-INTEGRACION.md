@@ -1,5 +1,7 @@
 # HU30 — Auditoría de integración y compatibilidad
 
+> **Estado actualizado para revisión de #170 (2026-11-03):** las ocho migraciones HU30 originales ya se aplicaron previamente en producción y `commercial-funnel-metrics` ya fue desplegada. **No volver a ejecutar esas ocho migraciones.** La correctiva `20261103120000_hu30_hu18_legacy_confirmation_guard.sql` aún no está aplicada en producción; tras el review requiere aplicación coordinada con el backend. Integrar [#171](https://github.com/Bolgunn/RutaHogar/pull/171) antes de cerrar #170. Al integrar, conservar `hu30_guard_profile_privileges()` de #171 (`cb713a86`) más cualquier cambio estrictamente necesario para HU30/HU28 posterior; nunca restaurar la definición antigua de #170. La correctiva legacy cambia sólo `hu30_guard_evaluation()` y no depende de modificar el guard de perfiles. El smoke post-merge debe cubrir backend y frontend, autenticación, evaluación, invitación/confirmación y métricas HU15.
+
 Fecha: 2026-10-25. Estado: diff preparado para revisión; despliegue escalonado sobre `main` antiguo BLOQUEADO. No certifica el ambiente hospedado.
 
 ## Referencias y alcance
@@ -119,7 +121,9 @@ NUEVA de producción: **CO_DEBTOR_ALLOWED_ORIGINS**, opcional y vacía por defec
 
 APP_PUBLIC_URL y variables Supabase/Resend/remitente/TTL/cron/frontend ya existían. No se cambiaron sus valores ni se solicita reconfigurarlas. RUTAHOGAR_ALLOWED_ORIGINS backend también preexistía. LOCAL_MAILPIT_URL/DENO_DEPLOYMENT_ID usados sólo por el adaptador eliminado no son requisitos nuevos de producción. Redirect de confirmación de Auth es configuración del servicio, no una variable nueva introducida por HU30.
 
-## Orden de integración y despliegue
+## Orden histórico de integración y despliegue (2026-10-25)
+
+> Esta secuencia conserva el análisis de aquella fecha; sus instrucciones de aplicar M1–M7 ya no están vigentes para producción. Rige el estado actualizado al inicio.
 
 La secuencia propuesta “migrar producción -> validar frontend antiguo intacto -> merge develop -> probar HU30 -> main” **no es aprobable con este diff**. La validación antigua fallaría por los contratos listados. No se aplica ni corrige automáticamente.
 
@@ -294,4 +298,4 @@ A	supabase/tests/hu30_staff_contact_isolation.sql
 A	supabase/tests/hu30_staff_contact_preflight.sql
 ```
 
-Los commits a subir serán únicamente `51b14af` y el commit documental de esta auditoría. No subir la rama backup ni usar push --all/--mirror. No se hizo push, PR, merge, migración remota, deploy ni cambio de secrets.
+En el momento de esta auditoría se consideraban únicamente `51b14af` y su commit documental. No subir la rama backup ni usar push --all/--mirror. Hasta la fecha de aquella auditoría no se había hecho push, PR, merge, migración remota, deploy ni cambio de secrets.

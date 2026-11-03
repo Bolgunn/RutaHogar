@@ -1,16 +1,18 @@
 # HU30 — cierre técnico y preparación para revisión
 
+> **Estado actualizado para revisión de #170 (2026-11-03):** las ocho migraciones HU30 originales ya se aplicaron previamente en producción y `commercial-funnel-metrics` ya fue desplegada. **No volver a ejecutar esas ocho migraciones.** La correctiva `20261103120000_hu30_hu18_legacy_confirmation_guard.sql` aún no está aplicada en producción; tras el review requiere aplicación coordinada con el backend. Integrar [#171](https://github.com/Bolgunn/RutaHogar/pull/171) antes de cerrar #170. Al integrar, conservar `hu30_guard_profile_privileges()` de #171 (`cb713a86`) más cualquier cambio estrictamente necesario para HU30/HU28 posterior; nunca restaurar la definición antigua de #170. La correctiva legacy cambia sólo `hu30_guard_evaluation()` y no depende de modificar el guard de perfiles. El smoke post-merge debe cubrir backend y frontend, autenticación, evaluación, invitación/confirmación y métricas HU15.
+
 > **Auditoría de integración 2026-10-25:** el diff productivo fue separado del tooling local. El despliegue de BD/Edge HU30 manteniendo el frontend/backend antiguo de `main` es **incompatible y está bloqueado**; el workflow existente también despliega Edge al integrar en `develop`. Ver [AUDITORIA-INTEGRACION.md](AUDITORIA-INTEGRACION.md) antes de merge o despliegue. El cierre local no certifica esa transición.
 
 Fecha: 2026-10-23. Branch: `feat/hu30-capacidad-bipersonal`. Base de develop: `14738e185c4d77794d4fa2c9e57dcbeffc47dcca`. Implementación revisada hasta `9d98b12` (cierre T9B).
 
-**Estado final: implementación, validación integrada local y cierre documental completos; lista para PR/revisión.** La revisión de otra persona, homologación hospedada y aplicación coordinada de migraciones siguen pendientes. Esta entrega no declara producción certificada ni autorización de despliegue. Sólo modifica documentación; no aplica SQL remoto, hace push, abre PR, merge ni avanza a HU23.
+**Estado de esta etapa histórica:** implementación y validación integrada local completas al cierre de octubre. El estado de producción y los pasos de integración vigentes se indican en la actualización superior.
 
 ## Lectura y consistencia
 
 Contrato: [PLAN](PLAN.md). Evidencia por etapa: [T3](T3-PERSISTENCIA.md), [T4A](T4A-ACCESO.md), [T4B](T4B-CONFIRMACION.md), [T5](T5-EVALUACION.md), [T6](T6-PROYECCIONES.md), [T7](T7-TITULAR.md), [T8](T8-STAFF.md), [T9A](T9A-REGRESION.md) y [T9B](T9B-HARDENING.md).
 
-Los informes conservan resultados y pendientes **al cierre de su etapa**. Para el estado actual prevalece esta consolidación: T9A resolvió el contexto de invitación entre pestañas y restauró los metadatos comerciales; T9B cerró el bypass de contactos/historial/reportes, redujo la deriva de ocho a seis diferencias y probó Deno nativo local. No se reinterpretan esas pruebas como validación del despliegue hospedado. Las restricciones de cada etapa en el PLAN son antecedentes de autorización, no pendientes actuales de implementación.
+Los informes conservan resultados y pendientes **al cierre de su etapa**. En esta etapa prevalecía esta consolidación: T9A resolvió el contexto de invitación entre pestañas y restauró los metadatos comerciales; T9B cerró el bypass de contactos/historial/reportes, redujo la deriva de ocho a seis diferencias y probó Deno nativo local. No se reinterpretan esas pruebas como validación del despliegue hospedado. Las restricciones de cada etapa en el PLAN son antecedentes de autorización, no pendientes actuales de implementación.
 
 ## Resumen funcional y arquitectura final
 
@@ -65,7 +67,7 @@ Se evalúan E1/E2, la ampliación acordada y §13 del PLAN; no se agrega E3 ni o
 | §13: no recalcular históricos, borrar snapshots o exponer fuera de plazo | Cumplido localmente / pendiente homologación | SQL, redacción de respuestas, cutoff y UI. |
 | §13: resolver/verificar RLS y caminos alternativos en API/base | Cumplido localmente / pendiente homologación | T3/T6/T9B, lecturas directas y cross-tenant reales locales. |
 | §13: registrar pruebas, límites y resolución del fallo previo | Cumplido en registro; Pendiente externo en corrección del fallo previo | Diagnóstico 2200 vs 2737.185 documentado, sin cambiar contrato para forzar verde. Las suites globales no están verdes. |
-| §13: documentar y aplicar migraciones mediante proceso del equipo | Cumplido en documentación; Pendiente externo en aplicación | Siete migraciones y rollbacks locales probados; ninguna aplicada remotamente. |
+| §13: documentar y aplicar migraciones mediante proceso del equipo | Ocho originales aplicadas previamente; correctiva legacy pendiente de review y aplicación coordinada | No repetir las originales; la correctiva dispone de rollback específico. |
 | §13: actualizar documentación y mantener disclaimers | Cumplido | PLAN, cierres por etapa y este inventario; resultado orientativo, sin aprobación crediticia. |
 | §13: obtener revisión de otra persona | Pendiente externo | Checklist siguiente; este cierre no la sustituye. |
 
@@ -73,7 +75,7 @@ T1, T2, T3, T4A, T4B, T5, T6, T7, T8, T9A y T9B están cerrados en su alcance lo
 
 ## Inventario exacto de migraciones y rollback
 
-Aplicar sobre la base histórica conocida, en este orden. Directorios: `supabase/migrations/` y `supabase/rollback/`. Cada nombre de rollback se lista completo; ninguno elimina evidencia para volver a HU18.
+Inventario histórico de M1–M7, ya aplicadas en producción; no repetir. M8 también fue aplicada posteriormente. Directorios: `supabase/migrations/` y `supabase/rollback/`. Cada nombre de rollback se lista completo; ninguno elimina evidencia para volver a HU18.
 
 | Orden | Migración | Rollback | Alcance |
 | --- | --- | --- | --- |
@@ -194,7 +196,7 @@ Validación de este cierre: contraste documental con contratos/rutas/funciones y
 
 Las seis diferencias residuales son exactamente los seis objetos listados en las tres filas de esquema anteriores; ninguna nueva definición HU30 divergente. T9B corrigió las otras dos iniciales (contactos e historial), que ya no son deuda abierta. La deriva externa impide un gate global verde; su efecto en el proyecto hospedado concreto debe determinarse mediante ledger/definiciones reales, no por inferencia de la fixture.
 
-**Bloqueadores de despliegue actuales:** falta revisión de otra persona; no están homologados configuración/redirects/orígenes, imports/runtime desplegados, correo real ni migraciones del destino. Además, integración debe decidir/resolver con responsables el gate de pruebas previas y los riesgos externos de esquema aplicables. No se ha demostrado un bug HU30 abierto que impida su revisión; estos pendientes sí impiden autorizar producción desde esta evidencia local.
+**Bloqueadores registrados en esta etapa histórica:** faltaba revisión de otra persona; no están homologados configuración/redirects/orígenes, imports/runtime desplegados, correo real ni migraciones del destino. Además, integración debe decidir/resolver con responsables el gate de pruebas previas y los riesgos externos de esquema aplicables. No se ha demostrado un bug HU30 abierto que impida su revisión; estos pendientes sí impiden autorizar producción desde esta evidencia local.
 
 ## Checklist de revisión por otra persona
 
@@ -209,15 +211,22 @@ Las seis diferencias residuales son exactamente los seis objetos listados en las
 - [ ] Contrastar cifras T9B y fallas previas, reproducir partes pertinentes en entorno aislado y registrar las limitaciones; no exigir modificar requisitos para verde.
 - [ ] Firmar revisión/observaciones, asignar pendientes externos de integración y aprobar secuencia coordinada/rollback antes de liberar.
 
-## Checklist de release autorizado posterior
+## Checklist histórico de release autorizado posterior
+
+> **Histórico, no ejecutar como instrucciones actuales:** las ocho migraciones ya fueron aplicadas. Rige la actualización del inicio.
 
 - [ ] Responsable identifica ambiente/proyecto/commit y registra aprobación de revisión; comprobar automatismos CI antes de integrar.
 - [ ] Revisar ledger y definiciones reales del destino; resolver o validar con responsables las seis divergencias y el gate externo que aplique. No reemplazar toda la base con schema.sql.
 - [ ] Preparar respaldo/recuperación, ventana controlada y los siete rollbacks; documentar qué lecturas/escrituras se deshabilitarían y recuperación hacia adelante.
 - [ ] Configurar frontend/backend/Edge/Auth/SMTP/Resend/orígenes y secretos sin exposición; verificar TTL y cron existente.
-- [ ] Aplicar siete migraciones en orden, registrar resultados; desplegar backend, Edge y frontend compatibles en el mismo corte, evitando clientes HU18 antiguos activos.
+- [ ] Tras review y coordinación, aplicar sólo la correctiva legacy pendiente; verificar backend y frontend compatibles sin reejecutar las ocho originales.
 - [ ] Homologar imports/runtime hospedados, HTTPS y redirects con contexto, registro/verificación/login/cambio de cuenta; probar entrega real a destinatario autorizado.
 - [ ] Smoke de confirmación e incorporación explícita, titular y staff; caso cross-tenant/contactos, corte histórico, errores privados y retry sin duplicados; comprobar evidencia anterior intacta.
 - [ ] Registrar versiones, resultados, responsables y decisión de habilitación/rollback; vigilar fallos sin logs sensibles.
 
-Hasta completar estas acciones, HU30 puede pasar a revisión/PR y conserva cierre técnico local; no se declara desplegada ni certificada para producción.
+Este checklist registra la etapa histórica; no sustituye el estado y las acciones actualizados al inicio.
+
+
+### Orígenes permitidos para las funciones HU30 y HU15
+
+Si `APP_PUBLIC_URL` usa `https://rutahogar.cl` o `https://www.rutahogar.cl`, ambas variantes HTTPS están permitidas explícitamente. Para otros orígenes autorizados, configurar `CO_DEBTOR_ALLOWED_ORIGINS` como lista de orígenes completos separados por comas, sin rutas ni comodines. El mismo control protege `co-debtor-consent` y `commercial-funnel-metrics`. Esta configuración no cambia secretos ni despliega funciones.

@@ -306,7 +306,7 @@ class TrackingService:
             complete_snapshot(row["snapshot"])
         return result
 
-    def projection(self, user_id, as_of=None):
+    def projection(self, user_id, as_of=None, *, visible_evaluations=None):
         from ..scoring_engine.rule_boundaries import RuleBoundaryProvider
         from .projection import project_progress
 
@@ -327,15 +327,38 @@ class TrackingService:
                 scoring_runner=lambda _state, _at: None,
                 rule_boundary_provider=RuleBoundaryProvider(),
             )
-        latest = deepcopy(view.get("latest_effective_snapshot") or {})
-        market_snapshot = self._stored_market_snapshot(view.get("active_line")) or self.market_snapshot_resolver()
-        baseline = view.get("baseline") or {}
-        target = baseline.get("target_project_snapshot")
+        active_line = view["active_line"]
+        audit_line = view["audit_line"]
+        if visible_evaluations is not None:
+            # Reconstructed lineage snapshots may inherit hidden co-debtor data.
+            # Use only immutable visible evaluation inputs, never patches/deltas.
+            evaluated = [row for row in active_line if row.get("evaluation_id")]
+            safe_line = []
+            for row in evaluated:
+                stored = visible_evaluations.get(row["evaluation_id"])
+                state = (stored or {}).get("input")
+                if isinstance(state, dict) and state:
+                    safe_line.append({"event_id": row["event_id"], "evaluation_id": row["evaluation_id"],
+                                      "effective_at": row["effective_at"], "snapshot": deepcopy(state), "provenance": {}})
+            # Never project an earlier visible state when the latest evaluation is hidden.
+            if not evaluated or not safe_line or evaluated[-1]["evaluation_id"] != safe_line[-1]["evaluation_id"]:
+                return {"status": "not_projectable", "cause": "co_debtor_history_hidden",
+                        "cutoff_at": cutoff.isoformat(), "variables": {}, "milestones": [],
+                        "target_compatible_at": None}
+            active_line, audit_line = safe_line, []
+            latest = deepcopy(safe_line[-1]["snapshot"])
+            target = valid_project_snapshot(latest)
+            market_snapshot = self.market_snapshot_resolver()
+        else:
+            latest = deepcopy(view.get("latest_effective_snapshot") or {})
+            market_snapshot = self._stored_market_snapshot(active_line) or self.market_snapshot_resolver()
+            baseline = view.get("baseline") or {}
+            target = baseline.get("target_project_snapshot")
         # Older frozen targets may not contain a catalogue price. Keep their
         # historical source as a compatibility fallback; a target price is an
         # existing scoring-input overlay, not a newly asserted universal rule.
         target_source = next((
-            row for row in view["audit_line"]
+            row for row in audit_line
             if row.get("recorded_complete_snapshot", {}).get("project_goal") == target
         ), None)
         target_with_price = frozen_target_scoring_snapshot(latest, target)
@@ -364,11 +387,11 @@ class TrackingService:
         current = runner(latest, cutoff)
         details = provenance(current) if current else {}
         return project_progress(
-            subject_user_id=user_id, as_of=cutoff, active_line=view["active_line"],
+            subject_user_id=user_id, as_of=cutoff, active_line=active_line,
             variables=variables,
             latest_effective_snapshot=latest, target_project=target,
             scoring_runner=runner, rule_boundary_provider=RuleBoundaryProvider(market_snapshot),
-            excluded_observation_ids=view.get("excluded_from_metrics", []),
+            excluded_observation_ids=[] if visible_evaluations is not None else view.get("excluded_from_metrics", []),
             projection_provenance={**details, "projection_scoring_version": details.get("scoring_version")},
         )
 

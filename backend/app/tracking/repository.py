@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 import httpx
 
 from .contracts import TrackingError
-from .co_debtor import select_confirmation, historical_visibility, FINANCIAL_FIELDS
+from .co_debtor import select_confirmation, historical_visibility, FINANCIAL_FIELDS, is_legacy_confirmation
 
 # Una conexión TLS nueva por llamada a Supabase costaba ~100-300 ms cada una.
 # httpx.Client es thread-safe y la instancia de la función se reutiliza entre requests.
@@ -74,10 +74,10 @@ class TrackingRepository:
             "select": (
                 "id,status,created_at,expires_at,participant_user_id,"
                 "co_debtor_confirmations!co_debtor_confirmations_invitation_id_fkey("
-                "id,revision_number,participant_user_id,accepted_relation_event_id,confirmed_at,ingreso_mensual_complementario,deuda_mensual_complementario,"
+                "id,revision_number,participant_user_id,accepted_relation_event_id,request_id,treatment_consent_version,treatment_consented_at,confirmed_at,ingreso_mensual_complementario,deuda_mensual_complementario,"
                 "tipo_contrato_complementario,continuidad_laboral_complementario,"
                 "morosidad_complementario),"
-                "co_debtor_consent_events!co_debtor_consent_events_invitation_id_fkey(id,event_type,relation_revision,relation_value,occurred_at)"
+                "co_debtor_consent_events!co_debtor_consent_events_invitation_id_fkey(id,event_type,actor_type,invitation_status,actor_user_id,confirmation_id,relation_revision,relation_value,occurred_at)"
             ),
             "order": "created_at.desc,id.desc",
         })
@@ -96,22 +96,26 @@ class TrackingRepository:
             relations = [event for event in invitation.get("co_debtor_consent_events", [])
                          if event.get("relation_revision") is not None]
             relation = max(relations, key=lambda event: event["relation_revision"], default={})
+            legacy = is_legacy_confirmation(invitation, confirmation)
             facts.update(participation_id=invitation.get("id"), revision_number=confirmation["revision_number"],
+                         legacy_confirmation=legacy,
                          relation_declaration_event_id=relation.get("id"), declared_relation=relation.get("relation_value"),
-                         exclude_complement=(not invitation.get("participant_user_id")
+                         exclude_complement=(invitation.get("status") != "confirmed" or (not legacy and (
+                           not invitation.get("participant_user_id")
                            or confirmation.get("participant_user_id") != invitation.get("participant_user_id")
                            or not relation
+                           or not historical_visibility(invitation)["visible"]
                            or historical_visibility(invitation)["closure_at"] is not None
                            or not any(row.get("accepted_relation_event_id") and
                                       row.get("participant_user_id") == invitation.get("participant_user_id")
-                                      for row in (invitation.get("co_debtor_confirmations") or []))))
+                                      for row in (invitation.get("co_debtor_confirmations") or []))))))
         if confirmation and "revision_number" in confirmation and not facts.get("exclude_complement"):
             facts["matches_evaluated"] = self.request("POST", "/rest/v1/rpc/hu30_matches_evaluated", payload={
                 "p_id": invitation["id"], "p_values": {field: confirmation.get(field) for field in FINANCIAL_FIELDS},
             })
         if confirmation and "revision_number" in confirmation:
             facts["verified_revision"] = bool(invitation.get("status") == "confirmed"
-                                              and not facts.get("exclude_complement"))
+                                              and not facts.get("exclude_complement") and not facts.get("legacy_confirmation"))
         if invitation.get("status") == "replaced":
             facts["exclude_complement"] = True
         return facts
@@ -175,10 +179,10 @@ class TrackingRepository:
             "select": (
                 "id,status,created_at,expires_at,participant_user_id,"
                 "co_debtor_confirmations!co_debtor_confirmations_invitation_id_fkey("
-                "id,revision_number,participant_user_id,accepted_relation_event_id,confirmed_at,ingreso_mensual_complementario,deuda_mensual_complementario,"
+                "id,revision_number,participant_user_id,accepted_relation_event_id,request_id,treatment_consent_version,treatment_consented_at,confirmed_at,ingreso_mensual_complementario,deuda_mensual_complementario,"
                 "tipo_contrato_complementario,continuidad_laboral_complementario,"
                 "morosidad_complementario),"
-                "co_debtor_consent_events!co_debtor_consent_events_invitation_id_fkey(id,event_type,relation_revision,relation_value,occurred_at)"
+                "co_debtor_consent_events!co_debtor_consent_events_invitation_id_fkey(id,event_type,actor_type,invitation_status,actor_user_id,confirmation_id,relation_revision,relation_value,occurred_at)"
             ),
             "order": "created_at.desc,id.desc",
         })

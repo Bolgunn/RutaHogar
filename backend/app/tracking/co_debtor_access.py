@@ -81,6 +81,16 @@ def can_show_snapshot(snapshot, invitations, now, *, owner=False):
     if not snapshot_has_complement(snapshot):
         return True
     ref = snapshot_reference(snapshot)
+    # Only an explicit owner-declared source without a confirmation reference is
+    # attributable to the titular. Unknown or confirmed sources still require
+    # the original invitation and its historical visibility window.
+    provenance = (snapshot or {}).get("provenance") or {}
+    consent = provenance.get("co_debtor_consent") or {}
+    summary = ((snapshot or {}).get("result") or {}).get("bipersonal_summary") or {}
+    if (owner and not ref and consent.get("complement_source") == "lead_declared"
+            and consent.get("complement_confirmation_status") == "not_confirmed"
+            and summary.get("evaluation_type") != "bipersonal_confirmed"):
+        return True
     matches = [invitation for invitation in invitations
                if ref and select_confirmation(invitation.get("co_debtor_confirmations"), ref)]
     if len(matches) == 1:

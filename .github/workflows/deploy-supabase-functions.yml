@@ -10,6 +10,12 @@ on:
       - Isaias
     paths:
       - "supabase/functions/**"
+      - "frontend/src/lib/commercial/funnelMetrics.js"
+      - "frontend/src/lib/commercial/overallStage.js"
+      - "frontend/src/lib/commercial/priorityActions.js"
+      - "frontend/src/lib/commercial/santiagoCalendar.js"
+      - "frontend/src/lib/commercial/stageRules.js"
+      - "frontend/src/lib/matching/leadProjectMatching.js"
       - ".github/workflows/deploy-supabase-functions.yml"
   workflow_dispatch:
 

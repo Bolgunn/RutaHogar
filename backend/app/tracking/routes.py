@@ -141,7 +141,15 @@ def confirm(goal_id: UUID, command: ConfirmationCommand, ctx=Depends(context)):
 @router.get("/projection")
 def projection(ctx=Depends(context), as_of: AwareDatetime | None = None):
     user_id, repo, service = ctx
-    return checked(lambda: owner_view(repo, user_id, service.projection(user_id, as_of)))
+    def read_projection():
+        if not callable(getattr(repo, "co_debtor_rows", None)):
+            return service.projection(user_id, as_of)
+        owner = OwnerReadService(repo, user_id)
+        evidence = owner.projection_evidence()
+        value = service.projection(user_id, as_of, visible_evaluations=evidence)
+        # In the filtered path ALG-13 has seen only visible immutable inputs.
+        return value if evidence is not None else owner.tracking_view(value)
+    return checked(read_projection)
 
 
 @router.get("/staff/evaluations")

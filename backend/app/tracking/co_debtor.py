@@ -69,3 +69,28 @@ def historical_visibility(invitation, now=None):
     until = first + timedelta(days=30)
     return {"visible": now < until, "closure_at": first.isoformat(),
             "historical_visible_until": until.isoformat()}
+
+
+def is_legacy_confirmation(invitation, confirmation):
+    """Recognize immutable HU18 evidence without associating a person."""
+    if not invitation or not confirmation or invitation.get("status") != "confirmed":
+        return False
+    confirmations = invitation.get("co_debtor_confirmations") or []
+    if isinstance(confirmations, dict):
+        confirmations = [confirmations]
+    events = invitation.get("co_debtor_consent_events") or []
+    if (len(confirmations) != 1 or confirmation.get("revision_number") != 1
+            or invitation.get("participant_user_id") is not None
+            or confirmation.get("participant_user_id") is not None
+            or confirmation.get("request_id") is not None
+            or confirmation.get("accepted_relation_event_id") is not None
+            or not confirmation.get("id") or not str(confirmation.get("treatment_consent_version") or "").strip()
+            or not confirmation.get("treatment_consented_at") or not confirmation.get("confirmed_at")
+            or not historical_visibility(invitation)["visible"]
+            or historical_visibility(invitation)["closure_at"] is not None):
+        return False
+    event_types = {event.get("event_type") for event in events
+                   if event.get("actor_type") == "co_debtor"
+                   and event.get("invitation_status") == "confirmed"
+                   and event.get("actor_user_id") is None and event.get("confirmation_id") is None}
+    return {"consent_granted", "confirmed"} <= event_types
