@@ -13,7 +13,7 @@ For implementation, review and deployment. Standing instructions remain in `agen
 - Read first: `backend/app/exports/routes.py`, `backend/app/exports/service.py`,
   `frontend/src/components/ExportAction.jsx`, `frontend/src/lib/exports/files.js`,
   `frontend/src/lib/commercial/funnelMetrics.js` and
-  `supabase/migrations/20261029120000_hu22_export_events.sql`.
+  `supabase/migrations/20261103195023_hu22_export_events.sql`.
 - Preserve scoring, matching, HU13 tracking, HU18 co-debtor privacy and existing commercial transitions.
 - Stop and report if an export requires weakening RLS, exposing a service credential in the browser,
   returning an unauthorized project or lead, or exporting raw evaluation snapshots.
@@ -55,7 +55,7 @@ snapshot after recording preparation; the browser generates the file with lazily
 | :- | :------- | :----- |
 | 1 | Touches scoring? Which ALG, numbers changed? | **No.** Export persisted evaluation results and existing ALG-18 outputs; do not recalculate score or compatibility. |
 | 2 | Needs RLS / multi-tenant scoping? | **Yes.** Derive actor from authentication and project scope from authenticated `commercial_funnel_facts()`. Private export RPCs are executable only by `service_role`. History queries additionally filter current actor, role and company. |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | **Yes.** `20261029120000_hu22_export_events.sql` creates audit storage and private RPCs. The deployment owner applies it through the project's migration procedure and verifies hosted permissions before release. |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | **Yes.** `20261103195023_hu22_export_events.sql` creates audit storage and private RPCs. The deployment owner applies it through the project's migration procedure and verifies hosted permissions before release. |
 | 4 | Changes the `POST /score` contract? | **No.** New `/exports` routes are independent; Vercel forwards them to the existing backend entry point. |
 | 5 | Consent / privacy impact? | **Yes, contained.** Reject an explicit refusal of lead consent, exclude co-debtor fields, omit joint plans where needed and restrict audit access. Search filters can contain personal text and remain protected metadata. |
 
