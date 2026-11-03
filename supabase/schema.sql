@@ -3556,6 +3556,168 @@ BEFORE INSERT ON public.evaluations
 FOR EACH ROW
 EXECUTE FUNCTION public.check_ml_fraud_on_insert();
 
+-- HU27: account identity and access guards.
+-- Preserve legacy duplicates; serialize/check only new or changed RUT assignments.
+create index profiles_hu27_normalized_rut_lookup
+on public.profiles ((nullif(regexp_replace(upper(rut), '[^0-9K]', '', 'g'), '')))
+where nullif(regexp_replace(upper(rut), '[^0-9K]', '', 'g'), '') is not null;
+
+create or replace function public.hu27_guard_profile_rut()
+returns trigger language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_rut text := nullif(regexp_replace(upper(new.rut), '[^0-9K]', '', 'g'), '');
+begin
+  if v_rut is null then return new; end if;
+  if tg_op = 'UPDATE' and v_rut is not distinct from nullif(regexp_replace(upper(old.rut), '[^0-9K]', '', 'g'), '') then return new; end if;
+  if tg_op = 'INSERT' and exists (select 1 from public.profiles p where p.id=new.id
+    and nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut) then return new; end if;
+  -- Trigger-only definer lookup is necessary to detect conflicts hidden by profile RLS.
+  perform pg_advisory_xact_lock(hashtextextended('hu27-rut:' || v_rut, 0));
+  if exists (select 1 from public.profiles p where p.id <> new.id
+    and nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut) then
+    raise exception using errcode='23505', message='No se pudo guardar el perfil. Revisa tus datos o recupera tu cuenta existente.';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.hu27_guard_profile_rut() from public, anon, authenticated;
+create trigger hu27_profile_rut_guard before insert or update of rut on public.profiles
+for each row execute function public.hu27_guard_profile_rut();
+
+-- Opt in through Authentication > Hooks after deploying and testing this function.
+create or replace function public.hu27_access_token_hook(event jsonb)
+returns jsonb language plpgsql stable security invoker
+set search_path = pg_catalog, public, auth
+as $$
+declare
+  v_user uuid := (event->>'user_id')::uuid;
+  v_role text;
+  v_email text;
+  v_oauth boolean;
+begin
+  select role into v_role from public.profiles where id = v_user;
+  v_oauth := event->>'authentication_method' = 'oauth'
+    or exists (select 1 from jsonb_array_elements(coalesce(event->'claims'->'amr', '[]'::jsonb)) a where a->>'method' = 'oauth');
+  if v_oauth and coalesce(v_role, 'usuario') <> 'usuario' then
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Esta cuenta debe ingresar con correo y contraseña.'));
+  end if;
+  select lower(email) into v_email from auth.users where id = v_user;
+  if exists (select 1 from auth.identities i where i.user_id = v_user and i.provider = 'google'
+    and (i.identity_data->>'email' is null or lower(i.identity_data->>'email') is distinct from v_email)) then
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Google debe utilizar el mismo correo de la cuenta.'));
+  end if;
+  return jsonb_build_object('claims', event->'claims');
+end;
+$$;
+revoke all on function public.hu27_access_token_hook(jsonb) from public, anon, authenticated;
+grant usage on schema public to supabase_auth_admin;
+grant select (id, role) on public.profiles to supabase_auth_admin;
+create policy "hu27_auth_hook_profile_read" on public.profiles for select to supabase_auth_admin using (true);
+grant execute on function public.hu27_access_token_hook(jsonb) to supabase_auth_admin;
+comment on function public.hu27_access_token_hook(jsonb) is 'HU27: trusted role and same-email Google scope. Enable as Custom Access Token hook; never expose as a browser RPC.';
+
+-- HU27: Before User Created RUT guard
+
+-- Called only by Supabase Auth before inserting a new user. Existing login,
+-- identity linking and the profile-level duplicate guard remain unchanged.
+create function public.hu27_before_user_created(event jsonb)
+returns jsonb language plpgsql stable security invoker
+set search_path = pg_catalog, public
+as $$
+declare
+  v_provider text := event->'user'->'app_metadata'->>'provider';
+  v_rut text := nullif(regexp_replace(upper(event->'user'->'user_metadata'->>'rut'), '[^0-9K]', '', 'g'), '');
+begin
+  -- Google supplies no RUT; collect it in the existing profile completion flow.
+  -- Missing RUT is also valid for existing staff invitation/provisioning flows.
+  if v_provider is distinct from 'email' or v_rut is null then return '{}'::jsonb; end if;
+  if exists (
+    select 1 from public.profiles p
+    where nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut
+  ) then
+    return jsonb_build_object('error', jsonb_build_object(
+      'http_code', 400,
+      'message', 'No se pudo crear la cuenta con estos datos. Revisa el RUT o recupera el acceso a tu cuenta.'
+    ));
+  end if;
+  return '{}'::jsonb;
+end;
+$$;
+
+revoke all on function public.hu27_before_user_created(jsonb) from public, anon, authenticated;
+grant execute on function public.hu27_before_user_created(jsonb) to supabase_auth_admin;
+-- The HU27 access-guard migration already grants schema usage and adds the
+-- Auth-only SELECT policy. Add just the column required by this lookup.
+grant select (rut) on public.profiles to supabase_auth_admin;
+comment on function public.hu27_before_user_created(jsonb) is 'HU27: enable as Before User Created / Postgres hook. Rejects email registration with a RUT already in profiles; Google remains supported. Not a reservation or a solution for concurrent pending signups.';
+
+
+-- Authorized export metadata and service-only RPCs
+create table public.export_events (
+  id uuid primary key,
+  actor_id uuid references public.profiles(id) on delete set null,
+  actor_role text not null check (actor_role in ('ejecutivo','admin','admin_inmobiliario')),
+  inmobiliaria_id uuid not null references public.inmobiliarias(id),
+  kind text not null check (kind in ('dossier','leads','metrics')),
+  format text not null check (format in ('pdf','xlsx')),
+  blocks jsonb not null,
+  evaluation_ids jsonb not null default '[]',
+  project_id uuid,
+  filters jsonb not null default '{}',
+  source_at text,
+  generated_at timestamptz not null default now(),
+  record_count integer check (record_count >= 0),
+  status text not null check (status in ('prepared','delivery_requested')),
+  sha256 text check (sha256 is null or sha256 ~ '^[a-f0-9]{64}$')
+);
+create index export_events_tenant_date on public.export_events(inmobiliaria_id, generated_at desc);
+alter table public.export_events enable row level security;
+revoke all on public.export_events from public, anon, authenticated;
+grant select on public.export_events to authenticated;
+grant all on public.export_events to service_role;
+create policy "export_events_read" on public.export_events for select to authenticated using (
+  inmobiliaria_id = public.get_my_inmobiliaria()
+  and (actor_id = auth.uid() and public.get_my_role() = 'ejecutivo'
+       or public.get_my_role() in ('admin','admin_inmobiliario'))
+);
+comment on table public.export_events is 'HU22 metadata only. delivery_requested means delivery to browser was requested; not proof of a saved file. SHA-256 is reported by the client, not a server signature.';
+create or replace function public.hu22_record_export(p_record jsonb) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare v_row public.export_events;
+begin
+  v_row := jsonb_populate_record(null::public.export_events, p_record);
+  insert into public.export_events select (v_row).*;
+  return jsonb_build_object('id', v_row.id);
+end;
+$$;
+create or replace function public.hu22_export_delivery(p_id uuid, p_sha256 text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+begin
+  if exists(select 1 from public.export_events where id=p_id and sha256 is not null and sha256<>p_sha256) then
+    raise exception 'idempotency_conflict';
+  end if;
+  update public.export_events set status='delivery_requested', sha256=p_sha256 where id=p_id;
+  return jsonb_build_object('id', p_id);
+end;
+$$;
+revoke all on function public.hu22_record_export(jsonb), public.hu22_export_delivery(uuid,text) from public, anon, authenticated;
+grant execute on function public.hu22_record_export(jsonb), public.hu22_export_delivery(uuid,text) to service_role;
+-- Private batch read. p_projects is derived from the caller's authenticated
+-- commercial_funnel_facts() response by the backend, never from request JSON.
+create or replace function public.hu22_export_rows(p_evaluations uuid[], p_projects uuid[]) returns jsonb
+language sql stable security definer set search_path=public as $$
+  select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from (
+    select e.id,e.user_id,e.created_at,e.score,e.classification,e.email,e.financial_data,
+           p.full_name,p.phone,
+           (select jsonb_agg(pr) from unnest(p_projects) pr where public.lead_belongs_to_proyecto(e.user_id,pr)) as authorized_projects
+    from public.evaluations e join public.profiles p on p.id=e.user_id
+    where e.id=any(p_evaluations)
+      and exists(select 1 from unnest(p_projects) pr where public.lead_belongs_to_proyecto(e.user_id,pr))
+  ) r;
+$$;
+revoke all on function public.hu22_export_rows(uuid[],uuid[]) from public,anon,authenticated;
+grant execute on function public.hu22_export_rows(uuid[],uuid[]) to service_role;
 -- HU23 T1. No bucket, OCR, scheduler or historical evaluation changes.
 begin;
 
@@ -6322,6 +6484,195 @@ begin
   return new;
 end;
 $$;
+
+-- =============================================================
+-- HU24 — Asistente virtual y sistema de tickets para usuarios
+-- Tabla support_tickets, RLS y funciones RPC para gestión de tickets
+-- =============================================================
+
+create table if not exists public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  user_name text null,
+  user_email text null,
+  role text not null,
+  inmobiliaria_id uuid null,
+  subject text not null,
+  message text not null,
+  transcript jsonb not null default '[]'::jsonb,
+  screen_id text null,
+  status text not null default 'abierto' check (status in ('abierto', 'en_proceso', 'en_curso', 'resuelto', 'cerrado')),
+  admin_reply text null,
+  replied_at timestamptz null,
+  replied_by uuid null references auth.users(id) on delete set null,
+  status_updated_at timestamptz null,
+  status_updated_by uuid null references auth.users(id) on delete set null,
+  notified_at timestamptz null,
+  notification_error text null,
+  user_feedback text null check (user_feedback in ('helpful', 'unhelpful')),
+  user_feedback_at timestamptz null,
+  thread jsonb not null default '[]'::jsonb,
+  client_request_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint support_tickets_user_client_request_key unique (user_id, client_request_id)
+);
+
+-- Garantizar reglas ON DELETE en caso de que la tabla ya existiera previamente
+alter table public.support_tickets
+  drop constraint if exists support_tickets_user_id_fkey,
+  add constraint support_tickets_user_id_fkey
+    foreign key (user_id) references auth.users(id) on delete cascade;
+
+alter table public.support_tickets
+  drop constraint if exists support_tickets_replied_by_fkey,
+  add constraint support_tickets_replied_by_fkey
+    foreign key (replied_by) references auth.users(id) on delete set null;
+
+alter table public.support_tickets
+  drop constraint if exists support_tickets_status_updated_by_fkey,
+  add constraint support_tickets_status_updated_by_fkey
+    foreign key (status_updated_by) references auth.users(id) on delete set null;
+
+create index if not exists idx_support_tickets_user_id on public.support_tickets(user_id);
+create index if not exists idx_support_tickets_status on public.support_tickets(status);
+create index if not exists idx_support_tickets_created_at on public.support_tickets(created_at desc);
+
+-- RLS: Cada usuario lee solo sus tickets; el admin global lee todos.
+-- La creación se realiza exclusivamente vía backend (service_role) para garantizar
+-- redacción de datos personales (PII) e integridad de estado inicial.
+alter table public.support_tickets enable row level security;
+
+drop policy if exists "support_tickets_select" on public.support_tickets;
+create policy "support_tickets_select"
+  on public.support_tickets
+  for select
+  using (
+    user_id = auth.uid() or public.is_global_admin()
+  );
+
+drop policy if exists "support_tickets_insert" on public.support_tickets;
+
+-- Restricción estricta: ninguna inserción, actualización o eliminación directa por clientes
+revoke insert, update, delete on public.support_tickets from public, authenticated, anon;
+grant select on public.support_tickets to authenticated;
+
+-- Eliminar sobrecargas de 2 parámetros que generan ambigüedad PGRST203 en PostgREST
+drop function if exists public.update_support_ticket_status(uuid, text);
+drop function if exists public.submit_ticket_user_feedback(uuid, text);
+
+-- RPC SECURITY DEFINER para actualizar el estado del ticket y registrar respuesta (solo admin global)
+create or replace function public.update_support_ticket_status(
+  p_ticket_id uuid,
+  p_status text,
+  p_reply text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ticket public.support_tickets%rowtype;
+begin
+  if auth.uid() is null or not public.is_global_admin() then
+    raise exception 'Acceso denegado: solo el administrador global puede modificar tickets.';
+  end if;
+
+  if p_status not in ('abierto', 'en_proceso', 'en_curso', 'resuelto', 'cerrado') then
+    raise exception 'Estado de ticket invalido: %', p_status;
+  end if;
+
+  update public.support_tickets
+  set status = case when p_status = 'en_curso' then 'en_proceso' else p_status end,
+      status_updated_at = now(),
+      status_updated_by = auth.uid(),
+      admin_reply = coalesce(nullif(trim(p_reply), ''), admin_reply),
+      replied_at = case when p_reply is not null and trim(p_reply) <> '' then now() else replied_at end,
+      replied_by = case when p_reply is not null and trim(p_reply) <> '' then auth.uid() else replied_by end,
+      thread = case
+        when p_reply is not null and trim(p_reply) <> '' then
+          coalesce(thread, '[]'::jsonb) || jsonb_build_array(jsonb_build_object('role', 'admin', 'content', trim(p_reply), 'created_at', now()))
+        else thread
+      end
+  where id = p_ticket_id
+  returning * into v_ticket;
+
+  if not found then
+    raise exception 'Ticket no encontrado: %', p_ticket_id;
+  end if;
+
+  return to_jsonb(v_ticket);
+end;
+$$;
+
+-- RPC SECURITY DEFINER para que el usuario confirme si la respuesta resolvió su duda o envíe réplica
+create or replace function public.submit_ticket_user_feedback(
+  p_ticket_id uuid,
+  p_feedback text,
+  p_user_reply text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ticket public.support_tickets%rowtype;
+  v_new_status text;
+  v_turn jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'Acceso denegado: debes iniciar sesion para enviar feedback.';
+  end if;
+
+  select * into v_ticket from public.support_tickets where id = p_ticket_id;
+  if not found then
+    raise exception 'Ticket no encontrado: %', p_ticket_id;
+  end if;
+
+  if v_ticket.user_id is distinct from auth.uid() and not public.is_global_admin() then
+    raise exception 'Acceso denegado: solo el creador del ticket puede enviar feedback.';
+  end if;
+
+  if p_feedback not in ('helpful', 'unhelpful') then
+    raise exception 'Feedback invalido: %', p_feedback;
+  end if;
+
+  v_new_status := case when p_feedback = 'helpful' then 'resuelto' else 'en_proceso' end;
+
+  if p_user_reply is not null and trim(p_user_reply) <> '' then
+    v_turn := jsonb_build_object(
+      'role', 'user',
+      'content', left(trim(p_user_reply), 2000),
+      'created_at', now()
+    );
+  end if;
+
+  update public.support_tickets
+  set status = v_new_status,
+      status_updated_at = now(),
+      user_feedback = p_feedback,
+      user_feedback_at = now(),
+      thread = case
+        when v_turn is not null then coalesce(thread, '[]'::jsonb) || jsonb_build_array(v_turn)
+        else thread
+      end
+  where id = p_ticket_id
+  returning * into v_ticket;
+
+  return jsonb_build_object(
+    'id', v_ticket.id,
+    'status', v_ticket.status,
+    'user_feedback', v_ticket.user_feedback,
+    'user_feedback_at', v_ticket.user_feedback_at,
+    'thread', v_ticket.thread
+  );
+end;
+$$;
+
+-- Las escrituras pasan por el backend: ningun cliente ejecuta estas RPC directamente.
+revoke all on function public.update_support_ticket_status(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.submit_ticket_user_feedback(uuid, text, text) from public, anon, authenticated;
 
 -- HU 28: gestión de equipo (20261102120000_hu28_gestion_equipo.sql)
 

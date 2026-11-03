@@ -73,7 +73,7 @@ export async function trackingRequest(path = "", body, { timeoutMs, expectedUser
 
 export const getTracking = (options) => trackingRequest("", undefined, options);
 export const getProjection = (options) => trackingRequest("/projection", undefined, options);
-export const appendTrackingEvent = (command) => trackingRequest("/events", command);
+export const appendTrackingEvent = (command, options) => trackingRequest("/events", command, options);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
 export const updateScoreWithConfirmedCoDebtor = (options) =>

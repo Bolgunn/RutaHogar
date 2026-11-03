@@ -37,7 +37,7 @@ import { ensureUserProfile } from "../profileService";
 vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {}, removeItem: () => {} });
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
-const staffMetadataUser = { id: USER_ID, email: "lead@example.invalid", user_metadata: { role: "admin" } };
+const staffMetadataUser = { id: USER_ID, email: "lead@example.invalid", email_confirmed_at: "2026-11-01T00:00:00Z", user_metadata: { role: "admin" } };
 
 describe("user_metadata.role no decide el rol", () => {
   beforeEach(() => {
@@ -72,6 +72,7 @@ describe("user_metadata.role no decide el rol", () => {
     expect(mocks.update.mock.calls[0][0].role).toBe("ejecutivo");
   });
 
+  // HU27: sin perfil legible no hay sesión, así que tampoco un rol tomado de la metadata.
   it("si el perfil no se puede leer, la sesión local no asume el rol de la metadata", async () => {
     mocks.signInWithPassword.mockResolvedValue({
       data: { user: staffMetadataUser, session: { access_token: "token" } },
@@ -80,8 +81,6 @@ describe("user_metadata.role no decide el rol", () => {
     mocks.maybeSingle.mockRejectedValue(new Error("sin red"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const { profile } = await signIn({ email: staffMetadataUser.email, password: "x" });
-
-    expect(profile.role).toBe("usuario");
+    await expect(signIn({ email: staffMetadataUser.email, password: "x" })).rejects.toThrow("No pudimos cargar el perfil");
   });
 });

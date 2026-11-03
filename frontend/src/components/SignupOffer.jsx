@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import DataConsent from "./DataConsent";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
 import { formatRut, validateRut } from "../utils/rut";
+import { PASSWORD_HINT, validNewPassword } from "../lib/authPolicy";
 
 function getPasswordStrength(password) {
   const checks = [
@@ -25,7 +26,7 @@ const scoreCopy = {
   Bajo: "Hay espacio para mejorar. Crea tu cuenta para recibir un plan paso a paso que te acerque a tu objetivo inmobiliario.",
 };
 
-export default function SignupOffer({ result, anonBirthDate, onSignup, onContinueWithout, loading, error }) {
+export default function SignupOffer({ result, anonBirthDate, onSignup, onContinueWithout, loading, error, notice }) {
   const [form, setForm] = useState({ nombre: "", apellido_paterno: "", apellido_materno: "", rut: "", email: "", phone: "", password: "" });
   const [consentData, setConsentData] = useState(null);
   const [showConsent, setShowConsent] = useState(false);
@@ -64,8 +65,8 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
       setFormError(PHONE_ERROR_MESSAGE);
       return;
     }
-    if (!form.password || form.password.length < 6) {
-      setFormError("La contraseña debe tener al menos 6 caracteres.");
+    if (!validNewPassword(form.password)) {
+      setFormError(PASSWORD_HINT);
       return;
     }
     if (!consentData) {
@@ -226,7 +227,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
             name="password"
             value={form.password}
             onChange={handleChange}
-            placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             autoComplete="new-password"
           />
         </label>
@@ -268,6 +269,7 @@ export default function SignupOffer({ result, anonBirthDate, onSignup, onContinu
         {(formError || error) && (
           <div className="error-message" role="alert">{formError || error}</div>
         )}
+        {notice && <p role="status">{notice}</p>}
 
         <button type="submit" disabled={loading || !consentData}>
           {loading ? "Creando cuenta..." : "Crear cuenta y guardar resultado"}

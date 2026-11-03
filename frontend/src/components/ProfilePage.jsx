@@ -1,3 +1,4 @@
+import AccountAccess from "./AccountAccess";
 import React, { useEffect, useMemo, useState } from "react";
 import { comunasMvp } from "../constants/comunas";
 import { formatFormValue, plazoLabels, propertyLabels } from "../constants";
@@ -1205,6 +1206,7 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
         </div>
       )}
 
+      <AccountAccess profile={profile} />
     </section>
   );
 }

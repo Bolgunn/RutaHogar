@@ -1,3 +1,4 @@
+import AccountAccess from "./AccountAccess";
 import React, { useEffect, useMemo, useState } from "react";
 import { getProjects } from "../services/projectService";
 import "./executive-profile.css";
@@ -51,6 +52,7 @@ export default function ExecutiveProfile({ profile, inmobiliariaId, onNavigate }
           <div className="executive-profile-actions"><button type="button" className="secondary-button compact-button" onClick={() => onNavigate("projects")}>Ver mis proyectos <i className="ti ti-arrow-right" aria-hidden="true" /></button></div>
         </section>
       </div>
+      <AccountAccess profile={profile} />
     </section>
   );
 }
