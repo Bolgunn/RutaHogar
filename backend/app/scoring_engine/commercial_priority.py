@@ -163,11 +163,20 @@ def engine_action_key(detail) -> str:
 
 
 def evaluation_parts(row: dict) -> tuple[dict, dict]:
-    """(result, input) of a stored evaluation row, tolerating the legacy snapshot shapes."""
-    financial_data = (row or {}).get("financial_data") or {}
+    """(result, input) of a stored evaluation row, with the fallbacks normalizeEvaluation applies."""
+    row = row or {}
+    financial_data = row.get("financial_data") or {}
     result = financial_data.get("result") or financial_data.get("result_snapshot") or {}
-    data = financial_data.get("input") or financial_data.get("input_snapshot") or {}
-    return result, data
+    # Rows saved before the input snapshot stored the form flat in financial_data.
+    data = financial_data.get("input") or financial_data.get("input_snapshot") or financial_data
+    # Older rows kept score and classification only in their own columns.
+    for key in ("score", "classification"):
+        if result.get(key) is None and row.get(key) is not None:
+            result = {**result, key: row[key]}
+    # The onboarding answers captured with the evaluation win over the form, as in the UI.
+    snapshot = data.get("onboarding_snapshot") or {}
+    signals = {key: snapshot[key] for key in ("plazo_compra", "tiene_propiedad_vista") if key in snapshot}
+    return result, {**data, **signals} if signals else data
 
 
 def configured_priority_for_evaluation(row: dict, criterios: dict | None, config_version: int | None) -> dict:
