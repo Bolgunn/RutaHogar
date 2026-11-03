@@ -1032,6 +1032,10 @@ export default function App() {
     }
     return () => { active = false; };
   }, [userId, profile?.role, evaluations, trackingRevision]);
+  const refreshStaffEvaluations = async () => {
+    try { setEvaluations(await getEvaluations(userId, profile?.role)); }
+    catch { setDataError("La configuración se guardó, pero no se pudo actualizar la bandeja de leads."); }
+  };
   const refreshTracking = async () => {
     setTrackingRevision((revision) => revision + 1);
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
@@ -2652,7 +2656,7 @@ export default function App() {
       ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
       ) : page === "admin-priorizacion" && canViewStaffPage(page, profile.role, inmobiliariaId) ? (
-        <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} />
+        <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} onSaved={refreshStaffEvaluations} />
       ) : page === "admin-priorizacion" && isAdminRole(profile.role) && !tenantResolved ? (
         <section className="section-block"><p>Cargando configuración comercial…</p></section>
       ) : (
