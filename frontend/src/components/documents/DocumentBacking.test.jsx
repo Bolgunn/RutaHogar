@@ -32,9 +32,9 @@ it('el usuario legacy tiene el panel sin habilitar carga/score antes de precalif
   expect(html).not.toContain('Actualizar score con datos validados');
 });
 
-import LeadDetailModal from '../LeadDetailModal';
+import { LeadDetailView } from '../LeadDetailModal';
 it('integra el panel vigente en el detalle comercial sin mezclarlo con valores históricos',()=>{
-  const html=renderToStaticMarkup(<LeadDetailModal onClose={()=>{}} role="ejecutivo" lead={{
+  const html=renderToStaticMarkup(<LeadDetailView onClose={()=>{}} role="ejecutivo" lead={{
     id:'11111111-1111-4111-8111-111111111111',user_id:'22222222-2222-4222-8222-222222222222',
     full_name:'Lead sintético',created_at:'2026-10-25T12:00:00Z',
     input:{ingreso_mensual:1000000,ahorro_disponible:2000000,tipo_contrato:'indefinido',continuidad_laboral:'mas_3_anios'},

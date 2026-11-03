@@ -53,7 +53,7 @@ def test_bootstrap_has_the_same_grant_and_keeps_evaluations_rls_enabled():
 def test_evaluations_policies_keep_authenticated_access_row_scoped():
     sql = normalize(SCHEMA.read_text(encoding="utf-8"))
     final_select_policy = sql.rsplit('create policy "evaluations select own"', 1)[1].split(";", 1)[0]
-    assert "on public.evaluations for select to authenticated using (auth.uid() = user_id)" in final_select_policy
+    assert "on public.evaluations for select to authenticated using (auth.uid() = user_id and not public.hu30_has_complement(financial_data))" in final_select_policy
     assert "get_my_role" not in final_select_policy
     assert (
         'create policy "evaluations insert own" on public.evaluations for insert '
@@ -100,7 +100,7 @@ def test_hu18_cleanup_rollback_restores_only_the_removed_policy():
 
 def test_final_hu18_schema_denies_direct_staff_history_and_event_reads():
     sql = normalize(SCHEMA.read_text(encoding="utf-8"))
-    final_hu18_state = sql.rsplit("-- hu18 step 8:", 1)[1]
+    final_hu18_state = sql.rsplit("-- hu18 step 8:", 1)[1].split("-- hu30 t3", 1)[0]
 
     assert 'drop policy if exists "evaluations select sales" on public.evaluations;' in final_hu18_state
     assert 'drop policy if exists "scoring history select staff" on public.scoring_history;' in final_hu18_state

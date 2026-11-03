@@ -1,6 +1,8 @@
-# HU 23 - Configuración de parámetros de scoring
+# ~~HU 23~~ (retirada) - Configuración de parámetros de scoring
 
-> **🗓 Planificada - Sprint 3.** Permite al administrador inmobiliario ver y modificar los parámetros del motor de scoring para adaptar los leads que ven sus ejecutivos.
+> **⛔ Reemplazada.** Esta historia ya no está en el backlog: el tablero del Sprint 3 (octubre 2026) renumeró el sprint y su alcance pasó a [[HU21-configuracion-comercial-priorizacion|HU 21]]. Se conserva como antecedente; el número que tenía ahora pertenece a otra historia.
+
+> **Descripción original.** Permite al administrador inmobiliario ver y modificar los parámetros del motor de scoring para adaptar los leads que ven sus ejecutivos.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Administrador inmobiliario |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

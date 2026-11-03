@@ -1,6 +1,8 @@
-# HU 28 - Estimador de gastos iniciales de compra
+# ~~HU 28~~ (retirada) - Estimador de gastos iniciales de compra
 
-> **🗓 Planificada - Sprint 3.** Estima los gastos iniciales asociados a la compra de una vivienda más allá del pie, separados claramente de este.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Estima los gastos iniciales asociados a la compra de una vivienda más allá del pie, separados claramente de este.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

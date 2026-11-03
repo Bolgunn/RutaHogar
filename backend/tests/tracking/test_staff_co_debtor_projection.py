@@ -80,11 +80,12 @@ def test_authorized_executive_receives_only_declared_provenance_while_pending():
 
     detail = service(repository).lead_detail("executive-token", LEAD_ID)
 
-    assert detail["co_debtor"] == {"status": "pending", "source": "lead_declared"}
+    assert detail["co_debtor"]["status"] == "pending"
+    assert detail["co_debtor"]["evaluation_type"] == "unverifiable_origin"
     assert not any(field in str(detail["co_debtor"]) for field in CO_DEBTOR_CONFIRMED_FIELDS)
 
 
-def test_confirmed_projection_exposes_exactly_five_current_values_and_lead_relation():
+def test_confirmed_state_without_used_reference_does_not_expose_current_values():
     repository = StaffRepository()
     repository.invitation = {"status": "confirmed", "co_debtor_confirmations": [confirmed_values()]}
 
@@ -92,10 +93,10 @@ def test_confirmed_projection_exposes_exactly_five_current_values_and_lead_relat
 
     co_debtor = detail["co_debtor"]
     assert co_debtor["status"] == "confirmed"
-    assert co_debtor["source"] == "co_debtor_confirmed"
-    assert set(co_debtor["confirmed"]) == set(CO_DEBTOR_CONFIRMED_FIELDS)
-    assert co_debtor["confirmed"] == confirmed_values()
-    assert co_debtor["relation"] == {"value": "pareja_conviviente", "source": "lead_declared"}
+    assert co_debtor["source"] == "unverifiable_origin"
+    assert "confirmed" not in co_debtor
+    assert co_debtor["used_revision"] is None
+    assert co_debtor["co_debtor"] is None
     assert "token" not in str(co_debtor).lower()
     assert "digest" not in str(co_debtor).lower()
 
@@ -107,7 +108,8 @@ def test_revocation_keeps_history_but_redacts_all_co_debtor_values_everywhere():
     detail = service(repository).lead_detail("executive-token", LEAD_ID)
     list_projection = service(repository).evaluations("executive-token")
 
-    assert detail["co_debtor"] == {"status": "revoked", "source": "excluded_after_revocation"}
+    assert detail["co_debtor"]["status"] == "revoked"
+    assert detail["co_debtor"]["visibility"] == "hidden"
     assert detail["history"][0]["score"] == 71
     serialized = str({"list": list_projection, "history": detail["history"], "co_debtor": detail["co_debtor"]})
     for field in (*CO_DEBTOR_CONFIRMED_FIELDS, "relacion_complementario"):
@@ -122,7 +124,8 @@ def test_decline_excludes_all_co_debtor_values_from_the_staff_projection():
 
     detail = service(repository).lead_detail("executive-token", LEAD_ID)
 
-    assert detail["co_debtor"] == {"status": "declined", "source": "excluded_after_decline"}
+    assert detail["co_debtor"]["status"] == "declined"
+    assert detail["co_debtor"]["visibility"] == "hidden"
     assert "confirmed" not in detail["co_debtor"]
     serialized = str(detail)
     for field in (*CO_DEBTOR_CONFIRMED_FIELDS, "relacion_complementario"):
@@ -136,12 +139,14 @@ def test_refresh_after_confirmed_to_revoked_transition_removes_the_values():
     repository.invitation = {"status": "confirmed", "co_debtor_confirmations": [confirmed_values()]}
     projection = service(repository)
 
-    assert projection.lead_detail("executive-token", LEAD_ID)["co_debtor"]["confirmed"] == confirmed_values()
+    assert projection.lead_detail("executive-token", LEAD_ID)["co_debtor"]["status"] == "confirmed"
+    assert "confirmed" not in projection.lead_detail("executive-token", LEAD_ID)["co_debtor"]
 
     repository.invitation = {"status": "revoked", "co_debtor_confirmations": [confirmed_values()]}
     refreshed = projection.lead_detail("executive-token", LEAD_ID)
 
-    assert refreshed["co_debtor"] == {"status": "revoked", "source": "excluded_after_revocation"}
+    assert refreshed["co_debtor"]["status"] == "revoked"
+    assert refreshed["co_debtor"]["visibility"] == "hidden"
     assert "1400000" not in str(refreshed)
 
 

@@ -27,6 +27,8 @@ function preservePlanChoice(evaluation, evaluations) {
 }
 
 export function currentTrackingEvaluation(trackingState, evaluations = [], userId = null) {
+  evaluations = evaluations.filter((row) => !userId || !row.user_id || row.user_id === userId);
+  if (userId && trackingState?.baseline?.user_id && trackingState.baseline.user_id !== userId) return null;
   if (trackingState?.status === "active") {
     const current = evaluations.find((row) => row.id === trackingState.current_evaluation_id) ||
       (trackingState.current_evaluation ? {
@@ -34,6 +36,7 @@ export function currentTrackingEvaluation(trackingState, evaluations = [], userI
         user_id: userId,
         input: trackingState.latest_effective_snapshot,
         result: trackingState.current_evaluation,
+        co_debtor: trackingState.co_debtor || null,
       } : null);
     return preservePlanChoice(current, evaluations);
   }
