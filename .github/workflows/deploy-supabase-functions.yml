@@ -10,6 +10,7 @@ on:
       - Isaias
     paths:
       - "supabase/functions/**"
+      - "frontend/src/lib/commercial/configuredPriority.js"
       - "frontend/src/lib/commercial/funnelMetrics.js"
       - "frontend/src/lib/commercial/overallStage.js"
       - "frontend/src/lib/commercial/priorityActions.js"
