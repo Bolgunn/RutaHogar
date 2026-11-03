@@ -109,6 +109,8 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 **Link lifetime, decided on 2026-11-02:** the project's Email OTP Expiration was 1800 seconds, so most invitations would have expired unread. It was raised to 86400 in the Supabase dashboard. The setting is project-wide, so lead password-recovery links also last 24 hours. Links stay single-use. The value was reported by the user; the CLI cannot read it.
 
+**No 72-hour links, decided on 2026-11-03:** the review asked whether invitations must last 72 hours. Supabase caps Email OTP Expiration at 86400 seconds, so the user decided to drop the requirement and keep 24 hours. An executive whose link expires asks for a new one, and the administrator sends it with Reenviar.
+
 **Not verified, needs the live domain:** delivery from production with a working link, a link past the old 30-minute limit, and whether corporate mail filters such as Outlook Safe Links use up the single-use link. If they do, the person may show as `Activo`, which blocks "Reenviar invitación".
 
 ## Standing questions
