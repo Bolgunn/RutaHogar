@@ -63,6 +63,38 @@ describe("HU22 files", () => {
     expect(cell.type).toBe(ExcelJS.ValueType.String);
     expect(cell.formula).toBeUndefined();
   });
+  it("formats readable workbooks while retaining full labels and native values", async () => {
+    const data = structuredClone(snapshot);
+    data.items[0].evaluated_at = "2026-11-03T12:30:00Z";
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await (await makeWorkbook(data)).arrayBuffer());
+    const leads = book.getWorksheet("Leads");
+    const headers = leads.getRow(1).values;
+    const dateColumn = headers.indexOf("Evaluado el");
+    expect(dateColumn).toBeGreaterThan(0);
+    expect(leads.getCell(1, dateColumn).note).toBe("Fecha de evaluación");
+    expect(leads.getCell(2, dateColumn).value).toEqual(new Date("2026-11-03T12:30:00Z"));
+    expect(leads.getCell(2, dateColumn).note).toBe("Fecha y hora en UTC.");
+    expect(leads.views[0]).toMatchObject({ state: "frozen", xSplit: 1, ySplit: 1, showGridLines: false });
+    expect(leads.columns.every(column => column.width >= 15 && column.width <= 40)).toBe(true);
+    expect(leads.pageSetup.orientation).toBe("landscape");
+    const money = leads.getRow(2)._cells.find(cell => cell?.value === 1500000);
+    expect(money.numFmt).toBe("#,##0");
+    const context = book.getWorksheet("Contexto");
+    expect(context.getColumn(2).width).toBeGreaterThan(context.getColumn(1).width);
+    expect(context.autoFilter).toBeUndefined();
+  });
+  it("shortens metric labels without changing percentage values or their full descriptions", async () => {
+    const data = { context: { ...snapshot.context, kind: "metrics", blocks: ["resumen"] }, items: [] };
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(await (await makeWorkbook(data, { n: 10, plan_mejora_a_venta: { tasa: .25 } })).arrayBuffer());
+    const sheet = book.getWorksheet("Resumen");
+    let rate;
+    sheet.eachRow(row => { if (row.getCell(1).value === "Conversión a venta: plan de mejora") rate = row; });
+    expect(rate.getCell(1).note).toBe("Tasa de conversión de plan de mejora a venta");
+    expect(rate.getCell(2).value).toBe(.25);
+    expect(rate.getCell(2).numFmt).toBe("0.0%");
+  });
   it("exports selected metric sheets from existing results, retaining zero and missing rates", () => {
     const metrics = { n: 3, captura: { rate: null, sales: 0 }, serie: { granularidad: "mes", periodos: [] } };
     const sheets = exportSheets({ context: { ...snapshot.context, kind: "metrics", blocks: ["resumen", "historico"] }, items: [] }, metrics);

@@ -131,17 +131,67 @@ export async function makeWorkbook(snapshot, metrics) {
   const book = new ExcelJS.Workbook();
   book.creator = "RutaHogar";
   book.created = new Date(snapshot.context.generated_at);
+  const concise = text => String(text)
+    .replace("Historial de evaluaciones y finanzas", "Historial financiero")
+    .replace("Proyecto objetivo y compatibilidad", "Proyecto y compatibilidad")
+    .replace("Fecha de evaluación", "Evaluado el")
+    .replace("Correo del responsable", "Correo responsable")
+    .replace("Rol del responsable", "Rol responsable")
+    .replace("Plazo estimado (meses)", "Plazo (meses)")
+    .replace("Compatibilidad del objetivo declarado", "Compatibilidad del objetivo")
+    .replace("Antigüedad mediana de leads sin contactar", "Sin contactar: antigüedad mediana")
+    .replace("Antigüedad máxima de leads sin contactar", "Sin contactar: antigüedad máxima")
+    .replace("Tiempo promedio hasta el primer contacto", "Primer contacto: promedio")
+    .replace("Tiempo mediano hasta el primer contacto", "Primer contacto: mediana")
+    .replace("Tasa de conversión de plan de mejora a venta", "Conversión a venta: plan de mejora")
+    .replace("Tasa de conversión de plan a venta", "Conversión a venta: con plan");
   for (const { name, rows } of exportSheets(snapshot, metrics)) {
-    const sheet = book.addWorksheet(name);
+    const sheet = book.addWorksheet(name, { properties: { tabColor: { argb: name === "Contexto" ? "FFC99B2C" : "FF132B4A" } } });
     sheet.addRows(rows.map(row => row.map(scalar)));
-    rows.forEach((row, index) => {
-      if (index && typeof row[1] === "number" && /tasa|rate/i.test(String(row[0]))) sheet.getCell(index + 1, 2).numFmt = "0.0%";
+    const keyValue = rows[0]?.length === 2 && ["Campo", "Indicador"].includes(rows[0][0]);
+    sheet.eachRow((row, rowNumber) => {
+      row.eachCell(cell => {
+        cell.font = { name: "Calibri", size: 11, color: { argb: "FF243B55" } };
+        cell.alignment = { vertical: "top", wrapText: true };
+        if (rowNumber > 1 && rowNumber % 2 === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F4F8" } };
+        if (typeof cell.value === "number") {
+          const meaning = keyValue ? String(rows[rowNumber - 1][0]) : String(rows[0][cell.col - 1]);
+          cell.numFmt = /tasa|rate/i.test(meaning) ? "0.0%" : /CLP/.test(meaning) ? "#,##0" : "#,##0.##";
+          cell.alignment = { vertical: "top", horizontal: "right", wrapText: true };
+        }
+        if (typeof cell.value === "string" && /^\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:\d{2}))?$/.test(cell.value)) {
+          const date = new Date(cell.value);
+          if (Number.isFinite(date.getTime())) {
+            const withTime = cell.value.includes("T");
+            cell.value = date;
+            cell.numFmt = withTime ? "dd-mm-yyyy hh:mm" : "dd-mm-yyyy";
+            if (withTime) cell.note = "Fecha y hora en UTC.";
+          }
+        }
+        if (rowNumber === 1 || (keyValue && cell.col === 1)) {
+          const full = String(cell.value ?? "");
+          cell.value = concise(full);
+          if (cell.value !== full) cell.note = full;
+        }
+      });
     });
-    sheet.views = [{ state: "frozen", ySplit: 1 }];
-    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.columns.forEach((column, index) => {
+      const values = column.values.filter(value => value != null).map(value => value instanceof Date ? "00-00-0000 00:00" : String(value));
+      const longest = Math.max(0, ...values.map(value => value.length));
+      column.width = keyValue ? (index === 0 ? 44 : 64) : Math.min(40, Math.max(15, Math.min(longest, 36) + 3));
+    });
+    sheet.eachRow(row => {
+      let lines = 1;
+      row.eachCell(cell => { lines = Math.max(lines, ...String(cell.value instanceof Date ? "Fecha" : cell.value ?? "").split("\n").map(text => Math.ceil(text.length / Math.max(10, sheet.getColumn(cell.col).width - 3)))); });
+      row.height = Math.max(28, lines * 16 + 12);
+    });
+    sheet.views = [{ state: "frozen", ySplit: 1, xSplit: keyValue ? 0 : 1, showGridLines: false }];
+    sheet.getRow(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
     sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF132B4A" } };
-    sheet.columns.forEach(column => { column.width = 30; column.alignment = { vertical: "top", wrapText: true }; });
-    if (rows.length > 1 && rows[0].length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: rows[0].length } };
+    sheet.getRow(1).alignment = { vertical: "middle", wrapText: true };
+    sheet.pageSetup = { orientation: keyValue ? "portrait" : "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
+    sheet.headerFooter.oddFooter = "&LRutaHogar&R&P / &N";
+    if (!keyValue && rows.length > 1 && rows[0].length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: rows[0].length } };
   }
   return new Blob([await book.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
