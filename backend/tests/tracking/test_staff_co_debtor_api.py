@@ -41,7 +41,8 @@ def test_staff_detail_requires_bearer_and_projects_only_the_authorized_lead(api)
     headers = {"Authorization": "Bearer executive-token"}
     allowed = client.get(f"/tracking/staff/leads/{LEAD_ID}", headers=headers)
     assert allowed.status_code == 200, allowed.text
-    assert allowed.json()["co_debtor"]["confirmed"] == confirmed_values()
+    assert allowed.json()["co_debtor"]["evaluation_type"] == "unverifiable_origin"
+    assert "confirmed" not in allowed.json()["co_debtor"]
     assert "token" not in str(allowed.json()).lower()
 
     outside = client.get(f"/tracking/staff/leads/{OUTSIDE_LEAD_ID}", headers=headers)

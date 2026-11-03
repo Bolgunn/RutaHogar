@@ -87,6 +87,9 @@ class ConfigRepository:
     def staff_contacts(self, ids):
         return {str(i): {"full_name": f"Nombre {i}", "phone": None} for i in ids if i}
 
+    def staff_co_debtor_invitation(self, lead_id):
+        return None
+
     def lead_reliability_statuses(self, ids):
         return {i: ("descartado" if i == "descartado" else "normal") for i in ids}
 
