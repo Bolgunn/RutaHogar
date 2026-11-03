@@ -1,3 +1,4 @@
+import { invitationEmailRedirect } from "./coDebtorAuthContext";
 import { supabase } from "../utils/supabase";
 import { roles } from "../lib/roles";
 import { ensureUserProfile, getCurrentProfile, normalizeBirthDateForStorage, normalizePhoneForStorage } from "./profileService";
@@ -73,13 +74,13 @@ export async function signIn({ email, password }) {
   } finally { interactiveAuth = false; }
 }
 
-export async function signUp({ email, password, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "" }) {
+export async function signUp({ email, password, nombre = "", apellido_paterno = "", apellido_materno = "", full_name = "", phone = "", rut = "", birth_date = "", invitationContext = null }) {
   if (!validNewPassword(password)) throw new Error(PASSWORD_HINT);
   interactiveAuth = true;
   try {
-    const { data, error } = await requireAuth().signUp({ email: normalizeEmail(email), password, options: { emailRedirectTo: callbackUrl(), data: { role: roles.user, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizePhoneForStorage(phone), rut, birth_date: normalizeBirthDateForStorage(birth_date) } } });
+    const { data, error } = await requireAuth().signUp({ email: normalizeEmail(email), password, options: { emailRedirectTo: invitationContext ? invitationEmailRedirect(invitationContext) : callbackUrl(), data: { role: roles.user, nombre, apellido_paterno, apellido_materno, full_name, phone: normalizePhoneForStorage(phone), rut, birth_date: normalizeBirthDateForStorage(birth_date) } } });
     if (error) throw new Error(safeAuthError(error));
-    if (!data.session || !data.user?.identities?.length) return { confirmationRequired: true, email: normalizeEmail(email), session: null, profile: null };
+    if (!data.session || !data.user?.identities?.length) return { emailConfirmationRequired: true, email: normalizeEmail(email), session: null, profile: null };
     return await accountFor(data.user, data.session);
   } finally { interactiveAuth = false; }
 }
@@ -118,4 +119,14 @@ export async function signOut(scope = "local") {
   const { error } = await requireAuth().signOut({ scope });
   if (error) throw new Error("No pudimos cerrar las sesiones. Intenta nuevamente.");
   clearPrivateAuth();
+}
+
+// Used by the invitation return, including a verification link opened in a new tab.
+// Null instead of an error: the invitation page then asks the visitor to sign in.
+export async function restoreInvitationSession() {
+  if (!supabase) return null;
+  try {
+    const account = await restoreAuth();
+    return account.session ? account : null;
+  } catch { return null; }
 }

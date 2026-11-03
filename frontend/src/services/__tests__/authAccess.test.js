@@ -35,7 +35,7 @@ describe("HU27 authenticated accounts", () => {
   });
   it("keeps duplicate email signup responses generic without opening a profile", async () => {
     mocks.auth.signUp.mockResolvedValue({ data: { session, user: { ...user, identities: [] } } });
-    expect((await signUp({ email: user.email, password: "Valid123!" })).confirmationRequired).toBe(true);
+    expect((await signUp({ email: user.email, password: "Valid123!" })).emailConfirmationRequired).toBe(true);
     expect(mocks.profile).not.toHaveBeenCalled();
   });
   it("does not release an account when profile completion conflicts with an existing RUT", async () => {
@@ -106,7 +106,7 @@ describe("HU27 authenticated accounts", () => {
   it("signup always uses usuario and never accesses private data pending verification", async () => {
     mocks.auth.signUp.mockResolvedValue({ data: { session: null, user: { identities: [{}] } } });
     const result = await signUp({ email: user.email, password: "Valid123!", role: "admin" });
-    expect(result.confirmationRequired).toBe(true);
+    expect(result.emailConfirmationRequired).toBe(true);
     expect(mocks.profile).not.toHaveBeenCalled();
     expect(mocks.auth.signUp.mock.calls[0][0].options.data.role).toBe("usuario");
   });

@@ -11,6 +11,7 @@ import AuthPanel from "./components/AuthPanel";
 import AccessFeedback from "./components/AccessFeedback";
 import CommercialMetrics from "./components/CommercialMetrics";
 import DashboardLeads from "./components/DashboardLeads";
+import AdminCommercialPriority from "./components/AdminCommercialPriority";
 import DataConsent from "./components/DataConsent";
 import FinancialTracking from "./components/FinancialTracking";
 import ProgressPage, { TrackingHistoryPage } from "./features/tracking/ProgressPage";
@@ -27,6 +28,8 @@ import LandingPage from "./components/LandingPage";
 import Navbar from "./components/Navbar";
 import UserHomeOverview from "./components/UserHomeOverview";
 import NotificationToast from "./components/NotificationToast";
+import PendingScoreNotice from "./components/PendingScoreNotice";
+import { useDocumentScorePending } from "./hooks/useDocumentScorePending";
 import ObjectiveReview from "./components/ObjectiveReview";
 import Onboarding from "./components/Onboarding";
 import ProfilePage from "./components/ProfilePage";
@@ -467,7 +470,10 @@ function LeadChangeDetail({ change }) {
 
 function LeadChangeTimeline({ changes, loading, onMarkSeen, onDisableType, highlightedId }) {
   const [detailGroup, setDetailGroup] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(highlightedId));
+  useEffect(() => {
+    if (highlightedId) setExpanded(true);
+  }, [highlightedId]);
   if (loading) {
     return (
       <section className="home-change-timeline is-loading" aria-live="polite">
@@ -780,6 +786,7 @@ const getPrivatePathForPage = (page) => {
   if (page === "admin-profile") return "/admin/perfil";
   if (page === "metricas") return "/metricas";
   if (page === "admin-reports") return "/admin/reportes";
+  if (page === "admin-priorizacion") return "/admin/priorizacion";
   return "/inicio";
 };
 
@@ -791,8 +798,8 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     return { page: "subsidios", path: "/subsidios" };
   }
   const path = normalizePathname(pathname);
-  // These token-gated pages belong to the co-debtor, never to a RutaHogar
-  // account. Resolve them before any profile or session redirect.
+  // Keep invitation context ahead of profile redirects, including Auth callbacks.
+  // The invitation page validates the recipient session before allowing access.
   if (path === "/co-deudor/invitacion") return { page: "co-debtor-invitation" };
   if (path === "/co-deudor/gestion" || path === "/co-deudor/consentimiento") {
     return { page: "co-debtor-management" };
@@ -821,6 +828,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     "/admin/perfil",
     "/metricas",
     "/admin/reportes",
+    "/admin/priorizacion",
     "/definir-password",
     "/proyectos",
   ].includes(path);
@@ -836,7 +844,7 @@ const resolveRouteForPath = (pathname, profile, hasAnonOnboarding) => {
     }
     // El portal es la puerta de entrada pública: un lead busca antes de tener cuenta.
     if (path === "/portal") return { page: "anon-portal" };
-    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
+    if (["/recomendaciones", "/subsidios", "/comparar-proyectos", "/academia", ...trackingRoutePaths, "/perfil", "/historial", "/dashboard", "/admin", "/admin/proyectos", "/admin/perfil", "/admin/reportes", "/admin/priorizacion", "/metricas", "/ejecutivo/leads", "/proyectos"].includes(path)) {
       return { page: "auth", path: "/login" };
     }
     return { page: "auth", path: path === "/" ? "/login" : undefined };
@@ -1020,6 +1028,16 @@ function Application({ initialAuth, onAuthAccepted }) {
 
   const userEvaluations = profile ? evaluations : [];
   const currentEvaluation = currentTrackingEvaluation(trackingState, userEvaluations, userId);
+  const [scoreUpdateFeedback, setScoreUpdateFeedback] = useState(null);
+  const [scoreUpdateFocus, setScoreUpdateFocus] = useState(null);
+  useEffect(() => { setScoreUpdateFeedback(null); setScoreUpdateFocus(null); }, [userId]);
+  const documentScorePending = useDocumentScorePending(profile?.role === roles.user ? userId : null,
+    `${trackingRevision}:${trackingState?.latest_event_id || ''}:${currentEvaluation?.id || ''}`);
+  const pendingScoreSource = documentScorePending.pending ? 'documents' : null;
+  const openPendingScoreUpdate = () => {
+    setScoreUpdateFocus(pendingScoreSource);
+    navigateToPage('profile');
+  };
   useEffect(() => {
     let active = true;
     setTrackingState(null);
@@ -1029,27 +1047,45 @@ function Application({ initialAuth, onAuthAccepted }) {
     }
     return () => { active = false; };
   }, [userId, profile?.role, evaluations, trackingRevision]);
+  const refreshStaffEvaluations = async () => {
+    try { setEvaluations(await getEvaluations(userId, profile?.role)); }
+    catch { setDataError("La configuración se guardó, pero no se pudo actualizar la bandeja de leads."); }
+  };
   const refreshTracking = async () => {
     setTrackingRevision((revision) => revision + 1);
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("El cambio se guardó, pero no se pudo refrescar el historial."); }
   };
+  const evaluationOwnerRef = useRef(userId);
+  const evaluationReadRef = useRef(0);
+  evaluationOwnerRef.current = userId;
   const refreshEvaluationView = async () => {
+    const requestedOwner = userId;
+    const requestRevision = ++evaluationReadRef.current;
     const [nextTracking, nextEvaluations] = await Promise.all([
       getTracking(),
       getEvaluations(userId, profile?.role),
     ]);
+    if (evaluationOwnerRef.current !== requestedOwner || requestRevision !== evaluationReadRef.current) throw new Error("La sesión cambió. Vuelve a cargar tu evaluación.");
     setTrackingState(nextTracking);
     setEvaluations(nextEvaluations);
     return { tracking: nextTracking, evaluations: nextEvaluations };
   };
-  const refreshScoreAfterCoDebtorConfirmation = async () => {
-    try {
-      return await refreshEvaluationView();
-    } catch {
-      setDataError("La nueva evaluación se guardó, pero no pudimos actualizar la vista.");
-      throw new Error("No pudimos actualizar tu evaluación ni el historial.");
-    }
+  const refreshScorePresentation = async (source, expectedEvaluationId = null) => {
+    const previousScore = currentEvaluation?.result?.score;
+    const view = await refreshEvaluationView();
+    const updated = expectedEvaluationId
+      ? view.evaluations.find((row) => row.id === expectedEvaluationId)
+      : currentTrackingEvaluation(view.tracking, view.evaluations, userId);
+    if (!updated) throw new Error('La nueva evaluación todavía no está disponible.');
+    setResult(null);
+    setResultSaved(null);
+    setScoreUpdateFeedback({ userId, evaluationId: updated.id, previousScore, source });
+    return view;
+  };
+  const showDocumentScoreResult = async (next) => {
+    await refreshScorePresentation('documents', next.evaluation_id);
+    navigateToPage('recommendations');
   };
   const userOnboarding = isRemoteProfile(profile)
     ? profile?.onboarding_data || null
@@ -1346,7 +1382,7 @@ function Application({ initialAuth, onAuthAccepted }) {
 
   // HU 15: las métricas son por inmobiliaria; el admin global no tiene una y vuelve a su inicio.
   useEffect(() => {
-    if (page === "metricas" && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
+    if ((page === "metricas" || page === "admin-priorizacion") && tenantResolved && isGlobalAdmin(profile?.role, inmobiliariaId)) {
       navigateToPage("admin", { replace: true });
     }
   }, [page, tenantResolved, inmobiliariaId, profile?.role]);
@@ -1497,8 +1533,11 @@ function Application({ initialAuth, onAuthAccepted }) {
             continuidad_laboral_complementario: pendingInput?.continuidad_laboral_complementario,
             morosidad_complementario: pendingInput?.morosidad_complementario,
           },
+          pendingCoDebtorInvitation.declaredRelation || pendingInput?.relacion_complementario,
         );
-      } catch { /* The persisted delivery-failure state provides the retry UI. */ }
+      } catch (failure) {
+        setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
+      }
     }
 
     await assertAccountSession(nextUserId);
@@ -1563,7 +1602,7 @@ function Application({ initialAuth, onAuthAccepted }) {
         role: roles.user,
       });
       trackSignUp({ method: "signup_offer" });
-      if (nextAuth.confirmationRequired) {
+      if (nextAuth.emailConfirmationRequired) {
         setSignupOfferNotice("Revisa tu correo para confirmar la cuenta. Tu precalificación permanece en esta pestaña; inicia sesión aquí después de confirmar.");
         return;
       }
@@ -1759,6 +1798,7 @@ function Application({ initialAuth, onAuthAccepted }) {
   }, [result]);
 
   const handleResult = async (scoreResult, input, metadata = {}) => {
+    setScoreUpdateFeedback(null);
     setScoreFormDraft(null);
     setPortalProperty(null);
     const resultSnapshot = buildResultSnapshot(scoreResult);
@@ -1801,9 +1841,11 @@ function Application({ initialAuth, onAuthAccepted }) {
             metadata.coDebtorInvitation.recipientEmail,
             metadata.coDebtorInvitation.recipientRut,
             metadata.coDebtorInvitation.declaredComplement,
+            metadata.coDebtorInvitation.declaredRelation || financialInput.relacion_complementario,
           );
-        } catch {
+        } catch (failure) {
           // A delivery failure must never roll back or hide the saved score.
+          setDataError(`Tu precalificación se guardó, pero no se pudo enviar la invitación al co-deudor. ${failure.message || "Reintenta desde la sección Co-deudor."}`);
         }
       }
 
@@ -2264,6 +2306,7 @@ function Application({ initialAuth, onAuthAccepted }) {
       />
       <main className="content"><div className="content-inner">
         {showInternalBack && <AppBackButton onBack={handleInternalBack} />}
+        {profile.role === roles.user && <PendingScoreNotice pending={Boolean(pendingScoreSource)} onUpdate={openPendingScoreUpdate} />}
 
         {visibleError && (
           <div className="error-message dismissible-message">
@@ -2506,6 +2549,11 @@ function Application({ initialAuth, onAuthAccepted }) {
             onboarding={userOnboarding}
             evaluations={userEvaluations}
             onSaveOnboarding={handleProfileOnboardingSave}
+            onDocumentConfirmed={refreshTracking}
+            onDocumentScoreUpdated={showDocumentScoreResult}
+            onDocumentPendingChange={documentScorePending.report}
+            focusDocumentScoreUpdate={scoreUpdateFocus === 'documents'}
+            onScoreUpdateFocused={() => setScoreUpdateFocus(null)}
             onProfileUpdate={handleProfileUpdate}
             onRetryExplanation={handleRetryAiExplanation}
           />
@@ -2549,11 +2597,14 @@ function Application({ initialAuth, onAuthAccepted }) {
         />
       ) : page === "recommendations" && profile.role === roles.user ? (
         <Recommendations
+          key={userId || "preview"}
+          ownerId={userId}
+          onRefreshEvaluation={refreshEvaluationView}
           evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}
           onRetryExplanation={handleRetryAiExplanation}
-          onCoDebtorScoreUpdated={refreshScoreAfterCoDebtorConfirmation}
+          scoreUpdate={scoreUpdateFeedback?.userId === userId ? scoreUpdateFeedback : null}
           trackingState={trackingState}
         />
       ) : page === "subsidios" && profile.role === roles.user ? (
@@ -2599,15 +2650,18 @@ function Application({ initialAuth, onAuthAccepted }) {
           />
       ) : page === "leads" && canViewStaffPage(page, profile.role) ? (
         <DashboardLeads
+          key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
+          staffScopeKey={`${userId}:${profile.role}:${inmobiliariaId || "global"}`}
           highScoreNotification={{ count: newHighLeadsCount, onClick: handleNotificationClick,
             onClose: handleDismissNotification, className: "notification-toast--high-score" }}
           evaluations={evaluations}
+          userId={userId}
           inmobiliariaId={inmobiliariaId}
           ejecutivo={profile?.role === roles.sales ? { id: profile.id, email: profile.email } : null}
           role={profile.role}
         />
       ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
-        <CommercialMetrics role={profile.role} onNavigate={navigateToPage} />
+        <CommercialMetrics key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`} role={profile.role} onNavigate={navigateToPage} />
       ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
@@ -2620,6 +2674,10 @@ function Application({ initialAuth, onAuthAccepted }) {
         <AdminPanel evaluations={evaluations} profile={profile} />
       ) : page === "admin-projects" && canViewStaffPage(page, profile.role) ? (
         <AdminProjectCatalog />
+      ) : page === "admin-priorizacion" && canViewStaffPage(page, profile.role, inmobiliariaId) ? (
+        <AdminCommercialPriority evaluations={evaluations} inmobiliariaId={inmobiliariaId} onSaved={refreshStaffEvaluations} />
+      ) : page === "admin-priorizacion" && isAdminRole(profile.role) && !tenantResolved ? (
+        <section className="section-block"><p>Cargando configuración comercial…</p></section>
       ) : (
         <section className="section-block">
           <div className="section-heading">

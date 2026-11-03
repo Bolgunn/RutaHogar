@@ -161,7 +161,7 @@ export function BirthDateField({ name, value, placeholder, ariaLabel, maxLength,
 }
 
 
-export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon }) {
+export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = "signin", onEvalAnon, onPortalAnon, invitationContext = null }) {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({
     nombre: "",
@@ -177,6 +177,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
     password: "",
     role: roles.user,
   });
+  const [verificationPending, setVerificationPending] = useState(false);
   const [error, setError] = useState("");
   const [confirmationNeeded, setConfirmationNeeded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -301,14 +302,14 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         mode === "signin"
           ? await signIn(form)
           : await signUp({ 
-              ...form, 
+              ...form, invitationContext,
               full_name: `${form.nombre} ${form.apellido_paterno} ${form.apellido_materno}`.trim(),
               phone: normalizedPhone, 
               birth_date: birthDate, 
               rut: `${form.rut_number}-${form.rut_dv}` 
             });
       if (mode === "signup") trackSignUp({ method: "auth_panel" });
-      if (auth.confirmationRequired) { setNotice("Revisa tu correo para confirmar la cuenta. Si ya tienes una cuenta, inicia sesión o recupera tu acceso."); return; }
+      if (auth.emailConfirmationRequired) { if (invitationContext) { setVerificationPending(true); return; } setNotice("Revisa tu correo para confirmar la cuenta. Si ya tienes una cuenta, inicia sesión o recupera tu acceso."); return; }
       onAuth(auth);
     } catch (err) {
       setConfirmationNeeded(mode === "signin" && err?.code === "email_not_confirmed");
@@ -348,7 +349,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               Precalificación inmobiliaria
             </div>
             <h2>Descubre si estás listo para <span className="gold">comprar tu primera vivienda</span></h2>
-            <p>Conoce tu posición financiera antes de solicitar un crédito hipotecario. Sin documentos, sin claves bancarias.</p>
+            <p>Conoce tu posición financiera antes de solicitar un crédito hipotecario. Puedes precalificar sin documentos ni claves bancarias.</p>
             <div className="auth-left-divider" />
             <ul className="auth-left-features">
               <li className="auth-left-feature">
@@ -389,7 +390,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
 
             <h1>{mode === "signin" ? "Bienvenido de vuelta" : "Crea tu cuenta"}</h1>
             <p className="auth-right-sub">
-              {mode === "signin"
+              {invitationContext ? "Accede a tu cuenta para volver a la invitación de co-deudor." : mode === "signin"
                 ? "Ingresa tus credenciales para acceder a tu precalificación."
                 : "Regístrate para guardar tu score y seguimiento financiero."}
             </p>
@@ -400,7 +401,11 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               </div>
             )}
 
-            <form ref={formRef} onSubmit={submit}>
+            {verificationPending && <div role="status">
+              <p>Revisa tu correo y confirma tu cuenta. Después podrás volver a la invitación.</p>
+              <button type="button" onClick={() => { setVerificationPending(false); changeMode("signin"); }}>Ya confirmé mi correo: iniciar sesión</button>
+            </div>}
+            {!verificationPending && <form ref={formRef} onSubmit={submit}>
               <div className="auth-seg" aria-label="Modo de acceso">
                 <button type="button" className={`auth-seg-btn ${mode === "signin" ? "is-active" : ""}`} onClick={() => changeMode("signin")}>
                   Entrar
@@ -570,7 +575,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                 <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5h6.6c3.9-3.6 6.1-8.8 6.1-14.9Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.9-3.6-11.5-8.4H5.7v5.2A20.4 20.4 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.5 27.7a12.3 12.3 0 0 1 0-7.4v-5.2H5.7a20 20 0 0 0 0 17.8l6.8-5.2Z"/><path fill="#EA4335" d="M24 11.9c3 0 5.7 1 7.8 3.1l5.9-5.9A19.7 19.7 0 0 0 24 4 20.4 20.4 0 0 0 5.7 15.1l6.8 5.2C14.1 15.5 18.7 11.9 24 11.9Z"/></svg>
                 Continuar con Google
               </button>
-            </form>
+            </form>}
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@ export async function trackingRequest(path = "", body, { timeoutMs, expectedUser
   }
   const { data, error } = session;
   if (error || !data?.session?.access_token) throw new Error("Inicia sesión para acceder a tu progreso.");
-  if (expectedUserId && data.session.user?.id !== expectedUserId) throw new Error("La cuenta cambió. Vuelve a iniciar el proceso.");
+  if (expectedUserId && data.session.user?.id !== expectedUserId) throw new Error("La cuenta cambió. Consulta tu evaluación antes de actualizarla.");
   let response, payload;
   try {
     ({ response, payload } = await fetchJsonWithTimeout(`${apiBase()}/tracking${path}`, {
@@ -44,13 +44,23 @@ export async function trackingRequest(path = "", body, { timeoutMs, expectedUser
       invalid_patch: "Revisa los datos enviados; no cumplen el contrato financiero.",
       verifiable_data_contradiction: "Esta meta se verifica con tus datos y no admite confirmación manual.",
       persistence_unavailable: "El seguimiento no está disponible temporalmente.",
+      local_ocr_public_origin_invalid: "No pudimos iniciar el procesamiento del documento. Intenta nuevamente más tarde.",
+      local_ocr_unavailable: "No pudimos procesar el documento. El archivo sigue cargado; espera unos segundos y reintenta.",
+      ocr_provider_mismatch: "No pudimos continuar este intento. Ciérralo e inicia una nueva carga.",
+      ocr_unavailable: "El reconocimiento documental no está disponible. Intenta nuevamente más tarde.",
       not_found: "No se encontró el registro en tu seguimiento.",
+      co_debtor_confirmation_already_applied: "Los antecedentes ya están incorporados o coinciden con tu evaluación actual.",
+      co_debtor_revision_conflict: "Los antecedentes cambiaron. Revisa el estado actualizado antes de continuar.",
+      co_debtor_relation_conflict: "La relación cambió. Revisa el estado actualizado antes de continuar.",
       co_debtor_confirmation_required: "Aún no hay una confirmación vigente del co-deudor para actualizar tu score.",
       co_debtor_consent_revoked: "El co-deudor revocó su consentimiento. Sus antecedentes ya no se pueden usar para actualizar tu score.",
       owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
+      config_version_conflict: "Otro administrador cambió la configuración; revisa los cambios.",
+      invalid_criterios: "Revisa los criterios marcados; hay valores no permitidos.",
     };
     const failure = new Error(messages[code] || "No se pudo completar la operación.");
     failure.code = code;
+    failure.errors = payload?.detail?.errors || [];
     throw failure;
   }
   return payload;
@@ -61,9 +71,9 @@ export const getProjection = (options) => trackingRequest("/projection", undefin
 export const appendTrackingEvent = (command, options) => trackingRequest("/events", command, options);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
-export const updateScoreWithConfirmedCoDebtor = () =>
-  trackingRequest("/evaluations/co-debtor-confirmation", {});
-export const getStaffEvaluations = () => trackingRequest("/staff/evaluations", undefined);
+export const updateScoreWithConfirmedCoDebtor = (options) =>
+  trackingRequest("/evaluations/co-debtor-confirmation", {}, options);
+export const getStaffEvaluations = (options) => trackingRequest("/staff/evaluations", undefined, options);
 export const getStaffLeadDetail = (leadId) => trackingRequest(`/staff/leads/${encodeURIComponent(leadId)}`, undefined);
 export const annotateEvaluation = (evaluation, kind, payload, eventId = crypto.randomUUID()) =>
   trackingRequest(`/evaluations/${evaluation}/events`, {

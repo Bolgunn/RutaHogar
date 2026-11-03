@@ -1,16 +1,15 @@
+import AuthenticatedCoDebtorInvitationPage from "./AuthenticatedCoDebtorInvitationPage";
 import React, { useEffect, useRef, useState } from "react";
 
 import {
-  inspectCoDebtorInvitation,
   inspectCoDebtorManagement,
-  declineCoDebtorInvitation,
   readPublicCoDebtorToken,
   revokeCoDebtorManagement,
   runExclusive,
-  submitCoDebtorConfirmation,
 } from "../services/coDebtorService";
-import { formatMoneyInput, stripMoneyInput } from "../services/moneyFormat";
 import FieldTooltip from "./FieldTooltip";
+import FormattedAmountInput from "./FormattedAmountInput";
+import PublicShell from "./CoDebtorPageShell";
 
 const emptyConfirmation = {
   ingreso_mensual_complementario: "",
@@ -53,31 +52,12 @@ const continuityOptions = [
   ["mas_3_anios", "Más de 3 años"],
 ];
 
-function PublicShell({ children }) {
-  return <div className="co-debtor-public-page">
-    <header className="co-debtor-public-page__brand">
-      <img src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
-    </header>
-    <main className="co-debtor-public-page__main">{children}</main>
-  </div>;
-}
-
 function StatusCard({ eyebrow, title, children, tone = "neutral" }) {
   return <section className={`co-debtor-public-card co-debtor-public-card--${tone}`} aria-live="polite">
     <span className="eyebrow">{eyebrow}</span>
     <h1>{title}</h1>
     {children}
   </section>;
-}
-
-function validationMessage(values) {
-  if (!/^\d+$/.test(values.ingreso_mensual_complementario)) return "Ingresa tu ingreso mensual en pesos.";
-  if (!/^\d+$/.test(values.deuda_mensual_complementario)) return "Ingresa tu deuda mensual en pesos. Si no tienes deuda, escribe 0.";
-  if (!values.tipo_contrato_complementario) return "Selecciona tu tipo de contrato.";
-  if (!values.continuidad_laboral_complementario) return "Selecciona tu continuidad laboral.";
-  if (!values.morosidad_complementario) return "Indica si tienes morosidad actual.";
-  if (!values.treatment_consent) return "Debes aceptar el tratamiento de datos para continuar.";
-  return "";
 }
 
 export function CoDebtorInvitationView({ context, loading, confirmation, onChange, onSubmit, onDecline, busy, error, submitted }) {
@@ -110,29 +90,29 @@ export function CoDebtorInvitationView({ context, loading, confirmation, onChang
     <p className="co-debtor-public-card__note">Estos antecedentes fueron declarados por la persona que te invitó. Revísalos y corrígelos si es necesario.</p>
     <form className="co-debtor-public-form" onSubmit={onSubmit} noValidate>
       <div className="co-debtor-public-form__grid">
-        <div className="co-debtor-public-form__field">
+        <div className="co-debtor-public-form__field pre-wizard-field">
           <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-income">Ingreso mensual</label><FieldTooltip text="Indica tu ingreso líquido mensual o el promedio que recibes regularmente." /></div>
-          <input id="co-debtor-income" name="ingreso_mensual_complementario" inputMode="numeric" value={formatMoneyInput(confirmation.ingreso_mensual_complementario)} onChange={(event) => onChange("ingreso_mensual_complementario", stripMoneyInput(event.target.value))} placeholder="Ej: 900.000" disabled={busy} />
+          <FormattedAmountInput id="co-debtor-income" name="ingreso_mensual_complementario" allowEmpty maxDigits={16} value={confirmation.ingreso_mensual_complementario} onChange={value => onChange("ingreso_mensual_complementario", String(value))} placeholder="Ej: 900.000" disabled={busy} />
         </div>
-        <div className="co-debtor-public-form__field">
+        <div className="co-debtor-public-form__field pre-wizard-field">
           <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-debt">Deuda mensual</label><FieldTooltip text="Incluye tus cuotas y compromisos financieros mensuales vigentes. Si no tienes deuda, ingresa 0." /></div>
-          <input id="co-debtor-debt" name="deuda_mensual_complementario" inputMode="numeric" value={formatMoneyInput(confirmation.deuda_mensual_complementario)} onChange={(event) => onChange("deuda_mensual_complementario", stripMoneyInput(event.target.value))} disabled={busy} />
+          <FormattedAmountInput id="co-debtor-debt" name="deuda_mensual_complementario" allowEmpty maxDigits={16} value={confirmation.deuda_mensual_complementario} onChange={value => onChange("deuda_mensual_complementario", String(value))} disabled={busy} />
         </div>
-        <div className="co-debtor-public-form__field">
+        <div className="co-debtor-public-form__field pre-wizard-field">
           <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-contract">Tipo de contrato</label><FieldTooltip text="Selecciona la modalidad bajo la cual recibes tus ingresos actualmente." /></div>
           <select id="co-debtor-contract" name="tipo_contrato_complementario" value={confirmation.tipo_contrato_complementario} onChange={(event) => onChange("tipo_contrato_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
             {contractOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
-        <div className="co-debtor-public-form__field">
+        <div className="co-debtor-public-form__field pre-wizard-field">
           <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-continuity">Continuidad laboral</label><FieldTooltip text="Indica cuánto tiempo llevas trabajando de forma continua en tu empleo o actividad actual." /></div>
           <select id="co-debtor-continuity" name="continuidad_laboral_complementario" value={confirmation.continuidad_laboral_complementario} onChange={(event) => onChange("continuidad_laboral_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
             {continuityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
-        <div className="co-debtor-public-form__field">
+        <div className="co-debtor-public-form__field pre-wizard-field">
           <div className="pre-wizard-field-label-row"><label className="pre-wizard-field-label" htmlFor="co-debtor-delinquency">Morosidad actual</label><FieldTooltip text="Indica si tienes cuotas o pagos vencidos en este momento." /></div>
           <select id="co-debtor-delinquency" name="morosidad_complementario" value={confirmation.morosidad_complementario} onChange={(event) => onChange("morosidad_complementario", event.target.value)} disabled={busy}>
             <option value="">Selecciona una opción</option>
@@ -168,13 +148,13 @@ export function CoDebtorManagementView({ context, loading, confirmRevoke, onStar
 
   return <PublicShell><StatusCard eyebrow="Consentimiento vigente" title="Tu participación está activa" tone="success">
     <p>RutaHogar puede utilizar tus antecedentes únicamente para la evaluación relacionada. Puedes retirar esta autorización cuando lo necesites.</p>
-    {!confirmRevoke ? <button className="secondary-button" type="button" onClick={onStartRevoke}>Revocar mi consentimiento</button> : (
+    {!confirmRevoke ? <button className="danger-button" type="button" onClick={onStartRevoke} disabled={busy}>Revocar mi consentimiento</button> : (
       <div className="co-debtor-public-revoke-confirm" role="alert">
         <strong>¿Quieres revocar tu consentimiento?</strong>
         <p>Tus antecedentes dejarán de utilizarse en evaluaciones futuras. Las evaluaciones históricas ya realizadas no se eliminan ni modifican.</p>
         <div>
           <button className="secondary-button" type="button" onClick={onCancelRevoke} disabled={busy}>Cancelar</button>
-          <button className="primary-button" type="button" onClick={onConfirmRevoke} disabled={busy}>{busy ? "Revocando..." : "Confirmar revocación"}</button>
+          <button className="danger-button" type="button" onClick={onConfirmRevoke} disabled={busy} aria-busy={busy}>{busy ? "Revocando..." : "Confirmar revocación"}</button>
         </div>
       </div>
     )}
@@ -182,88 +162,8 @@ export function CoDebtorManagementView({ context, loading, confirmRevoke, onStar
   </StatusCard></PublicShell>;
 }
 
-export function CoDebtorInvitationPage({ token = readPublicCoDebtorToken() }) {
-  const [context, setContext] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [confirmation, setConfirmation] = useState(emptyConfirmation);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const submitLock = useRef(null);
-
-  useEffect(() => {
-    let active = true;
-    if (!token) {
-      setContext({ status: "invalid", can_submit: false });
-      setLoading(false);
-      return () => { active = false; };
-    }
-    setLoading(true);
-    inspectCoDebtorInvitation(token)
-      .then((next) => {
-        if (!active) return;
-        setContext(next);
-        setConfirmation(confirmationFromInvitation(next));
-      })
-      .catch(() => { if (active) setContext({ status: "invalid", can_submit: false }); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [token]);
-
-  const changeConfirmation = (field, value) => setConfirmation((current) => ({ ...current, [field]: value }));
-  const submit = (event) => {
-    event.preventDefault();
-    if (submitLock.current) return;
-    const validationError = validationMessage(confirmation);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setBusy(true);
-    setError("");
-    return runExclusive(submitLock, async () => {
-      try {
-        await submitCoDebtorConfirmation(token, confirmation);
-        setSubmitted(true);
-      } catch (failure) {
-        try {
-          const next = await inspectCoDebtorInvitation(token);
-          setContext(next);
-        } catch { /* Keep the current safe public state and show a generic error. */ }
-        setError(failure.message || "No se pudieron registrar tus antecedentes. Intenta nuevamente.");
-      } finally {
-        setBusy(false);
-      }
-    });
-  };
-  const decline = () => {
-    if (submitLock.current) return;
-    setBusy(true);
-    setError("");
-    return runExclusive(submitLock, async () => {
-      try {
-        await declineCoDebtorInvitation(token);
-        setContext({ status: "declined", can_submit: false });
-        setConfirmation(emptyConfirmation);
-      } catch (failure) {
-        setError(failure.message || "No se pudo registrar tu decisión. Intenta nuevamente.");
-      } finally {
-        setBusy(false);
-      }
-    });
-  };
-
-  return <CoDebtorInvitationView
-    context={context}
-    loading={loading}
-    confirmation={confirmation}
-    onChange={changeConfirmation}
-    onSubmit={submit}
-    onDecline={decline}
-    busy={busy}
-    error={error}
-    submitted={submitted}
-  />;
+export function CoDebtorInvitationPage() {
+  return <AuthenticatedCoDebtorInvitationPage />;
 }
 
 export function CoDebtorManagementPage({ token = readPublicCoDebtorToken() }) {
