@@ -4,6 +4,16 @@ export function validNewPassword(value) {
   return typeof value === "string" && value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9\s]/.test(value);
 }
 export function normalizeEmail(value) { return String(value || "").trim().toLowerCase(); }
+export function callbackAccessError(href) {
+  const url = new URL(href);
+  if (url.pathname !== "/auth/callback") return null;
+  const hash = new URLSearchParams(url.hash.slice(1));
+  const params = url.searchParams.has("error") || url.searchParams.has("error_code") ? url.searchParams : hash;
+  if (!params.has("error") && !params.has("error_code")) return null;
+  const description = params.get("error_description") || "";
+  const known = ["Esta cuenta debe ingresar con correo y contraseña.", "Google debe utilizar el mismo correo de la cuenta."];
+  return known.find(message => description.includes(message)) || "No se completó el acceso. El enlace puede haber vencido o el proceso fue cancelado.";
+}
 // A UI routing check only; Supabase must still verify the token and password update.
 export function sessionMethods(session) {
   try {

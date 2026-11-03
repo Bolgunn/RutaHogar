@@ -3597,7 +3597,7 @@ for each row execute function public.hu27_guard_profile_rut();
 create or replace function public.hu27_access_token_hook(event jsonb)
 returns jsonb language plpgsql stable security invoker
 set search_path = pg_catalog, public, auth
-as $
+as $$
 declare
   v_user uuid := (event->>'user_id')::uuid;
   v_role text;
@@ -3617,7 +3617,7 @@ begin
   end if;
   return jsonb_build_object('claims', event->'claims');
 end;
-$;
+$$;
 revoke all on function public.hu27_access_token_hook(jsonb) from public, anon, authenticated;
 grant usage on schema public to supabase_auth_admin;
 grant select (id, role) on public.profiles to supabase_auth_admin;

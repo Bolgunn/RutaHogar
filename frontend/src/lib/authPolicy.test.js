@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { normalizeEmail, PASSWORD_HINT, SIGNUP_DATA_REJECTED, recoverySession, safeAuthError, sessionMethods, validNewPassword } from "./authPolicy";
+import { callbackAccessError, normalizeEmail, PASSWORD_HINT, SIGNUP_DATA_REJECTED, recoverySession, safeAuthError, sessionMethods, validNewPassword } from "./authPolicy";
 
 describe("HU27 access policy", () => {
+  it.each(["?", "#"])("handles allowlisted callback errors from %s without exposing raw provider text", separator => {
+    const message = "Esta cuenta debe ingresar con correo y contraseña.";
+    expect(callbackAccessError(`https://www.rutahogar.cl/auth/callback${separator}error=access_denied&error_description=${encodeURIComponent(message)}`)).toBe(message);
+    const generic = callbackAccessError(`https://www.rutahogar.cl/auth/callback${separator}error=server_error&error_description=secret-token-database-detail`);
+    expect(generic).not.toContain("secret");
+    expect(generic).toContain("No se completó");
+  });
+  it("only treats callback error responses as errors", () => {
+    expect(callbackAccessError("https://www.rutahogar.cl/login?error=access_denied")).toBeNull();
+    expect(callbackAccessError("https://www.rutahogar.cl/auth/callback?code=valid")).toBeNull();
+    const message = "Google debe utilizar el mismo correo de la cuenta.";
+    expect(callbackAccessError(`https://www.rutahogar.cl/auth/callback?error_code=hook_error&error_description=${encodeURIComponent(message)}`)).toBe(message);
+  });
   it("shows only the allowlisted signup hook rejection without exposing database details", () => {
     expect(safeAuthError({ status: 400, message: SIGNUP_DATA_REJECTED })).toBe(SIGNUP_DATA_REJECTED);
     expect(safeAuthError({ status: 400, message: "private database failure" })).not.toContain("private");

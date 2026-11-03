@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../utils/supabase";
 import { clearPrivateAuth, isInteractiveAuth, restoreAuth, signOut } from "../services/auth";
-import { normalizeEmail, recoverySession } from "../lib/authPolicy";
+import { callbackAccessError, normalizeEmail, recoverySession } from "../lib/authPolicy";
 import { withTimeout } from "../services/httpRequest";
 import AccessFeedback from "./AccessFeedback";
 
@@ -12,11 +12,16 @@ export default function SessionAccess({ children }) {
   const [revision, setRevision] = useState(0);
   const current = useRef(null);
   const generation = useRef(0);
+  const callbackError = useRef(callbackAccessError(window.location.href));
   useEffect(() => {
     let active = true, sequence = 0, timer;
     const verify = async () => {
       const request = ++sequence;
       try {
+        if (callbackError.current) {
+          sessionStorage.removeItem("RutaHogar_google_expected");
+          throw new Error(callbackError.current);
+        }
         const next = supabase ? await withTimeout(restoreAuth(), 15000, "No pudimos verificar tu sesión a tiempo. Reintenta sin ingresar datos de otra cuenta.") : { session: null, profile: null };
         if (!active || request !== sequence) return;
         if (recoverySession(next.session)) { window.location.replace("/definir-password"); return; }
@@ -65,7 +70,7 @@ export default function SessionAccess({ children }) {
     return () => { active = false; ++sequence; clearTimeout(timer); subscription?.unsubscribe(); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("online", schedule); };
   }, [revision]);
   if (checking) return <AccessFeedback message="Comprobando tu sesión…" />;
-  if (error) return <AccessFeedback error message={error}><button className="primary-button" onClick={() => { setChecking(true); setRevision(value => value + 1); }}>Reintentar</button><button className="secondary-button" onClick={async () => { try { await signOut("local"); } finally { window.location.replace("/login"); } }}>Ir a iniciar sesión</button></AccessFeedback>;
+  if (error) return <AccessFeedback error message={error}><button className="primary-button" onClick={() => { callbackError.current = null; setChecking(true); setRevision(value => value + 1); }}>Reintentar</button><button className="secondary-button" onClick={async () => { try { await signOut("local"); } finally { window.location.replace("/login"); } }}>Ir a iniciar sesión</button></AccessFeedback>;
   return children(account || { session: null, profile: null }, async next => {
     const version = generation.current;
     try {
