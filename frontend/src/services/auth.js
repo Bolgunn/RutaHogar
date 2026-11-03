@@ -45,7 +45,7 @@ function buildProfile(user, preferredRole = roles.user, persistedProfile = null)
   }
 
   const fullName = persistedProfile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || "";
-  const role = normalizeRole(persistedProfile?.role || user.user_metadata?.role || preferredRole);
+  const role = normalizeRole(persistedProfile?.role || preferredRole);
   const phone = persistedProfile?.phone || user.user_metadata?.phone || "";
   const rut = persistedProfile?.rut || user.user_metadata?.rut || "";
   const birthDate = persistedProfile?.birth_date || user.user_metadata?.birth_date || "";
