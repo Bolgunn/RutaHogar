@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
 import { BarsChart, RateChart } from "./CommercialCharts";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
@@ -10,6 +10,7 @@ import { getCommercialFunnelMetrics } from "../services/commercialMetricsService
 // solo filtra y dibuja. Copia y estructura: frontend/mockups/hu15-metricas.html.
 
 const EMPTY_FILTERS = { proyecto_id: null, afinidad: [], capacidad: [], prioridad: [] };
+const FOCUS_REFRESH_MS = 30_000;
 const LADDER = STAGES.filter((stage) => stage.value !== "perdido");
 const TIME_STAGES = LADDER.filter((stage) => stage.value !== "venta_cerrada");
 
@@ -328,17 +329,25 @@ export default function CommercialMetrics({ role, onNavigate }) {
   const isEjecutivo = role === roles.sales;
 
   const queryKey = JSON.stringify([filtros, granularidad, refresh]);
+  const loadedAt = useRef(0);
   useEffect(() => {
     let active = true;
-    setState({ status: "loading", data: null, error: "", queryKey });
+    // Keep the previous result on screen so filters, focus and scroll survive a refetch.
+    setState((current) => ({ ...current, status: "loading", error: "", queryKey }));
     getCommercialFunnelMetrics({ filtros, granularidad })
-      .then((data) => { if (active) setState({ status: data ? "ready" : "offline", data, error: "", queryKey }); })
-      .catch((error) => { if (active) setState({ status: "error", data: null, error: error.message, queryKey }); });
+      .then((data) => {
+        if (!active) return;
+        loadedAt.current = Date.now();
+        setState({ status: data ? "ready" : "offline", data, error: "", queryKey });
+      })
+      .catch((error) => { if (active) setState((current) => ({ ...current, status: "error", error: error.message, queryKey })); });
     return () => { active = false; };
   }, [queryKey]);
 
   useEffect(() => {
-    const invalidate = () => setRefresh(value => value + 1);
+    const invalidate = () => {
+      if (Date.now() - loadedAt.current >= FOCUS_REFRESH_MS) setRefresh(value => value + 1);
+    };
     window.addEventListener("focus", invalidate);
     return () => window.removeEventListener("focus", invalidate);
   }, []);
@@ -350,6 +359,8 @@ export default function CommercialMetrics({ role, onNavigate }) {
   }, [state.data?.refresh_at]);
 
   const metrics = state.data?.metrics;
+  const updating = state.queryKey !== queryKey || state.status === "loading";
+  const hasLeads = Boolean(state.data?.total_leads);
 
   const heading = (
     <div className="section-heading">
@@ -359,11 +370,15 @@ export default function CommercialMetrics({ role, onNavigate }) {
         ? "Conversión, tiempos y seguimiento de los leads de tus proyectos asignados."
         : "Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos."}</p>
       {state.data && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
+      {hasLeads && updating && <span className="cm-asof" role="status">Actualizando…</span>}
+      {hasLeads && state.status === "error" && (
+        <p className="error-message" role="alert">No pudimos actualizar las métricas: {state.error} Mostramos la última versión cargada.</p>
+      )}
     </div>
   );
 
-  if (state.queryKey !== queryKey || state.status !== "ready" || !state.data.total_leads) {
-    const message = state.queryKey !== queryKey || state.status === "loading" ? "Cargando métricas…"
+  if (!hasLeads) {
+    const message = updating ? "Cargando métricas…"
       : state.status === "offline" ? "Las métricas requieren conexión a Supabase."
         : state.status === "error" ? state.error
           : isEjecutivo ? "Todavía no hay leads asociados a tus proyectos asignados."

@@ -6,6 +6,9 @@ import { isStaffRole } from "../lib/roles";
 import { supabase } from "../utils/supabase";
 
 const CLASSIFICATION_ORDER = { Alto: 1, Medio: 2, Bajo: 3 };
+// /tracking/staff/evaluations is the heaviest staff read (15 s timeouts near 300 leads).
+const STAFF_REFRESH_MS = 60_000;
+const REFRESH_FAILED = "No pudimos actualizar los leads. Mostramos la última versión cargada.";
 
 function sortEvaluations(list) {
   return [...list].sort((a, b) => {
@@ -62,21 +65,32 @@ export function useLeads({ userId, profile }) {
     if (!isStaff || !supabase) return;
 
     let active = true;
+    let inFlight = false;
+    let lastRefresh = Date.now();
     // Raw Postgres INSERT payloads bypass consent redaction. Refresh the authorized feed.
     const refresh = async () => {
+      if (inFlight || document.visibilityState === "hidden") return;
+      if (Date.now() - lastRefresh < STAFF_REFRESH_MS / 2) return;
+      inFlight = true;
+      lastRefresh = Date.now();
       try {
         const list = await getEvaluations(null, profile?.role);
         if (!active) return;
         const sorted = sortEvaluations(list);
         setEvaluations(sorted);
+        setError((current) => (current === REFRESH_FAILED ? "" : current));
         setNewHighLeadsCount(sorted.filter((ev) => ev.result.classification === "Alto"
           && ev.user_id !== userId
           && (!profile?.last_lead_seen_at || ev.created_at > profile.last_lead_seen_at)).length);
-      } catch {
+      } catch (err) {
         // Keep the last authorized view; never fall back to raw table reads.
+        console.error(err);
+        if (active) setError(REFRESH_FAILED);
+      } finally {
+        inFlight = false;
       }
     };
-    const interval = window.setInterval(refresh, 30000);
+    const interval = window.setInterval(refresh, STAFF_REFRESH_MS);
     window.addEventListener("focus", refresh);
     return () => {
       active = false;
