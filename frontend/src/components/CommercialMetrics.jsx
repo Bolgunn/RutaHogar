@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import ExportAction from "./ExportAction";
 import FieldTooltip from "./FieldTooltip";
 import { BarsChart, RateChart } from "./CommercialCharts";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
@@ -451,6 +452,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
   );
 
   const periods = m.serie.periodos.map((period) => ({ ...period, label: periodLabel(period.clave, granularidad) }));
+  const exportControl = <ExportAction kind="metrics" metrics={m} metricProjects={proyectos} projectId={filtros.proyecto_id} sourceAt={state.data.now} filters={{ ...filtros, granularidad, algorithm_version: m.version, funnel_view: view.funnel, times_view: view.times, dimension, tiempoSerie, tab }} />;
   const ventas = (embudo) => embudo.etapas.find((etapa) => etapa.etapa === "venta_cerrada").alcanzaron;
   const tpc = m.contacto.tiempo_primer_contacto;
   const ciclo = m.tiempos.ciclo_venta;
@@ -459,6 +461,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
   return (
     <section className="section-block cm-page">
       {heading}
+      {exportControl}
 
       <article className="admin-surface cm-filters" aria-label="Filtros de métricas">
         <div className="cm-filters__scope">

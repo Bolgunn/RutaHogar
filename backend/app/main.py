@@ -27,6 +27,7 @@ from .tracking.routes import router as tracking_router
 from .documents.routes import router as documents_router
 from .academy_news import router as academy_news_router
 from .lead_changes.routes import router as lead_changes_router
+from .exports.routes import router as exports_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ app = FastAPI(title="RutaHogar")
 app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
 app.include_router(academy_news_router)
 app.include_router(lead_changes_router)
+app.include_router(exports_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
 app.include_router(tracking_router)
