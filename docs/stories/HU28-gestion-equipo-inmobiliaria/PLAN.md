@@ -85,7 +85,7 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 **Review fixes.** `20261102130000_hu28_revision.sql`, applied to production on 2026-11-02 while `audit_events` was still empty, stops the audit triggers linking a pending assignment to anyone outside the team, reports the Auth ban in `hu28_list_team`, makes `assign_executive` take the team lock, and makes `assign_admin` refuse an account with evaluations. Historial also resolves names against the team in the backend, so the name leak closes with the backend deploy either way. A member whose status and ban disagree shows "Reintentar" under Acceso, which the mockup does not draw; it needs this migration to appear. Project events use `circle-plus` and `circle-minus` because `index.html` resolves Tabler to v2.47.0.
 
-**Second review.** `20261102140000_hu28_revision_equipo.sql` is **not applied**. What it changes and why:
+**Second review.** `20261102140000_hu28_revision_equipo.sql` was applied to production on 2026-11-03 and recorded with `migration repair`. The backfill marked the 13 executives who had never signed in, and nobody who had. Rolled-back checks as real accounts: each staff member gets exactly their own team's names from `list_staff_names`, and a lead gets none. What it changes and why:
 
 | Change | Why |
 | :----- | :-- |
@@ -101,7 +101,7 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 **While the old frontend is live:** after this migration, tenant admins and executives see an email instead of a colleague's name in the old project catalog until the new frontend ships. `fetchExecutiveNames` tolerates this. Nothing errors.
 
-**Deployment order:** PR #171 and this migration were applied to production on 2026-11-02 and recorded with `migration repair`; `audit_events` was empty afterwards. `APP_URL` and `EJECUTIVO_FROM_EMAIL` (`RutaHogar <no-reply@rutahogar.cl>`) were set the same day. Next, apply `20261102140000_hu28_revision_equipo.sql` as a single file with `migration repair`, then the backend, frontend and `create-executive` together: the backend and the function need its column and RPCs. Until then nobody can be deactivated, a lead's email can still be linked from the catalog, and the old email text still goes out.
+**Deployment order:** PR #171 and this migration were applied to production on 2026-11-02 and recorded with `migration repair`; `audit_events` was empty afterwards. `APP_URL` and `EJECUTIVO_FROM_EMAIL` (`RutaHogar <no-reply@rutahogar.cl>`) were set the same day. All four HU 28 migrations are applied. Next: the backend, frontend and `create-executive` together. Until then nobody can be deactivated, a lead's email can still be linked from the catalog, and the old email text still goes out.
 
 **Redirect, checked on 2026-11-02:** `https://www.rutahogar.cl/definir-password` is allowed. A `/auth/v1/authorize` call kept it in `auth.flow_state.referrer`, while an unlisted URL fell back to the Site URL, `https://www.rutahogar.cl`.
 
