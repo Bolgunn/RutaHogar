@@ -7,6 +7,8 @@ import { getCurrentProjectGoal } from "../lib/projectGoalDisplay";
 import BankingChecklist from "./BankingChecklist";
 import AiExplanationBlock from "./AiExplanationBlock";
 import FieldTooltip from "./FieldTooltip";
+import GreenSavingsPlanner from "./GreenSavingsPlanner";
+import { formatClpExact, formatUfAmount, getEffectiveGreenSavingsGoal } from "../services/greenSavingsPlannerService";
 
 function ProjectGoalSummary({ projectGoal }) {
   if (!projectGoal?.nombre) return null;
@@ -177,6 +179,7 @@ export default function FinancialTracking({
   onLogScoringEvent,
   onOpenMilestoneRegistration,
   onOpenProgress,
+  onSaveGreenSavingsGoal,
   onNavigate,
   successMessage,
 }) {
@@ -191,6 +194,8 @@ export default function FinancialTracking({
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation, trackingState), [evaluation, trackingState]);
   const projectGoal = getCurrentProjectGoal(evaluation);
+  const [localGreenGoal, setLocalGreenGoal] = useState(null);
+  const greenSavingsGoal = localGreenGoal || getEffectiveGreenSavingsGoal(evaluation, trackingState);
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
 
   const adjustment = useMemo(
@@ -730,6 +735,24 @@ export default function FinancialTracking({
             }}
           >
             <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: "0 0 1rem 0" }}>Ahorro Pie</h3>
+            {greenSavingsGoal && (
+              <div
+                data-testid="dashboard-green-savings-goal"
+                style={{
+                  marginBottom: "0.75rem",
+                  padding: "0.5rem 0.65rem",
+                  backgroundColor: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "6px",
+                  fontSize: "0.82rem",
+                  color: "#1e40af",
+                }}
+              >
+                <strong>Meta periódica en verde fijada:</strong>{" "}
+                {formatUfAmount(greenSavingsGoal.cuota_mensual_uf)}/mes (
+                {formatClpExact(greenSavingsGoal.cuota_mensual_clp)}/m) · {greenSavingsGoal.plazo_meses} meses
+              </div>
+            )}
 
             {brecha_pie_minimo === 0 && totalSaneamientoRequerido === 0 ? (
               <div style={{ color: "var(--color-success)", fontSize: "0.85rem", padding: "0.5rem", backgroundColor: "#f0fdf4", borderRadius: "6px", textAlign: "center" }}>
@@ -942,6 +965,16 @@ export default function FinancialTracking({
          </div>
        )}
       </div>
+
+      <GreenSavingsPlanner
+        evaluation={evaluation}
+        trackingState={trackingState}
+        project={projectGoal}
+        onSaveGreenSavingsGoal={async (goalPayload) => {
+          setLocalGreenGoal(goalPayload);
+          if (onSaveGreenSavingsGoal) await onSaveGreenSavingsGoal(goalPayload);
+        }}
+      />
 
       <section className="tracking-checklist-section" aria-label="Checklist bancario">
         <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />

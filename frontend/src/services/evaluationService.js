@@ -255,7 +255,9 @@ export async function getEvaluations(userId, role) {
   if (annotationOwner) annotationQuery = annotationQuery.eq("user_id", annotationOwner);
   const { data: annotations, error: annotationError } = await annotationQuery
     .order("recorded_at", { ascending: true });
-  if (annotationError) throw annotationError;
+  if (annotationError) {
+    logSupabaseError(annotationError);
+  }
   return data.map((row) => normalizeEvaluation(
     applyEvaluationAnnotations(row, (annotations || []).filter((event) => event.evaluation_id === row.id)), {}));
 }

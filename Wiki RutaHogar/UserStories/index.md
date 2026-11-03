@@ -68,7 +68,7 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 | [[HU26-simulacion-subsidios\|HU 26]] | Simulación avanzada de subsidios habitacionales | Deseable | 5 | Lead | 🗓 |
 | [[HU27-revision-antecedentes\|HU 27]] | Revisión referencial de antecedentes declarados | Deseable | 5 | Ejecutivo comercial | 🗓 |
 | [[HU28-gastos-iniciales\|HU 28]] | Estimador de gastos iniciales de compra | Importante | 5 | Lead | 🗓 |
-| [[HU29-comparador-costo-credito\|HU 29]] | Comparador de costo total referencial del crédito | Importante | 5 | Lead | 🗓 |
+| [[HU29-planificador-metas-proyecto-verde-blanco\|HU 29]] | Planificador interactivo de metas de ahorro para compras en verde/blanco | Deseable | 5 | Lead | ✅ |
 | [[HU30-ranking-proyectos-brecha\|HU 30]] | Ranking de proyectos por brecha mínima | Importante | *(sin definir)* | Lead | 🗓 |
 | [[HU31-mapa-accesibilidad\|HU 31]] | Visualización de mapa de accesibilidad inmobiliaria | Opcional | *(sin definir)* | Lead | 🗓 |
 

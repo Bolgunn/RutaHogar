@@ -1913,6 +1913,44 @@ export default function App() {
     });
   };
 
+  const handleSaveGreenSavingsGoal = async (goalPayload) => {
+    if (!currentEvaluation || !goalPayload) return null;
+
+    const nextHousingPlan = {
+      ...(currentEvaluation.housing_plan || {}),
+      green_savings_goal: goalPayload,
+    };
+    const optimisticEvaluation = {
+      ...currentEvaluation,
+      housing_plan: nextHousingPlan,
+    };
+
+    setEvaluations((prev) =>
+      prev.map((item) =>
+        item.id === currentEvaluation.id ? optimisticEvaluation : item,
+      ),
+    );
+
+    try {
+      const updatedEvaluation = await saveHousingPlanProgress(
+        currentEvaluation.id,
+        userId || profile?.email || "local-user",
+        nextHousingPlan,
+      );
+      if (updatedEvaluation) {
+        setEvaluations((prev) =>
+          prev.map((item) =>
+            item.id === currentEvaluation.id ? updatedEvaluation : item,
+          ),
+        );
+      }
+    } catch (err) {
+      console.warn("Meta de ahorro en verde guardada localmente:", err);
+    }
+
+    return goalPayload;
+  };
+
   const handleSaveHousingProgress = async (progressData) => {
     if (!currentEvaluation) return;
 
@@ -2488,6 +2526,7 @@ export default function App() {
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
+          onSaveGreenSavingsGoal={handleSaveGreenSavingsGoal}
           onRetryExplanation={handleRetryAiExplanation}
           evaluation={currentEvaluation}
           trackingState={trackingState}
@@ -2502,6 +2541,7 @@ export default function App() {
         />
       ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
         <ProgressPage
+          evaluation={currentEvaluation}
           onOpenHistory={() => navigateToPage("progress-history")}
           onOpenProject={(projectId) => navigateToPage("projects", { projectId })}
           onStartEvaluation={startEvaluation}
@@ -2513,6 +2553,8 @@ export default function App() {
         />
       ) : page === "housing-plan" && profile.role === roles.user ? (
         <HousingSavingsPlan
+          trackingState={trackingState}
+          onSaveGreenSavingsGoal={handleSaveGreenSavingsGoal}
           evaluation={currentEvaluation}
           initialPieType={housingInitialPieType}
           onBack={() => navigateToPage("tracking")}

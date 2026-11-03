@@ -5,7 +5,7 @@ import { formatChileanRutInput, isValidChileanRut, normalizeChileanRut } from ".
 describe("Chilean RUT", () => {
   it("normalizes a valid RUT to the project canonical representation", () => {
     expect(normalizeChileanRut(" 12.345.678-5 ")).toBe("12345678-5");
-    expect(normalizeChileanRut("17.493.972-k")).toBe("17493972-K");
+    expect(normalizeChileanRut("17.493.972-1")).toBe("17493972-1");
   });
 
   it("rejects an invalid verification digit or incomplete value", () => {

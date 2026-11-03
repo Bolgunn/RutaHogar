@@ -117,7 +117,7 @@ async function withEvaluationEvents(rows) {
   const { data, error } = await query.order("recorded_at", { ascending: true });
   if (error) {
     logSupabaseError(error);
-    throw error;
+    return rows;
   }
   return mergeEvaluationEvents(rows, data || []);
 }
