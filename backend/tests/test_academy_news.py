@@ -20,6 +20,8 @@ def _reload_module(monkeypatch, feeds=None):
 
 def test_academy_news_returns_curated_items_without_feeds(monkeypatch):
     academy_news = _reload_module(monkeypatch)
+    if hasattr(academy_news, "RUTAHOGAR_ACADEMY_NEWS_FEEDS"):
+        monkeypatch.delattr(academy_news, "RUTAHOGAR_ACADEMY_NEWS_FEEDS")
 
     payload = academy_news.build_academy_news_payload(now=100)
 
@@ -80,6 +82,11 @@ def test_academy_news_route_is_registered(monkeypatch):
     for mod in list(sys.modules):
         if mod.startswith("app.") and mod != "app.academy_news":
             del sys.modules[mod]
+            
+    # Mock the global variable
+    import app.academy_news
+    if hasattr(app.academy_news, "RUTAHOGAR_ACADEMY_NEWS_FEEDS"):
+        monkeypatch.delattr(app.academy_news, "RUTAHOGAR_ACADEMY_NEWS_FEEDS")
 
     main = importlib.import_module("app.main")
     response = TestClient(main.app).get("/academy/news")

@@ -12,19 +12,24 @@ const project = {
   precio_min_uf: 3000, precio_max_uf: 3200, descripcion: "Departamentos cercanos al centro de Santiago.",
 };
 
+const alternativeProject = {
+  ...project, id: "project-2", nombre: "Vista Sur", precio_min_uf: 2500, precio_max_uf: 2600, valor_uf: 2500,
+};
+
 const baseContext = {
   ingreso_mensual: 3000000, deuda_mensual: 100000,
   ahorro_disponible: 600 * DEFAULT_UF_CLP, dividendo_estimado: 600000,
   classification: "Alto", score: 78, uf_value_clp: DEFAULT_UF_CLP,
 };
 
-function renderModal(context) {
+function renderModal(context, { projects = [], compatibilityStatus } = {}) {
   return renderToStaticMarkup(<ProjectEvaluationModal
     project={project}
-    projects={[]}
+    projects={projects}
     context={context}
     ufValueClp={DEFAULT_UF_CLP}
     onboarding={{}}
+    compatibilityStatus={compatibilityStatus}
     onClose={vi.fn()}
     onToggleFavorite={vi.fn()}
   />);
@@ -54,20 +59,29 @@ describe("project evaluation modal copy", () => {
     expect(html).not.toContain(PROJECT_SIMULATION_DISCLAIMER);
   });
 
-  it("uses the persisted tracking verdict for the same projection target", () => {
-    const html = renderToStaticMarkup(<ProjectEvaluationModal
-      project={project}
-      projects={[]}
-      context={{ ...baseContext, ahorro_disponible: 150 * DEFAULT_UF_CLP }}
-      ufValueClp={DEFAULT_UF_CLP}
-      onboarding={{}}
-      compatibilityStatus="Cercano"
-      onClose={vi.fn()}
-      onToggleFavorite={vi.fn()}
-    />);
+  it.each(["Compatible", "Cercano"])("uses tracking's %s verdict without local adjustment alternatives", (compatibilityStatus) => {
+    const context = { ...baseContext, ahorro_disponible: 150 * DEFAULT_UF_CLP };
+    expect(evaluateScenario(context, projectToScenario(project, DEFAULT_UF_CLP)).status).toBe("Requiere ajuste");
+    const html = renderModal(
+      context,
+      { projects: [alternativeProject], compatibilityStatus },
+    );
 
-    expect(html).toContain("Cercano");
+    expect(html).toContain(compatibilityStatus);
     expect(html).not.toContain("Requiere ajuste");
+    expect(html).not.toContain("Alternativas para comparar");
+    expect(html).not.toContain(alternativeProject.nombre);
+  });
+
+  it("keeps local alternatives when tracking did not provide a verdict", () => {
+    const html = renderModal(
+      { ...baseContext, ahorro_disponible: 150 * DEFAULT_UF_CLP },
+      { projects: [alternativeProject] },
+    );
+
+    expect(html).toContain("Requiere ajuste");
+    expect(html).toContain("Alternativas para comparar");
+    expect(html).toContain(alternativeProject.nombre);
   });
 });
 

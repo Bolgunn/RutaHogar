@@ -16,7 +16,7 @@ import SuggestedConfiguration from "../../../components/financing/SuggestedConfi
 import FinancingOverview, { FinancingAdjustments, formattedAmountCursorPosition, normalizedDecimalInput } from "../../../components/financing/FinancingOverview";
 import SubsidyDetailPanel from "../../../components/financing/subsidies/SubsidyDetailPanel";
 import ScenarioComparison from "../../../components/financing/ScenarioComparison";
-import { ADJUSTMENTS_SCROLL_OPTIONS, RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, requiresScenarioDecision, savedSuggestedScenarioState, scrollToFinancingAdjustments, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
+import { ADJUSTMENTS_SCROLL_OPTIONS, RANGE_AMOUNT_SCROLL_OPTIONS, clearRangeAmountGuide, hasEffectiveScenarioChanges, savedSuggestedScenarioState, scrollToFinancingAdjustments, scrollToRangeAmountSelector } from "../../../components/financing/FinancingSimulatorPanel";
 
 const findElementByType = (node, type) => {
   if (Array.isArray(node)) return node.map((child) => findElementByType(child, type)).find(Boolean);
@@ -59,6 +59,26 @@ describe("ALG-11", () => {
     expect(benefit.amount_clp).toBe(12560000);
     expect(benefit.eligible).toBe(false);
   });
+  it.each([
+    [
+      { identifier: "DS1", name: "DS1", value: { amount_clp: 250 }, eligibility: {} },
+      "Monto informado",
+    ],
+    [
+      BENEFIT_ESTIMATION_BASELINE.entries.find((item) => item.identifier === "DS49"),
+      "Aporte base",
+    ],
+  ])("shows a monetary %s contribution in financing instead of saying it does not discount capital", (entry, label) => {
+    const draft = { precio_uf: 900, pie_clp: 100, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const benefit = evaluateBenefit(entry, {}, { precio_uf: 900 }, 1);
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+    const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result, ufReference: { uf_value_clp: 1 } }));
+
+    expect(result.subsidio_principal_clp).toBeGreaterThan(0);
+    expect(markup).toContain(label);
+    expect(markup).toContain("Beneficio");
+    expect(markup).not.toContain("no descuenta el capital del financiamiento");
+  });
   it("keeps a DS1 range separate from the single credit until an official amount exists", () => {
     const entry = BENEFIT_ESTIMATION_BASELINE.entries.find((item) => item.identifier === "DS1");
     const benefit = evaluateBenefit(entry, {}, { precio_uf: 1200 }, 40000);
@@ -71,13 +91,27 @@ describe("ALG-11", () => {
     expect(applyRangeReferenceAmount(rangeBenefit, 200)).toMatchObject({ amount_kind: "range_selected", amount_clp: 200, range_reference_clp: [100, 200] });
     expect(applyRangeReferenceAmount(rangeBenefit, 201)).toBe(rangeBenefit);
   });
-  it("keeps informational benefits available when a reviewed catalogue only supplies monetary entries", () => {
-    const entries = benefitOptions({ entries: [{ identifier: "DS1", value: { amount_clp: 15000000 }, eligibility: {} }] });
+  it("uses the complete estimation baseline only when no published catalogue exists", () => {
+    expect(benefitOptions()).toEqual(BENEFIT_ESTIMATION_BASELINE.entries);
+  });
+  it("uses only DS1 when that is the complete published catalogue", () => {
+    const ds1 = { identifier: "DS1", value: { amount_clp: 15000000 }, eligibility: {} };
 
-    expect(entries.find((entry) => entry.identifier === "DS1")?.value.amount_clp).toBe(15000000);
-    expect(entries.map((entry) => entry.identifier)).toEqual(expect.arrayContaining([
-      "FOGAES", "PADHI", "LEASING", "LEY_21748",
-    ]));
+    expect(benefitOptions({ entries: [ds1] })).toEqual([ds1]);
+  });
+  it("keeps exactly the published entries, including reviewed additions", () => {
+    const ds1 = { identifier: "DS1", value: { amount_clp: 15000000 }, eligibility: {} };
+    const newBenefit = { identifier: "REVIEWED_NEW", name: "Beneficio revisado", kind: "information" };
+
+    expect(benefitOptions({ entries: [ds1, newBenefit] })).toEqual([ds1, newBenefit]);
+  });
+  it("does not replace a published entry's reviewed values with baseline metadata", () => {
+    const publishedDs1 = {
+      identifier: "DS1", name: "DS1 revisado", kind: "official",
+      value: { amount_clp: 17000000 }, eligibility: { max_precio_uf: 2200 },
+    };
+
+    expect(benefitOptions({ entries: [publishedDs1] })).toEqual([publishedDs1]);
   });
   it("builds minimum, middle and maximum simulation references from a normalized range", () => {
     expect(rangeSimulationOptions([250, 550])).toEqual([
@@ -152,14 +186,6 @@ describe("ALG-11", () => {
     expect(hasEffectiveScenarioChanges(next.draft, next.activeDraft)).toBe(true);
     expect(synchronizeScenario(next.activeDraft)).toEqual(next.activeDraft);
   });
-  it.each([
-    [null, false, false],
-    [null, true, true],
-    ["scenario-a", false, false],
-    ["scenario-a", true, true],
-  ])("requires a scenario decision only for pending changes (active id %s, changes %s)", (_activeScenarioId, hasUnsavedChanges, expected) => {
-    expect(requiresScenarioDecision(hasUnsavedChanges)).toBe(expected);
-  });
   it("normalizes decimal input without returning non-finite values", () => {
     const normalized = ["", ".", ",", "1.", "1,5", "1.5"]
       .map((value) => normalizedDecimalInput(value, { maxIntegerDigits: 3, decimalPlaces: 2 }));
@@ -173,6 +199,17 @@ describe("ALG-11", () => {
     expect(normalizedDecimalInput("1234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
     expect(normalizedDecimalInput("1.234", { maxIntegerDigits: 3, decimalPlaces: 2 })).toBeNull();
   });
+  it("keeps Pie percentage at or below its semantic 100% maximum", () => {
+    const options = { maxIntegerDigits: 3, decimalPlaces: 2, maxValue: 100 };
+    const accepted = ["99.99", "100", "100.00", "", ".", ",", "1."]
+      .map((value) => normalizedDecimalInput(value, options));
+
+    expect(accepted.map((item) => item.value)).toEqual([99.99, 100, 100, 0, 0, 0, 1]);
+    expect(accepted.every((item) => Number.isFinite(item.value))).toBe(true);
+    expect(accepted.at(-1).rawValue).toBe("1.");
+    expect(normalizedDecimalInput("100.01", options)).toBeNull();
+    expect(normalizedDecimalInput("101", options)).toBeNull();
+  });
   it("preserves the logical cursor position across formatted amount edits", () => {
     expect(formattedAmountCursorPosition("234.567", 0)).toBe(0);
     expect(formattedAmountCursorPosition("1.234.567", 3)).toBe(4);
@@ -182,6 +219,14 @@ describe("ALG-11", () => {
   it("shows each scenario restriction with its own tone", () => {
     expect(scenarioMetricTones({ ltvRatio: 0.82, ltvLimit: 0.8, dividendRatio: 0.26, burdenRatio: 0.4 }))
       .toEqual({ ltvTone: "adjustment", dividendTone: "near", burdenTone: "compatible" });
+  });
+  it("uses a compatible LTV tone below the available reference", () => {
+    expect(scenarioMetricTones({ ltvRatio: 0.78, ltvLimit: 0.8, dividendRatio: 0.2, burdenRatio: 0.4 }))
+      .toMatchObject({ ltvTone: "compatible" });
+  });
+  it("uses a neutral LTV tone when no valid LTV reference is available", () => {
+    expect(scenarioMetricTones({ ltvRatio: 0.82, ltvLimit: null, dividendRatio: 0.2, burdenRatio: 0.4 }))
+      .toMatchObject({ ltvTone: "neutral" });
   });
   it("reads the historic scenario classification from its saved snapshot", () => {
     expect(persistedScenarioStatus({ financial_status: "Cercano" })).toBe("Cercano");
@@ -266,10 +311,33 @@ describe("ALG-11", () => {
     expect(markup).toContain("Cambio pendiente: revísalo y aplica tus cambios.");
     expect(markup).not.toContain("Sin subsidio");
   });
-  it("applies the Ley 21.748 rate reduction without treating it as a capital subsidy", () => {
+  it("keeps informational benefits out of the financed capital", () => {
+    const draft = { precio_uf: 1000, pie_clp: 100, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const benefit = evaluateBenefit(BENEFIT_ESTIMATION_BASELINE.entries.find((item) => item.identifier === "FOGAES"), {}, { precio_uf: 1000 }, 1);
+    const result = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 1 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+
+    expect(result.subsidio_principal_clp).toBe(0);
+    expect(result.credito_clp).toBe(900);
+  });
+  it("does not reduce the Ley 21.748 rate from the informational baseline", () => {
     const draft = { precio_uf: 1000, pie_clp: 10000000, credito_clp: 90000000, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
     const withoutBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
-    const benefit = { selected: "LEY_21748", eligible: true, amount_kind: "information", amount_clp: 0, entry: { name: "Subsidio al Dividendo — Ley N.º 21.748", rate_reduction_percentage_points: 0.60 } };
+    const benefit = evaluateBenefit(BENEFIT_ESTIMATION_BASELINE.entries.find((item) => item.identifier === "LEY_21748"), {}, { precio_uf: 1000 }, 100000);
+    const withBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit });
+
+    expect(withBenefit.subsidio_principal_clp).toBe(0);
+    expect(withBenefit.tasa_reduccion_anual).toBe(0);
+    expect(withBenefit.tasa_anual_aplicada).toBe(draft.tasa_anual);
+    expect(withBenefit.dividendo_clp).toBe(withoutBenefit.dividendo_clp);
+  });
+  it("uses only an explicit reviewed Ley 21.748 rate reduction without treating it as capital", () => {
+    const draft = { precio_uf: 1000, pie_clp: 10000000, credito_clp: 90000000, plazo_anios: 20, tasa_anual: 0.04, renta_propia_clp: 10000000, renta_complementaria_clp: 0, usar_renta_complementaria: false, deuda_mensual_clp: 0 };
+    const withoutBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit: { amount_kind: "information", amount_clp: 0 } });
+    const [reviewedEntry] = benefitOptions({ entries: [{
+      identifier: "LEY_21748", name: "Subsidio al Dividendo — Ley N.º 21.748", kind: "information",
+      rate_reduction_percentage_points: 0.60,
+    }] });
+    const benefit = evaluateBenefit(reviewedEntry, {}, { precio_uf: 1000 }, 100000);
     const withBenefit = calculateScenarioResult({ draft, ufReference: { uf_value_clp: 100000 }, marketReference: { ltv_referencial: 0.9 }, benefit });
     const markup = renderToStaticMarkup(React.createElement(FinancingOverview, { draft, result: withBenefit, ufReference: { uf_value_clp: 100000 } }));
 

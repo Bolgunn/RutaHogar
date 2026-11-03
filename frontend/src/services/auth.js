@@ -187,8 +187,24 @@ export function updateStoredProfile(profile) {
 
 export async function signOut() {
   if (isSupabaseDataConfigured) {
-    await supabase.auth.signOut();
+    // "local": el scope global por defecto revoca la sesión de la cuenta en
+    // todos los dispositivos, y las cuentas demo/QA se comparten entre varias personas.
+    await supabase.auth.signOut({ scope: "local" });
   }
+  clearStoredAuth();
+}
+
+// supabase-js emite SIGNED_OUT cuando la sesión deja de existir (logout en esta
+// pestaña, refresh rechazado o sesión revocada en el servidor).
+export function onSessionEnded(callback) {
+  if (!isSupabaseDataConfigured) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT") callback();
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+export function clearStoredAuth() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(ONBOARDING_KEY);

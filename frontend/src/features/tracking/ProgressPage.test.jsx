@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PointTooltip, ProgressView, TrackingHistoryView, formatHistoricalProjectGoal,
-  activeBaselineForComparison, bulkAnnulSuccessMessage, canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields, isUpdatedField,
+  activeBaselineForComparison, auditRecordLabel, buildBulkAnnulCommands, bulkAnnulSuccessMessage,
+  canBulkAnnul, correctionTargetForClick, goalsStatusMessage, historicalEvaluationSummary, historySnapshotFields,
+  isUpdatedField, mutateBulkCorrections, runSequentialCorrections,
   dateTime, financialHistoryRows, tooltipPlacement,
 } from "./ProgressPage";
 
@@ -175,8 +177,82 @@ describe("HU13 compact financial history", () => {
   });
 
   it("reports the number of current logical records annulled in bulk", () => {
-    expect(bulkAnnulSuccessMessage(1)).toBe("1 registro fue eliminado de tu historial visible y evolución.");
-    expect(bulkAnnulSuccessMessage(2)).toBe("2 registros fueron eliminados de tu historial visible y evolución.");
+    expect(bulkAnnulSuccessMessage(1)).toBe("1 registro fue anulado lógicamente de tu evolución. Seguirá visible en el historial.");
+    expect(bulkAnnulSuccessMessage(2)).toBe("2 registros fueron anulados lógicamente de tu evolución. Seguirán visibles en el historial.");
+    expect(`${bulkAnnulSuccessMessage(1)} ${bulkAnnulSuccessMessage(2)}`).not.toMatch(/eliminad/i);
+  });
+
+  it("sends a bulk annulment sequentially through one visual mutation and onChanged", async () => {
+    const items = [
+      { target: { event_id: "update-1" }, command: { event_id: "command-1" } },
+      { target: { event_id: "update-2" }, command: { event_id: "command-2" } },
+    ];
+    const calls = [];
+    const onChanged = vi.fn();
+    const onCorrect = vi.fn(async (target, command) => { calls.push(`${target.event_id}:${command.event_id}`); });
+    const mutate = vi.fn(async (operation) => { await operation(); onChanged(); });
+
+    await mutateBulkCorrections(items, mutate, onCorrect);
+
+    expect(calls).toEqual(["update-1:command-1", "update-2:command-2"]);
+    expect(onCorrect).toHaveBeenCalledTimes(2);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for each bulk correction before sending the next one", async () => {
+    const pending = [];
+    const onCorrect = vi.fn(() => new Promise((resolve) => pending.push(resolve)));
+    const running = runSequentialCorrections([
+      { target: { event_id: "update-1" }, command: { event_id: "command-1" } },
+      { target: { event_id: "update-2" }, command: { event_id: "command-2" } },
+    ], onCorrect);
+
+    expect(onCorrect).toHaveBeenCalledTimes(1);
+    pending.shift()();
+    await Promise.resolve();
+    expect(onCorrect).toHaveBeenCalledTimes(2);
+    pending.shift()();
+    await running;
+  });
+
+  it("keeps generated command IDs when a failed bulk annulment is retried", () => {
+    const rows = [{ event_id: "update-1" }, { event_id: "update-2" }];
+    const createCommand = vi.fn((row) => ({ event_id: `command-for-${row.event_id}`, reason: "Datos duplicados" }));
+    const initial = buildBulkAnnulCommands(rows, "Datos duplicados", {}, createCommand);
+    const retry = buildBulkAnnulCommands(rows, "Datos duplicados", initial, createCommand);
+
+    expect(createCommand).toHaveBeenCalledTimes(2);
+    expect(retry).toEqual(initial);
+    expect(retry["update-1"].event_id).toBe("command-for-update-1");
+    expect(retry["update-2"].event_id).toBe("command-for-update-2");
+  });
+
+  it("labels current, replaced, annulled records and annulment events distinctly", () => {
+    const current = { event_id: "current" };
+    const replaced = { event_id: "replaced", root_event_id: "replaced" };
+    const annulled = { event_id: "annulled", root_event_id: "annulled" };
+    const annulment = {
+      event_id: "annulment", event_kind: "correction", correction_effect: "annul",
+      correction_of: "annulled", root_event_id: "annulled",
+    };
+    const audit = [current, replaced, annulled, annulment];
+
+    expect(auditRecordLabel(current, [current], audit, [])).toBe("Registro vigente");
+    expect(auditRecordLabel(replaced, [current], audit, ["replaced"])).toBe("Versión anterior");
+    expect(auditRecordLabel(annulled, [current], audit, ["annulled", "annulment"])).toBe("Registro anulado");
+    expect(auditRecordLabel(annulment, [current], audit, ["annulled", "annulment"])).toBe("Anulación");
+  });
+
+  it("does not allow an already annulled record to be selected again", () => {
+    const annulled = { event_id: "annulled", root_event_id: "annulled" };
+    const annulment = {
+      event_id: "annulment", correction_effect: "annul", correction_of: "annulled", root_event_id: "annulled",
+    };
+    const audit = [{ event_id: "baseline" }, annulled, annulment];
+
+    expect(canBulkAnnul(annulled, "baseline", audit, [])).toBe(false);
+    expect(canBulkAnnul(annulment, "baseline", audit, [])).toBe(false);
   });
 });
 
