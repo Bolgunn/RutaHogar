@@ -18,6 +18,19 @@ beforeEach(() => {
 });
 
 describe("HU27 authenticated accounts", () => {
+  it.each(["usuario", "ejecutivo", "admin", "admin_inmobiliario"])("rejects a disabled %s on password login and clears cached data", async role => {
+    mocks.profile.mockResolvedValue({ id: user.id, role, estado_acceso: "desactivado" });
+    mocks.auth.signInWithPassword.mockResolvedValue({ data: { session, user } });
+    await expect(signIn({ email: user.email, password: "legacy" })).rejects.toMatchObject({ code: "access_disabled" });
+    expect(mocks.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(localStorage.getItem("RutaHogar_profile")).toBeNull();
+  });
+  it("rejects disabled restored sessions and permits the account after reactivation", async () => {
+    mocks.profile.mockResolvedValueOnce({ id: user.id, role: "usuario", estado_acceso: "desactivado" });
+    await expect(restoreAuth()).rejects.toMatchObject({ code: "access_disabled" });
+    mocks.profile.mockResolvedValueOnce({ id: user.id, role: "usuario", estado_acceso: "activo" });
+    expect((await restoreAuth()).profile.estado_acceso).toBe("activo");
+  });
   it.each(["usuario", "ejecutivo", "admin", "admin_inmobiliario"])("preserves the server role for password login: %s", async role => {
     mocks.profile.mockResolvedValue({ id: user.id, role });
     mocks.auth.signInWithPassword.mockResolvedValue({ data: { session, user } });

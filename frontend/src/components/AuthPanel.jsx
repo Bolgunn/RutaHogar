@@ -1,9 +1,10 @@
 import '../styles/AuthPanel.css';
+import { validateRut } from "../utils/rut";
 import React, { useMemo, useRef, useState } from "react";
 import { isSupabaseDataConfigured } from "../services/profileService";
 import { calculateAge } from "../utils/helpers";
 import { roleLabels, roles, signIn, signUp, sendAccessEmail, startGoogle } from "../services/auth";
-import { PASSWORD_HINT, SIGNUP_DATA_REJECTED, validNewPassword } from "../lib/authPolicy";
+import { getPasswordStrength, PASSWORD_HINT, SIGNUP_DATA_REJECTED, validNewPassword } from "../lib/authPolicy";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
 import { trackSignUp } from "../lib/analytics";
 
@@ -79,36 +80,9 @@ export function getBirthDateError(form) {
   return "";
 }
 
-function validateRut(rutNumber, dv) {
-  if (!rutNumber || !dv) return false;
-  const cleanRut = rutNumber.replace(/\D/g, "");
-  if (cleanRut.length < 7) return false;
-  
-  let t = parseInt(cleanRut, 10);
-  let m = 0, s = 1;
-  for (; t; t = Math.floor(t / 10)) {
-    s = (s + t % 10 * (9 - m++ % 6)) % 11;
-  }
-  const expectedDv = s ? String(s - 1) : "K";
-  return expectedDv.toUpperCase() === dv.toUpperCase();
-}
 
-function getPasswordStrength(password) {
-  const checks = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /\d/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ];
-  const score = checks.filter(Boolean).length;
 
-  if (!password) return { label: "Débil", level: "weak", percent: 0, score };
-  if (score <= 2) return { label: "Débil", level: "weak", percent: 25, score };
-  if (score === 3) return { label: "Media", level: "medium", percent: 50, score };
-  if (score === 4) return { label: "Segura", level: "strong", percent: 75, score };
-  return { label: "Muy segura", level: "very-strong", percent: 100, score };
-}
+
 
 const strengthColors = {
   weak: "#b42318",
@@ -264,7 +238,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         setError("Ingresa tu RUT para crear la cuenta.");
         return;
       }
-      if (!validateRut(form.rut_number, form.rut_dv)) {
+      if (!validateRut(`${form.rut_number}-${form.rut_dv}`)) {
         setError("El RUT ingresado no es válido.");
         return;
       }

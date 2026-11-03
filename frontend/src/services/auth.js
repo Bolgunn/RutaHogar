@@ -2,7 +2,7 @@ import { invitationEmailRedirect } from "./coDebtorAuthContext";
 import { supabase } from "../utils/supabase";
 import { roles } from "../lib/roles";
 import { ensureUserProfile, getCurrentProfile, normalizeBirthDateForStorage, normalizePhoneForStorage } from "./profileService";
-import { normalizeEmail, PASSWORD_HINT, safeAuthError, sessionMethods, validNewPassword } from "../lib/authPolicy";
+import { ACCESS_DISABLED, normalizeEmail, PASSWORD_HINT, safeAuthError, sessionMethods, validNewPassword } from "../lib/authPolicy";
 
 export { roles };
 export const roleLabels = { usuario: "Usuario", ejecutivo: "Ejecutivo comercial", admin: "Admin", admin_inmobiliario: "Admin inmobiliaria" };
@@ -27,6 +27,11 @@ async function accountFor(user, session) {
   let profile;
   try {
     profile = await getCurrentProfile(user.id);
+    if (profile?.estado_acceso === "desactivado") {
+      await requireAuth().signOut({ scope: "local" }).catch(() => {});
+      clearPrivateAuth();
+      throw Object.assign(new Error(ACCESS_DISABLED), { code: "access_disabled" });
+    }
     // The signup trigger may already have created a partial profile. Recover
     // registration fields before deciding whether to ask for them again.
     if (!profile || (!profile.rut && user.user_metadata?.rut) ||
@@ -34,7 +39,10 @@ async function accountFor(user, session) {
         (!profile.birth_date && user.user_metadata?.birth_date)) {
       profile = await ensureUserProfile({ ...user, user_metadata: { ...user.user_metadata, role: roles.user } });
     }
-  } catch { throw new Error("No pudimos cargar el perfil. Si ya tienes una cuenta con este RUT, recupera su acceso; no se fusionarán cuentas."); }
+  } catch (failure) {
+    if (failure?.code === "access_disabled") throw failure;
+    throw new Error("No pudimos cargar el perfil. Si ya tienes una cuenta con este RUT, recupera su acceso; no se fusionarán cuentas.");
+  }
   if (!profile?.id) throw new Error("No pudimos cargar tu perfil. Intenta nuevamente.");
   if (sessionMethods(session).includes("oauth") && profile.role !== roles.user) throw new Error("Esta cuenta debe ingresar con correo y contraseña.");
   return { session, profile: { ...profile, email: user.email, user_id: user.id } };

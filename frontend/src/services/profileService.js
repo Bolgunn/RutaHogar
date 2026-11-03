@@ -24,6 +24,7 @@ function normalizeProfile(row) {
     rut: row.rut || "",
     birth_date: row.birth_date || "",
     role: normalizeRole(row.role),
+    estado_acceso: row.estado_acceso,
     onboarding_data: row.onboarding_data || null,
     last_lead_seen_at: row.last_lead_seen_at || null,
     created_at: row.created_at,
@@ -79,7 +80,7 @@ export async function getCurrentProfile(userId) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, estado_acceso, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -129,7 +130,7 @@ export async function upsertProfile(userId, fullName, role = "usuario", onboardi
     ? table.update(updated).eq("id", userId)
     : table.upsert({ ...updated, created_at: new Date().toISOString() });
   const { data, error } = await mutation
-    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, onboarding_data, last_lead_seen_at, created_at, updated_at")
+    .select("id, nombre, apellido_paterno, apellido_materno, full_name, phone, rut, birth_date, role, estado_acceso, onboarding_data, last_lead_seen_at, created_at, updated_at")
     .maybeSingle();
 
   if (error) {

@@ -2,23 +2,9 @@ import React, { useMemo, useState } from "react";
 import DataConsent from "./DataConsent";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
 import { formatRut, validateRut } from "../utils/rut";
-import { PASSWORD_HINT, validNewPassword } from "../lib/authPolicy";
+import { getPasswordStrength, PASSWORD_HINT, validNewPassword } from "../lib/authPolicy";
 
-function getPasswordStrength(password) {
-  const checks = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /\d/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ];
-  const score = checks.filter(Boolean).length;
-  if (!password) return { label: "Débil", level: "weak", percent: 0 };
-  if (score <= 2) return { label: "Débil", level: "weak", percent: 25 };
-  if (score === 3) return { label: "Media", level: "medium", percent: 50 };
-  if (score === 4) return { label: "Segura", level: "strong", percent: 75 };
-  return { label: "Muy segura", level: "very-strong", percent: 100 };
-}
+
 
 const scoreCopy = {
   Alto: "Excelente. Tu perfil está bien posicionado para iniciar el proceso de compra. Crea tu cuenta para guardar este resultado y recibir tu plan personalizado.",

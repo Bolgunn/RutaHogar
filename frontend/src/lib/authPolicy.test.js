@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { callbackAccessError, normalizeEmail, PASSWORD_HINT, SIGNUP_DATA_REJECTED, recoverySession, safeAuthError, sessionMethods, validNewPassword } from "./authPolicy";
+import { callbackAccessError, getPasswordStrength, normalizeEmail, PASSWORD_HINT, SIGNUP_DATA_REJECTED, recoverySession, safeAuthError, sessionMethods, validNewPassword } from "./authPolicy";
 
 describe("HU27 access policy", () => {
+  it.each(["Abcd123 ", "Valid123!", "abcdefgh", "Abcd123_", ""])("keeps strength and validation consistent for %s", password => {
+    expect(getPasswordStrength(password).score === 5).toBe(validNewPassword(password));
+  });
   it.each(["?", "#"])("handles allowlisted callback errors from %s without exposing raw provider text", separator => {
     const message = "Esta cuenta debe ingresar con correo y contraseña.";
     expect(callbackAccessError(`https://www.rutahogar.cl/auth/callback${separator}error=access_denied&error_description=${encodeURIComponent(message)}`)).toBe(message);

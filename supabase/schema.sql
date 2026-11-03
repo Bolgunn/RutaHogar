@@ -3586,6 +3586,7 @@ create trigger hu27_profile_rut_guard before insert or update of rut on public.p
 for each row execute function public.hu27_guard_profile_rut();
 
 -- Opt in through Authentication > Hooks after deploying and testing this function.
+alter table public.profiles add column if not exists estado_acceso text not null default 'activo';
 create or replace function public.hu27_access_token_hook(event jsonb)
 returns jsonb language plpgsql stable security invoker
 set search_path = pg_catalog, public, auth
@@ -3593,17 +3594,22 @@ as $$
 declare
   v_user uuid := (event->>'user_id')::uuid;
   v_role text;
+  v_state text;
   v_email text;
   v_oauth boolean;
 begin
-  select role into v_role from public.profiles where id = v_user;
+  select role, estado_acceso into v_role, v_state from public.profiles where id=v_user;
+  if v_state = 'desactivado' then
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403,
+      'message', 'Esta cuenta no tiene acceso habilitado. Contacta al administrador.'));
+  end if;
   v_oauth := event->>'authentication_method' = 'oauth'
     or exists (select 1 from jsonb_array_elements(coalesce(event->'claims'->'amr', '[]'::jsonb)) a where a->>'method' = 'oauth');
   if v_oauth and coalesce(v_role, 'usuario') <> 'usuario' then
     return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Esta cuenta debe ingresar con correo y contraseña.'));
   end if;
-  select lower(email) into v_email from auth.users where id = v_user;
-  if exists (select 1 from auth.identities i where i.user_id = v_user and i.provider = 'google'
+  select lower(email) into v_email from auth.users where id=v_user;
+  if exists (select 1 from auth.identities i where i.user_id=v_user and i.provider='google'
     and (i.identity_data->>'email' is null or lower(i.identity_data->>'email') is distinct from v_email)) then
     return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Google debe utilizar el mismo correo de la cuenta.'));
   end if;
@@ -3612,7 +3618,7 @@ end;
 $$;
 revoke all on function public.hu27_access_token_hook(jsonb) from public, anon, authenticated;
 grant usage on schema public to supabase_auth_admin;
-grant select (id, role) on public.profiles to supabase_auth_admin;
+grant select (id, role, estado_acceso) on public.profiles to supabase_auth_admin;
 create policy "hu27_auth_hook_profile_read" on public.profiles for select to supabase_auth_admin using (true);
 grant execute on function public.hu27_access_token_hook(jsonb) to supabase_auth_admin;
 comment on function public.hu27_access_token_hook(jsonb) is 'HU27: trusted role and same-email Google scope. Enable as Custom Access Token hook; never expose as a browser RPC.';
@@ -5669,8 +5675,13 @@ grant execute on function public.hu30_list_owner_goals() to authenticated;
 
 -- Guard de privilegios de profiles y alta sin rol desde metadata
 -- (20261031120000_profiles_privilege_guard_fix).
-create or replace function public.hu30_guard_profile_privileges()
-returns trigger language plpgsql security definer set search_path=public as $$
+alter table public.profiles add column if not exists password_pendiente boolean not null default false;
+CREATE OR REPLACE FUNCTION public.hu30_guard_profile_privileges()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
 declare actor_role text; actor_tenant uuid;
 begin
   -- PostgREST SET ROLE survives SECURITY DEFINER; current_user would not.
@@ -5682,10 +5693,20 @@ begin
     -- stored row, so a staff member re-saving their own profile is not a change.
     if exists (select 1 from public.profiles where id = new.id) then return new; end if;
     if new.role is distinct from 'usuario' or new.inmobiliaria_id is not null
-        or new.reliability_status is distinct from 'normal' then
+        or new.reliability_status is distinct from 'normal'
+        or new.estado_acceso is distinct from 'activo' or new.password_pendiente then
       raise exception 'profile_privilege_change_forbidden' using errcode='42501';
     end if;
     return new;
+  end if;
+  -- El acceso sólo cambia por hu28_set_member_access, que deja auditoría.
+  if new.estado_acceso is distinct from old.estado_acceso then
+    raise exception 'profile_privilege_change_forbidden' using errcode='42501';
+  end if;
+  -- Sólo el trigger sobre auth.users lo limpia, cuando GoTrue guarda la contraseña.
+  if new.password_pendiente is distinct from old.password_pendiente
+      and current_setting('role', true) in ('authenticated', 'anon') then
+    raise exception 'profile_privilege_change_forbidden' using errcode='42501';
   end if;
   -- A user never clears their own fraud flag. check_ml_fraud_on_insert raises it from the lead's
   -- own evaluation insert, so that write arrives here one trigger level down.
@@ -5716,7 +5737,7 @@ begin
           and (actor_tenant is null or actor_tenant=new.inmobiliaria_id)) then return new; end if;
   raise exception 'profile_privilege_change_forbidden' using errcode='42501';
 end;
-$$;
+$function$
 drop trigger if exists hu30_profile_privileges on public.profiles;
 create trigger hu30_profile_privileges before insert or update on public.profiles
   for each row execute function public.hu30_guard_profile_privileges();

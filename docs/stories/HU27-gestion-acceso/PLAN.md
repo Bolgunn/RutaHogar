@@ -197,6 +197,36 @@ To reproduce SQL verification, use a disposable database: hu27_schema.sql, both 
 
 ## PR review corrections
 
+### Post-merge access-state and shared-validation follow-up
+
+The owner reports `20261103191025_hu27_shared_access_guard.sql` applied in hosted
+Supabase. Keep the Custom Access Token and Before User Created hooks enabled.
+The migration requires the active HU30 profile trigger and HU28's
+`profiles.estado_acceso` before removing any remaining duplicate HU27 guard.
+It does not replace the deployed HU30 guard or modify team records. The snapshot
+and disposable fixture mirror the shared production guard, including access-state
+and pending-password protections. Other environments need those shared team
+prerequisites before applying this migration.
+
+Login, restoration and the access-token hook reject `desactivado`; reactivation
+restores normal access. Password validation and both strength meters share one
+rule set, and registration reuses `utils/rut`. Integration preserves develop's
+existing-profile UPDATE path and co-debtor invitation registration/restoration.
+
+Disposable SQL checks passed for duplicate RUTs, hook permissions, shared executive
+assignment, forbidden privilege/state changes, disabled password/OAuth/refresh
+requests, reactivation, rollback and reapplication. Two snapshot tests passed.
+Chrome fixtures passed for login, cross-tab account switching/logout, stale-result
+isolation, server-rejected sessions in two tabs, profile completion at 393/1280 px
+and recovery reload/expiry/session mismatch. Provider responses were simulated.
+Real Google continuity, mail delivery and cross-device global logout still require
+hosted acceptance. JWT-only services can retain access until token expiry.
+
+Revalidated on develop commit `7861455`: 1,261 frontend tests passed; the unchanged
+`chileanRut` fixture is the single failing test. Production build and both schema
+snapshot tests passed. The full suite includes develop's server-revocation and
+co-debtor invitation regression tests.
+
 Integrated current develop through the export branch without rewriting published history. SessionAccess remains the single auth-state owner; backend-rejected sessions still trigger local sign-out through the updated tracking transport. Local simulated login is intentionally unsupported: Supabase is required for authentication. Remaining local data adapters are not authentication fallbacks and were not removed indiscriminately.
 
 Apply 20261103043642_hu27_auth_hook_controlled_errors.sql to existing environments: the access-token hook now returns structured 403 errors instead of SQL exceptions. The snapshot mirrors that definition and excludes the nested transaction from the signup-hook copy. The prior two hooks remain configured; no remote hook was changed by this review correction.
