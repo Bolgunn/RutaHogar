@@ -1,5 +1,6 @@
 import { metricsResponse, parseMetricsRequest } from "./handler.ts";
 import { computeFunnelMetrics } from "../../../frontend/src/lib/commercial/funnelMetrics.js";
+import { withConfiguredPriority } from "../../../frontend/src/lib/commercial/configuredPriority.js";
 import { protectParticipationRequest } from "../co-debtor-consent/security.ts";
 
 function assert(value: unknown, message = "assertion failed") { if (!value) throw new Error(message); }
@@ -16,7 +17,11 @@ const evaluation = {
 const fact = { lead_id: "PRIVATE_LEAD_SENTINEL", first_evaluation_at: "2026-10-01T12:00:00Z", evaluacion_actual: evaluation,
   evaluaciones: [{ at: "2026-10-01T12:00:00Z", project_goal_id: project.id }], proyectos: [project.id], postulaciones: [], stage_events: [], plan: null, favoritos: [], progress_update_ats: [], confirmed_goal_ats: [] };
 function request(body: any = {}) { return new Request("https://edge.test", { method: "POST", headers: { Authorization: "Bearer valid", Origin: "https://app.test" }, body: JSON.stringify(body) }); }
-function admin(facts = [fact]) { return { auth: { getUser: async token => ({ data: { user: { id: "verified-staff" } }, error: null }) }, rpc: async (name, args) => {
+// tables: rows each query resolves to; no saved commercial criteria unless a test provides them.
+function admin(facts = [fact], tables: Record<string, any> = { profiles: { inmobiliaria_id: null }, configuracion_comercial: null }) {
+  const query = (table: string) => { const chain: any = { select: () => chain, eq: () => chain, order: () => chain, limit: () => chain,
+    maybeSingle: async () => ({ data: tables[table] ?? null, error: null }) }; return chain; };
+  return { auth: { getUser: async token => ({ data: { user: { id: "verified-staff" } }, error: null }) }, from: query, rpc: async (name, args) => {
   assert(name === "hu30_commercial_funnel_source" && args.p_actor === "verified-staff", "untrusted actor or RPC");
   return { data: { now, proyectos: [project], facts }, error: null }; } }; }
 const controls = { filtros: { proyecto_id: null, afinidad: [], capacidad: [], prioridad: [] }, granularidad: "mes" };
@@ -81,4 +86,17 @@ Deno.test("HTTP aggregation responses and failures are private; errors expose no
     assert(response.headers.get("Vary") === "Origin");
     if (bad) assert(!/987654321|PRIVATE_LEAD/.test(await response.text()));
   }
+});
+
+Deno.test("HU 21 configured priority reaches the aggregate without exposing criteria or snapshots", async () => {
+  const medio = { ...fact, lead_id: "medio", evaluacion_actual: { ...evaluation, input: { ...evaluation.input, plazo_compra: "inmediato" },
+    result: { ...evaluation.result, score: 60, classification: "Medio", project_fit: { classification: "Compatible", status: "compatible" },
+      commercial_priority_detail: { action_key: "contact_with_review" } } } };
+  const config = { version: 2, alg_version: "hu21-commercial-priority-v1", criterios: { subir_con_senales: 1 } };
+  const client = admin([medio], { profiles: { inmobiliaria_id: "tenant-1" }, configuracion_comercial: config });
+  const body = await (await metricsResponse(request(), client)).json();
+  const expected = computeFunnelMetrics({ now, proyectos: [project], facts: withConfiguredPriority([medio], config), ...controls });
+  assert(JSON.stringify(body.metrics) === JSON.stringify(expected), "configured priority parity lost");
+  assert(body.metrics.desglose.prioridad.find(row => row.clave === "contact_now").leads === 1, "tenant criteria ignored");
+  assert(!/subir_con_senales|criterios|987654321/.test(JSON.stringify(body)), "criteria or snapshot leaked");
 });

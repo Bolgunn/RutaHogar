@@ -359,7 +359,7 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function DashboardLeads({ inmobiliariaId, ejecutivo, role, highScoreNotification, staffScopeKey }) {
+export default function DashboardLeads({ userId, inmobiliariaId, ejecutivo, role, highScoreNotification, staffScopeKey }) {
   const feed = useStaffProjectionRead({
     scopeKey: staffScopeKey || `${ejecutivo?.id || ejecutivo?.email || "staff"}:${role}:${inmobiliariaId || "global"}`,
     load: () => getEvaluations(null, role),
@@ -398,7 +398,7 @@ export default function DashboardLeads({ inmobiliariaId, ejecutivo, role, highSc
     ? { ...row, reliability_status: reliabilityOverrides[row.user_id || row.id] } : row), [evaluations, reliabilityOverrides]);
 
   // HU 21: la proyección staff trae junto a las evaluaciones lo que R9 necesita de los criterios.
-  const commercialConfig = useMemo(() => getStaffCommercialConfig(), [evaluations]);
+  const commercialConfig = useMemo(() => getStaffCommercialConfig(userId), [evaluations, userId]);
   const defaultSortBy = commercialConfig?.orden_desempate || "afinidad";
   useEffect(() => {
     setSortBy(defaultSortBy);

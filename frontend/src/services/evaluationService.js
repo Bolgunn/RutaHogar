@@ -229,11 +229,12 @@ export function evaluationAnnotationOwner(role, userId) {
 // App.jsx y useLeads cargan la misma lista staff al iniciar sesión; compartir la
 // petición en vuelo evita duplicar la consulta más pesada del backend.
 const staffEvaluationsInFlight = new Map();
-let staffCommercialConfig = null;
-
 // HU 21: lo que la bandeja necesita de los criterios del tenant (ALG-19 R9), o null.
-export function getStaffCommercialConfig() {
-  return staffCommercialConfig;
+// Por usuario, como la petición en vuelo: otra cuenta nunca ve criterios ajenos.
+const staffCommercialConfigs = new Map();
+
+export function getStaffCommercialConfig(userId) {
+  return staffCommercialConfigs.get(userId) || null;
 }
 
 function loadStaffEvaluations(userId) {
@@ -255,7 +256,7 @@ export async function getEvaluations(userId, role) {
   if (isSales) {
     // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
     const projection = await loadStaffEvaluations(user.id);
-    staffCommercialConfig = projection.commercial_config || null;
+    staffCommercialConfigs.set(user.id, projection.commercial_config || null);
     const rows = projection.items || [];
     const contactsMap = await listLeadContacts(rows);
     return rows.map((row) => normalizeEvaluation(row, contactsMap));

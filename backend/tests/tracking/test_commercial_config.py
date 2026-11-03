@@ -8,9 +8,11 @@ import pytest
 
 from app.main import app
 from app.scoring_engine.commercial_criteria import normalize_criterios
+from app.scoring_engine.commercial_priority import configured_priority_for_evaluation
 from app.scoring_engine.constants import COMMERCIAL_ACTIONS, COMMERCIAL_PRIORITY_ALG_VERSION
 from app.tracking.commercial_config import CommercialConfigService, InvalidCriteria
 from app.tracking.contracts import TrackingError
+from app.tracking import routes as tracking_routes
 from app.tracking.routes import repository
 from app.tracking.service import TrackingService
 from app.tracking.staff import StaffLeadService
@@ -227,6 +229,26 @@ def test_configured_priority_never_changes_score_or_classification():
         assert item["financial_data"] == stored[item["id"]]
 
 
+
+COMPATIBLE = {"classification": "Compatible", "status": "compatible"}
+
+
+def test_legacy_column_classification_is_not_downgraded_to_request_info():
+    row = {"score": 82, "classification": "Alto",
+           "financial_data": {"result_snapshot": {"project_fit": COMPATIBLE, "blockers": []},
+                              "input_snapshot": {"plazo_compra": "6_a_12_meses"}}}
+    configured = configured_priority_for_evaluation(row, normalize_criterios(None), None)
+    assert configured["commercial_priority_configured"]["action_key"] == "contact_now"
+
+
+def test_flat_legacy_form_and_onboarding_snapshot_feed_the_signals():
+    row = {"financial_data": {"result": {"score": 60, "classification": "Medio", "project_fit": COMPATIBLE, "blockers": []},
+                              "ingreso_mensual": 1500000, "plazo_compra": "mas_12_meses",
+                              "onboarding_snapshot": {"plazo_compra": "inmediato"}}}
+    criterios = normalize_criterios({"subir_con_senales": 1})
+    priority = configured_priority_for_evaluation(row, criterios, 2)["commercial_priority_configured"]
+    assert priority["action_key"] == "contact_now" and priority["promoted"] is True
+
 # --- E3 · preview before confirming ----------------------------------------------------------
 
 def test_preview_writes_nothing():
@@ -276,6 +298,17 @@ def test_stale_base_version_conflicts(base_version):
         save(repo, base_version=base_version)
     assert error.value.code == "config_version_conflict"
     assert len(repo.configs) == 2
+
+
+@pytest.mark.parametrize("base_version", [None, 1, 3])
+def test_preview_on_a_stale_base_version_conflicts(base_version):
+    repo = ConfigRepository()
+    save(repo)
+    save(repo, base_version=1)
+
+    with pytest.raises(TrackingError) as error:
+        CommercialConfigService(repo).preview_config("admin-a", {"base_version": base_version, "criterios": criterios(subir_con_senales=1)})
+    assert error.value.code == "config_version_conflict"
 
 
 def test_evaluations_use_latest_config():
@@ -384,7 +417,7 @@ def test_http_status_codes(api):
 
 def test_lead_endpoints_identical_with_config(inline, monkeypatch):
     monkeypatch.setattr(
-        "app.tracking.routes.TrackingService",
+        tracking_routes, "TrackingService",
         lambda repo: TrackingService(repo, market_snapshot_resolver=market_snapshot),
     )
     repo = MemoryRepository()

@@ -127,7 +127,11 @@ class CommercialConfigService:
     def preview_config(self, token, body):
         actor = self._admin(token)
         borrador = self._validated(actor, body.get("criterios"))
-        vigente, version = criterios_of(self.repository.latest_commercial_config(actor["inmobiliaria_id"]))
+        latest = self.repository.latest_commercial_config(actor["inmobiliaria_id"])
+        # Same check as save: a preview against another version would describe the wrong change.
+        if body.get("base_version") != (latest or {}).get("version"):
+            raise TrackingError("config_version_conflict")
+        vigente, version = criterios_of(latest)
 
         # Same universe as the tray: latest evaluation per lead, discarded leads excluded.
         rows = latest_per_lead(self.repository.staff_evaluations(actor) or [])

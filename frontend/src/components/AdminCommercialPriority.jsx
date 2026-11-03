@@ -44,7 +44,7 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? "Sin fecha" : date.toLocaleString("es-CL");
 }
 
-export default function AdminCommercialPriority({ evaluations, inmobiliariaId }) {
+export default function AdminCommercialPriority({ evaluations, inmobiliariaId, onSaved }) {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState(null);
@@ -55,12 +55,13 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  // keepDraft: after a version conflict the admin's edits survive against the new base version.
+  const load = useCallback(async ({ keepDraft = false } = {}) => {
     setLoadError("");
     try {
       const config = await getCommercialConfig();
       setData(config);
-      setDraft(config.vigente?.criterios || config.defaults);
+      if (!keepDraft) setDraft(config.vigente?.criterios || config.defaults);
       setPreview(null);
       setPreviewKey("");
       setErrors([]);
@@ -116,6 +117,11 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
       setErrors([]);
     } catch (error) {
       setPreview(null);
+      if (error.code === "config_version_conflict") {
+        await load({ keepDraft: true });
+        setMessage("Otro administrador cambió la configuración. Tus cambios siguen aquí: vuelve a previsualizar sobre la versión vigente.");
+        return;
+      }
       setErrors(error.errors || []);
       setMessage(error.message);
     } finally {
@@ -128,12 +134,13 @@ export default function AdminCommercialPriority({ evaluations, inmobiliariaId })
     setMessage("");
     try {
       const saved = await saveCommercialConfig(baseVersion, draft);
-      await load();
+      // The tray and every staff view recompute priority on read: reload them with the new version.
+      await Promise.all([load(), onSaved?.()]);
       setMessage(`Configuración aplicada: versión ${saved.version}.`);
     } catch (error) {
       if (error.code === "config_version_conflict") {
-        await load();
-        setMessage("Otro administrador cambió la configuración; revisa los cambios.");
+        await load({ keepDraft: true });
+        setMessage("Otro administrador cambió la configuración. Tus cambios siguen aquí: vuelve a previsualizar sobre la versión vigente.");
       } else {
         setErrors(error.errors || []);
         setMessage(error.message);
