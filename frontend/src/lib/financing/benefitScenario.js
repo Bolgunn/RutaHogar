@@ -48,19 +48,7 @@ function baselineEntry(identifier) {
 export function benefitOptions(catalogue) {
   const published = catalogue?.entries || [];
   if (!published.length) return BENEFIT_ESTIMATION_BASELINE.entries;
-  const publishedByIdentifier = new Map(published.map((entry) => [normalizeBenefitIdentifier(entry?.identifier), entry]));
-  const baseline = BENEFIT_ESTIMATION_BASELINE.entries.map((entry) => {
-    const reviewed = publishedByIdentifier.get(normalizeBenefitIdentifier(entry.identifier));
-    return reviewed ? {
-      ...entry,
-      ...reviewed,
-      value: { ...entry.value, ...reviewed.value },
-      eligibility: { ...entry.eligibility, ...reviewed.eligibility },
-    } : entry;
-  });
-  const additional = published.filter((entry) => !BENEFIT_ESTIMATION_BASELINE.entries
-    .some((baselineEntry) => normalizeBenefitIdentifier(baselineEntry.identifier) === normalizeBenefitIdentifier(entry?.identifier)));
-  return [...baseline, ...additional];
+  return published;
 }
 
 export function benefitDisplay(entry, evaluation, ufValue) {

@@ -7,6 +7,27 @@ import httpx
 
 from .contracts import TrackingError
 
+# Una conexión TLS nueva por llamada a Supabase costaba ~100-300 ms cada una.
+# httpx.Client es thread-safe y la instancia de la función se reutiliza entre requests.
+_shared_clients = {}
+
+
+def _shared_client(base_url):
+    client = _shared_clients.get(base_url)
+    if client is None:
+        client = _shared_clients.setdefault(base_url, httpx.Client(base_url=base_url, timeout=30))
+    return client
+
+
+CO_DEBTOR_INVITATION_SELECTION_LIMIT = 10
+
+
+def select_current_co_debtor_invitation(rows):
+    """Match the lead-visible rule: prefer pending, otherwise most recent."""
+    if not isinstance(rows, list) or not rows:
+        return None
+    return next((row for row in rows if row.get("status") == "pending"), rows[0])
+
 
 class TrackingRepository:
     def __init__(self, client=None):
@@ -23,8 +44,8 @@ class TrackingRepository:
         elif not self.key.startswith("sb_secret_"):
             headers["Authorization"] = f"Bearer {self.key}"
         try:
-            with httpx.Client(base_url=self.url, timeout=30) if self.client is None else _Borrowed(self.client) as client:
-                response = client.request(method, path, headers=headers, json=payload)
+            client = self.client or _shared_client(self.url)
+            response = client.request(method, path, headers=headers, json=payload)
         except httpx.HTTPError:
             raise TrackingError("persistence_unavailable") from None
         if response.status_code >= 400:
@@ -59,12 +80,12 @@ class TrackingRepository:
                 "morosidad_complementario)"
             ),
             "order": "created_at.desc",
-            "limit": 10,
+            "limit": CO_DEBTOR_INVITATION_SELECTION_LIMIT,
         })
         rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
-        if not isinstance(rows, list) or not rows:
+        invitation = select_current_co_debtor_invitation(rows)
+        if invitation is None:
             return None
-        invitation = rows[0]
         confirmations = invitation.get("co_debtor_confirmations")
         if isinstance(confirmations, dict):
             confirmation = confirmations
@@ -103,8 +124,18 @@ class TrackingRepository:
             "p_inmobiliaria": tenant_id,
         }))
 
-    def staff_evaluations(self):
-        return self.request("GET", "/rest/v1/evaluations?select=*&order=created_at.desc")
+    def staff_evaluations(self, actor):
+        """Same scope as staff_can_access, resolved in one database round trip."""
+        if actor.get("role") not in {"ejecutivo", "admin", "admin_inmobiliario"}:
+            return []
+        if actor.get("role") == "admin" and not actor.get("inmobiliaria_id"):
+            return self.request("GET", "/rest/v1/evaluations?select=*&order=created_at.desc")
+        tenant_id = actor.get("inmobiliaria_id")
+        if not tenant_id:
+            return []
+        return self.request("POST", "/rest/v1/rpc/staff_evaluations_for_inmobiliaria", payload={
+            "p_inmobiliaria": tenant_id,
+        })
 
     def staff_contacts(self, lead_ids):
         ids = sorted({str(lead_id) for lead_id in lead_ids if lead_id})
@@ -132,10 +163,10 @@ class TrackingRepository:
                 "morosidad_complementario)"
             ),
             "order": "created_at.desc",
-            "limit": 1,
+            "limit": CO_DEBTOR_INVITATION_SELECTION_LIMIT,
         })
         rows = self.request("GET", f"/rest/v1/co_debtor_invitations?{query}")
-        return rows[0] if isinstance(rows, list) and rows else None
+        return select_current_co_debtor_invitation(rows)
 
     def staff_history(self, lead_id):
         query = urlencode({
@@ -161,13 +192,3 @@ class TrackingRepository:
             "p_user_id": user_id, "p_evaluation_id": evaluation_id, "p_command": command,
         })
 
-
-class _Borrowed:
-    def __init__(self, client):
-        self.client = client
-
-    def __enter__(self):
-        return self.client
-
-    def __exit__(self, *args):
-        return False

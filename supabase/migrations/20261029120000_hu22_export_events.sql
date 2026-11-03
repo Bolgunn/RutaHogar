@@ -21,13 +21,13 @@ alter table public.export_events enable row level security;
 revoke all on public.export_events from public, anon, authenticated;
 grant select on public.export_events to authenticated;
 grant all on public.export_events to service_role;
-create policy export_events_read on public.export_events for select to authenticated using (
+create policy "export_events_read" on public.export_events for select to authenticated using (
   inmobiliaria_id = public.get_my_inmobiliaria()
   and (actor_id = auth.uid() and public.get_my_role() = 'ejecutivo'
        or public.get_my_role() in ('admin','admin_inmobiliario'))
 );
 comment on table public.export_events is 'HU22 metadata only. delivery_requested means delivery to browser was requested; not proof of a saved file. SHA-256 is reported by the client, not a server signature.';
-create function public.hu22_record_export(p_record jsonb) returns jsonb
+create or replace function public.hu22_record_export(p_record jsonb) returns jsonb
 language plpgsql security definer set search_path=public as $$
 declare v_row public.export_events;
 begin
@@ -36,7 +36,7 @@ begin
   return jsonb_build_object('id', v_row.id);
 end;
 $$;
-create function public.hu22_export_delivery(p_id uuid, p_sha256 text) returns jsonb
+create or replace function public.hu22_export_delivery(p_id uuid, p_sha256 text) returns jsonb
 language plpgsql security definer set search_path=public as $$
 begin
   if exists(select 1 from public.export_events where id=p_id and sha256 is not null and sha256<>p_sha256) then
@@ -50,7 +50,7 @@ revoke all on function public.hu22_record_export(jsonb), public.hu22_export_deli
 grant execute on function public.hu22_record_export(jsonb), public.hu22_export_delivery(uuid,text) to service_role;
 -- Private batch read. p_projects is derived from the caller's authenticated
 -- commercial_funnel_facts() response by the backend, never from request JSON.
-create function public.hu22_export_rows(p_evaluations uuid[], p_projects uuid[]) returns jsonb
+create or replace function public.hu22_export_rows(p_evaluations uuid[], p_projects uuid[]) returns jsonb
 language sql stable security definer set search_path=public as $$
   select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from (
     select e.id,e.user_id,e.created_at,e.score,e.classification,e.email,e.financial_data,

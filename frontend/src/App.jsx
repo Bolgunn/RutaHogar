@@ -2061,6 +2061,8 @@ function Application({ initialAuth, onAuthAccepted }) {
     navigateToPage("auth", { replace: true });
   };
 
+  // SessionAccess owns SIGNED_OUT cleanup and remounts account-bound state.
+
   const handleNotificationClick = () => navigateToPage("leads");
 
   const handleDismissNotification = () => markLeadsSeen();
@@ -2488,7 +2490,10 @@ function Application({ initialAuth, onAuthAccepted }) {
               consentGranted={consentGranted}
               onConsentAccept={handleDataConsent}
               onBirthDateSave={handleBirthDateSave}
-              onBack={currentEvaluation ? () => setStartingNewEvaluation(false) : undefined}
+              onBack={currentEvaluation ? () => {
+                setScoreFormDraft(null);
+                setStartingNewEvaluation(false);
+              } : undefined}
               initialDraft={scoreFormDraft}
               onDraftChange={setScoreFormDraft}
               onResult={handleResult}
@@ -2574,6 +2579,7 @@ function Application({ initialAuth, onAuthAccepted }) {
           <PropertySearch
             evaluation={currentEvaluation}
             onboarding={userOnboarding}
+            userId={userId}
             onStartEvaluation={startEvaluation}
             onNavigate={navigateToPage}
           />

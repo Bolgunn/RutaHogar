@@ -55,7 +55,6 @@ export const BENEFIT_ESTIMATION_BASELINE = {
       identifier: "LEY_21748",
       name: "Subsidio al Dividendo — Ley N.º 21.748",
       kind: "information",
-      rate_reduction_percentage_points: 0.60,
       source_label: "FOGAES MINVU",
       source_url: "https://www.minvu.gob.cl/fogaes/",
       note: "El subsidio a la tasa depende del crédito y de la entidad financiera que lo otorgue.",

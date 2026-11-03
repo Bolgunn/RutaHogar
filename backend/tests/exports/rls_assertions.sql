@@ -19,6 +19,12 @@ do $$begin
  if jsonb_array_length(public.hu22_export_rows(array['44444444-4444-4444-8444-444444444444']::uuid[],array['33333333-3333-4333-8333-333333333333']::uuid[]))<>1 then raise exception 'Authorized batch read failed'; end if;
  if jsonb_array_length(public.hu22_export_rows(array['44444444-4444-4444-8444-444444444444']::uuid[],array['88888888-8888-4888-8888-888888888888']::uuid[]))<>0 then raise exception 'Cross project data exposed'; end if;
  perform public.hu22_export_delivery('66666666-6666-4666-8666-666666666666',repeat('a',64));
+ begin
+   perform public.hu22_export_delivery('66666666-6666-4666-8666-666666666666',repeat('b',64));
+   raise exception 'Hash mismatch accepted';
+ exception when raise_exception then
+   if sqlerrm <> 'idempotency_conflict' then raise; end if;
+ end;
  if not exists(select 1 from public.export_events where status='delivery_requested') then raise exception 'Delivery not recorded'; end if;
 end$$;
 reset role;

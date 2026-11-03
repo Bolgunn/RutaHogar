@@ -223,12 +223,66 @@ export function correctionTargetForClick(currentTarget, row) {
   return currentTarget?.event_id === row.event_id ? null : row;
 }
 
+function auditRootEventId(row, auditLine) {
+  if (!row) return null;
+  if (row.root_event_id) return row.root_event_id;
+  const rowsById = new Map((auditLine || []).map((item) => [item.event_id, item]));
+  const visited = new Set();
+  let current = row;
+  while (current?.correction_of && !visited.has(current.event_id)) {
+    visited.add(current.event_id);
+    const source = rowsById.get(current.correction_of);
+    if (!source) break;
+    current = source;
+  }
+  return current?.event_id || row.event_id;
+}
+
+export function isAnnulmentEvent(row) {
+  return row?.correction_effect === "annul";
+}
+
+export function isAnnulledRecord(row, auditLine) {
+  const rootEventId = auditRootEventId(row, auditLine);
+  return rootEventId != null && (auditLine || []).some((item) =>
+    isAnnulmentEvent(item) && auditRootEventId(item, auditLine) === rootEventId);
+}
+
+export function auditRecordLabel(row, activeLine, auditLine, excludedFromMetrics = []) {
+  if (isAnnulmentEvent(row)) return "Anulación";
+  if (isAnnulledRecord(row, auditLine)) return "Registro anulado";
+  if ((activeLine || []).some((item) => item.event_id === row.event_id)) return "Registro vigente";
+  if (excludedFromMetrics.includes(row.event_id)) return "Versión anterior";
+  return "Registro vigente";
+}
+
 export function canBulkAnnul(row, baselineEventId, auditLine, excludedFromMetrics = []) {
-  return !belongsToSlot(row, baselineEventId, auditLine) && !excludedFromMetrics.includes(row.event_id);
+  return !belongsToSlot(row, baselineEventId, auditLine)
+    && !excludedFromMetrics.includes(row.event_id)
+    && !isAnnulledRecord(row, auditLine);
 }
 
 export function bulkAnnulSuccessMessage(count) {
-  return `${count} registro${count === 1 ? " fue eliminado" : "s fueron eliminados"} de tu historial visible y evolución.`;
+  return `${count} registro${count === 1 ? " fue anulado" : "s fueron anulados"} lógicamente de tu evolución. Seguir${count === 1 ? "á" : "án"} visible${count === 1 ? "" : "s"} en el historial.`;
+}
+
+export function buildBulkAnnulCommands(rows, reason, existingCommands = {}, createCommand = () => ({
+  event_id: crypto.randomUUID(), effective_at: new Date().toISOString(),
+  reason, correction_effect: "annul", patch: {},
+})) {
+  const commands = { ...existingCommands };
+  rows.forEach((row) => {
+    commands[row.event_id] ||= createCommand(row);
+  });
+  return commands;
+}
+
+export async function runSequentialCorrections(items, onCorrect) {
+  for (const { target, command } of items) await onCorrect(target, command);
+}
+
+export function mutateBulkCorrections(items, mutate, onCorrect) {
+  return mutate(() => runSequentialCorrections(items, onCorrect));
 }
 
 export function goalsStatusMessage(goals) {
@@ -440,7 +494,7 @@ export function ProgressView({ data, projection, projectionError = "", onRetryPr
   </div>;
 }
 
-export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarget = null }) {
+export function TrackingHistoryView({ data, onCorrect, onBulkCorrect, busy = false, initialTarget = null }) {
   const [target, setTarget] = useState(initialTarget);
   const [annulReason, setAnnulReason] = useState("");
   const [annulCommand, setAnnulCommand] = useState(null);
@@ -511,13 +565,7 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
       setActionError("Selecciona al menos un registro para anular.");
       return;
     }
-    const commands = { ...bulkAnnulCommands };
-    selectedRows.forEach((row) => {
-      commands[row.event_id] ||= {
-        event_id: crypto.randomUUID(), effective_at: new Date().toISOString(),
-        reason: bulkAnnulReason, correction_effect: "annul", patch: {},
-      };
-    });
+    const commands = buildBulkAnnulCommands(selectedRows, bulkAnnulReason, bulkAnnulCommands);
     setBulkAnnulCommands(commands);
     // Each request is an immutable logical annulment of its selected source
     // record. Sequential execution preserves lineage and lets a retry reuse
@@ -525,11 +573,13 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
     const count = selectedRows.length;
     setBulkAnnulSubmitting(true);
     try {
-      for (const row of selectedRows) await onCorrect(row, commands[row.event_id]);
+      const items = selectedRows.map((target) => ({ target, command: commands[target.event_id] }));
+      if (onBulkCorrect) await onBulkCorrect(items);
+      else await runSequentialCorrections(items, onCorrect);
       resetBulkAnnul();
       setBulkAnnulSuccess(bulkAnnulSuccessMessage(count));
     } catch (failure) {
-      setActionError(failure.message || "No pudimos eliminar los registros seleccionados.");
+      setActionError(failure.message || "No pudimos anular los registros seleccionados.");
     } finally {
       setBulkAnnulSubmitting(false);
     }
@@ -543,8 +593,8 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
         onClick={() => { setBulkAnnulMode(true); setTarget(null); setAnnulReason(""); setAnnulCommand(null); setBulkAnnulSuccess(""); }}>
         <i className="ti ti-trash" aria-hidden="true" /> Seleccionar registros para anular
       </button> : <>
-        <p>Selecciona los registros que quieras quitar de la evolución. La evaluación inicial se conserva.</p>
-        <button type="button" className="text-button progress-audit__select-all" disabled={busy || !annullableRows.length}
+        <p>Selecciona los registros que quieras anular lógicamente de la evolución. La evaluación inicial se conserva.</p>
+        <button type="button" className="text-button progress-audit__select-all" disabled={busy || bulkAnnulSubmitting || !annullableRows.length}
           onClick={toggleAllBulkRows}>{selectedRows.length === annullableRows.length ? "Quitar selección" : `Seleccionar todos (${annullableRows.length})`}</button>
         <label>Motivo de anulación múltiple<textarea rows="4" maxLength="500" value={bulkAnnulReason}
           onChange={(event) => { setBulkAnnulReason(event.target.value); setBulkAnnulCommands({}); }} /></label>
@@ -554,12 +604,12 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
       </>}
     </div>
     {bulkAnnulSubmitting && <p className="progress-audit__feedback" role="status" aria-live="polite"><span className="loading-spinner" />
-      Eliminando {selectedRows.length} registro{selectedRows.length === 1 ? "" : "s"}…</p>}
+      Anulando {selectedRows.length} registro{selectedRows.length === 1 ? "" : "s"}…</p>}
     {bulkAnnulSuccess && <p className="progress-audit__feedback is-success" role="status" aria-live="polite"><i className="ti ti-check" aria-hidden="true" /> {bulkAnnulSuccess}</p>}
     <ol className="progress-audit-list">{data.audit_line.map((row) => <li key={row.event_id} id={`progress-audit-record-${row.event_id}`}>
       <div className="progress-audit-record__head">
         <div className="progress-audit-record__meta"><strong>{dateTime(row.effective_at)}</strong><p>{row.reason}</p>
-          <span>{data.excluded_from_metrics.includes(row.event_id) ? "Versión anterior" : "Registro vigente"}</span></div>
+          <span>{auditRecordLabel(row, data.active_line, data.audit_line, data.excluded_from_metrics)}</span></div>
         {!bulkAnnulMode && <button type="button" className="secondary-button progress-audit-record__correct" disabled={busy}
           aria-controls={`progress-correction-${row.event_id}`} aria-expanded={target?.event_id === row.event_id}
           onClick={() => {
@@ -573,7 +623,7 @@ export function TrackingHistoryView({ data, onCorrect, busy = false, initialTarg
         <HistoricalRecordDetails row={row} />
       </details>
       {bulkAnnulMode && canAnnulRow(row) && <label className="progress-audit-record__select">
-        <span>Seleccionar para anular</span><input type="checkbox" checked={selectedForAnnul.includes(row.event_id)} disabled={busy}
+        <span>Seleccionar para anular</span><input type="checkbox" checked={selectedForAnnul.includes(row.event_id)} disabled={busy || bulkAnnulSubmitting}
           onChange={() => toggleBulkRow(row.event_id)} aria-label={`Seleccionar registro del ${dateTime(row.effective_at)} para anular`} />
       </label>}
       {target?.event_id === row.event_id && correctionEditor(row)}
@@ -648,6 +698,11 @@ export function TrackingHistoryPage({ onChanged }) {
     try { await operation(); setVersion((value) => value + 1); onChanged?.(); }
     finally { setBusy(false); }
   }, [onChanged]);
+  const bulkCorrect = useCallback((items) => mutateBulkCorrections(
+    items,
+    mutate,
+    (target, command) => correctTrackingEvent(target.event_id, command),
+  ), [mutate]);
 
   return <main className="section-block progress-page">
     <div className="page-head progress-page__head"><div>
@@ -661,6 +716,7 @@ export function TrackingHistoryPage({ onChanged }) {
       <i className="ti ti-history" aria-hidden="true" /><h2>Aún no hay historial disponible</h2>
     </section>}
     {data?.status === "active" && <TrackingHistoryView data={data} busy={busy}
-      onCorrect={(target, command) => mutate(() => correctTrackingEvent(target.event_id, command))} />}
+      onCorrect={(target, command) => mutate(() => correctTrackingEvent(target.event_id, command))}
+      onBulkCorrect={bulkCorrect} />}
   </main>;
 }

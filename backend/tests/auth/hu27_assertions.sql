@@ -16,18 +16,8 @@ do $$ declare result jsonb; begin
   result := public.hu27_access_token_hook('{"user_id":"11111111-1111-4111-8111-111111111111","authentication_method":"oauth","claims":{"role":"authenticated"}}');
   if result <> '{"claims":{"role":"authenticated"}}'::jsonb then raise exception 'claims changed'; end if;
   perform public.hu27_access_token_hook('{"user_id":"22222222-2222-4222-8222-222222222222","authentication_method":"password","claims":{"role":"authenticated"}}');
-  begin
-    perform public.hu27_access_token_hook('{"user_id":"22222222-2222-4222-8222-222222222222","authentication_method":"oauth","claims":{}}');
-    raise exception 'expected staff OAuth rejection';
-  exception when raise_exception then
-    if sqlerrm = 'expected staff OAuth rejection' then raise; end if;
-  end;
-  begin
-    perform public.hu27_access_token_hook('{"user_id":"22222222-2222-4222-8222-222222222222","authentication_method":"token_refresh","claims":{"amr":[{"method":"oauth"}]}}');
-    raise exception 'expected staff refresh rejection';
-  exception when raise_exception then
-    if sqlerrm = 'expected staff refresh rejection' then raise; end if;
-  end;
+  if (public.hu27_access_token_hook('{"user_id":"22222222-2222-4222-8222-222222222222","authentication_method":"oauth","claims":{}}')->'error'->>'http_code')::integer is distinct from 403 then raise exception 'expected staff OAuth rejection'; end if;
+  if (public.hu27_access_token_hook('{"user_id":"22222222-2222-4222-8222-222222222222","authentication_method":"token_refresh","claims":{"amr":[{"method":"oauth"}]}}')->'error'->>'http_code')::integer is distinct from 403 then raise exception 'expected staff refresh rejection'; end if;
 end $$;
 reset role;
 set role authenticated;
@@ -54,11 +44,6 @@ update public.profiles set role='usuario' where id='11111111-1111-4111-8111-1111
 update auth.identities set identity_data='{"email":"other@example.test"}';
 set role supabase_auth_admin;
 do $$ begin
-  begin
-    perform public.hu27_access_token_hook('{"user_id":"11111111-1111-4111-8111-111111111111","authentication_method":"oauth","claims":{}}');
-    raise exception 'expected email mismatch rejection';
-  exception when raise_exception then
-    if sqlerrm = 'expected email mismatch rejection' then raise; end if;
-  end;
+  if (public.hu27_access_token_hook('{"user_id":"11111111-1111-4111-8111-111111111111","authentication_method":"oauth","claims":{}}')->'error'->>'http_code')::integer is distinct from 403 then raise exception 'expected email mismatch rejection'; end if;
 end $$;
 reset role;

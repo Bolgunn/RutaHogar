@@ -1,4 +1,5 @@
 import React from "react";
+import { HEALTHY_DIVIDEND_RATIO, MAX_DIVIDEND_RATIO, MAX_TOTAL_BURDEN_RATIO } from "../../lib/financing/scenarioResult";
 
 const money = (value) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0));
 const oneDecimal = (value) => Number(value || 0).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -10,16 +11,16 @@ function statusConfig(status) {
 }
 
 function Metric({ icon, label, value, detail, tone }) {
-  const indicatorIcon = tone === "compatible" ? "ti-check" : "ti-exclamation-mark";
+  const indicatorIcon = tone === "compatible" ? "ti-check" : tone === "neutral" ? "ti-info-circle" : "ti-exclamation-mark";
   return <article className="scenario-status__metric"><span className="scenario-status__metric-icon"><i className={`ti ${icon}`} aria-hidden="true" /><b className={`is-${tone}`}><i className={`ti ${indicatorIcon}`} aria-hidden="true" /></b></span><div><small>{label}</small><strong>{value}</strong>{detail ? <span>{detail}</span> : null}</div></article>;
 }
 
 export function scenarioMetricTones({ ltvRatio, ltvLimit, dividendRatio, burdenRatio }) {
-  const ltvTone = Number.isFinite(ltvRatio) && Number.isFinite(ltvLimit) && ltvLimit > 0 && ltvRatio <= ltvLimit
-    ? "compatible" : "adjustment";
-  const dividendTone = !Number.isFinite(dividendRatio) || dividendRatio > 0.30 ? "adjustment"
-    : dividendRatio > 0.25 ? "near" : "compatible";
-  const burdenTone = Number.isFinite(burdenRatio) && burdenRatio <= 0.45 ? "compatible" : "adjustment";
+  const ltvTone = !(Number.isFinite(ltvLimit) && ltvLimit > 0) ? "neutral"
+    : Number.isFinite(ltvRatio) && ltvRatio <= ltvLimit ? "compatible" : "adjustment";
+  const dividendTone = !Number.isFinite(dividendRatio) || dividendRatio > MAX_DIVIDEND_RATIO ? "adjustment"
+    : dividendRatio > HEALTHY_DIVIDEND_RATIO ? "near" : "compatible";
+  const burdenTone = Number.isFinite(burdenRatio) && burdenRatio <= MAX_TOTAL_BURDEN_RATIO ? "compatible" : "adjustment";
   return { ltvTone, dividendTone, burdenTone };
 }
 
@@ -53,9 +54,9 @@ export default function ScenarioStatus({ result, ufReference, ltvReference }) {
     <article className="scenario-status__card">
       <header className="scenario-status__header"><span className="scenario-status__badge">{status.label}</span><div><strong>Estado del escenario</strong><p>{message}</p></div></header>
       <div className="scenario-status__metrics">
-        <Metric icon="ti-home" label="Pie / LTV" value={`${oneDecimal(piePercent)}%`} detail={ltvMaximum != null ? `Crédito ${oneDecimal(ltv)}% · máx. ${oneDecimal(ltvMaximum)}%` : `${oneDecimal(pieUf)} UF`} tone={tones.ltvTone} />
-        <Metric icon="ti-coins" label="Dividendo" value={money(result.dividendo_clp)} detail={`${oneDecimal(dividend)}% · máx. 30%`} tone={tones.dividendTone} />
-        <Metric icon="ti-chart-bar" label="Carga financiera" value={`${oneDecimal(burden)}%`} detail="máx. 45% de tus ingresos" tone={tones.burdenTone} />
+        <Metric icon="ti-home" label="Pie / LTV" value={`${oneDecimal(piePercent)}%`} detail={ltvMaximum != null ? `Crédito ${oneDecimal(ltv)}% · máx. ${oneDecimal(ltvMaximum)}%` : Number.isFinite(ltvRatio) ? `Crédito ${oneDecimal(ltv)}% · sin referencia LTV` : `${oneDecimal(pieUf)} UF`} tone={tones.ltvTone} />
+        <Metric icon="ti-coins" label="Dividendo" value={money(result.dividendo_clp)} detail={`${oneDecimal(dividend)}% · máx. ${MAX_DIVIDEND_RATIO * 100}%`} tone={tones.dividendTone} />
+        <Metric icon="ti-chart-bar" label="Carga financiera" value={`${oneDecimal(burden)}%`} detail={`máx. ${MAX_TOTAL_BURDEN_RATIO * 100}% de tus ingresos`} tone={tones.burdenTone} />
       </div>
       <div className="scenario-status__accordions"><details><summary>Entender este resultado</summary><p>{explanation}</p></details></div>
     </article>

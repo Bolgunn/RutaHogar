@@ -74,6 +74,14 @@ describe("HU13 immutable evaluation views", () => {
     expect(row).toEqual(original);
   });
 
+  it("takes the lead email from staff contacts when the evaluation row has none", () => {
+    const row = { id: "evaluation-3", user_id: "lead-1", email: null, financial_data: { result: {} } };
+    const contacts = { "lead-1": { id: "lead-1", full_name: "Ana", email: "ana@example.com" } };
+
+    expect(normalizeEvaluation(row, contacts).email).toBe("ana@example.com");
+    expect(normalizeEvaluation({ ...row, email: "legacy@example.com" }).email).toBe("legacy@example.com");
+  });
+
   it("rejects the retired physical-delete path", async () => {
     await expect(deleteEvaluation("evaluation-1", "owner")).rejects.toThrow("historial es inmutable");
   });

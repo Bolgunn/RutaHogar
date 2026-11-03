@@ -8,7 +8,7 @@ from app.market_data.repository import MarketSnapshotRepository
 
 
 def snapshot():
-    return json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text())["cases"][0]["input"]["market_snapshot"]
+    return json.loads((Path(__file__).resolve().parents[2] / "docs/algorithms/ALG-9-cases.json").read_text(encoding='utf-8'))["cases"][0]["input"]["market_snapshot"]
 
 
 def test_repository_orders_resolution_and_persists_embedded_metadata():

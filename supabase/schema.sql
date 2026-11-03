@@ -282,15 +282,19 @@ returns table (
   id uuid,
   full_name text,
   phone text,
-  reliability_status text
+  reliability_status text,
+  email text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status
+  -- evaluations.email no se completa desde HU13: el correo sale de auth.users.
+  select p.id, p.full_name, p.phone, coalesce(p.reliability_status, 'normal') as reliability_status,
+         u.email::text as email
   from public.profiles p
+  left join auth.users u on u.id = p.id
   where p.id = any(coalesce(p_user_ids, '{}'::uuid[]))
     and p.role = 'usuario'
     and coalesce(public.get_my_role(), '') = any (array['ejecutivo'::text, 'admin'::text, 'admin_inmobiliario'::text]);
@@ -2221,6 +2225,64 @@ grant execute on function public.lead_belongs_to_proyecto(uuid, uuid),
   public.commercial_stage_scope(uuid) to service_role;
 
 
+-- Evaluaciones staff acotadas por inmobiliaria en una sola consulta
+-- (20261008120000). Solo service_role: el backend fija el tenant del actor.
+-- Misma regla que lead_belongs_to_inmobiliaria (favorito en un proyecto del
+-- tenant o comuna declarada de uno de ellos), en forma de conjunto: llamarla por
+-- lead evaluaba lead_belongs_to_proyecto lead × proyecto y tardaba ~7 s en
+-- producción. Si cambia esa regla, cambiar también esta.
+create or replace function public.staff_evaluations_for_inmobiliaria(p_inmobiliaria uuid)
+returns setof public.evaluations
+language sql
+stable
+set search_path = public
+as $$
+  with tenant_projects as materialized (
+    select pr.id, lower(trim(pr.comuna)) as comuna
+    from public.proyectos pr
+    where pr.inmobiliaria_id = p_inmobiliaria
+  ),
+  declared as (
+    select e.user_id, lower(trim(c.comuna)) as comuna
+    from public.evaluations e
+    cross join lateral (values (e.target_commune), (e.alternative_commune),
+      (e.financial_data -> 'input' ->> 'comuna_objetivo')) c(comuna)
+    union all
+    select p.id, lower(trim(c.comuna))
+    from public.profiles p
+    cross join lateral (values (p.onboarding_data ->> 'comuna_interes'),
+      (p.onboarding_data ->> 'comuna_alternativa')) c(comuna)
+  ),
+  scoped as materialized (
+    select p.id as user_id
+    from public.profiles p
+    where p.role = 'usuario'
+      and (
+        exists (
+          select 1
+          from public.proyecto_favoritos f
+          join tenant_projects tp on tp.id = f.proyecto_id
+          where f.usuario_id = p.id
+        )
+        or exists (
+          select 1
+          from declared d
+          join tenant_projects tp on tp.comuna = d.comuna
+          where d.user_id = p.id
+            and d.comuna <> ''
+        )
+      )
+  )
+  select e.*
+  from public.evaluations e
+  where e.user_id in (select scoped.user_id from scoped)
+  order by e.created_at desc;
+$$;
+
+revoke all on function public.staff_evaluations_for_inmobiliaria(uuid) from public, anon, authenticated;
+grant execute on function public.staff_evaluations_for_inmobiliaria(uuid) to service_role;
+
+
 -- Backfill (decisión Q5): cada lead con evaluación parte en 'nuevo' en cada
 -- inmobiliaria a la que pertenece, fechado en su primera evaluación. Volver a
 -- ejecutarlo no inserta nada. Los leads que se vuelvan elegibles después no
@@ -3535,7 +3597,7 @@ for each row execute function public.hu27_guard_profile_rut();
 create or replace function public.hu27_access_token_hook(event jsonb)
 returns jsonb language plpgsql stable security invoker
 set search_path = pg_catalog, public, auth
-as $$
+as $
 declare
   v_user uuid := (event->>'user_id')::uuid;
   v_role text;
@@ -3546,16 +3608,16 @@ begin
   v_oauth := event->>'authentication_method' = 'oauth'
     or exists (select 1 from jsonb_array_elements(coalesce(event->'claims'->'amr', '[]'::jsonb)) a where a->>'method' = 'oauth');
   if v_oauth and coalesce(v_role, 'usuario') <> 'usuario' then
-    raise exception 'Esta cuenta debe ingresar con correo y contraseña.';
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Esta cuenta debe ingresar con correo y contraseña.'));
   end if;
   select lower(email) into v_email from auth.users where id = v_user;
   if exists (select 1 from auth.identities i where i.user_id = v_user and i.provider = 'google'
     and (i.identity_data->>'email' is null or lower(i.identity_data->>'email') is distinct from v_email)) then
-    raise exception 'Google debe utilizar el mismo correo de la cuenta.';
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Google debe utilizar el mismo correo de la cuenta.'));
   end if;
   return jsonb_build_object('claims', event->'claims');
 end;
-$$;
+$;
 revoke all on function public.hu27_access_token_hook(jsonb) from public, anon, authenticated;
 grant usage on schema public to supabase_auth_admin;
 grant select (id, role) on public.profiles to supabase_auth_admin;
@@ -3564,7 +3626,6 @@ grant execute on function public.hu27_access_token_hook(jsonb) to supabase_auth_
 comment on function public.hu27_access_token_hook(jsonb) is 'HU27: trusted role and same-email Google scope. Enable as Custom Access Token hook; never expose as a browser RPC.';
 
 -- HU27: Before User Created RUT guard
-begin;
 
 -- Called only by Supabase Auth before inserting a new user. Existing login,
 -- identity linking and the profile-level duplicate guard remain unchanged.
@@ -3599,4 +3660,69 @@ grant execute on function public.hu27_before_user_created(jsonb) to supabase_aut
 grant select (rut) on public.profiles to supabase_auth_admin;
 comment on function public.hu27_before_user_created(jsonb) is 'HU27: enable as Before User Created / Postgres hook. Rejects email registration with a RUT already in profiles; Google remains supported. Not a reservation or a solution for concurrent pending signups.';
 
-commit;
+
+-- Authorized export metadata and service-only RPCs
+create table public.export_events (
+  id uuid primary key,
+  actor_id uuid references public.profiles(id) on delete set null,
+  actor_role text not null check (actor_role in ('ejecutivo','admin','admin_inmobiliario')),
+  inmobiliaria_id uuid not null references public.inmobiliarias(id),
+  kind text not null check (kind in ('dossier','leads','metrics')),
+  format text not null check (format in ('pdf','xlsx')),
+  blocks jsonb not null,
+  evaluation_ids jsonb not null default '[]',
+  project_id uuid,
+  filters jsonb not null default '{}',
+  source_at text,
+  generated_at timestamptz not null default now(),
+  record_count integer check (record_count >= 0),
+  status text not null check (status in ('prepared','delivery_requested')),
+  sha256 text check (sha256 is null or sha256 ~ '^[a-f0-9]{64}$')
+);
+create index export_events_tenant_date on public.export_events(inmobiliaria_id, generated_at desc);
+alter table public.export_events enable row level security;
+revoke all on public.export_events from public, anon, authenticated;
+grant select on public.export_events to authenticated;
+grant all on public.export_events to service_role;
+create policy "export_events_read" on public.export_events for select to authenticated using (
+  inmobiliaria_id = public.get_my_inmobiliaria()
+  and (actor_id = auth.uid() and public.get_my_role() = 'ejecutivo'
+       or public.get_my_role() in ('admin','admin_inmobiliario'))
+);
+comment on table public.export_events is 'HU22 metadata only. delivery_requested means delivery to browser was requested; not proof of a saved file. SHA-256 is reported by the client, not a server signature.';
+create or replace function public.hu22_record_export(p_record jsonb) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare v_row public.export_events;
+begin
+  v_row := jsonb_populate_record(null::public.export_events, p_record);
+  insert into public.export_events select (v_row).*;
+  return jsonb_build_object('id', v_row.id);
+end;
+$$;
+create or replace function public.hu22_export_delivery(p_id uuid, p_sha256 text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+begin
+  if exists(select 1 from public.export_events where id=p_id and sha256 is not null and sha256<>p_sha256) then
+    raise exception 'idempotency_conflict';
+  end if;
+  update public.export_events set status='delivery_requested', sha256=p_sha256 where id=p_id;
+  return jsonb_build_object('id', p_id);
+end;
+$$;
+revoke all on function public.hu22_record_export(jsonb), public.hu22_export_delivery(uuid,text) from public, anon, authenticated;
+grant execute on function public.hu22_record_export(jsonb), public.hu22_export_delivery(uuid,text) to service_role;
+-- Private batch read. p_projects is derived from the caller's authenticated
+-- commercial_funnel_facts() response by the backend, never from request JSON.
+create or replace function public.hu22_export_rows(p_evaluations uuid[], p_projects uuid[]) returns jsonb
+language sql stable security definer set search_path=public as $$
+  select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from (
+    select e.id,e.user_id,e.created_at,e.score,e.classification,e.email,e.financial_data,
+           p.full_name,p.phone,
+           (select jsonb_agg(pr) from unnest(p_projects) pr where public.lead_belongs_to_proyecto(e.user_id,pr)) as authorized_projects
+    from public.evaluations e join public.profiles p on p.id=e.user_id
+    where e.id=any(p_evaluations)
+      and exists(select 1 from unnest(p_projects) pr where public.lead_belongs_to_proyecto(e.user_id,pr))
+  ) r;
+$$;
+revoke all on function public.hu22_export_rows(uuid[],uuid[]) from public,anon,authenticated;
+grant execute on function public.hu22_export_rows(uuid[],uuid[]) to service_role;

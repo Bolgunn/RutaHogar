@@ -33,8 +33,8 @@ function dateLabel(value) {
     : date.toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function InvitationForm({ email, rut, onEmailChange, onRutChange, onSubmit, onCancel, busy, status }) {
-  const replacement = ["pending", "expired", "revoked", "delivery_failed"].includes(status);
+export function InvitationForm({ email, rut, onEmailChange, onRutChange, onSubmit, onCancel, busy, status }) {
+  const replacement = ["pending", "expired", "revoked", "declined", "delivery_failed"].includes(status);
   return <form className="co-debtor-section__form" onSubmit={onSubmit} noValidate>
     <label htmlFor="co-debtor-recipient-rut">RUT del co-deudor</label>
     <input id="co-debtor-recipient-rut" name="co-debtor-recipient-rut" type="text" autoComplete="off" value={formatChileanRutInput(rut)} onChange={(event) => onRutChange(formatChileanRutInput(event.target.value))} placeholder="Ej: 12.345.678-5" disabled={busy} />
@@ -72,7 +72,7 @@ export function CoDebtorPanel({ invitation, declaredComplement, declaredRelation
     {isConfirmed && <><p>Los antecedentes aportados por el co-deudor prevalecerán sobre los que declaraste al actualizar tu score.</p><dl className="co-debtor-section__details">{confirmedFields.map(([field, label, formatter]) => <div key={field}><dt>{label}</dt><dd>{formatter(invitation.confirmation[field])}</dd></div>)}<div><dt>Relación</dt><dd>{formatFormValue(declaredRelation)}</dd></div></dl><p className="co-debtor-section__note">La relación es información declarada por ti.</p>{scoreUpdateRequired && <button type="button" className="primary-button co-debtor-section__update" onClick={onUpdateScore} disabled={updatingScore}>{updatingScore ? "Actualizando score..." : "Actualizar score con datos confirmados"}</button>}</>}
     {status === "confirmed" && !isConfirmed && <p>No pudimos verificar los antecedentes confirmados. Actualiza la página antes de continuar.</p>}
     {status === "revoked" && <><p>El co-deudor revocó su consentimiento. Sus antecedentes dejarán de utilizarse en futuras evaluaciones.</p><p className="co-debtor-section__note">Tus evaluaciones históricas siguen disponibles y no se modifican.</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
-    {status === "declined" && <><p>El co-deudor no autorizó el uso de sus datos. Este complemento de renta no se utilizará.</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
+    {status === "declined" && <><p>El co-deudor no autorizó el uso de sus datos. Este complemento de renta no se utilizará.</p><InvitationForm {...formProps} /></>}
     {message && <p className="success-message co-debtor-section__feedback" role="status">{message}</p>}
     {error && <p className="error-message co-debtor-section__feedback" role="alert">{error}</p>}
   </section>;
@@ -122,7 +122,7 @@ export default function CoDebtorSection({ evaluation, trackingState, onScoreUpda
   const sendInvitation = async (recipientEmail, recipientRut) => {
     const declaredValues = invitation?.declaredComplement || declaredComplementValues;
     const sent = await createCoDebtorInvitation(recipientEmail, recipientRut, declaredValues);
-    rememberInvitation({ recipientEmail: recipientEmail.trim().toLowerCase(), recipientRut, status: "pending", expiresAt: sent.expires_at, declaredComplement: declaredValues, confirmation: null });
+    rememberInvitation(pendingInvitationFromSend(recipientEmail, recipientRut, sent, declaredValues));
     setEditingInvitation(false);
     setMessage("Enviamos la invitación por correo. Quedará pendiente hasta que el co-deudor complete sus antecedentes.");
   };
@@ -152,4 +152,11 @@ export default function CoDebtorSection({ evaluation, trackingState, onScoreUpda
 
   if (loading || loadedEvaluationId !== evaluationId) return declaredComplement ? <section className="co-debtor-section" aria-live="polite"><p>Cargando el estado del co-deudor...</p></section> : null;
   return <CoDebtorPanel invitation={invitation} declaredComplement={declaredComplement} declaredRelation={declaredRelation} email={email} rut={rut} onEmailChange={setEmail} onRutChange={setRut} onInvite={handleInvite} onResend={handleResend} onEditInvitation={handleEditInvitation} onCancelEditInvitation={handleCancelEditInvitation} editingInvitation={editingInvitation} invitationBusy={invitationBusy} onUpdateScore={handleUpdateScore} updatingScore={updatingScore} scoreUpdateRequired={scoreUpdateRequired} message={message} error={error} />;
+}
+
+export function pendingInvitationFromSend(recipientEmail, recipientRut, sent, declaredComplement) {
+  return {
+    recipientEmail: recipientEmail.trim().toLowerCase(), recipientRut, status: "pending",
+    expiresAt: sent.expires_at, declaredComplement, confirmation: null,
+  };
 }

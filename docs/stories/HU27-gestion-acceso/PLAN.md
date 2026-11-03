@@ -194,3 +194,11 @@ The owner reports the following migration and hook are already applied/enabled. 
 The signup hook checks trusted app_metadata.provider and normalizes the RUT against profiles. It is SECURITY INVOKER, uses the Auth-only profile policy and exposes no browser RPC. Google and missing-RUT staff provisioning remain supported. It does not reserve RUTs for concurrent pending signups, prove RUT ownership, merge accounts or delete legacy duplicates. The existing profile-write trigger remains authoritative.
 
 To reproduce SQL verification, use a disposable database: hu27_schema.sql, both migrations, hu27_signup_assertions.sql, then hu27_assertions.sql. Disable the corresponding hook before using its rollback. Shared grants are retained to avoid breaking other hooks.
+
+## PR review corrections
+
+Integrated current develop through the export branch without rewriting published history. SessionAccess remains the single auth-state owner; backend-rejected sessions still trigger local sign-out through the updated tracking transport. Local simulated login is intentionally unsupported: Supabase is required for authentication. Remaining local data adapters are not authentication fallbacks and were not removed indiscriminately.
+
+Apply 20261103043642_hu27_auth_hook_controlled_errors.sql to existing environments: the access-token hook now returns structured 403 errors instead of SQL exceptions. The snapshot mirrors that definition and excludes the nested transaction from the signup-hook copy. The prior two hooks remain configured; no remote hook was changed by this review correction.
+
+Validation after integration: 800 frontend tests pass, with two existing failures (RUT and project adapter); build passes. Backend exports/tracking: 136 pass, one existing down-payment confirmation expectation fails. PostgreSQL hook/RUT/permission checks pass, including controlled staff OAuth/refresh and identity-email rejection. Export tests pass (22), including SQLSTATE P0001-to-409 transport behavior. The drift checker reports 11 unrelated objects after develop integration; the export functions and policy added here match. Merge the export PR first, then update the access PR base comparison.

@@ -5,7 +5,6 @@ dashboard receives redacted evaluation/history snapshots plus a deliberately
 small, current-consent projection for the selected lead.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -27,9 +26,6 @@ CO_DEBTOR_CONFIRMED_FIELDS = (
     "continuidad_laboral_complementario",
     "morosidad_complementario",
 )
-# Una consulta de alcance por lead; en serie superaban el timeout de 15 s del
-# frontend con ~140 leads. Cada llamada del repositorio abre su propio cliente HTTP.
-SCOPE_CHECK_WORKERS = 16
 
 
 def redact_co_debtor_data(value):
@@ -93,6 +89,8 @@ def co_debtor_staff_projection(invitation, latest_input, now=None):
         return {"status": "not_confirmed", "source": "lead_declared"}
     if status == "revoked":
         return {"status": "revoked", "source": "excluded_after_revocation"}
+    if status == "declined":
+        return {"status": "declined", "source": "excluded_after_decline"}
     if status == "pending":
         return {"status": "pending", "source": "lead_declared"}
     if status == "expired":
@@ -120,12 +118,10 @@ class StaffLeadService:
 
     def evaluations(self, token):
         actor = self._actor(token)
-        rows = self.repository.staff_evaluations()
-        lead_ids = list(dict.fromkeys(row["user_id"] for row in rows if row.get("user_id")))
-        with ThreadPoolExecutor(max_workers=SCOPE_CHECK_WORKERS) as pool:
-            access = pool.map(lambda lead_id: self.repository.staff_can_access(actor, lead_id), lead_ids)
-            allowed = {lead_id for lead_id, ok in zip(lead_ids, access) if ok}
-        result = [redact_co_debtor_data(row) for row in rows if row.get("user_id") in allowed]
+        # El alcance se resuelve en la base: un chequeo HTTP por lead superaba el
+        # timeout de 15 s del frontend con ~300 leads.
+        rows = self.repository.staff_evaluations(actor)
+        result = [redact_co_debtor_data(row) for row in rows if row.get("user_id")]
         contacts = self.repository.staff_contacts([row["user_id"] for row in result])
         return {
             "items": [

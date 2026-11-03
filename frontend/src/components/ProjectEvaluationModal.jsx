@@ -68,18 +68,22 @@ export default function ProjectEvaluationModal({
   // El proyecto objetivo activo ya fue evaluado por el seguimiento. Su estado
   // debe ser idéntico al de "Estado actual"; otros proyectos siguen usando la
   // comparación local del catálogo.
+  const hasTrackingVerdict = Boolean(compatibilityStatus);
   const evaluation = useMemo(() => (
-    compatibilityStatus ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
-  ), [compatibilityStatus, localEvaluation]);
+    hasTrackingVerdict ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
+  ), [compatibilityStatus, hasTrackingVerdict, localEvaluation]);
   const alternatives = useMemo(() => {
-    if (evaluation.status === "Compatible") return [];
+    // Tracking already decided the target project's compatibility. Its payload
+    // does not include alternative/gap details, so do not mix in local advice
+    // calculated for a potentially different verdict.
+    if (hasTrackingVerdict || evaluation.status === "Compatible") return [];
     return buildAccessibleAlternatives(
       projects.filter((item) => item.id !== project.id),
       context,
       onboarding,
       4,
     ).slice(0, 3);
-  }, [context, evaluation.status, onboarding, project.id, projects]);
+  }, [context, evaluation.status, hasTrackingVerdict, onboarding, project.id, projects]);
   const isCompatible = evaluation.status === "Compatible";
   // Los avisos del portal no están en public.proyectos: favoritos, contacto con
   // ejecutivo y meta del plan dependen de esa tabla, así que solo se enlaza el aviso.
