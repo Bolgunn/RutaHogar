@@ -45,6 +45,8 @@ class Repository:
         self.rows, self.invitations = [row], [item]
         self.tenant = 'tenant-1'
         self.other_calls = []
+    def latest_commercial_config(self, inmobiliaria_id):
+        return None
     def staff_actor(self, token):
         return {'id': 'staff', 'role': token if token in {'admin', 'admin_inmobiliario', 'usuario'} else 'ejecutivo',
                 'inmobiliaria_id': None if token == 'admin' else self.tenant}

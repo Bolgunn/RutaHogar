@@ -69,6 +69,9 @@ class StaffRepository:
     def staff_history(self, _lead_id):
         return deepcopy(self.history_rows)
 
+    def latest_commercial_config(self, _inmobiliaria_id):
+        return None
+
 
 def service(repository):
     return StaffLeadService(repository, clock=lambda: datetime(2026, 10, 4, tzinfo=timezone.utc))

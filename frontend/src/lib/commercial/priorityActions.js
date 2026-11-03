@@ -24,3 +24,9 @@ export function priorityKeyFromDetail(detail) {
   if (KEY_BY_LABEL.has(detail.action)) return { key: KEY_BY_LABEL.get(detail.action), reconocida: true };
   return { key: SIN_PRIORIDAD, reconocida: false };
 }
+
+// HU 21: las superficies del tenant usan la prioridad según sus criterios (ALG-19), recalculada por
+// el backend en cada lectura; sin ella (lead, admin global, filas legacy) se usa la del motor.
+export function resolvedPriorityDetail(lead) {
+  return lead?.commercial_priority_configured || lead?.result?.commercial_priority_detail || null;
+}

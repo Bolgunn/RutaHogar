@@ -90,6 +90,9 @@ export function normalizeEvaluation(row, contactsMap = {}) {
     },
     plan_accepted_at: row.plan_accepted_at || null,
     plan_type: row.plan_type || row.housing_plan?.plan_type || null,
+    // HU 21: solo la proyección staff de un tenant trae la prioridad según sus criterios.
+    commercial_priority_configured: row.commercial_priority_configured || null,
+    differs_from_engine: row.differs_from_engine === true,
   };
 }
 
@@ -226,6 +229,13 @@ export function evaluationAnnotationOwner(role, userId) {
 // App.jsx y useLeads cargan la misma lista staff al iniciar sesión; compartir la
 // petición en vuelo evita duplicar la consulta más pesada del backend.
 const staffEvaluationsInFlight = new Map();
+// HU 21: lo que la bandeja necesita de los criterios del tenant (ALG-19 R9), o null.
+// Por usuario, como la petición en vuelo: otra cuenta nunca ve criterios ajenos.
+const staffCommercialConfigs = new Map();
+
+export function getStaffCommercialConfig(userId) {
+  return staffCommercialConfigs.get(userId) || null;
+}
 
 function loadStaffEvaluations(userId) {
   if (!staffEvaluationsInFlight.has(userId)) {
@@ -246,6 +256,7 @@ export async function getEvaluations(userId, role) {
   if (isSales) {
     // HU18: staff lee evaluaciones solo vía la proyección del backend (redacta datos del codeudor).
     const projection = await loadStaffEvaluations(user.id);
+    staffCommercialConfigs.set(user.id, projection.commercial_config || null);
     const rows = projection.items || [];
     const contactsMap = await listLeadContacts(rows);
     return rows.map((row) => normalizeEvaluation(row, contactsMap));

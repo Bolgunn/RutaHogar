@@ -1,6 +1,8 @@
 """Authorized HU30 commercial reads; current confirmations never replace history."""
 from datetime import datetime, timezone
 
+from ..scoring_engine.commercial_priority import configured_priority_for_evaluation
+from .commercial_config import criterios_of, tray_config
 from .contracts import TrackingError
 from .co_debtor import FINANCIAL_FIELDS, historical_visibility
 from .co_debtor_access import project_row, redact_snapshot
@@ -76,7 +78,17 @@ class StaffLeadService:
         other = self._other(rows, invitations, now)
         result = [self._project(row, invitations, now, other) for row in rows]
         contacts = self.repository.staff_contacts([row['user_id'] for row in result])
-        return {'items': [{**row, **contacts.get(row['user_id'], {})} for row in result]}
+        items = [{**row, **contacts.get(row['user_id'], {})} for row in result]
+        tenant_id = actor.get('inmobiliaria_id')
+        if not tenant_id:
+            # The global admin has no tenant criteria: it sees the engine's stored priority.
+            return {'items': items}
+        # HU 21 / ALG-19: recomputed per read with the tenant's latest criteria, never persisted.
+        criterios, version = criterios_of(self.repository.latest_commercial_config(tenant_id))
+        return {
+            'items': [{**row, **configured_priority_for_evaluation(row, criterios, version)} for row in items],
+            'commercial_config': tray_config(criterios, version),
+        }
 
     def lead_detail(self, token, lead_id):
         actor, now = self._actor(token), self.clock()

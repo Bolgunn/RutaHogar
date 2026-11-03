@@ -1,4 +1,5 @@
 import { computeFunnelMetrics, FUNNEL_FILTER_OPTIONS } from "../../../frontend/src/lib/commercial/funnelMetrics.js";
+import { withConfiguredPriority } from "../../../frontend/src/lib/commercial/configuredPriority.js";
 
 const forbidden = "Tu cuenta no tiene una inmobiliaria asignada para ver métricas comerciales.";
 function response(body: unknown, status = 200) {
@@ -25,6 +26,18 @@ export function parseMetricsRequest(body: any) {
   return { filtros: parsed, granularidad };
 }
 
+// HU 21: the latest criteria the staff tray also applies. None (global admin, no saved version)
+// keeps the engine's stored priority, which the defaults reproduce (ALG-19 invariant 1).
+async function tenantCommercialConfig(admin: any, actorId: string) {
+  const profile = await admin.from("profiles").select("inmobiliaria_id").eq("id", actorId).maybeSingle();
+  if (profile.error) throw new Error("profile_unavailable");
+  if (!profile.data?.inmobiliaria_id) return null;
+  const latest = await admin.from("configuracion_comercial").select("version,criterios,alg_version")
+    .eq("inmobiliaria_id", profile.data.inmobiliaria_id).order("version", { ascending: false }).limit(1).maybeSingle();
+  if (latest.error) throw new Error("commercial_config_unavailable");
+  return latest.data ?? null;
+}
+
 export async function metricsResponse(req: Request, admin: any) {
   if (req.method !== "POST") return response({ code: "method_not_allowed" }, 405);
   const bearer = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
@@ -40,7 +53,8 @@ export async function metricsResponse(req: Request, admin: any) {
       if (source.error.code === "42501" || source.error.message === "forbidden") return response({ code: "forbidden", error: forbidden }, 403);
       return response({ code: "metrics_unavailable" }, 503);
     }
-    const { facts, proyectos, now } = source.data;
+    const { proyectos, now } = source.data;
+    const facts = withConfiguredPriority(source.data.facts, await tenantCommercialConfig(admin, actor.data.user.id));
     if (controls.filtros.proyecto_id && !proyectos.some(project => project.id === controls.filtros.proyecto_id)) {
       return response({ code: "forbidden", error: forbidden }, 403);
     }
