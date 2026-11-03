@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   maybeSingle: vi.fn(),
   signInWithPassword: vi.fn(),
   upsert: vi.fn(),
+  update: vi.fn(),
 }));
 
 vi.mock("../../utils/supabase", () => {
@@ -18,6 +19,10 @@ vi.mock("../../utils/supabase", () => {
         select: query.select,
         upsert: (row) => {
           mocks.upsert(row);
+          return query;
+        },
+        update: (row) => {
+          mocks.update(row);
           return query;
         },
       }),
@@ -39,15 +44,18 @@ describe("user_metadata.role no decide el rol", () => {
     mocks.maybeSingle.mockReset();
     mocks.signInWithPassword.mockReset();
     mocks.upsert.mockReset();
+    mocks.update.mockReset();
   });
 
   it("crea el perfil faltante como usuario aunque la metadata diga admin", async () => {
     mocks.maybeSingle
       .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
       .mockResolvedValueOnce({ data: { id: USER_ID, role: "usuario" }, error: null });
 
     const profile = await ensureUserProfile(staffMetadataUser);
 
+    expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.upsert.mock.calls[0][0].role).toBe("usuario");
     expect(profile.role).toBe("usuario");
@@ -55,13 +63,13 @@ describe("user_metadata.role no decide el rol", () => {
 
   it("al completar datos de contacto conserva el rol guardado, no el de la metadata", async () => {
     const stored = { id: USER_ID, role: "ejecutivo", full_name: "Ejecutiva" };
-    mocks.maybeSingle
-      .mockResolvedValueOnce({ data: stored, error: null })
-      .mockResolvedValueOnce({ data: stored, error: null });
+    mocks.maybeSingle.mockResolvedValue({ data: stored, error: null });
 
     await ensureUserProfile({ ...staffMetadataUser, user_metadata: { role: "admin", phone: "+56911111111" } });
 
-    expect(mocks.upsert.mock.calls[0][0].role).toBe("ejecutivo");
+    // Existing profiles take the UPDATE path: the guard rejects privileged INSERT ON CONFLICT.
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.update.mock.calls[0][0].role).toBe("ejecutivo");
   });
 
   it("si el perfil no se puede leer, la sesión local no asume el rol de la metadata", async () => {

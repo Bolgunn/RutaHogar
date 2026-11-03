@@ -4,7 +4,7 @@ import { fetchJsonWithTimeout, RequestTimeoutError, withTimeout } from "./httpRe
 const apiBase = () => (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
 
-export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
+export async function trackingRequest(path = "", body, { timeoutMs, expectedUserId } = {}) {
   if (!supabase) throw new Error("El seguimiento requiere una conexión configurada.");
   let session;
   try {
@@ -18,6 +18,7 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
   }
   const { data, error } = session;
   if (error || !data?.session?.access_token) throw new Error("Inicia sesión para acceder a tu progreso.");
+  if (expectedUserId && data.session.user?.id !== expectedUserId) throw new Error("La cuenta cambió. Consulta tu evaluación antes de actualizarla.");
   let response, payload;
   try {
     ({ response, payload } = await fetchJsonWithTimeout(`${apiBase()}/tracking${path}`, {
@@ -44,6 +45,9 @@ export async function trackingRequest(path = "", body, { timeoutMs } = {}) {
       verifiable_data_contradiction: "Esta meta se verifica con tus datos y no admite confirmación manual.",
       persistence_unavailable: "El seguimiento no está disponible temporalmente.",
       not_found: "No se encontró el registro en tu seguimiento.",
+      co_debtor_confirmation_already_applied: "Los antecedentes ya están incorporados o coinciden con tu evaluación actual.",
+      co_debtor_revision_conflict: "Los antecedentes cambiaron. Revisa el estado actualizado antes de continuar.",
+      co_debtor_relation_conflict: "La relación cambió. Revisa el estado actualizado antes de continuar.",
       co_debtor_confirmation_required: "Aún no hay una confirmación vigente del co-deudor para actualizar tu score.",
       co_debtor_consent_revoked: "El co-deudor revocó su consentimiento. Sus antecedentes ya no se pueden usar para actualizar tu score.",
       owner_mismatch: "No tienes permisos para consultar los antecedentes de este lead.",
@@ -60,9 +64,9 @@ export const getProjection = (options) => trackingRequest("/projection", undefin
 export const appendTrackingEvent = (command) => trackingRequest("/events", command);
 export const correctTrackingEvent = (target, command) => trackingRequest(`/events/${target}/corrections`, command);
 export const confirmTrackingGoal = (goal, command) => trackingRequest(`/goals/${goal}/confirmations`, command);
-export const updateScoreWithConfirmedCoDebtor = () =>
-  trackingRequest("/evaluations/co-debtor-confirmation", {});
-export const getStaffEvaluations = () => trackingRequest("/staff/evaluations", undefined);
+export const updateScoreWithConfirmedCoDebtor = (options) =>
+  trackingRequest("/evaluations/co-debtor-confirmation", {}, options);
+export const getStaffEvaluations = (options) => trackingRequest("/staff/evaluations", undefined, options);
 export const getStaffLeadDetail = (leadId) => trackingRequest(`/staff/leads/${encodeURIComponent(leadId)}`, undefined);
 export const annotateEvaluation = (evaluation, kind, payload, eventId = crypto.randomUUID()) =>
   trackingRequest(`/evaluations/${evaluation}/events`, {

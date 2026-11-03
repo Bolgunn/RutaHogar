@@ -175,7 +175,7 @@ def test_explicit_confirmation_update_can_produce_a_different_score():
     assert repository.bundle["evaluations"][-1]["financial_data"]["result"]["score"] != original_score
 
 
-def test_insufficient_down_payment_is_identical_before_and_after_confirmation():
+def test_insufficient_down_payment_preserves_objective_and_uses_income_capacity_after_confirmation():
     repository, tracking = service()
     repository.co_debtor_consent = pending_facts()
     tracking.execute("u1", command(declared_snapshot(
@@ -189,12 +189,13 @@ def test_insufficient_down_payment_is_identical_before_and_after_confirmation():
     tracking.update_score_with_confirmed_co_debtor("u1")
 
     baseline, confirmed = [row["financial_data"]["result"] for row in repository.bundle["evaluations"]]
-    expected_minimum = 2_200 * 40_695 * 0.10
     for result in (baseline, confirmed):
         indicators = result["financial_indicators"]
-        assert indicators["property_value_uf"] == 2_200
-        assert indicators["pie_minimo_clp"] == expected_minimum
-        assert indicators["brecha_pie_minimo"] == expected_minimum - 6_000_000
+        # ALG-1 uses income capacity for savings; the objective stays separate.
+        assert result["property_value_resolution"]["property_value_uf"] == 2_200
+        expected_minimum = indicators["valor_vivienda_soportable_por_renta_clp"] * 0.10
+        assert indicators["pie_minimo_clp"] == pytest.approx(expected_minimum)
+        assert indicators["brecha_pie_minimo"] == pytest.approx(expected_minimum - 6_000_000)
         assert "pie_insuficiente" in {blocker["code"] for blocker in result["blockers"]}
     assert (
         baseline["financial_indicators"]["capacidad_supuestos"]["market_snapshot"]

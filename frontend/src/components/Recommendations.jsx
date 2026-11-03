@@ -14,6 +14,10 @@ import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
 import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 import AiExplanationBlock from "./AiExplanationBlock";
 import CoDebtorSection from "./CoDebtorSection";
+import BipersonalCapacityCard from "./BipersonalCapacityCard";
+import ScoreChangeNotice from "./ScoreChangeNotice";
+import NotificationToast from "./NotificationToast";
+import useOwnerResult from "../hooks/useOwnerResult";
 
 
 function PlanCarousel({ children }) {
@@ -95,23 +99,42 @@ export function scrollToScoreSummary(element) {
   element?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
-export default function Recommendations({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, onCoDebtorScoreUpdated }) {
+export default function Recommendations(props) {
+  const ownerResult = useOwnerResult(props);
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    if (!ownerResult.message) { setNotice(null); return undefined; }
+    setNotice({ ownerId: props.ownerId, message: ownerResult.message });
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [ownerResult.message, props.ownerId]);
+  const activeNotice = notice?.ownerId === props.ownerId ? notice : null;
+  const content = ownerResult.enabled && (ownerResult.loading || !ownerResult.evaluation) ? (
+    <section className="section-block recommendations-panel" aria-live="polite" aria-busy={ownerResult.loading || undefined}>
+      <h1>Resultados de tu precalificación</h1>
+      {ownerResult.loading ? <p>Consultando tu evaluación vigente...</p> : <><p role="alert">{ownerResult.error || "No se pudo cargar tu evaluación vigente."}</p><button type="button" onClick={ownerResult.refresh}>Reintentar</button></>}
+    </section>
+  ) : <RecommendationsView {...props} evaluation={ownerResult.enabled ? ownerResult.evaluation : props.evaluation} trackingState={ownerResult.enabled ? ownerResult.tracking : props.trackingState} ownerResult={ownerResult} />;
+  return <>{content}<NotificationToast count={activeNotice ? 1 : 0} title="Evaluación actualizada"
+    message={activeNotice?.message} actionLabel="Ver resultado" icon={<i className="ti ti-check" />}
+    onClose={() => setNotice(null)} onClick={() => {
+      scrollToScoreSummary(document.getElementById("owner-result-score")); setNotice(null);
+    }} /></>;
+}
+
+export function RecommendationsView({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, ownerResult = {} }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
   const scoreSummaryRef = useRef(null);
-  const [coDebtorSuccess, setCoDebtorSuccess] = useState(false);
+  const feedbackRef = useRef(null);
   const openInAcademy = () => onNavigate?.("academia");
-  const handleCoDebtorScoreUpdated = async () => {
-    await onCoDebtorScoreUpdated?.();
-    setCoDebtorSuccess(true);
-    const scrollToScore = () => scrollToScoreSummary(scoreSummaryRef.current);
-    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(scrollToScore);
-    } else {
-      scrollToScore();
-    }
-  };
+  useEffect(() => {
+    if (ownerResult.error) scrollToScoreSummary(feedbackRef.current);
+    else if (ownerResult.message) scrollToScoreSummary(scoreSummaryRef.current);
+  }, [ownerResult.message, ownerResult.error]);
+  const projection = evaluation?.co_debtor;
+  const historicalHidden = projection?.visibility === "hidden" && projection?.warnings?.some((code) => ["historical_details_hidden", "closure_time_unknown"].includes(code));
 
   if (!data) {
     return (
@@ -139,19 +162,21 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
         </div>
       </div>
 
-      {coDebtorSuccess && <p className="success-message" role="status">Actualizamos tu score con los antecedentes confirmados.</p>}
 
-      <div className="recommendation-hero-row" ref={scoreSummaryRef}>
+      <div ref={feedbackRef}>
+        {ownerResult.error && <p className="error-message" role="alert">{ownerResult.error}</p>}
+      </div>
+      <div className="recommendation-hero-row" ref={scoreSummaryRef} id="owner-result-score">
         <section className="recommendation-score-ai-card">
           <header className="results-section-head"><div><span className="eyebrow">Tu punto de partida</span><h2>Tu resultado actual</h2></div><span className="results-reference-label">Orientativo</span></header>
           <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
             <span>Score orientativo</span>
-            <strong>{formatScore(data.score, "Sin score")}</strong>
+            <div className="recommendation-score-value"><strong>{formatScore(data.score, "Sin score")}</strong><ScoreChangeNotice change={ownerResult.scoreChange} /></div>
             <small>{data.classification || "Sin clasificación"}</small>
           </div>
           <div className="recommendation-score-ai-card__explanation">
             <h2 className="results-ai-title"><i className="ti ti-sparkles" aria-hidden="true"></i> Explicación con IA</h2>
-            <AiExplanationBlock text={evaluation?.result?.ai_explanation} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation} />
+            <AiExplanationBlock text={evaluation?.result?.ai_explanation} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation ? async () => { await onRetryExplanation(); await ownerResult.refresh?.(); } : undefined} />
           </div>
         </section>
 
@@ -236,7 +261,8 @@ export default function Recommendations({ evaluation, trackingState, onStartEval
         </div>
       )}
 
-      <CoDebtorSection evaluation={evaluation} trackingState={trackingState} onScoreUpdated={handleCoDebtorScoreUpdated} />
+      <BipersonalCapacityCard projection={projection} updating={ownerResult.updating} onUpdate={ownerResult.update} onRefresh={ownerResult.refresh} />
+      {!historicalHidden && <CoDebtorSection managementOnly evaluation={evaluation} trackingState={trackingState} />}
 
       <div className="warning-note">
         <i className="ti ti-alert-triangle"></i>
