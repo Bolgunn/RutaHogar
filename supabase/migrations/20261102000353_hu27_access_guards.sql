@@ -1,35 +1,5 @@
 begin;
 
--- Existing administrator functions and service-role provisioning remain authoritative.
--- Direct browser writes cannot promote the caller or reassign its company.
-create or replace function public.hu27_guard_own_access()
-returns trigger language plpgsql security invoker
-set search_path = pg_catalog, public
-as $$
-declare v_role text; v_company uuid;
-begin
-  if current_user = 'authenticated' and auth.uid() = new.id then
-    if tg_op = 'INSERT' then
-      select role, inmobiliaria_id into v_role, v_company from public.profiles where id=new.id;
-      if found then
-        -- Supabase upserts execute BEFORE INSERT before their conflict UPDATE.
-        if new.role is distinct from v_role or (new.inmobiliaria_id is not null and new.inmobiliaria_id is distinct from v_company) then
-          raise exception using errcode='42501', message='No puedes modificar los permisos de tu cuenta.';
-        end if;
-      elsif new.role is distinct from 'usuario' or new.inmobiliaria_id is not null then
-        raise exception using errcode='42501', message='No puedes modificar los permisos de tu cuenta.';
-      end if;
-    elsif new.role is distinct from old.role or new.inmobiliaria_id is distinct from old.inmobiliaria_id then
-      raise exception using errcode='42501', message='No puedes modificar los permisos de tu cuenta.';
-    end if;
-  end if;
-  return new;
-end;
-$$;
-revoke all on function public.hu27_guard_own_access() from public, anon, authenticated;
-create trigger hu27_own_access_guard before insert or update of role, inmobiliaria_id on public.profiles
-for each row execute function public.hu27_guard_own_access();
-
 -- Preserve legacy duplicates; serialize/check only new or changed RUT assignments.
 create index profiles_hu27_normalized_rut_lookup
 on public.profiles ((nullif(regexp_replace(upper(rut), '[^0-9K]', '', 'g'), '')))
