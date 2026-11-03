@@ -118,8 +118,11 @@ ese segmento, sin que cambie qué leads puede ver según las políticas actuales
   se registran en la explicación y en el plan de mejora, como pide la convención del motor.
 - **Límite regulatorio.** Calcular rentabilidad bruta es orientación; recomendar una inversión no
   lo es. E4 dibuja esa línea explícitamente para que el prompt de Groq la respete.
-- **Migración.** Una columna nullable. En producción se aplica archivo por archivo con
-  `migration repair`, nunca con `db push`, por el drift conocido del historial de migraciones.
+- **Migración.** Una columna nullable. En producción, por el drift conocido del historial, nunca se
+  usa `db push`: primero se ejecuta explícitamente el SQL de ese único archivo y se verifica que la
+  columna exista; solo después se concilia el historial con `migration repair`, que marca la
+  migración como aplicada pero **no ejecuta el SQL**
+  ([referencia](https://supabase.com/docs/reference/cli/supabase-migration-repair)).
 
 ---
 
@@ -146,7 +149,7 @@ Hay que cerrarlas con Echeverría Izquierdo **antes** de estimar:
 | [[HU2-priorizacion-leads\|HU 2]] | E6 agrega un segmento a su dashboard. |
 | [[HU3-scoring-hibrido\|HU 3]] | E3 y E4 son un conjunto de reglas más del mismo motor, con la misma regla de que la IA no decide. |
 | [[HU4-plan-de-mejora\|HU 4]] | E5 agrega pasos para los `risk_codes` de inversión. |
-| [[HU23-parametros-scoring\|HU 23]] | Si se implementa, los parámetros de E3 deberían configurarse desde ahí y no quedar fijos en código. |
+| *(decisión pendiente)* | Dónde se configuran los parámetros de E3 no tiene historia en el backlog vigente: la antigua [[HU23-parametros-scoring\|HU 23 — parámetros de scoring]] fue retirada y [[HU21-configuracion-comercial-priorizacion\|HU 21]] excluye expresamente modificar el score. Hasta que el equipo lo decida, quedan fuera del alcance actual; la antigua HU 23 se conserva solo como antecedente. |
 | [[propuesta-primera-vivienda-fogaes\|Primera vivienda / FOGAES]] | Caso opuesto: el propósito `inversion` excluye beneficios de primera vivienda. |
 
 ---

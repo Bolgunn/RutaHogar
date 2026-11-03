@@ -41,6 +41,6 @@
 
 ## Notas
 
-- Hoy existen favoritos (`favoritesService.js`), pero **no se registran visualizaciones ni simulaciones**: hay que empezar a capturar esos eventos antes de poder contarlos.
+- **Qué existe y qué falta.** Hay favoritos (`favoritesService.js`) y escenarios de simulación guardados por el lead (`mortgage_scenarios`, con `project_id` y snapshots, vía `saveMortgageScenario()` de HU 17). **No hay registro de visualizaciones** ni telemetría exhaustiva de simulaciones no guardadas, y tampoco una agregación autorizada para el administrador. Reutilizar `mortgage_scenarios` para contar simulaciones guardadas en vez de duplicar esa persistencia, y exponer solo agregados: los escenarios son datos de cada lead.
 - Los motivos de rechazo pueden salir de los bloqueadores del motor (`scoring_engine/blockers.py`) y de la compatibilidad por proyecto (`scoring_engine/project_fit.py`).
 - Se suma a las métricas comerciales de [[HU15-dashboard-conversion-tiempos|HU 15]] (`CommercialMetrics.jsx`). La exportación de estas métricas la cubre [[HU22-centro-exportacion-dossier|HU 22]].

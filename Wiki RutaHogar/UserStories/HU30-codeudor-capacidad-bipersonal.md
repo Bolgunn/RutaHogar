@@ -44,9 +44,41 @@
 
 ---
 
+> La historia y los criterios de arriba son la **transcripción del tablero**. El alcance operativo
+> vigente está en la sección siguiente.
+
+---
+
+## Alcance operativo vigente
+
+El equipo acordó una ampliación de HU 30 en el plan de trabajo
+`docs/stories/HU30-capacidad-bipersonal/PLAN.md` (rama `feat/hu30-capacidad-bipersonal`). No agrega
+un E3: precisa cómo se cumplen E1 y E2. **El plan es la fuente de las reglas**; aquí se resumen.
+
+- **Qué significa "consideró válidamente".** `ingreso_complementario > 0` no basta. Una evaluación es
+  **bipersonal confirmada** solo si registra la procedencia de la confirmación del co-deudor que
+  usó **esa misma evaluación** y el motor consideró un ingreso complementario mayor que cero. Una
+  confirmación posterior no reclasifica evaluaciones anteriores.
+- **Lo que no es bipersonal confirmado.** Un complemento declarado por el titular y no confirmado
+  (`lead_declared` / `not_confirmed`, que HU 18 admite) o de origen no verificable **no recibe el
+  badge** ni se presenta como individual comprobado. En el filtro de E2 aparece solo en "Todos".
+- **Aporte cero o negativo.** El aporte se calcula contra el mismo titular sin complemento. Puede ser
+  positivo, cero ("Sin aumento de capacidad") o negativo ("Reducción de capacidad"); la tarjeta de E1
+  no afirma siempre una capacidad "ganada".
+- **Participación con cuenta y revisiones.** El co-deudor confirma desde una cuenta autenticada y
+  puede confirmar revisiones sucesivas; el recálculo de la evaluación es siempre explícito.
+- **Revocación y reemplazo.** Excluyen de inmediato los antecedentes de evaluaciones futuras. La
+  consulta del desglose histórico se mantiene **30 días** desde el primer hecho que cerró el acceso
+  y después se oculta, **sin borrar ni reescribir snapshots**.
+
+Esto no rehace [[HU18-participacion-consentimiento-codeudor|HU 18]]: reutiliza su invitación,
+consentimiento y estados.
+
+---
+
 ## Notas
 
-- **El título y la historia repiten los de [[HU18-participacion-consentimiento-codeudor|HU 18]]**, pero los criterios son otros: HU 18 construyó la invitación y el consentimiento; esta HU 30 **muestra** el resultado al lead y al ejecutivo. Conviene que el equipo ajuste el título en el tablero (p. ej. "Capacidad bipersonal del co-deudor") para no confundirlas.
+- **El título y la historia repiten los de [[HU18-participacion-consentimiento-codeudor|HU 18]].** Conviene que el equipo ajuste el título en el tablero (p. ej. "Capacidad bipersonal del co-deudor") para no confundirlas.
 - Absorbe dos propuestas sin numerar: [[propuesta-transparencia-complemento-renta|Transparencia del complemento de renta]] (E1) y [[propuesta-complemento-vista-ejecutivo|Complemento en la vista del ejecutivo]] (E2).
-- La "deuda total consolidada" de E1 depende de que el cálculo descuente la deuda del co-deudor (defecto §10.1 del Spike 1). Verificar `scoring_engine/indicators.py` y `co_debtor_inputs.py` antes de mostrar el número.
-- Toca `Result.jsx`, `DashboardLeads.jsx`, `LeadDetailModal.jsx` y `ExecutiveCoDebtorSection.jsx`. El filtro de E2 comparte bloque con [[HU21-configuracion-comercial-priorizacion|HU 21]] y [[HU22-centro-exportacion-dossier|HU 22]].
+- **La deuda del co-deudor ya se descuenta.** `calculate_financial_scope()` en `scoring_engine/indicators.py` suma `deuda_principal + deuda_complementaria_considerada`, y `purchase_capacity.py` usa ese total. El defecto §10.1 del Spike 1 es un antecedente histórico, no un prerrequisito de esta historia.
+- Puntos de integración: la tarjeta de E1 va en `Recommendations.jsx` junto a `CoDebtorSection.jsx`, que es la pantalla de resultados activa (`Result.jsx` no está montado en el flujo actual). E2 toca `DashboardLeads.jsx`, `LeadDetailModal.jsx` y `ExecutiveCoDebtorSection.jsx`; el filtro comparte bloque con [[HU21-configuracion-comercial-priorizacion|HU 21]] y [[HU22-centro-exportacion-dossier|HU 22]].

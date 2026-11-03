@@ -6,8 +6,9 @@ los criterios de aceptación transcritos del documento fuente del backlog.
 **Estado:** ✅ Implementada · ⚠️ Parcial o pendiente de merge · 🗓 Planificada · 💡 Propuesta sin numerar · ⛔ Retirada del backlog
 
 > El estado refleja lo que el código hace hoy en `develop`, verificado criterio por criterio con citas a
-> `archivo:línea` en la sección **Estado frente al código** de cada página. Un criterio sin
-> evidencia citable es un criterio no verificado. Cuando una historia está construida pero su PR
+> `archivo:línea` en la sección **Estado frente al código** de cada página auditada. Un criterio sin
+> evidencia citable es un criterio no verificado. Las historias del Sprint 3 (HU 21–31) todavía no
+> tienen esa sección: su estado 🗓 no está auditado contra el código. Cuando una historia está construida pero su PR
 > sigue abierto, su página lo dice y cita la rama.
 
 > **Los Sprints 2 y 3 se renumeraron** con el documento *HUs para Sprint 2* acordado por el equipo.
@@ -87,8 +88,8 @@ el cliente. Reparto por integrante en [[../Sprint3-Division|División del Sprint
 > **[[HU30-codeudor-capacidad-bipersonal|HU 30]] repite el título de [[HU18-participacion-consentimiento-codeudor|HU 18]]**
 > pero sus criterios son otros: muestra la capacidad bipersonal al lead y al ejecutivo.
 >
-> **La [[ruta-guiada-carga-cognitiva|ruta guiada]] sigue sin número de HU** y no está en el tablero
-> del Sprint 3; sus 5 SP no se suman.
+> **La [[ruta-guiada-carga-cognitiva|ruta guiada]] no está comprometida en el Sprint 3:** no tiene
+> número, no está en el tablero ni en los 57 SP, y figura en [Propuestas sin numerar](#propuestas-sin-numerar).
 
 ### Historias retiradas del Sprint 3
 
@@ -136,6 +137,7 @@ equipo las priorice y les asigne número.
 | [[propuesta-matching-nivel-unidad\|Matching a nivel de unidad]] | Deseable | Lead | UNIDADES-PROYECTO — vía HU 10 |
 | [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]] | Importante | Administrador inmobiliario | UNIDADES-PROYECTO — vía HU 7 |
 | [[propuesta-perfil-inversor\|Precalificación para compra de inversión]] | Deseable | Lead · Ejecutivo comercial | Consulta del equipo — vía HU 1 / HU 3 |
+| [[ruta-guiada-carga-cognitiva\|Ruta guiada: un siguiente paso a la vez]] | Esencial | Lead | Feedback de carga cognitiva en la sprint review |
 | [[HU22-actualizacion-mapa-accesibilidad\|Actualización dinámica del mapa de accesibilidad]] | Opcional | Lead | Ex HU 22, retirada del Sprint 3 |
 | [[HU26-simulacion-subsidios\|Simulación avanzada de subsidios habitacionales]] | Deseable | Lead | Ex HU 26, retirada del Sprint 3 |
 | [[HU28-gastos-iniciales\|Estimador de gastos iniciales de compra]] | Importante | Lead | Ex HU 28, retirada del Sprint 3 |
@@ -157,10 +159,11 @@ equipo las priorice y les asigne número.
 > precondición**, que es [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]]. Ninguna de las dos
 > está en el backlog numerado, así que se priorizan juntas o no se priorizan.
 >
-> **El defecto §10.1 del Spike 1 ahora toca una historia comprometida:** `indicators.py` suma la
-> renta del co-deudor e ignora su deuda, así que toda capacidad con complemento está sobreestimada.
-> La "deuda total consolidada" de [[HU30-codeudor-capacidad-bipersonal|HU 30]] no se puede mostrar
-> correctamente sin corregirlo.
+> **El defecto §10.1 del Spike 1 ya está corregido y queda como antecedente histórico.** El Spike
+> detectó que la capacidad con complemento sumaba la renta del co-deudor sin su deuda. Hoy
+> `calculate_financial_scope()` en `indicators.py` suma `deuda_principal + deuda_complementaria_considerada`
+> y `purchase_capacity.py` usa ese total, así que no es prerrequisito de
+> [[HU30-codeudor-capacidad-bipersonal|HU 30]].
 
 ---
 
@@ -221,9 +224,10 @@ comercial y servicios externos, fuentes de datos externas, flujos y experiencia 
 ecosistema de corredores inmobiliarios. Su formulación vigente (13 SP, seis criterios) reemplaza la
 del documento [[../informes_entregas/E4 - GPI Plan de Proyecto 2026|E4]] (20 SP, siete criterios).
 
-El documento anota además un frente de investigación **para Sprint 3**: validación de datos y
-viabilidad técnica para la visualización inmobiliaria, insumo de
-[[HU31-mapa-accesibilidad|HU 31]].
+*(Histórico.)* El documento anotaba además un frente de investigación para el Sprint 3 de la
+numeración anterior: validación de datos y viabilidad técnica para la visualización inmobiliaria,
+insumo de la antigua [[HU31-mapa-accesibilidad|HU 31 — mapa de accesibilidad]], hoy retirada. No
+forma parte del Sprint 3 vigente.
 
 ---
 
@@ -233,7 +237,7 @@ viabilidad técnica para la visualización inmobiliaria, insumo de
 | :---- | :---------- |
 | **Lead** | Persona interesada en comprar su primera vivienda. Completa el formulario, recibe su score y sigue un plan de mejora personalizado. |
 | **Ejecutivo comercial** | Profesional de venta inmobiliaria. Gestiona el dashboard priorizado de leads y cierra negocios. |
-| **Administrador inmobiliario** | Representante de la inmobiliaria contratante. Asigna roles de ejecutivo, gestiona el catálogo de proyectos y los parámetros de scoring. |
+| **Administrador inmobiliario** | Representante de la inmobiliaria contratante. Asigna roles de ejecutivo, gestiona el catálogo de proyectos y los criterios de prioridad comercial ([[HU21-configuracion-comercial-priorizacion\|HU 21]]), sin modificar el score. |
 | **Administrador desarrollador** | Miembro del equipo de desarrollo. Se hace cargo de trazabilidad, logs, seguridad y ajustes manuales de score. |
 | **Co-deudor** *(nuevo)* | Tercero cuya renta complementa la del lead. Aporta y confirma sus propios datos y otorga su propio consentimiento; no navega la plataforma. Lo introduce [[HU18-participacion-consentimiento-codeudor\|HU 18]]. |
 
@@ -243,7 +247,8 @@ Detalle completo en [[../Actores\|Actores / Roles]].
 
 ## Páginas relacionadas
 
-- [[../Distribucion\|Distribución / Sprints]] — plan de sprints y totales de SP.
+- [[../Sprint3-Division\|División del Sprint 3]] — reparto vigente por integrante, solapamientos y cruces.
+- [[../Distribucion\|Distribución / Sprints]] — *(histórico)* distribución original de los tres sprints, con la numeración anterior.
 - [[../Riesgos\|Riesgos técnicos]] — riesgos con su fórmula de prioridad.
 - [[../AtributosDeCalidad\|Atributos de calidad (RNF)]] — índice de la carpeta `RNF/`.
 - [[../Actores\|Actores / Roles]] — los actores del sistema en detalle.
