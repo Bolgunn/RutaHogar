@@ -5,7 +5,6 @@ dashboard receives redacted evaluation/history snapshots plus a deliberately
 small, current-consent projection for the selected lead.
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -125,9 +124,9 @@ class StaffLeadService:
     def authorized_leads(self, token, lead_ids):
         """Authenticate once; omit denied IDs without distinguishing their cause."""
         actor = self._actor(token)
-        with ThreadPoolExecutor(max_workers=min(8, max(1, len(lead_ids)))) as pool:
-            permitted = pool.map(lambda lead_id: self.repository.staff_can_access(actor, lead_id), lead_ids)
-            return [lead_id for lead_id, allowed in zip(lead_ids, permitted) if allowed]
+        # Un chequeo HTTP por lead es lo que evaluations() tuvo que abandonar.
+        permitted = self.repository.staff_accessible_leads(actor, lead_ids)
+        return [lead_id for lead_id in lead_ids if lead_id in permitted]
 
     def evaluations(self, token):
         actor = self._actor(token)

@@ -20,8 +20,8 @@ def test_batch_authenticates_once_and_omits_unauthorized(monkeypatch):
         def staff_actor(self, token):
             self.calls += 1
             return {"role": "ejecutivo", "inmobiliaria_id": "tenant"}
-        def staff_can_access(self, actor, subject):
-            return subject != ids[-1]
+        def staff_accessible_leads(self, actor, subjects):
+            return set(subjects) - {ids[-1]}
     class Repo:
         tracking = Tracking()
     repo = Repo()
@@ -81,7 +81,7 @@ def test_batch_http_scope_and_invalid_payload_are_private(monkeypatch):
         def staff_actor(self, token):
             self.actor_calls += 1
             return {'role':'ejecutivo','inmobiliaria_id':'tenant'}
-        def staff_can_access(self, actor, subject): return subject == allowed
+        def staff_accessible_leads(self, actor, subjects): return {allowed} & set(subjects)
     class Repo:
         tracking = Tracking()
     repo = Repo()
@@ -116,3 +116,21 @@ def test_score_status_http_with_no_effective_event_returns_conservative_200():
     response = TestClient(app).get('/tracking/documents/score/status')
     assert response.status_code == 200
     assert response.json()['pending'] is False and response.json()['evaluation_id'] is None
+
+
+def test_accessible_leads_resolves_tenant_scope_in_one_request():
+    from app.tracking.repository import TrackingRepository
+    inside, outside = str(uuid4()), str(uuid4())
+    repo = TrackingRepository.__new__(TrackingRepository)
+    calls = []
+    def request(method, path, *, token=None, payload=None):
+        calls.append((method, path, payload))
+        return [{'user_id': inside}, {'user_id': inside}, {'user_id': str(uuid4())}]
+    repo.request = request
+    actor = {'role': 'ejecutivo', 'inmobiliaria_id': 'tenant'}
+    assert repo.staff_accessible_leads(actor, [inside, outside]) == {inside}
+    assert calls == [('POST', '/rest/v1/rpc/staff_evaluations_for_inmobiliaria?select=user_id', {'p_inmobiliaria': 'tenant'})]
+    assert repo.staff_accessible_leads({'role': 'admin', 'inmobiliaria_id': None}, [outside]) == {outside}
+    assert repo.staff_accessible_leads({'role': 'ejecutivo', 'inmobiliaria_id': None}, [inside]) == set()
+    assert repo.staff_accessible_leads({'role': 'usuario'}, [inside]) == set()
+    assert len(calls) == 1
