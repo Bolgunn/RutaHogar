@@ -159,6 +159,20 @@ class TrackingRepository:
             "p_inmobiliaria": tenant_id,
         }))
 
+    def staff_accessible_leads(self, actor, lead_ids):
+        """Batch form of staff_can_access for leads with evaluations, in one round trip."""
+        if actor.get("role") not in {"ejecutivo", "admin", "admin_inmobiliario"}:
+            return set()
+        if actor.get("role") == "admin" and not actor.get("inmobiliaria_id"):
+            return set(lead_ids)
+        tenant_id = actor.get("inmobiliaria_id")
+        if not tenant_id:
+            return set()
+        rows = self.request("POST", "/rest/v1/rpc/staff_evaluations_for_inmobiliaria?select=user_id", payload={
+            "p_inmobiliaria": tenant_id,
+        })
+        return {row["user_id"] for row in rows} & set(lead_ids)
+
     def staff_evaluations(self, actor):
         """Same scope as staff_can_access, resolved in one database round trip."""
         if actor.get("role") not in {"ejecutivo", "admin", "admin_inmobiliario"}:

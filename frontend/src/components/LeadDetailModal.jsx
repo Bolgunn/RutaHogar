@@ -9,6 +9,7 @@ import { resolvedPriorityDetail } from "../lib/commercial/priorityActions";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import CommercialStagePanel from "./CommercialStagePanel";
+import DocumentBacking from "./documents/DocumentBacking";
 import ExecutiveCoDebtorSection from "./ExecutiveCoDebtorSection";
 import { getCommercialRecords } from "../services/commercialStageService";
 import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
@@ -292,6 +293,7 @@ export function LeadDetailView({
   commercialRecords = null,
   onStageChanged = null,
   crm = null,
+  loadDocumentBacking,
   coDebtor = null,
   authorizedHistory = [],
 }) {
@@ -693,6 +695,7 @@ export function LeadDetailView({
                 </dl>
               </article>
 
+              <DocumentBacking mode="staff" leadId={activeLead?.user_id || activeLead?.id} refreshKey={activeLead.id} loadStaffProjection={loadDocumentBacking} />
               <ExecutiveCoDebtorSection coDebtor={coDebtor} />
 
               {selectedMainBlocker && (

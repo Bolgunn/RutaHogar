@@ -58,6 +58,18 @@ class StaffLeadService:
         output['co_debtor'] = project_evaluation(snapshot, scoped, now, other_active=other.get((item or {}).get('id'), False))
         return output
 
+    def authorize_lead(self, token, lead_id):
+        actor = self._actor(token)
+        self._authorize(actor, lead_id)
+        return actor
+
+    def authorized_leads(self, token, lead_ids):
+        """Authenticate once; omit denied IDs without distinguishing their cause."""
+        actor = self._actor(token)
+        # Un chequeo HTTP por lead es lo que evaluations() tuvo que abandonar.
+        permitted = self.repository.staff_accessible_leads(actor, lead_ids)
+        return [lead_id for lead_id in lead_ids if lead_id in permitted]
+
     def evaluations(self, token):
         actor, now = self._actor(token), self.clock()
         # The scoped RPC applies the same tenant predicate as the detail check.

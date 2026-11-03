@@ -14,6 +14,7 @@ import GlossaryTerm, { splitTextWithGlossaryTerms } from "./GlossaryTerm";
 import { ACADEMY_BENEFIT_CAPSULES } from "../constants/academyContent";
 import AiExplanationBlock from "./AiExplanationBlock";
 import CoDebtorSection from "./CoDebtorSection";
+import ScoreUpdateFeedback from "./ScoreUpdateFeedback";
 import BipersonalCapacityCard from "./BipersonalCapacityCard";
 import ScoreChangeNotice from "./ScoreChangeNotice";
 import NotificationToast from "./NotificationToast";
@@ -122,7 +123,7 @@ export default function Recommendations(props) {
     }} /></>;
 }
 
-export function RecommendationsView({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, ownerResult = {} }) {
+export function RecommendationsView({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, ownerResult = {}, scoreUpdate }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
@@ -135,6 +136,17 @@ export function RecommendationsView({ evaluation, trackingState, onStartEvaluati
   }, [ownerResult.message, ownerResult.error]);
   const projection = evaluation?.co_debtor;
   const historicalHidden = projection?.visibility === "hidden" && projection?.warnings?.some((code) => ["historical_details_hidden", "closure_time_unknown"].includes(code));
+  const activeUpdate = scoreUpdate?.evaluationId === evaluation?.id ? scoreUpdate : null;
+  useEffect(() => {
+    if (!activeUpdate) return;
+    const scrollToScore = () => scrollToScoreSummary(scoreSummaryRef.current);
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      const frame = window.requestAnimationFrame(scrollToScore);
+      return () => window.cancelAnimationFrame(frame);
+    } else {
+      scrollToScore();
+    }
+  }, [activeUpdate?.evaluationId]);
 
   if (!data) {
     return (
@@ -169,7 +181,8 @@ export function RecommendationsView({ evaluation, trackingState, onStartEvaluati
       <div className="recommendation-hero-row" ref={scoreSummaryRef} id="owner-result-score">
         <section className="recommendation-score-ai-card">
           <header className="results-section-head"><div><span className="eyebrow">Tu punto de partida</span><h2>Tu resultado actual</h2></div><span className="results-reference-label">Orientativo</span></header>
-          <div className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
+          {activeUpdate && <ScoreUpdateFeedback previousScore={activeUpdate.previousScore} score={data.score} />}
+          <div key={activeUpdate?.evaluationId || 'current-score'} className={`score-badge-wrap score-visual-card ${getScoreBadgeClass(data.classification)}${activeUpdate ? ' is-score-updated' : ''}`} style={{ "--score-value": `${Math.max(0, Math.min(100, Number(data.score) || 0))}%` }}>
             <span>Score orientativo</span>
             <div className="recommendation-score-value"><strong>{formatScore(data.score, "Sin score")}</strong><ScoreChangeNotice change={ownerResult.scoreChange} /></div>
             <small>{data.classification || "Sin clasificación"}</small>
