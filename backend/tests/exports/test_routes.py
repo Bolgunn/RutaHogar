@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from app.exports.routes import router
 from app.tracking.routes import repository
+from app.tracking.repository import TrackingRepository
 from tests.exports.test_exports import Repository, command, ACTOR
 
 
@@ -104,3 +105,23 @@ def test_empty_lead_selection_is_rejected_before_audit(api):
     response = request("POST", "/exports/prepare", json=body, headers={"Authorization": "Bearer valid"})
     assert response.status_code == 422
     assert not repo.events
+
+
+def test_postgrest_hash_conflict_is_translated_to_http_409(api, monkeypatch):
+    request, repo = api
+    headers = {"Authorization": "Bearer valid"}
+    assert request("POST", "/exports/prepare", json=command().model_dump(mode="json"), headers=headers).status_code == 200
+    original = repo.request
+    transport = httpx.MockTransport(lambda req: httpx.Response(400, json={"code": "P0001", "message": "idempotency_conflict"}))
+    monkeypatch.setenv("SUPABASE_URL", "https://database.example.test")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_fixture")
+    with httpx.Client(transport=transport, base_url="https://database.example.test") as client:
+        actual = TrackingRepository(client=client)
+        def dispatch(method, path, **kwargs):
+            if path.endswith("hu22_export_delivery"):
+                return actual.request(method, path, **kwargs)
+            return original(method, path, **kwargs)
+        repo.request = dispatch
+        result = request("POST", f"/exports/{command().request_id}/delivery", json={"sha256": "b" * 64}, headers=headers)
+    assert result.status_code == 409
+    assert result.json()["detail"]["code"] == "idempotency_conflict"

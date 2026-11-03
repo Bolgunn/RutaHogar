@@ -172,3 +172,11 @@ The implementation must not be declared fully accepted until these points and ho
 - Staff loading performance is a separate known issue on this branch. An existing optimization in
   `origin/develop` (`767696f`) requires independent integration; it is not silently included in HU22.
 - The browser cannot prove a file was saved. Traceability ends at the delivery request.
+
+## Review follow-up
+
+The export DDL is mirrored in schema.sql without nested transactions; rollback drops its RPCs, policy and table (audit metadata is lost). Function/policy syntax is recognized by the drift checker. The manifest retains the original CRLF bytes via a scoped .gitattributes rule.
+
+Validation: 22 backend export tests passed, including PostgREST P0001 hash-conflict translation to HTTP 409. PostgreSQL checks passed for RLS, RPC permissions, hash conflict and destructive rollback. Account-scoped history remains intentional.
+
+Coordinate migration ordering with other open branches: an earlier timestamp already absent from the remote migration history may require a reviewed supabase db push --include-all. Inspect the pending migration list first; never renumber migrations already applied to hosted environments.
