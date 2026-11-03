@@ -1,6 +1,8 @@
-# HU 27 - Revisión referencial de antecedentes declarados
+# ~~HU 27~~ (retirada) - Revisión referencial de antecedentes declarados
 
-> **🗓 Planificada - Sprint 3.** Genera para el ejecutivo un resumen referencial de riesgo a partir de los antecedentes financieros declarados por el lead, sin consultar fuentes externas.
+> **⛔ Reemplazada.** Esta historia ya no está en el backlog: el tablero del Sprint 3 (octubre 2026) renumeró el sprint y su alcance pasó a [[HU23-documentos-validacion-asistida|HU 23]]. Se conserva como antecedente; el número que tenía ahora pertenece a otra historia.
+
+> **Descripción original.** Genera para el ejecutivo un resumen referencial de riesgo a partir de los antecedentes financieros declarados por el lead, sin consultar fuentes externas.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Ejecutivo comercial |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

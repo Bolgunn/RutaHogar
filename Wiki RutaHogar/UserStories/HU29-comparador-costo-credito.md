@@ -1,6 +1,8 @@
-# HU 29 - Comparador de costo total referencial del crédito
+# ~~HU 29~~ (retirada) - Comparador de costo total referencial del crédito
 
-> **🗓 Planificada - Sprint 3.** Muestra el costo referencial de un crédito bajo distintos plazos, para que el lead entienda que bajar el dividendo mensual puede aumentar el costo total.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Muestra el costo referencial de un crédito bajo distintos plazos, para que el lead entienda que bajar el dividendo mensual puede aumentar el costo total.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

@@ -56,6 +56,14 @@
       "destination": "/api/score"
     },
     {
+      "source": "/exports",
+      "destination": "/api/score"
+    },
+    {
+      "source": "/exports/(.*)",
+      "destination": "/api/score"
+    },
+    {
       "source": "/tracking/(.*)",
       "destination": "/api/score"
     },

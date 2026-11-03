@@ -10,7 +10,7 @@ export async function listMortgageScenarios(evaluationId) {
   if (!isSupabaseDataConfigured) return readLocal().filter((item) => item.evaluation_id === evaluationId).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const user = await getAuthenticatedUser();
   if (!user?.id) throw new Error("Debes iniciar sesiÃ³n para cargar simulaciones.");
-  const { data, error } = await supabase.from("mortgage_scenarios").select("*").eq("evaluation_id", evaluationId).eq("user_id", user.id).order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("hu30_list_mortgage_scenarios", { p_evaluation_id: evaluationId });
   if (error) { logSupabaseError(error); throw error; }
   return data || [];
 }

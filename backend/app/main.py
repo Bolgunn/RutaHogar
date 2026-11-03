@@ -15,6 +15,7 @@ from .market_data.service import MarketSnapshotUnavailable, read_persisted_uf_hi
 from .market_data.repository import MarketRepositoryError
 from .housing_benefit_catalog import HousingBenefitCatalogueError, HousingBenefitCatalogueRepository
 from .scoring import calculate_score
+from .scoring_engine.constants import PURCHASE_TERM_ALIASES
 from .properties_search import DEFAULT_SIMILARITY_THRESHOLD, EmbeddingError, search_properties
 from .ai import (
     generate_commercial_guidance,
@@ -23,9 +24,11 @@ from .ai import (
 )
 from .routers import crm_mock
 from .tracking.routes import router as tracking_router
+from .documents.routes import router as documents_router
 from .academy_news import router as academy_news_router
 from .lead_changes.routes import router as lead_changes_router
 from .assistant.router import router as assistant_router, support_router
+from .exports.routes import router as exports_router
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +58,13 @@ app = FastAPI(title="RutaHogar")
 app.include_router(crm_mock.router, prefix="/api/v1/crm-mock", tags=["CRM Mock"])
 app.include_router(academy_news_router)
 app.include_router(lead_changes_router)
+app.include_router(exports_router)
 
 # HU13 has its own authenticated contract; POST /score is unchanged.
 app.include_router(tracking_router)
 app.include_router(assistant_router)
 app.include_router(support_router)
+app.include_router(documents_router)
 
 LOCAL_FRONTEND_ORIGINS = [
     "http://localhost:5173",
@@ -159,13 +164,8 @@ class ScoreRequest(BaseModel):
             if dividend is not None:
                 data["dividendo_estimado"] = dividend
 
-        purchase_term_aliases = {
-            "0_3_meses": "inmediato",
-            "3_6_meses": "3_a_6_meses",
-            "6_12_meses": "6_a_12_meses",
-        }
-        if data.get("plazo_compra") in purchase_term_aliases:
-            data["plazo_compra"] = purchase_term_aliases[data["plazo_compra"]]
+        if data.get("plazo_compra") in PURCHASE_TERM_ALIASES:
+            data["plazo_compra"] = PURCHASE_TERM_ALIASES[data["plazo_compra"]]
         return data
 
     @field_validator("ingreso_mensual")

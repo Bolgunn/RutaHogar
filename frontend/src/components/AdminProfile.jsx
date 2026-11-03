@@ -1,3 +1,4 @@
+import AccountAccess from "./AccountAccess";
 import React, { useEffect, useMemo, useState } from "react";
 import { getProjects, getTenantContext } from "../services/projectService";
 import "./admin-profile.css";
@@ -127,6 +128,7 @@ export default function AdminProfile({ profile, onNavigate }) {
           {onNavigate && <div className="admin-profile-actions"><button type="button" onClick={() => onNavigate("admin-projects")}>Gestionar proyectos <i className="ti ti-arrow-right" aria-hidden="true" /></button><button type="button" className="secondary-button" onClick={() => onNavigate("admin-reports")}>Ver reportes</button></div>}
         </section>
       </div>
+      <AccountAccess profile={profile} />
     </section>
   );
 }

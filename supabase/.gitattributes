@@ -1,0 +1,2 @@
+# The applied HU21 ledger export contains CRLF within its original statements.
+migrations/20261029120000_hu21_configuracion_comercial.sql whitespace=cr-at-eol

@@ -78,3 +78,50 @@ RATIO_CARGA_TOTAL_MAX = 0.45
 RATIO_DIVIDENDO_SALUDABLE = 0.25
 PLAZO_MINIMO_VIABLE_ANIOS = 5
 EDAD_MAX_FIN_CREDITO = 70
+
+# ALG-19 — prioridad comercial configurable por inmobiliaria (HU 21).
+# Ver docs/algorithms/ALG-19-configurable-commercial-priority.md. Nunca cambia un resultado guardado.
+COMMERCIAL_PRIORITY_ALG_VERSION = "hu21-commercial-priority-v1"
+
+PURCHASE_TERM_ALIASES = {
+    "0_3_meses": "inmediato",
+    "3_6_meses": "3_a_6_meses",
+    "6_12_meses": "6_a_12_meses",
+}
+
+MAX_PRIORITY_PROJECTS = 5
+
+DEFAULT_COMMERCIAL_CRITERIOS = {
+    "contactar_ahora": {"clasificaciones": ["Alto"], "compatibilidades": ["Compatible"]},
+    "contactar_con_revision": {"clasificaciones": ["Medio"], "compatibilidades": ["Cercano", "Compatible"]},
+    "senales": {"plazos": ["3_a_6_meses", "inmediato"], "propiedad_vista": True},
+    "subir_con_senales": 0,
+    "umbral_reorientar": 70,
+    "proyectos_prioritarios": [],
+    "orden_desempate": "afinidad",
+}
+
+# R0: valores permitidos. Las listas de "sets" son las únicas opciones válidas; senales.plazos
+# admite cualquier subconjunto no vacío de su lista (A5: mas_12_meses y solo_explorando nunca).
+COMMERCIAL_CRITERIA_OPTIONS = {
+    "contactar_ahora.clasificaciones": [["Alto"], ["Alto", "Medio"]],
+    "contactar_ahora.compatibilidades": [["Compatible"], ["Cercano", "Compatible"]],
+    "contactar_con_revision.clasificaciones": [["Medio"], ["Bajo", "Medio"]],
+    "contactar_con_revision.compatibilidades": [["Cercano", "Compatible"], ["Cercano", "Compatible", "Fuera de alcance"]],
+    "senales.plazos": ["inmediato", "3_a_6_meses", "6_a_12_meses"],
+    "senales.propiedad_vista": [True, False],
+    "subir_con_senales": [0, 1, 2],
+    "umbral_reorientar": [60, 65, 70, 75, 80, 85],
+    "orden_desempate": ["afinidad", "capacidad"],
+}
+
+# A6: orden de la bandeja (R9). El frontend lo replica en leadRanking.js.
+COMMERCIAL_ACTION_TIERS = {
+    "contact_now": 0,
+    "contact_with_review": 1,
+    "reorient": 2,
+    "request_info": 3,
+    "nurture": 4,
+    "do_not_route": 5,
+    "sin_prioridad": 6,
+}
