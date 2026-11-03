@@ -162,6 +162,29 @@ de un tenant ajeno. Una migración de scoping sólo debe **estrechar** lecturas,
 
 Sólo 4 de las 15 migraciones tienen rollback. Las nuevas lo traen; las viejas son deuda.
 
+## Un proyecto Supabase de pruebas desde cero
+
+Ni `schema.sql` ni las migraciones corren limpias por sí solas sobre una base vacía: `schema.sql`
+crea funciones que nombran tablas definidas más abajo, y las primeras migraciones suponen un esquema
+base que nunca se versionó. `supabase/bootstrap-entorno-pruebas.sh` aplica la secuencia que sí
+funciona (detalle en su cabecera) y se niega a correr contra el proyecto de `frontend/.env` o contra
+una base que ya tiene `profiles`:
+
+```bash
+DATABASE_URL='<cadena Session pooler del proyecto de pruebas>' bash supabase/bootstrap-entorno-pruebas.sh
+```
+
+Para apuntar el frontend local a ese proyecto sin tocar `.env`, crear `frontend/.env.pruebas`
+(ignorado por git) con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`, y correr
+`npm --prefix frontend run dev -- --mode pruebas`.
+
+⚠️ **Deriva conocida: `can_admin_inmobiliaria()` y `assign_admin()`.** La versión vigente en
+`schema.sql` (commit `47a3b03`, "Vistas y accesos admin inmobiliario") acepta el rol
+`admin_inmobiliario`; la última migración que las define (`20260729_project_catalog.sql`) no. Una base
+armada solo con migraciones no deja al `admin_inmobiliario` crear ni editar proyectos (tampoco con
+HU 25). `node scripts/check-schema-drift.js` lo reporta. Falta la migración que las alinee; mientras
+tanto, el script de arriba repasa `schema.sql` al final para dejar la versión vigente.
+
 ## Market snapshots (SCORING-BCCH)
 
 `public.market_snapshots` is an append-only cache of complete, validated BCCh
