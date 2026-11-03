@@ -2,16 +2,17 @@ import '../styles/AuthPanel.css';
 import React, { useMemo, useRef, useState } from "react";
 import { isSupabaseDataConfigured } from "../services/profileService";
 import { calculateAge } from "../utils/helpers";
-import { roleLabels, roles, signIn, signUp } from "../services/auth";
+import { roleLabels, roles, signIn, signUp, sendAccessEmail, startGoogle } from "../services/auth";
+import { PASSWORD_HINT, SIGNUP_DATA_REJECTED, validNewPassword } from "../lib/authPolicy";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
 import { trackSignUp } from "../lib/analytics";
 
 const currentYear = new Date().getFullYear();
-const dayOptions = Array.from({ length: 31 }, (_, index) => {
+export const dayOptions = Array.from({ length: 31 }, (_, index) => {
   const value = String(index + 1).padStart(2, "0");
   return { value, label: value };
 });
-const monthOptions = [
+export const monthOptions = [
   ["01", "~ Enero"],
   ["02", "~ Febrero"],
   ["03", "~ Marzo"],
@@ -25,7 +26,7 @@ const monthOptions = [
   ["11", "~ Noviembre"],
   ["12", "~ Diciembre"],
 ].map(([value, month]) => ({ value, label: `${value} ${month}` }));
-const yearOptions = Array.from({ length: currentYear - 18 - 1900 + 1 }, (_, index) => {
+export const yearOptions = Array.from({ length: currentYear - 18 - 1900 + 1 }, (_, index) => {
   const value = String(currentYear - 18 - index);
   return { value, label: value };
 });
@@ -34,7 +35,7 @@ function onlyDigits(value, maxLength) {
   return value.replace(/\D/g, "").slice(0, maxLength);
 }
 
-function buildBirthDateIso({ birth_day, birth_month, birth_year }) {
+export function buildBirthDateIso({ birth_day, birth_month, birth_year }) {
   const day = onlyDigits(birth_day, 2).padStart(2, "0");
   const month = onlyDigits(birth_month, 2).padStart(2, "0");
   const year = onlyDigits(birth_year, 4);
@@ -42,7 +43,7 @@ function buildBirthDateIso({ birth_day, birth_month, birth_year }) {
   return `${year}-${month}-${day}`;
 }
 
-function getBirthDateError(form) {
+export function getBirthDateError(form) {
   if (!form.birth_day || !form.birth_month || !form.birth_year) {
     return "Ingresa tu fecha de nacimiento para crear la cuenta.";
   }
@@ -116,7 +117,7 @@ const strengthColors = {
   "very-strong": "#166534",
 };
 
-function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, options, activeDropdown, onOpen, onClose, onBlur, onChange, onSelect }) {
+export function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, options, activeDropdown, onOpen, onClose, onBlur, onChange, onSelect }) {
   const isOpen = activeDropdown === name;
 
   return (
@@ -178,25 +179,33 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
   });
   const [verificationPending, setVerificationPending] = useState(false);
   const [error, setError] = useState("");
+  const [confirmationNeeded, setConfirmationNeeded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showWeakPasswordConfirm, setShowWeakPasswordConfirm] = useState(false);
+  const [notice, setNotice] = useState("");
   const [activeDateDropdown, setActiveDateDropdown] = useState(null);
   const passwordRef = useRef(null);
   const formRef = useRef(null);
-  const weakPasswordConfirmedRef = useRef(false);
   const passwordStrength = useMemo(() => getPasswordStrength(form.password), [form.password]);
 
   React.useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
 
+  React.useEffect(() => {
+    setError("");
+    setNotice("");
+    setConfirmationNeeded(false);
+  }, [mode]);
+
   const changeMode = (nextMode) => {
+    setConfirmationNeeded(false);
     setMode(nextMode);
     if (onModeChange) onModeChange(nextMode);
   };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+    if (name === "email") setConfirmationNeeded(false);
     setForm((prev) => {
       const nextValue =
         name === "phone"
@@ -213,10 +222,6 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
       return { ...prev, [name]: nextValue };
     });
 
-    if (name === "password") {
-      weakPasswordConfirmedRef.current = false;
-      setShowWeakPasswordConfirm(false);
-    }
   };
 
   const handleBirthDateSelect = (name, value) => {
@@ -284,17 +289,13 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
         setError(birthDateError);
         return;
       }
-      if (form.password.length < 6) {
-        setError("La contraseña debe tener al menos 6 caracteres para crear la cuenta.");
-        return;
-      }
-      if (passwordStrength.level === "weak" && !weakPasswordConfirmedRef.current) {
-        setShowWeakPasswordConfirm(true);
-        setError("");
+      if (!validNewPassword(form.password)) {
+        setError(PASSWORD_HINT);
         return;
       }
     }
 
+    setConfirmationNeeded(false);
     setLoading(true);
     try {
       const auth =
@@ -308,15 +309,17 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
               rut: `${form.rut_number}-${form.rut_dv}` 
             });
       if (mode === "signup") trackSignUp({ method: "auth_panel" });
-      if (auth.emailConfirmationRequired) { setVerificationPending(true); return; }
+      if (auth.emailConfirmationRequired) { if (invitationContext) { setVerificationPending(true); return; } setNotice("Revisa tu correo para confirmar la cuenta. Si ya tienes una cuenta, inicia sesión o recupera tu acceso."); return; }
       onAuth(auth);
     } catch (err) {
+      setConfirmationNeeded(mode === "signin" && err?.code === "email_not_confirmed");
       const fallback =
         mode === "signin"
           ? "No se pudo iniciar sesión. Revisa tu correo y contraseña."
           : "No se pudo crear la cuenta.";
       const message = err?.message || fallback;
       const safeSignupMessages = new Set([
+        SIGNUP_DATA_REJECTED,
         "No se pudo crear la cuenta.",
         "La cuenta fue creada, pero no se pudo guardar el perfil.",
         "Este correo ya esta registrado. Intenta iniciar sesión.",
@@ -536,7 +539,7 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder={mode === "signin" ? "Tu contraseña" : "Mínimo 8 caracteres"}
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
                 />
               </div>
@@ -550,48 +553,27 @@ export default function AuthPanel({ onAuth, onBack, onModeChange, initialMode = 
                   <div className="auth-pwd-track">
                     <div className="auth-pwd-fill" style={{ width: `${passwordStrength.percent}%`, background: strengthColors[passwordStrength.level] }} />
                   </div>
-                  <p className="auth-pwd-hint">Recomendamos 8+ caracteres con mayúsculas, minúsculas, números y símbolos.</p>
+                  <p className="auth-pwd-hint">{PASSWORD_HINT}</p>
                 </div>
               )}
 
-              {showWeakPasswordConfirm && (
-                <div className="auth-weak-confirm" role="alert">
-                  <strong>Tu contraseña es débil. ¿Deseas continuar de todas formas?</strong>
-                  <div className="auth-weak-actions">
-                    <button
-                      type="button"
-                      className="auth-btn-gold"
-                      onClick={() => {
-                        weakPasswordConfirmedRef.current = true;
-                        setShowWeakPasswordConfirm(false);
-                        window.setTimeout(() => formRef.current?.requestSubmit(), 0);
-                      }}
-                    >
-                      Sí, continuar
-                    </button>
-                    <button
-                      type="button"
-                      className="auth-btn-outline"
-                      onClick={() => {
-                        weakPasswordConfirmedRef.current = false;
-                        setShowWeakPasswordConfirm(false);
-                        passwordRef.current?.focus();
-                      }}
-                    >
-                      No, mejorar
-                    </button>
-                  </div>
-                </div>
-              )}
               {error && (
                 <div className="auth-error" role="alert">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                   {error}
+                  {confirmationNeeded && <button type="button" className="auth-confirmation-link" disabled={loading} onClick={async () => { setLoading(true); try { setNotice(await sendAccessEmail(form.email, "signup")); } catch (failure) { setError(failure.message); } finally { setLoading(false); } }}>Solicitar otro enlace</button>}
                 </div>
               )}
 
               <button type="submit" className="auth-submit" disabled={loading}>
                 {loading ? "Validando…" : mode === "signin" ? "Iniciar sesión" : "Crear cuenta"}
+              </button>
+              {notice && <p className="auth-access-notice" role="status">{notice}</p>}
+              {mode === "signin" && <button type="button" className="auth-recovery-link" disabled={loading} onClick={async () => { setLoading(true); setError(""); try { setNotice(await sendAccessEmail(form.email, "recovery")); } catch (failure) { setError(failure.message); } finally { setLoading(false); } }}>¿Olvidaste tu contraseña?</button>}
+              <div className="auth-provider-divider"><span>o</span></div>
+              <button type="button" className="auth-google-button" disabled={loading} onClick={async () => { setLoading(true); setError(""); try { await startGoogle(); } catch (failure) { setError(failure.message); setLoading(false); } }}>
+                <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5h6.6c3.9-3.6 6.1-8.8 6.1-14.9Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5c-1.8 1.2-4.1 2-6.9 2-5.3 0-9.9-3.6-11.5-8.4H5.7v5.2A20.4 20.4 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.5 27.7a12.3 12.3 0 0 1 0-7.4v-5.2H5.7a20 20 0 0 0 0 17.8l6.8-5.2Z"/><path fill="#EA4335" d="M24 11.9c3 0 5.7 1 7.8 3.1l5.9-5.9A19.7 19.7 0 0 0 24 4 20.4 20.4 0 0 0 5.7 15.1l6.8 5.2C14.1 15.5 18.7 11.9 24 11.9Z"/></svg>
+                Continuar con Google
               </button>
             </form>}
           </div>

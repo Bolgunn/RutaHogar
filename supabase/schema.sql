@@ -3556,6 +3556,103 @@ BEFORE INSERT ON public.evaluations
 FOR EACH ROW
 EXECUTE FUNCTION public.check_ml_fraud_on_insert();
 
+-- HU27: account identity and access guards.
+-- Preserve legacy duplicates; serialize/check only new or changed RUT assignments.
+create index profiles_hu27_normalized_rut_lookup
+on public.profiles ((nullif(regexp_replace(upper(rut), '[^0-9K]', '', 'g'), '')))
+where nullif(regexp_replace(upper(rut), '[^0-9K]', '', 'g'), '') is not null;
+
+create or replace function public.hu27_guard_profile_rut()
+returns trigger language plpgsql security definer
+set search_path = pg_catalog, public
+as $$
+declare v_rut text := nullif(regexp_replace(upper(new.rut), '[^0-9K]', '', 'g'), '');
+begin
+  if v_rut is null then return new; end if;
+  if tg_op = 'UPDATE' and v_rut is not distinct from nullif(regexp_replace(upper(old.rut), '[^0-9K]', '', 'g'), '') then return new; end if;
+  if tg_op = 'INSERT' and exists (select 1 from public.profiles p where p.id=new.id
+    and nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut) then return new; end if;
+  -- Trigger-only definer lookup is necessary to detect conflicts hidden by profile RLS.
+  perform pg_advisory_xact_lock(hashtextextended('hu27-rut:' || v_rut, 0));
+  if exists (select 1 from public.profiles p where p.id <> new.id
+    and nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut) then
+    raise exception using errcode='23505', message='No se pudo guardar el perfil. Revisa tus datos o recupera tu cuenta existente.';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.hu27_guard_profile_rut() from public, anon, authenticated;
+create trigger hu27_profile_rut_guard before insert or update of rut on public.profiles
+for each row execute function public.hu27_guard_profile_rut();
+
+-- Opt in through Authentication > Hooks after deploying and testing this function.
+create or replace function public.hu27_access_token_hook(event jsonb)
+returns jsonb language plpgsql stable security invoker
+set search_path = pg_catalog, public, auth
+as $$
+declare
+  v_user uuid := (event->>'user_id')::uuid;
+  v_role text;
+  v_email text;
+  v_oauth boolean;
+begin
+  select role into v_role from public.profiles where id = v_user;
+  v_oauth := event->>'authentication_method' = 'oauth'
+    or exists (select 1 from jsonb_array_elements(coalesce(event->'claims'->'amr', '[]'::jsonb)) a where a->>'method' = 'oauth');
+  if v_oauth and coalesce(v_role, 'usuario') <> 'usuario' then
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Esta cuenta debe ingresar con correo y contraseña.'));
+  end if;
+  select lower(email) into v_email from auth.users where id = v_user;
+  if exists (select 1 from auth.identities i where i.user_id = v_user and i.provider = 'google'
+    and (i.identity_data->>'email' is null or lower(i.identity_data->>'email') is distinct from v_email)) then
+    return jsonb_build_object('error', jsonb_build_object('http_code', 403, 'message', 'Google debe utilizar el mismo correo de la cuenta.'));
+  end if;
+  return jsonb_build_object('claims', event->'claims');
+end;
+$$;
+revoke all on function public.hu27_access_token_hook(jsonb) from public, anon, authenticated;
+grant usage on schema public to supabase_auth_admin;
+grant select (id, role) on public.profiles to supabase_auth_admin;
+create policy "hu27_auth_hook_profile_read" on public.profiles for select to supabase_auth_admin using (true);
+grant execute on function public.hu27_access_token_hook(jsonb) to supabase_auth_admin;
+comment on function public.hu27_access_token_hook(jsonb) is 'HU27: trusted role and same-email Google scope. Enable as Custom Access Token hook; never expose as a browser RPC.';
+
+-- HU27: Before User Created RUT guard
+
+-- Called only by Supabase Auth before inserting a new user. Existing login,
+-- identity linking and the profile-level duplicate guard remain unchanged.
+create function public.hu27_before_user_created(event jsonb)
+returns jsonb language plpgsql stable security invoker
+set search_path = pg_catalog, public
+as $$
+declare
+  v_provider text := event->'user'->'app_metadata'->>'provider';
+  v_rut text := nullif(regexp_replace(upper(event->'user'->'user_metadata'->>'rut'), '[^0-9K]', '', 'g'), '');
+begin
+  -- Google supplies no RUT; collect it in the existing profile completion flow.
+  -- Missing RUT is also valid for existing staff invitation/provisioning flows.
+  if v_provider is distinct from 'email' or v_rut is null then return '{}'::jsonb; end if;
+  if exists (
+    select 1 from public.profiles p
+    where nullif(regexp_replace(upper(p.rut), '[^0-9K]', '', 'g'), '') = v_rut
+  ) then
+    return jsonb_build_object('error', jsonb_build_object(
+      'http_code', 400,
+      'message', 'No se pudo crear la cuenta con estos datos. Revisa el RUT o recupera el acceso a tu cuenta.'
+    ));
+  end if;
+  return '{}'::jsonb;
+end;
+$$;
+
+revoke all on function public.hu27_before_user_created(jsonb) from public, anon, authenticated;
+grant execute on function public.hu27_before_user_created(jsonb) to supabase_auth_admin;
+-- The HU27 access-guard migration already grants schema usage and adds the
+-- Auth-only SELECT policy. Add just the column required by this lookup.
+grant select (rut) on public.profiles to supabase_auth_admin;
+comment on function public.hu27_before_user_created(jsonb) is 'HU27: enable as Before User Created / Postgres hook. Rejects email registration with a RUT already in profiles; Google remains supported. Not a reservation or a solution for concurrent pending signups.';
+
+
 -- Authorized export metadata and service-only RPCs
 create table public.export_events (
   id uuid primary key,

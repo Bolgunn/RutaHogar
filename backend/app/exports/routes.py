@@ -1,4 +1,4 @@
-"""HU22 HTTP boundary; actor and tenant always come from the authenticated token."""
+"""Export HTTP boundary; actor and tenant come from the authenticated token."""
 from typing import Annotated, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
