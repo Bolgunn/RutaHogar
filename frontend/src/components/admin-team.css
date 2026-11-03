@@ -53,6 +53,7 @@
 .eq-state-note{display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--rh-danger);font-size:.76rem;font-weight:700}
 .eq-projects{color:var(--rh-text-secondary);font-size:.84rem}
 .eq-projects strong{color:var(--rh-text)}
+.eq-load-error{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .eq-actions{text-align:right;white-space:nowrap}
 
 .eq-history{display:grid;margin:0;padding:0;list-style:none}
@@ -101,6 +102,8 @@
 @media (max-width:1180px){
   .eq-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
   .eq-table,.eq-table tbody,.eq-table tr,.eq-table td{display:block;width:100%}
+  /* .table-wrap table keeps 720px for the wide layout; cards must fit the screen. */
+  .eq-table{min-width:0}
   .eq-table tr{margin-bottom:10px;padding:12px;border:1px solid var(--rh-border);border-radius:12px}
   .eq-table td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:5px 0;border:0;text-align:right}
   .eq-table td::before{content:attr(data-label);color:var(--rh-text-muted);font-size:.76rem;font-weight:700;text-align:left;white-space:nowrap}

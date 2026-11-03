@@ -587,7 +587,12 @@ export default function AdminTeam({ profile, inmobiliariaId }) {
       </div>
 
       {selector}
-      {loadError ? <div className="error-message" role="alert">{loadError}</div> : null}
+      {loadError ? (
+        <div className="error-message eq-load-error" role="alert">
+          <span>{loadError}</span>
+          <button type="button" className="secondary-button compact-button" onClick={loadTeam}>Reintentar</button>
+        </div>
+      ) : null}
 
       {!ready ? (
         <section className="admin-surface">
