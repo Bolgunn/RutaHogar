@@ -14,6 +14,7 @@ on:
       - "frontend/src/lib/commercial/funnelMetrics.js"
       - "frontend/src/lib/commercial/overallStage.js"
       - "frontend/src/lib/commercial/priorityActions.js"
+      - "frontend/src/lib/commercial/projectInterestMetrics.js"
       - "frontend/src/lib/commercial/santiagoCalendar.js"
       - "frontend/src/lib/commercial/stageRules.js"
       - "frontend/src/lib/matching/leadProjectMatching.js"
@@ -114,3 +115,9 @@ jobs:
         run: |
           set -euo pipefail
           supabase functions deploy commercial-funnel-metrics --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Deploy project interest aggregate function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy project-interest-metrics --project-ref "$SUPABASE_PROJECT_REF"

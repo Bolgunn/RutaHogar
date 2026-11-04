@@ -23,7 +23,9 @@ function expandCase(testCase) {
     if (evaluacion_actual) {
       alg10ByEvaluation.set(evaluacion_actual, lead.alg10 || {});
       interestByEvaluation.set(evaluacion_actual, new Set(
-        interacciones.filter((e) => e.visualizaciones > 0 || e.favorito || e.simulaciones > 0).map((e) => e.proyecto_id),
+        interacciones
+          .filter((e) => e.en_alcance !== false && (e.visualizaciones > 0 || e.favorito || e.simulaciones > 0))
+          .map((e) => e.proyecto_id),
       ));
     }
     return { lead_id: lead.lead_id, evaluacion_actual, interacciones };
@@ -32,7 +34,8 @@ function expandCase(testCase) {
 }
 
 // Stands in for matchLeadToProjects: returns the case's verdicts, and fails if it is asked about a
-// project the lead is not interested in or about a lead without an evaluation (R3).
+// project the lead is not interested in, a pair outside the lead's scope, or a lead without an
+// evaluation (R3).
 function fakeMatch(alg10ByEvaluation, interestByEvaluation) {
   return (evaluacion, catalogo) => {
     if (!evaluacion) throw new Error("match called for a lead without an evaluation");
@@ -41,7 +44,7 @@ function fakeMatch(alg10ByEvaluation, interestByEvaluation) {
     const matches = [];
     const excluidos = [];
     for (const proyecto of catalogo) {
-      if (!interest.has(proyecto.id)) throw new Error(`match asked about ${proyecto.id}, not of interest`);
+      if (!interest.has(proyecto.id)) throw new Error(`match asked about ${proyecto.id}, not of interest or out of scope`);
       const verdict = alg10[proyecto.id];
       if (!verdict) throw new Error(`case gives no alg10 verdict for ${proyecto.id}`);
       const row = {

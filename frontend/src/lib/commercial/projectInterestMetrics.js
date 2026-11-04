@@ -1,10 +1,10 @@
-import { matchLeadToProjects } from "../matching/leadProjectMatching";
+import { matchLeadToProjects } from "../matching/leadProjectMatching.js";
 
 // ALG-20 — métricas de interés por proyecto (HU 26). Especificación:
 // docs/algorithms/ALG-20-project-interest-metrics.md; casos en ALG-20-cases.json.
 // La compatibilidad y los motivos son de ALG-10: aquí solo se cuentan.
 
-export const ALG20_VERSION = "hu26-project-interest-v1";
+export const ALG20_VERSION = "hu26-project-interest-v2";
 
 const CAPACITY_CODES = new Set(["pie_insuficiente_para_proyecto", "renta_insuficiente_para_proyecto"]);
 
@@ -90,12 +90,14 @@ export function computeProjectInterestMetrics({ proyectos, leads }, { match = ma
       if (entry.favorito) row.favoritos += 1;
     }
 
-    if (!lead.evaluacion_actual) {
-      for (const entry of entries) rows.get(entry.proyecto_id).sin_datos += 1;
-      continue;
+    // R3 C0: la evaluación solo se compara con proyectos a los que el lead ya pertenece.
+    const evaluables = lead.evaluacion_actual ? entries.filter((entry) => entry.en_alcance !== false) : [];
+    for (const entry of entries) {
+      if (!evaluables.includes(entry)) rows.get(entry.proyecto_id).sin_datos += 1;
     }
+    if (!evaluables.length) continue;
 
-    const ids = new Set(entries.map((entry) => entry.proyecto_id));
+    const ids = new Set(evaluables.map((entry) => entry.proyecto_id));
     const { matches, excluidos } = match(lead.evaluacion_actual, proyectos.filter((proyecto) => ids.has(proyecto.id)));
     const verdicts = [
       ...matches.map((matchRow) => [matchRow, false]),

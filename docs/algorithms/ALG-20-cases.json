@@ -1,7 +1,7 @@
 {
   "algorithm": "ALG-20",
-  "version": "hu26-project-interest-v1",
-  "nota": "Shorthand. `proyectos` is a list of ids; each expands to { id, nombre: id, comuna: 'Ñuñoa', tipo: 'departamento', precio_min_uf: 3000, precio_max_uf: 4000, estado: 'en_venta' }, in that order. A lead's `interacciones` entries default to visualizaciones 0, favorito false, simulaciones 0. `sin_evaluacion: true` makes evaluacion_actual null; otherwise it is an opaque object and `alg10` maps a proyecto_id to the ALG-10 verdict the fake match returns for that pair: `motivo_exclusion` null means a match (with `clasificacion`, default 'Compatible', and `alcanza_precio_min`, default true), anything else an excluded row; `codigo` is bloqueador_principal.codigo (null = no bloqueador_principal). The fake match fails the test if it is called with a project the lead is not interested in, or for a lead without an evaluation. `expect` is a deep-partial match; `ranking` lists rows in the expected order (every row, so its length is asserted).",
+  "version": "hu26-project-interest-v2",
+  "nota": "Shorthand. `proyectos` is a list of ids; each expands to { id, nombre: id, comuna: 'Ñuñoa', tipo: 'departamento', precio_min_uf: 3000, precio_max_uf: 4000, estado: 'en_venta' }, in that order. A lead's `interacciones` entries default to visualizaciones 0, favorito false, simulaciones 0 (and en_alcance true when absent). `sin_evaluacion: true` makes evaluacion_actual null; otherwise it is an opaque object and `alg10` maps a proyecto_id to the ALG-10 verdict the fake match returns for that pair: `motivo_exclusion` null means a match (with `clasificacion`, default 'Compatible', and `alcanza_precio_min`, default true), anything else an excluded row; `codigo` is bloqueador_principal.codigo (null = no bloqueador_principal). The fake match fails the test if it is called with a project the lead is not interested in, or for a lead without an evaluation. `expect` is a deep-partial match; `ranking` lists rows in the expected order (every row, so its length is asserted).",
   "cases": [
     {
       "name": "ranking_por_interesados_no_por_volumen",
@@ -189,6 +189,34 @@
         "n_leads": 0,
         "totales": { "visualizaciones": 0, "favoritos": 0, "simulaciones": 0 },
         "ranking": [{ "proyecto_id": "P1", "interesados": 0 }]
+      }
+    },
+    {
+      "name": "fuera_de_alcance_cuenta_como_interes_sin_datos",
+      "why": "R3 C0: an interaction outside lead_belongs_to_proyecto (en_alcance false) counts as interest, but the lead's evaluation is never compared with that project: the pair goes to sin_datos.",
+      "proyectos": ["P1", "P2"],
+      "leads": [
+        { "lead_id": "1", "interacciones": [
+            { "proyecto_id": "P1", "favorito": true },
+            { "proyecto_id": "P2", "en_alcance": false, "simulaciones": 2 }
+          ],
+          "alg10": { "P1": { "motivo_exclusion": "bloqueador_critico", "codigo": "morosidad_vigente" } } },
+        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P2", "en_alcance": false, "visualizaciones": 1 }], "alg10": {} }
+      ],
+      "expect": {
+        "n_leads": 2,
+        "ranking": [
+          {
+            "proyecto_id": "P2", "interesados": 2, "simulaciones": 2, "visualizaciones": 1,
+            "compatibilidad": { "compatibles": 0, "incompatibles": 0, "sin_datos": 2, "evaluables": 0, "tasa_incompatibles": null },
+            "motivos": []
+          },
+          {
+            "proyecto_id": "P1", "interesados": 1, "favoritos": 1,
+            "compatibilidad": { "compatibles": 0, "incompatibles": 1, "sin_datos": 0 },
+            "motivos": [{ "motivo": "morosidad_vigente", "n": 1 }]
+          }
+        ]
       }
     },
     {
