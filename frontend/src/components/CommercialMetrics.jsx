@@ -4,8 +4,9 @@ import FieldTooltip from "./FieldTooltip";
 import { BarsChart, RateChart } from "./CommercialCharts";
 import { PRIORITY_ACTIONS, SIN_PRIORIDAD } from "../lib/commercial/priorityActions";
 import { STAGES } from "../lib/commercial/stageRules";
-import { roles } from "../lib/roles";
+import { isAdminRole, roles } from "../lib/roles";
 import { getCommercialFunnelMetrics } from "../services/commercialMetricsService";
+import ProjectInterestMetrics from "./ProjectInterestMetrics";
 
 // HU 15 — métricas comerciales. ALG-10/ALG-18 se ejecutan en servidor; esta vista
 // solo filtra y dibuja. Copia y estructura: frontend/mockups/hu15-metricas.html.
@@ -318,7 +319,7 @@ function DesgloseTable({ rows, labelOf }) {
   );
 }
 
-export default function CommercialMetrics({ role, onNavigate }) {
+export default function CommercialMetrics({ role, inmobiliariaId, onNavigate }) {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
   const [filtros, setFiltros] = useState(EMPTY_FILTERS);
   const [granularidad, setGranularidad] = useState("mes");
@@ -370,13 +371,39 @@ export default function CommercialMetrics({ role, onNavigate }) {
       <p>{isEjecutivo
         ? "Conversión, tiempos y seguimiento de los leads de tus proyectos asignados."
         : "Conversión, tiempos y seguimiento de los leads de tu inmobiliaria, en todos tus proyectos."}</p>
-      {state.data && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
+      {state.data && tab !== "proyectos" && <span className="cm-asof">Datos al {asOf(state.data.now)}</span>}
       {hasLeads && updating && <span className="cm-asof" role="status">Actualizando…</span>}
       {hasLeads && state.status === "error" && (
         <p className="error-message" role="alert">No pudimos actualizar las métricas: {state.error} Mostramos la última versión cargada.</p>
       )}
     </div>
   );
+
+  // HU 26: la vista por proyectos es del administrador de una inmobiliaria (el admin global no tiene
+  // proyectos propios) y no usa los filtros de HU 15.
+  const tabs = [
+    ["embudo", "Embudo y seguimiento"],
+    ["historia", "Evoluciones históricas"],
+    ...(isAdminRole(role) && inmobiliariaId ? [["proyectos", "Interés por proyecto"]] : []),
+  ];
+  const tabsBar = (
+    <div className="cm-tabs" role="tablist">
+      {tabs.map(([key, label]) => (
+        <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
+      ))}
+    </div>
+  );
+
+  if (tab === "proyectos") {
+    return (
+      <section className="section-block cm-page">
+        {heading}
+        {tabsBar}
+        <ProjectInterestMetrics />
+        <p className="cm-disclaimer">Orientativo: estas métricas no aprueban créditos ni reemplazan una evaluación bancaria.</p>
+      </section>
+    );
+  }
 
   if (!hasLeads) {
     const message = updating ? "Cargando métricas…"
@@ -387,6 +414,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
     return (
       <section className="section-block cm-page">
         {heading}
+        {tabs.length > 2 && tabsBar}
         <article className="admin-surface"><p className="cm-empty">{message}</p></article>
       </section>
     );
@@ -515,11 +543,7 @@ export default function CommercialMetrics({ role, onNavigate }) {
         </div>}
       </article>
 
-      <div className="cm-tabs" role="tablist">
-        {[["embudo", "Embudo y seguimiento"], ["historia", "Evoluciones históricas"]].map(([key, label]) => (
-          <button key={key} type="button" role="tab" aria-selected={tab === key} className={`cm-tab ${tab === key ? "is-active" : ""}`} onClick={() => setTab(key)}>{label}</button>
-        ))}
-      </div>
+      {tabsBar}
 
       {tab === "embudo" ? (
         <>

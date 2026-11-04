@@ -2718,7 +2718,7 @@ function Application({ initialAuth, onAuthAccepted }) {
           role={profile.role}
         />
       ) : page === "metricas" && canViewStaffPage(page, profile.role) ? (
-        <CommercialMetrics key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`} role={profile.role} onNavigate={navigateToPage} />
+        <CommercialMetrics key={`${userId}:${profile.role}:${inmobiliariaId || "global"}`} role={profile.role} inmobiliariaId={inmobiliariaId} onNavigate={navigateToPage} />
       ) : page === "projects" && canViewStaffPage(page, profile.role) ? (
         <ProjectsWorkspace
           inmobiliariaId={inmobiliariaId}
