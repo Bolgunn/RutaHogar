@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
-import { computeProjectInterestMetrics } from "../lib/commercial/projectInterestMetrics";
-import { getProjectInterestFacts } from "../services/projectInterestService";
+import { getProjectInterestMetrics } from "../services/projectInterestService";
 
-// HU 26 — interés por proyecto. Todo número sale de ALG-20 (computeProjectInterestMetrics); esta
-// vista solo ordena y dibuja. La ayuda explica en palabras, nunca con los umbrales de ALG-10.
+// HU 26 — interés por proyecto. Todo número sale de ALG-20, calculado en la Edge Function
+// project-interest-metrics; esta vista solo ordena y dibuja. La ayuda explica en palabras, nunca con los umbrales de ALG-10.
 
 const HELP = {
   interesados: "Leads que vieron el detalle, guardaron una simulación o marcaron como favorito el proyecto. Un lead interesado en dos proyectos cuenta en ambos.",
@@ -13,7 +12,7 @@ const HELP = {
   favoritos: "Leads que hoy tienen el proyecto marcado como favorito.",
   incompatibles: "Leads interesados que hoy no califican para el proyecto: su capacidad de compra está lejos del precio de entrada o tienen un bloqueador crítico, como morosidad vigente. El porcentaje se calcula sobre los leads que se pudieron evaluar.",
   compatibles: "Leads interesados que pueden optar al proyecto, incluidos los que están cerca de alcanzar el precio de la unidad más barata.",
-  sin_datos: "Leads interesados sin una precalificación con datos suficientes para compararlos con el proyecto. No cuentan como incompatibles.",
+  sin_datos: "Leads interesados que no se pueden comparar con el proyecto: no tienen una precalificación con datos suficientes, o solo lo vieron o simularon sin marcarlo como favorito ni declarar su comuna, así que sus datos financieros no se comparten con tu inmobiliaria para este proyecto. No cuentan como incompatibles.",
   motivo: "El antecedente que más frena a los leads incompatibles con este proyecto.",
 };
 
@@ -82,16 +81,11 @@ export default function ProjectInterestMetrics() {
 
   useEffect(() => {
     let active = true;
-    getProjectInterestFacts()
+    getProjectInterestMetrics()
       .then((data) => { if (active) setState({ status: data ? "ready" : "offline", data, error: "" }); })
       .catch((error) => { if (active) setState({ status: "error", data: null, error: error.message }); });
     return () => { active = false; };
   }, []);
-
-  const metrics = useMemo(
-    () => (state.data ? computeProjectInterestMetrics({ proyectos: state.data.proyectos, leads: state.data.leads }) : null),
-    [state.data],
-  );
 
   if (state.status !== "ready" || !state.data.proyectos.length) {
     const message = state.status === "loading" ? "Cargando interés por proyecto…"
@@ -101,7 +95,7 @@ export default function ProjectInterestMetrics() {
     return <article className="admin-surface cm-surface-gap"><p className="cm-empty">{message}</p></article>;
   }
 
-  const m = metrics;
+  const m = state.data.metrics;
   const proyectoOf = (id) => state.data.proyectos.find((proyecto) => proyecto.id === id);
   const rows = sort === "traccion"
     ? m.ranking

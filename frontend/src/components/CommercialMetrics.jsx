@@ -319,7 +319,7 @@ function DesgloseTable({ rows, labelOf }) {
   );
 }
 
-export default function CommercialMetrics({ role, onNavigate }) {
+export default function CommercialMetrics({ role, inmobiliariaId, onNavigate }) {
   const [state, setState] = useState({ status: "loading", data: null, error: "" });
   const [filtros, setFiltros] = useState(EMPTY_FILTERS);
   const [granularidad, setGranularidad] = useState("mes");
@@ -379,11 +379,12 @@ export default function CommercialMetrics({ role, onNavigate }) {
     </div>
   );
 
-  // HU 26: la vista por proyectos es del administrador inmobiliario y no usa los filtros de HU 15.
+  // HU 26: la vista por proyectos es del administrador de una inmobiliaria (el admin global no tiene
+  // proyectos propios) y no usa los filtros de HU 15.
   const tabs = [
     ["embudo", "Embudo y seguimiento"],
     ["historia", "Evoluciones históricas"],
-    ...(isAdminRole(role) ? [["proyectos", "Interés por proyecto"]] : []),
+    ...(isAdminRole(role) && inmobiliariaId ? [["proyectos", "Interés por proyecto"]] : []),
   ];
   const tabsBar = (
     <div className="cm-tabs" role="tablist">

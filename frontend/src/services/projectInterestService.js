@@ -1,22 +1,22 @@
 import { supabase } from "../utils/supabase";
 import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
-// HU 26 — interés por proyecto. Migración 20261026120000_hu26_project_interest.sql.
+// HU 26 — interés por proyecto. Migración 20261103220000_hu26_project_interest.sql y Edge Function
+// project-interest-metrics.
 
 export const FORBIDDEN_MESSAGE = "Solo el administrador de una inmobiliaria puede ver el interés por proyecto.";
 
-// Devuelve { now, proyectos, leads } tal como los lee ALG-20. Sin Supabase devuelve null: el
-// camino local no tiene métricas.
-export async function getProjectInterestFacts() {
+// Devuelve { now, proyectos, metrics }: el navegador recibe solo los conteos de ALG-20, calculados en
+// el servidor como las métricas de HU 15. Sin Supabase devuelve null: el camino local no tiene métricas.
+export async function getProjectInterestMetrics() {
   if (!isSupabaseDataConfigured) return null;
 
-  const { data, error } = await supabase.rpc("project_interest_facts");
-  if (error) {
-    if (error.code === "42501" || error.message?.includes("forbidden")) throw new Error(FORBIDDEN_MESSAGE);
-    logSupabaseError(error);
+  const { data, error } = await supabase.functions.invoke("project-interest-metrics", { body: {} });
+  if (error || !data?.metrics) {
+    if (error?.context?.status === 403 || data?.code === "forbidden") throw new Error(FORBIDDEN_MESSAGE);
     throw new Error("No se pudieron cargar las métricas de interés por proyecto.");
   }
-  return { now: data.now, proyectos: data.proyectos, leads: data.leads };
+  return { now: data.now, proyectos: data.proyectos, metrics: data.metrics };
 }
 
 // Una visualización por lead, proyecto y día (ALG-20 A2); la base ignora al staff y a los avisos
