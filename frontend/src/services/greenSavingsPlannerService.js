@@ -558,14 +558,16 @@ export function simulateInflationProtection({
 
 /**
  * E4 - Verifica si el lead tiene activo el seguimiento del plan de mejora (HU 13).
+ *
+ * El estado que entrega el backend de seguimiento (`GET /tracking`: `active` o
+ * `not_started`) es la fuente de verdad. Solo cuando ese estado aún no está
+ * disponible (cargando o modo local sin backend) se recurre al plan aceptado en
+ * la evaluación. Tener una meta en verde ya guardada NO activa el seguimiento:
+ * sería circular, porque la meta exige el seguimiento como precondición.
  */
 export function isTrackingPlanActive(evaluation, trackingState = null) {
-  if (trackingState?.status === "active") return true;
-  if (evaluation?.plan_type) return true;
-  if (evaluation?.plan_accepted_at) return true;
-  if (evaluation?.housing_plan?.status === "en_curso") return true;
-  if (evaluation?.housing_plan?.green_savings_goal) return true;
-  return false;
+  if (typeof trackingState?.status === "string") return trackingState.status === "active";
+  return Boolean(evaluation?.plan_accepted_at || evaluation?.plan_type);
 }
 
 /**
@@ -598,24 +600,45 @@ export function buildGreenSavingsGoalPayload({
 }
 
 /**
- * Persistencia local auxiliar (fallback cuando Supabase no está configurada o para lectura inmediata en ProgressPage).
+ * Persistencia local auxiliar (modo sin Supabase o lectura inmediata en ProgressPage).
+ *
+ * La meta queda indexada SOLO por evaluación: no existe una clave global
+ * `latest`, para que en un dispositivo compartido un lead no vea la meta de
+ * otro ni una meta de un plan anterior.
  */
 export function saveLocalGreenSavingsGoal(goalPayload, evaluationId = null) {
-  if (!goalPayload) return null;
+  if (!goalPayload || !evaluationId) return null;
   try {
     if (typeof localStorage !== "undefined") {
       const stored = JSON.parse(localStorage.getItem(GREEN_SAVINGS_GOAL_STORAGE_KEY) || "{}");
-      const next = {
-        ...stored,
-        latest: goalPayload,
-        ...(evaluationId ? { [String(evaluationId)]: goalPayload } : {}),
-      };
-      localStorage.setItem(GREEN_SAVINGS_GOAL_STORAGE_KEY, JSON.stringify(next));
+      const { latest: _legacyLatest, ...scoped } = stored;
+      localStorage.setItem(
+        GREEN_SAVINGS_GOAL_STORAGE_KEY,
+        JSON.stringify({ ...scoped, [String(evaluationId)]: goalPayload }),
+      );
     }
   } catch {
     // Entorno sin localStorage disponible
   }
   return goalPayload;
+}
+
+/**
+ * E4 - Fija la meta: guarda la copia local y la persiste en la cuenta del lead.
+ *
+ * Nunca lanza: devuelve `synced` cuando la cuenta confirmó la escritura y
+ * `local_only` cuando solo quedó en este dispositivo, para que la UI no
+ * anuncie como guardado en el dashboard algo que no se persistió.
+ */
+export async function persistGreenSavingsGoal({ payload, evaluationId = null, onSave = null } = {}) {
+  saveLocalGreenSavingsGoal(payload, evaluationId);
+  if (!onSave) return { status: "local_only", error: null };
+  try {
+    await onSave(payload);
+    return { status: "synced", error: null };
+  } catch (error) {
+    return { status: "local_only", error };
+  }
 }
 
 export function getEffectiveGreenSavingsGoal(evaluation = null, trackingState = null) {
@@ -629,11 +652,156 @@ export function getEffectiveGreenSavingsGoal(evaluation = null, trackingState = 
     if (typeof localStorage !== "undefined") {
       const stored = JSON.parse(localStorage.getItem(GREEN_SAVINGS_GOAL_STORAGE_KEY) || "{}");
       const evalId = evaluation?.id || trackingState?.current_evaluation_id;
-      if (evalId && stored[String(evalId)]) return stored[String(evalId)];
-      if (stored.latest) return stored.latest;
+      const local = evalId ? stored[String(evalId)] : null;
+      if (local && Number(local.cuota_mensual_uf) > 0) return local;
     }
   } catch {
     // Entorno sin localStorage disponible
   }
   return null;
+}
+
+/**
+ * E4 - Avance periódico de la meta: en qué mes del plan está el lead y cuánto
+ * debería llevar ahorrado a la fecha según la cuota fijada. Es orientativo: no
+ * compara contra depósitos reales, que RutaHogar no registra.
+ */
+export function describeGreenSavingsGoalProgress(goal, asOf = new Date()) {
+  const plazo = Math.round(Number(goal?.plazo_meses));
+  const cuotaUf = Number(goal?.cuota_mensual_uf);
+  const fixedAt = goal?.fixed_at ? new Date(goal.fixed_at) : null;
+  const now = asOf instanceof Date ? asOf : new Date(asOf);
+  if (!(plazo > 0) || !(cuotaUf > 0) || !fixedAt || Number.isNaN(fixedAt.getTime()) || Number.isNaN(now.getTime())) {
+    return null;
+  }
+
+  let mesesTranscurridos = (now.getUTCFullYear() - fixedAt.getUTCFullYear()) * 12
+    + (now.getUTCMonth() - fixedAt.getUTCMonth());
+  if (now.getUTCDate() < fixedAt.getUTCDate()) mesesTranscurridos -= 1;
+  mesesTranscurridos = Math.max(0, mesesTranscurridos);
+
+  const finalizada = mesesTranscurridos >= plazo;
+  const mesActual = finalizada ? plazo : mesesTranscurridos + 1;
+  const pieTotalUf = Number(goal.pie_total_uf) > 0 ? Number(goal.pie_total_uf) : cuotaUf * plazo;
+  const acumuladoEsperadoUf = Math.min(pieTotalUf, Math.round(cuotaUf * mesActual * 100) / 100);
+
+  return {
+    mesActual,
+    plazoMeses: plazo,
+    finalizada,
+    acumuladoEsperadoUf,
+    restanteEsperadoUf: Math.max(0, Math.round((pieTotalUf - acumuladoEsperadoUf) * 100) / 100),
+    porcentajeEsperado: Math.round((mesActual / plazo) * 100),
+  };
+}
+
+/**
+ * Unifica las variables globales de cálculo entre el dashboard del plan de mejora
+ * (FinancialTracking) y el planificador interactivo de metas en verde/blanco (HU 29).
+ *
+ * Sincroniza la misma base matemática para:
+ * 1. Valor de la propiedad y Pie total (evita descuadre del 10%).
+ * 2. Plazo de la venta en verde y horizonte objetivo.
+ * 3. Ahorro sugerido mensual, empatando con la exigencia periódica de la inmobiliaria.
+ */
+export function resolveUnifiedTrackingGoal({
+  evaluation = null,
+  trackingState = null,
+  projectGoal = null,
+  ufValueClp = DEFAULT_GREEN_UF_CLP,
+  activeSchedule = null,
+} = {}) {
+  const greenSavingsGoal = getEffectiveGreenSavingsGoal(evaluation, trackingState);
+  const safeUf = Number(ufValueClp) > 0 ? Number(ufValueClp) : DEFAULT_GREEN_UF_CLP;
+  const currentAhorro = Number(evaluation?.input?.ahorro_disponible) || 0;
+
+  // Determinar si aplica el contexto de compra en verde/blanco
+  const isGreenProject = Boolean(
+    projectGoal && (
+      projectGoal.estado === "en_construccion" ||
+      projectGoal.estado_proyecto === "verde" ||
+      projectGoal.estado_proyecto === "blanco" ||
+      projectGoal.entrega_estimada ||
+      projectGoal.esquema_pie_inmobiliaria
+    )
+  );
+
+  const isApplicable = Boolean(greenSavingsGoal || isGreenProject || activeSchedule?.isValid);
+
+  if (!isApplicable) {
+    return {
+      isApplicable: false,
+      isFixed: false,
+      projectName: null,
+      propertyUf: 0,
+      propertyClp: 0,
+      pieTotalUf: 0,
+      pieTotalClp: 0,
+      cuotaMensualUf: 0,
+      cuotaMensualClp: 0,
+      plazoMeses: 0,
+      currentAhorro,
+      brechaPieClp: 0,
+      pieProgressPercent: 0,
+    };
+  }
+
+  // Resolver Pie total en UF y CLP
+  let pieTotalUf = 0;
+  let plazoMeses = 0;
+  let cuotaMensualUf = 0;
+  let cuotaMensualClp = 0;
+  let propertyUf = 0;
+  const isFixed = Boolean(greenSavingsGoal && Number(greenSavingsGoal.cuota_mensual_uf) > 0);
+
+  if (activeSchedule?.isValid) {
+    pieTotalUf = Number(activeSchedule.pieUf) || 0;
+    plazoMeses = Number(activeSchedule.plazoMeses) || 18;
+    cuotaMensualUf = Number(activeSchedule.cuotaMensualUfDisplay) || 0;
+    cuotaMensualClp = Number(activeSchedule.cuotaMensualClpHoy) || 0;
+    propertyUf = Number(projectGoal?.precio_min_uf) || Number(evaluation?.input?.property_value_uf) || (pieTotalUf * 10);
+  } else if (isFixed) {
+    pieTotalUf = Number(greenSavingsGoal.pie_total_uf) || (Number(greenSavingsGoal.cuota_mensual_uf) * Number(greenSavingsGoal.plazo_meses));
+    plazoMeses = Number(greenSavingsGoal.plazo_meses) || 18;
+    cuotaMensualUf = Number(greenSavingsGoal.cuota_mensual_uf);
+    cuotaMensualClp = Number(greenSavingsGoal.cuota_mensual_clp);
+    propertyUf = Number(greenSavingsGoal.property_uf) || Number(projectGoal?.precio_min_uf) || (pieTotalUf * 10);
+  } else {
+    // Derivado del proyecto en verde
+    const initialPieInfo = resolveInitialPieUf({
+      project: projectGoal,
+      evaluation,
+      ufValueClp: safeUf,
+      piePercentage: 0.10,
+    });
+    propertyUf = initialPieInfo.propertyUf;
+    pieTotalUf = initialPieInfo.pieUf;
+    const monthsUntilDelivery = calculateMonthsUntilDelivery(projectGoal?.entrega_estimada);
+    plazoMeses = monthsUntilDelivery && monthsUntilDelivery > 0 ? monthsUntilDelivery : 18;
+    const rawCuotaUf = plazoMeses > 0 ? pieTotalUf / plazoMeses : 0;
+    cuotaMensualUf = Number(rawCuotaUf.toFixed(2));
+    cuotaMensualClp = Math.round(rawCuotaUf * safeUf);
+  }
+
+  const pieTotalClp = Math.round(pieTotalUf * safeUf);
+  const propertyClp = Math.round(propertyUf * safeUf);
+  const brechaPieClp = Math.max(0, pieTotalClp - currentAhorro);
+  const pieProgressPercent = pieTotalClp > 0 ? Math.min(100, Math.round((currentAhorro / pieTotalClp) * 1000) / 10) : 0;
+  const projectName = greenSavingsGoal?.project_name || projectGoal?.nombre || "Proyecto en verde / blanco";
+
+  return {
+    isApplicable: true,
+    isFixed,
+    projectName,
+    propertyUf,
+    propertyClp,
+    pieTotalUf,
+    pieTotalClp,
+    cuotaMensualUf,
+    cuotaMensualClp,
+    plazoMeses,
+    currentAhorro,
+    brechaPieClp,
+    pieProgressPercent,
+  };
 }

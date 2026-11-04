@@ -11,7 +11,12 @@ import {
 } from "../../lib/tracking/evolution";
 import { formatGoalValue, goalPresentation } from "../../lib/tracking/goalPresentation";
 import { formatFormValue } from "../../constants";
-import { formatClpExact, formatUfAmount, getEffectiveGreenSavingsGoal } from "../../services/greenSavingsPlannerService";
+import {
+  describeGreenSavingsGoalProgress,
+  formatClpExact,
+  formatUfAmount,
+  getEffectiveGreenSavingsGoal,
+} from "../../services/greenSavingsPlannerService";
 import UpdateFinancialDataForm from "./UpdateFinancialDataForm";
 import "./tracking.css";
 
@@ -456,23 +461,54 @@ export function ProgressView({ data, evaluation = null, projection, projectionEr
       </article>;
       })}</div>
       {actionError && <p role="alert" className="warning-note">{actionError}</p>}
-      {greenSavingsGoal && <article className="progress-goal-card progress-goal-card--green" data-testid="progress-green-savings-goal">
-        <div className="progress-goal-card__head"><div>
-          <h3>Meta de ahorro periódica — Pie en verde/blanco</h3>
-          <div className="progress-goal-card__statuses">
-            <span className="progress-status progress-status--en_progreso">En curso ({greenSavingsGoal.plazo_meses} meses)</span>
-          </div>
-        </div></div>
-        <p className="progress-goal-card__description">
-          {greenSavingsGoal.project_name ? `${greenSavingsGoal.project_name} · ` : ""}
-          Ahorro mensual fijado para reunir el pie de {formatUfAmount(greenSavingsGoal.pie_total_uf)}.
-        </p>
-        <dl className="progress-goal-values">
-          <div><dt>Cuota mensual (UF)</dt><dd>{formatUfAmount(greenSavingsGoal.cuota_mensual_uf)} / mes</dd></div>
-          <div><dt>Equivalente hoy (CLP)</dt><dd>{formatClpExact(greenSavingsGoal.cuota_mensual_clp)} / mes</dd></div>
-          <div><dt>Pie objetivo</dt><dd>{formatUfAmount(greenSavingsGoal.pie_total_uf)}</dd></div>
-        </dl>
-      </article>}
+      {greenSavingsGoal && (() => {
+        const greenProgress = describeGreenSavingsGoalProgress(greenSavingsGoal, data?.cutoff_at);
+        return (
+          <article className="progress-goal-card progress-goal-card--green" data-testid="progress-green-savings-goal">
+            <div className="progress-goal-card__head">
+              <div>
+                <h3>Meta de ahorro periódica — Pie en verde/blanco</h3>
+                <div className="progress-goal-card__statuses">
+                  <span className={`progress-status ${greenProgress?.finalizada ? "progress-status--cumplida" : "progress-status--en_progreso"}`}>
+                    {greenProgress
+                      ? greenProgress.finalizada
+                        ? `Plazo finalizado (${greenProgress.plazoMeses} meses)`
+                        : `En curso (mes ${greenProgress.mesActual} de ${greenProgress.plazoMeses})`
+                      : `En curso (${greenSavingsGoal.plazo_meses} meses)`}
+                  </span>
+                </div>
+              </div>
+              {greenProgress?.porcentajeEsperado != null && (
+                <div className="progress-goal-card__percentage">
+                  <strong>{greenProgress.porcentajeEsperado}%</strong>
+                  <span>esperado</span>
+                </div>
+              )}
+            </div>
+            <p className="progress-goal-card__description">
+              {greenSavingsGoal.project_name ? `${greenSavingsGoal.project_name} · ` : ""}
+              Ahorro mensual fijado para reunir el pie de {formatUfAmount(greenSavingsGoal.pie_total_uf)}.
+            </p>
+            {greenProgress?.porcentajeEsperado != null && (
+              <progress
+                max="100"
+                value={greenProgress.porcentajeEsperado}
+                aria-label="Avance esperado del ahorro para el pie"
+              />
+            )}
+            <dl className="progress-goal-values">
+              <div><dt>Cuota mensual (UF)</dt><dd>{formatUfAmount(greenSavingsGoal.cuota_mensual_uf)} / mes</dd></div>
+              <div><dt>Equivalente hoy (CLP)</dt><dd>{formatClpExact(greenSavingsGoal.cuota_mensual_clp)} / mes</dd></div>
+              <div><dt>Pie objetivo</dt><dd>{formatUfAmount(greenSavingsGoal.pie_total_uf)}</dd></div>
+            </dl>
+            {greenProgress && (
+              <p className="progress-goal-card__schedule">
+                Esperado al mes {greenProgress.mesActual}: {formatUfAmount(greenProgress.acumuladoEsperadoUf)} · Restante: {formatUfAmount(greenProgress.restanteEsperadoUf)}
+              </p>
+            )}
+          </article>
+        );
+      })()}
     </section>
 
     <UpdateFinancialDataForm snapshot={data.latest_effective_snapshot} previous={data.latest_event_id} onSubmit={onUpdate} />

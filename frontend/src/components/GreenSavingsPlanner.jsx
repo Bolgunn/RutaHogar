@@ -11,8 +11,8 @@ import {
   GREEN_PLANNER_TERM_PRESETS,
   isTrackingPlanActive,
   resolveGreenPlannerUfReference,
+  persistGreenSavingsGoal,
   resolveInitialPieUf,
-  saveLocalGreenSavingsGoal,
   simulateInflationProtection,
 } from "../services/greenSavingsPlannerService";
 import { getProjectInstallmentScheme } from "../services/projectService";
@@ -26,6 +26,7 @@ export default function GreenSavingsPlanner({
   initialPlazoMeses = null,
   referenceDate = new Date(),
   onSaveGreenSavingsGoal = null,
+  onScheduleChange = null,
 }) {
   const ufRef = useMemo(
     () => resolveGreenPlannerUfReference(evaluation, marketReference),
@@ -103,7 +104,13 @@ export default function GreenSavingsPlanner({
   );
   const [savedGoal, setSavedGoal] = useState(existingGoal);
   const [saveMessage, setSaveMessage] = useState("");
+  const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // La meta vigente puede cambiar por fuera (nueva evaluación, recarga del seguimiento).
+  useEffect(() => {
+    setSavedGoal(existingGoal);
+  }, [existingGoal]);
   const [showFullSchedule, setShowFullSchedule] = useState(false);
 
   const numericPieUf = Number(String(pieUfInput).replace(",", "."));
@@ -121,6 +128,12 @@ export default function GreenSavingsPlanner({
       }),
     [numericPieUf, numericPlazoMeses, ufRef, project?.entrega_estimada],
   );
+
+  useEffect(() => {
+    if (onScheduleChange && schedule.isValid) {
+      onScheduleChange(schedule);
+    }
+  }, [schedule, onScheduleChange]);
 
   const developerComparison = useMemo(
     () =>
@@ -162,19 +175,25 @@ export default function GreenSavingsPlanner({
     if (!schedule.isValid || !trackingActive || saving) return;
     setSaving(true);
     setSaveMessage("");
+    setSaveStatus("");
     try {
       const payload = buildGreenSavingsGoalPayload({
         schedule,
-        project,
+        project: comparisonProject || project,
         instrument: selectedInstrument,
       });
-      saveLocalGreenSavingsGoal(payload, evaluation?.id || trackingState?.current_evaluation_id);
-      if (onSaveGreenSavingsGoal) {
-        await onSaveGreenSavingsGoal(payload);
-      }
+      const { status } = await persistGreenSavingsGoal({
+        payload,
+        evaluationId: evaluation?.id || trackingState?.current_evaluation_id || null,
+        onSave: onSaveGreenSavingsGoal,
+      });
       setSavedGoal(payload);
+      setSaveStatus(status);
+      const resumen = `${formatUfAmount(payload.cuota_mensual_uf)} / mes (${formatClpExact(payload.cuota_mensual_clp)} a valor de hoy) por ${payload.plazo_meses} meses`;
       setSaveMessage(
-        `Meta fijada en tu dashboard: ${formatUfAmount(payload.cuota_mensual_uf)} / mes (${formatClpExact(payload.cuota_mensual_clp)} a valor de hoy) por ${payload.plazo_meses} meses.`,
+        status === "synced"
+          ? `Meta fijada en tu dashboard: ${resumen}.`
+          : `No pudimos guardar la meta en tu cuenta. Quedó guardada solo en este dispositivo (${resumen}); vuelve a presionar "Fijar meta de pie en verde" para reintentar.`,
       );
     } finally {
       setSaving(false);
@@ -599,7 +618,12 @@ export default function GreenSavingsPlanner({
             </div>
 
             {saveMessage && (
-              <div className="success-message" role="status" style={{ marginTop: "0.85rem" }}>
+              <div
+                className={saveStatus === "synced" ? "success-message" : "warning-note"}
+                role={saveStatus === "synced" ? "status" : "alert"}
+                data-testid="green-goal-save-message"
+                style={{ marginTop: "0.85rem" }}
+              >
                 {saveMessage}
               </div>
             )}

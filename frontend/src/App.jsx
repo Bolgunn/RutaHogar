@@ -1945,7 +1945,16 @@ export default function App() {
         );
       }
     } catch (err) {
-      console.warn("Meta de ahorro en verde guardada localmente:", err);
+      // HU 29 E4: no se anuncia como fijada en la cuenta una meta que no se
+      // persistió. Se revierte el estado optimista y el planificador informa que
+      // la meta quedó solo en este dispositivo.
+      console.warn("No se pudo persistir la meta de ahorro en verde:", err);
+      setEvaluations((prev) =>
+        prev.map((item) =>
+          item.id === currentEvaluation.id ? currentEvaluation : item,
+        ),
+      );
+      throw err;
     }
 
     return goalPayload;

@@ -14,10 +14,13 @@ import {
   DEFAULT_DAP_NOMINAL_ANNUAL_RATE,
   DEFAULT_GREEN_UF_CLP,
   DEFAULT_UF_ACCOUNT_REAL_RATE,
+  describeGreenSavingsGoalProgress,
   getEffectiveGreenSavingsGoal,
   GREEN_SAVINGS_GOAL_STORAGE_KEY,
   isTrackingPlanActive,
+  persistGreenSavingsGoal,
   resolveGreenPlannerUfReference,
+  resolveUnifiedTrackingGoal,
   saveLocalGreenSavingsGoal,
   simulateInflationProtection,
 } from "../greenSavingsPlannerService";
@@ -494,6 +497,341 @@ describe("HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Ve
       expect(html).toContain(
         "Activa primero el seguimiento de tu Plan de Mejora (HU 13) para poder fijar esta cuota mensual en tu dashboard personal.",
       );
+    });
+
+    it("evalúa el estado activo de seguimiento sin circularidad con metas previas", () => {
+      // Si el tracking del backend dice 'not_started', no debe dar activo aunque exista meta previa
+      const evalWithOldGoal = {
+        id: "eval-old",
+        housing_plan: { green_savings_goal: { cuota_mensual_uf: 20 } },
+      };
+      expect(isTrackingPlanActive(evalWithOldGoal, { status: "not_started" })).toBe(false);
+
+      // Si el tracking del backend está 'active', es activo
+      expect(isTrackingPlanActive(evalWithOldGoal, { status: "active" })).toBe(true);
+
+      // Si no hay trackingState disponible (ej. local o cargando), evalúa plan_accepted_at o plan_type
+      expect(isTrackingPlanActive({ plan_accepted_at: "2026-04-01" }, null)).toBe(true);
+      expect(isTrackingPlanActive({ plan_type: "acelerado" }, null)).toBe(true);
+      expect(isTrackingPlanActive({ housing_plan: {} }, null)).toBe(false);
+    });
+
+    it("persiste la meta con estado synced cuando la API responde y local_only si falla la sincronización", async () => {
+      const schedule = calculateGreenSavingsSchedule({
+        pieUf: 300,
+        plazoMeses: 12,
+        ufValueClp: 38500,
+      });
+      const payload = buildGreenSavingsGoalPayload({
+        schedule,
+        project: { id: "p-1", nombre: "Edificio Test" },
+      });
+
+      // Caso exitoso
+      const onSaveSuccess = vi.fn().mockResolvedValue(payload);
+      const syncedResult = await persistGreenSavingsGoal({
+        payload,
+        evaluationId: "eval-ok",
+        onSave: onSaveSuccess,
+      });
+      expect(syncedResult.status).toBe("synced");
+      expect(syncedResult.error).toBeNull();
+
+      // Caso con error de red / backend
+      const networkError = new Error("Network timeout");
+      const onSaveFailure = vi.fn().mockRejectedValue(networkError);
+      const failedResult = await persistGreenSavingsGoal({
+        payload,
+        evaluationId: "eval-fail",
+        onSave: onSaveFailure,
+      });
+      expect(failedResult.status).toBe("local_only");
+      expect(failedResult.error).toBe(networkError);
+    });
+
+    it("guarda en localStorage de forma aislada por evaluación sin contaminar clave global", () => {
+      const fakeStorage = {};
+      vi.stubGlobal("localStorage", {
+        getItem: (k) => fakeStorage[k] || null,
+        setItem: (k, v) => { fakeStorage[k] = v; },
+      });
+
+      const goalA = { cuota_mensual_uf: 15, plazo_meses: 12 };
+      const goalB = { cuota_mensual_uf: 25, plazo_meses: 24 };
+
+      saveLocalGreenSavingsGoal(goalA, "eval-user-1");
+      saveLocalGreenSavingsGoal(goalB, "eval-user-2");
+
+      const stored = JSON.parse(fakeStorage[GREEN_SAVINGS_GOAL_STORAGE_KEY]);
+      expect(stored["eval-user-1"]).toEqual(goalA);
+      expect(stored["eval-user-2"]).toEqual(goalB);
+      expect(stored.latest).toBeUndefined(); // no existe clave latest que filtre datos entre usuarios
+    });
+
+    it("calcula el progreso estimado y acumulación de ahorro mediante describeGreenSavingsGoalProgress", () => {
+      const goal = {
+        pie_total_uf: 360,
+        cuota_mensual_uf: 20,
+        plazo_meses: 18,
+        fixed_at: "2026-01-01T00:00:00Z",
+      };
+
+      // Al momento de fijar la meta (mes 1)
+      const dayOne = describeGreenSavingsGoalProgress(goal, new Date("2026-01-02T00:00:00Z"));
+      expect(dayOne).toMatchObject({
+        mesActual: 1,
+        plazoMeses: 18,
+        finalizada: false,
+        acumuladoEsperadoUf: 20,
+        restanteEsperadoUf: 340,
+        porcentajeEsperado: 6,
+      });
+
+      // A los 5 meses
+      const monthFive = describeGreenSavingsGoalProgress(goal, new Date("2026-06-01T00:00:00Z"));
+      expect(monthFive.mesActual).toBe(6);
+      expect(monthFive.acumuladoEsperadoUf).toBe(120);
+
+      // Cumplido el plazo de 18 meses
+      const finished = describeGreenSavingsGoalProgress(goal, new Date("2027-08-01T00:00:00Z"));
+      expect(finished.finalizada).toBe(true);
+      expect(finished.mesActual).toBe(18);
+      expect(finished.acumuladoEsperadoUf).toBe(360);
+      expect(finished.restanteEsperadoUf).toBe(0);
+    });
+
+    it("muestra en ProgressPage y FinancialTracking el avance estimado periódico del pie", () => {
+      const goalPayload = {
+        type: "pie_en_verde_blanco",
+        project_id: "proj-1",
+        project_name: "Edificio Futuro",
+        pie_total_uf: 450,
+        cuota_mensual_uf: 25,
+        cuota_mensual_clp: 962500,
+        plazo_meses: 18,
+        fixed_at: "2026-01-01T00:00:00Z",
+      };
+
+      const evalWithGoal = {
+        ...baseEvaluation,
+        housing_plan: { green_savings_goal: goalPayload },
+      };
+
+      // Simular visualización a 3 meses de fijada la meta
+      const asOfDate = "2026-04-01T00:00:00Z";
+      const trackingData = {
+        ...activeTrackingState,
+        cutoff_at: asOfDate,
+      };
+
+      const progressHtml = renderToStaticMarkup(
+        <ProgressView
+          data={trackingData}
+          evaluation={evalWithGoal}
+          projection={{ status: "not_projectable" }}
+          onConfirm={vi.fn()}
+          onOpenHistory={vi.fn()}
+          onUpdate={vi.fn()}
+        />,
+      );
+
+      // Debe mostrar el badge de avance con porcentaje y el esperado acumulado
+      expect(progressHtml).toContain('data-testid="progress-green-savings-goal"');
+      expect(progressHtml).toContain("En curso (mes 4 de 18)");
+      expect(progressHtml).toContain("22%");
+      expect(progressHtml).toContain("Esperado al mes 4:");
+    });
+
+    it("unifica la base matemática entre Meta de Pie (10%) y Ahorro Pie evitando descuadre y contradicciones", () => {
+      // Caso reportado: Evaluación con pie mínimo genérico de $6.192.945 (ahorrado $1M + faltante $5.19M),
+      // pero con proyecto Plaza Ñuñoa (5.800 UF, 10% = 580 UF = $23.852.500) y meta en verde de 32,22 UF ($1.325.066/mes) en 18 meses.
+      const ufRate = 41125;
+      const greenGoalPlazaNunoa = {
+        type: "pie_en_verde_blanco",
+        project_id: "p-plaza-nunoa",
+        project_name: "Plaza Ñuñoa",
+        property_uf: 5800,
+        pie_total_uf: 580,
+        pie_total_clp: 23852500,
+        cuota_mensual_uf: 32.22,
+        cuota_mensual_clp: 1325066,
+        plazo_meses: 18,
+        uf_value_clp: ufRate,
+      };
+
+      const evalWithNunoaGoal = {
+        ...baseEvaluation,
+        input: {
+          ...baseEvaluation.input,
+          uf_value_clp: ufRate,
+          ahorro_disponible: 1000000,
+          project_goal: {
+            id: "p-plaza-nunoa",
+            nombre: "Plaza Ñuñoa",
+            precio_min_uf: 5800,
+            estado: "en_construccion",
+            entrega_estimada: "2028-05",
+          },
+        },
+        result: {
+          ...baseEvaluation.result,
+          financial_indicators: {
+            ...baseEvaluation.result.financial_indicators,
+            capacidad_supuestos: {
+              market_snapshot: {
+                uf_value_clp: ufRate,
+                effective_date: "2026-04-15",
+              },
+            },
+            pie_minimo_clp: 6192945,
+            brecha_pie_minimo: 5192945,
+            ahorro_mensual_conservador: 244000,
+            ahorro_mensual_acelerado: 488000,
+            meses_conservador: 22,
+          },
+        },
+        housing_plan: {
+          green_savings_goal: greenGoalPlazaNunoa,
+        },
+      };
+
+      // 1. Verificación de cálculo puro unificado
+      const unified = resolveUnifiedTrackingGoal({
+        evaluation: evalWithNunoaGoal,
+        trackingState: activeTrackingState,
+        projectGoal: evalWithNunoaGoal.input.project_goal,
+        ufValueClp: ufRate,
+      });
+
+      expect(unified.isApplicable).toBe(true);
+      expect(unified.pieTotalUf).toBe(580);
+      expect(unified.pieTotalClp).toBe(23852500);
+      expect(unified.currentAhorro).toBe(1000000);
+      // Faltante real para la meta de 580 UF ($23.852.500 - $1.000.000)
+      expect(unified.brechaPieClp).toBe(22852500);
+      // Ahorro sugerido empata con la cuota real de la meta periódica en verde
+      expect(unified.cuotaMensualClp).toBe(1325066);
+      expect(unified.cuotaMensualUf).toBe(32.22);
+      expect(unified.plazoMeses).toBe(18);
+
+      // 2. Verificación de renderizado en FinancialTracking
+      const dashboardHtml = renderToStaticMarkup(
+        <FinancialTracking
+          evaluation={evalWithNunoaGoal}
+          trackingState={activeTrackingState}
+          onAcceptPlan={vi.fn()}
+          onStartEvaluation={vi.fn()}
+          onOpenProgress={vi.fn()}
+          onOpenHousingPlan={vi.fn()}
+          onNavigate={vi.fn()}
+        />,
+      );
+
+      // Tarjeta 2: Ya NO muestra el faltante desactualizado de $5.192.945, sino los $22.852.500 del proyecto
+      expect(dashboardHtml).toContain("Meta de Pie (10% · Plaza Ñuñoa)");
+      expect(dashboardHtml).toContain("$22.852.500");
+      expect(dashboardHtml).toContain("580,00 UF");
+
+      // Tarjeta 4: El 'Ahorro sugerido' empata con $1.325.066/m (32,22 UF/mes) y el plazo con 18 meses (1 año y 6 meses)
+      expect(dashboardHtml).toContain("Ahorro Pie (Venta en Verde)");
+      expect(dashboardHtml).toContain("$1.325.066/m");
+      expect(dashboardHtml).toContain("32,22 UF / mes");
+      expect(dashboardHtml).toContain("1 año y 6 meses");
+
+      // Advierte de forma responsable que la cuota de la venta en verde supera la capacidad ordinaria de $244.000/m
+      expect(dashboardHtml).toContain("Exigencia de venta en verde");
+      expect(dashboardHtml).toContain("supera tu ahorro ordinario");
+    });
+    it("permite al usuario regresar al ahorro de pie ordinario (sin plazo en verde), eliminando la etiqueta '(Venta en Verde)'", () => {
+      const ufRate = 41125;
+      const greenGoalPlazaNunoa = {
+        type: "pie_en_verde_blanco",
+        project_id: "p-plaza-nunoa",
+        project_name: "Plaza Ñuñoa",
+        property_uf: 5800,
+        pie_total_uf: 580,
+        pie_total_clp: 23852500,
+        cuota_mensual_uf: 32.22,
+        cuota_mensual_clp: 1325066,
+        plazo_meses: 18,
+        uf_value_clp: ufRate,
+      };
+
+      const evalWithNunoaGoal = {
+        ...baseEvaluation,
+        input: {
+          ...baseEvaluation.input,
+          uf_value_clp: ufRate,
+          ahorro_disponible: 1000000,
+          project_goal: {
+            id: "p-plaza-nunoa",
+            nombre: "Plaza Ñuñoa",
+            precio_min_uf: 5800,
+            estado: "en_construccion",
+            entrega_estimada: "2028-05",
+          },
+        },
+        result: {
+          ...baseEvaluation.result,
+          financial_indicators: {
+            ...baseEvaluation.result.financial_indicators,
+            capacidad_supuestos: {
+              market_snapshot: {
+                uf_value_clp: ufRate,
+                effective_date: "2026-04-15",
+              },
+            },
+            pie_minimo_clp: 6192945,
+            brecha_pie_minimo: 5192945,
+            ahorro_mensual_conservador: 244000,
+            ahorro_mensual_acelerado: 488000,
+            meses_conservador: 22,
+          },
+        },
+        housing_plan: {
+          green_savings_goal: greenGoalPlazaNunoa,
+        },
+      };
+
+      // 1. Con venta en verde activa: muestra título con etiqueta y cuota exigida
+      const htmlConVerde = renderToStaticMarkup(
+        <FinancialTracking
+          evaluation={evalWithNunoaGoal}
+          trackingState={activeTrackingState}
+          initialUseGreenSavingsPlan={true}
+        />,
+      );
+      expect(htmlConVerde).toContain("Ahorro Pie (Venta en Verde)");
+      expect(htmlConVerde).toContain("Meta de Pie (10% · Plaza Ñuñoa)");
+      expect(htmlConVerde).toContain("$1.325.066/m");
+      expect(htmlConVerde).toContain("Ahorro sin plazo en verde");
+      expect(htmlConVerde).toContain('data-testid="btn-return-conventional-savings"');
+
+      // 2. Al regresar al ahorro a su propio ritmo (sin plazo en verde):
+      // - Se elimina estrictamente la etiqueta '(Venta en Verde)'
+      // - El título de la tarjeta 4 vuelve a 'Ahorro Pie'
+      // - El título de la tarjeta 2 vuelve a 'Meta de Pie (10%)'
+      // - El ahorro sugerido y el plazo vuelven a los montos ordinarios ($244.000/mes, 22 meses = 1 año y 10 meses)
+      // - Se muestra el aviso informativo con opción de volver al plazo en verde
+      const htmlSinVerde = renderToStaticMarkup(
+        <FinancialTracking
+          evaluation={evalWithNunoaGoal}
+          trackingState={activeTrackingState}
+          initialUseGreenSavingsPlan={false}
+        />,
+      );
+
+      expect(htmlSinVerde).not.toContain("Ahorro Pie (Venta en Verde)");
+      expect(htmlSinVerde).toContain("Ahorro Pie");
+      expect(htmlSinVerde).toContain("Meta de Pie (10%)");
+      expect(htmlSinVerde).not.toContain("Meta de Pie (10% · Plaza Ñuñoa)");
+      expect(htmlSinVerde).toContain("$244.000/m");
+      expect(htmlSinVerde).toContain("1 año y 10 meses");
+      expect(htmlSinVerde).not.toContain("(32,22 UF / mes)");
+      expect(htmlSinVerde).not.toContain("⚠️ Exigencia de venta en verde");
+      expect(htmlSinVerde).toContain('data-testid="conventional-savings-notice"');
+      expect(htmlSinVerde).toContain("Ahorro a tu propio ritmo según tu capacidad mensual (sin exigir el plazo de 18 meses)");
+      expect(htmlSinVerde).toContain("Volver a plazo en verde");
     });
   });
 });
