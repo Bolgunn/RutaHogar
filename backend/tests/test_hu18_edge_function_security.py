@@ -42,7 +42,7 @@ def test_rut_migration_uses_one_invitation_column_and_service_only_overload():
     assert "create policy" not in migration.lower()
 
 
-def test_pending_public_inspection_only_allows_the_five_declared_fields():
+def test_pending_public_inspection_requires_authentication_without_financial_values():
     source = SOURCE.read_text(encoding="utf-8")
     helpers = HELPERS.read_text(encoding="utf-8")
     migration = PREFILL_MIGRATION.read_text(encoding="utf-8")
@@ -57,7 +57,16 @@ def test_pending_public_inspection_only_allows_the_five_declared_fields():
         assert field in migration
         assert field in source.split("function findByToken", 1)[1].split("function materializeExpiry", 1)[0]
     public_context = helpers.split("export function invitationPublicContext", 1)[1].split("export function managementPublicContext", 1)[0]
-    assert 'status !== "pending"' in public_context
+    assert "can_submit: false" in public_context
+    assert "authentication_required" in public_context
+    assert "row.ingreso_mensual_complementario" not in public_context
     for forbidden in ("recipient_email", "recipient_rut", "lead_id", "relacion_complementario", "token_digest", "management_token_digest"):
         assert forbidden not in public_context
     assert "parseLeadDeclaredComplement(body)" in source
+
+
+def test_t4a_does_not_leave_an_anonymous_confirmation_fallback():
+    source = SOURCE.read_text(encoding="utf-8")
+    assert 'hu18_confirm_invitation' not in source
+    assert 'authenticated_confirmation_required' in source
+    assert 'authorizeInvitationAccess(req, body, admin)' in source

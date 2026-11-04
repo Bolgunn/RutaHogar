@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -317,12 +318,14 @@ describe("toImportPayload", () => {
 
 describe("Excel files", () => {
   it("the published .xlsx template has the catalog columns and the same lists as the validator", async () => {
-    const readExcelFile = (await import("read-excel-file/universal")).default;
-    const sheets = await readExcelFile(bufferOf("../../../../public/plantillas/plantilla-proyectos-rutahogar.xlsx"));
-    expect(sheets.map((sheet) => sheet.sheet)).toEqual(["Proyectos", "Instrucciones", "Listas"]);
-    expect(sheets[0].data).toEqual([IMPORT_COLUMNS.map((column) => column.key)]);
-    const listas = sheets[2].data.slice(1);
-    const column = (index) => listas.map((row) => row[index]).filter(Boolean);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(bufferOf("../../../../public/plantillas/plantilla-proyectos-rutahogar.xlsx"));
+    expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["Proyectos", "Instrucciones", "Listas"]);
+    expect(await readXlsxRecords(bufferOf("../../../../public/plantillas/plantilla-proyectos-rutahogar.xlsx"))).toEqual([
+      IMPORT_COLUMNS.map((column) => column.key),
+    ]);
+    const listas = book.worksheets[2].getSheetValues().slice(2);
+    const column = (index) => listas.map((row) => row?.[index + 1]).filter(Boolean);
     expect(column(0)).toEqual(comunasMvp);
     expect(column(1)).toEqual(tiposProyecto);
     expect(column(2)).toEqual(estadosProyecto);

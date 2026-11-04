@@ -1,6 +1,5 @@
-import { supabase } from "../utils/supabase";
-import { annotateEvaluation } from "./trackingService";
-import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured, logSupabaseError } from "./profileService";
+import { annotateEvaluation, trackingRequest } from "./trackingService";
+import { ensureUserProfile, getAuthenticatedUser, isSupabaseDataConfigured } from "./profileService";
 
 const SCORING_HISTORY_KEY = "RutaHogar_scoring_history";
 const HISTORY_CLASSIFICATIONS = new Set(["Alto", "Medio", "Bajo"]);
@@ -107,21 +106,6 @@ export function mergeEvaluationEvents(rows, annotations) {
   }));
 }
 
-async function withEvaluationEvents(rows) {
-  const evaluationIds = [...new Set((rows || []).map((row) => row.evaluation_id).filter(Boolean))];
-  if (!evaluationIds.length) return rows;
-  let query = supabase.from("evaluation_events").select("*");
-  query = evaluationIds.length === 1
-    ? query.eq("evaluation_id", evaluationIds[0])
-    : query.in("evaluation_id", evaluationIds);
-  const { data, error } = await query.order("recorded_at", { ascending: true });
-  if (error) {
-    logSupabaseError(error);
-    throw error;
-  }
-  return mergeEvaluationEvents(rows, data || []);
-}
-
 function buildScoringHistoryRow(userId, evaluationId, evaluationPayload) {
   const result = evaluationPayload.result || {};
   return {
@@ -161,17 +145,8 @@ export async function getScoringHistory(userId) {
   }
   await ensureUserProfile(user);
 
-  const { data, error } = await supabase
-    .from("scoring_history")
-    .select(scoringHistorySelectColumns)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    logSupabaseError(error);
-    throw error;
-  }
-  return withEvaluationEvents((data || []).map(normalizeScoringHistoryRow));
+  const projection = await trackingRequest("/owner/scoring-history");
+  return (projection.items || []).map(normalizeScoringHistoryRow);
 }
 
 export async function getScoringHistoryByEvaluation(evaluationId) {
@@ -179,17 +154,9 @@ export async function getScoringHistoryByEvaluation(evaluationId) {
     return readLocalScoringHistory().filter((item) => item.evaluation_id === evaluationId);
   }
 
-  const { data, error } = await supabase
-    .from("scoring_history")
-    .select(scoringHistorySelectColumns)
-    .eq("evaluation_id", evaluationId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    logSupabaseError(error);
-    throw error;
-  }
-  return withEvaluationEvents((data || []).map(normalizeScoringHistoryRow));
+  const projection = await trackingRequest(`/evaluations/${evaluationId}/history`);
+  return (projection.items || []).filter((row) => row.evaluation_id === evaluationId)
+    .map(normalizeScoringHistoryRow);
 }
 
 /**

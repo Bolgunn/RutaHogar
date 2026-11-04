@@ -13,10 +13,9 @@
 | **Categoría** | Deseable *(el texto entregado indica también "Opcional")* |
 | **Puntos de Historia** | 5 |
 | **Actor** | Administrador inmobiliario |
+| **Sprint** | Sprint 3 |
 | **Estado** | ⚠️ Construida, pendiente de merge |
-
-> Numeración del sprint actual. La página [[HU25-exportacion-dossier|HU25 - Exportación de dossier]]
-> corresponde a la numeración del sprint anterior.
+| **Responsable** | Mauro — ver [[../Sprint3-Division\|División del Sprint 3]] |
 
 ---
 
@@ -28,20 +27,25 @@
 
 ## Criterios de aceptación
 
-### E1
+### E1 - Plantilla descargable
 
 **Dado** que el administrador desea subir proyectos, **cuando** acceda a la sección, **entonces** el sistema debe proveer una plantilla descargable (CSV/Excel) con las columnas requeridas.
 
-### E2
+### E2 - Validación previa por fila
 
 **Dado** que se sube un archivo poblado, **cuando** el sistema lo procese, **entonces** debe validar los datos (formatos, campos obligatorios) e informar exactamente qué filas tienen errores antes de guardar.
 
-### E3
+### E3 - Disponibilidad inmediata
 
 **Dado** que el archivo es válido, **cuando** se confirme la carga, **entonces** los proyectos deben quedar disponibles en el catálogo de la inmobiliaria al instante.
 
+---
+
 ## Notas
 
+- Es la [[propuesta-importacion-masiva-catalogo|propuesta de importación masiva del catálogo]] que entró al backlog con número.
+- Extiende el catálogo de [[HU7-catalogo-de-proyectos|HU 7]] (`AdminProjectCatalog.jsx`, `projectService.js`, `projectValidation.js`).
+- Una carga que cambia precios o agrega bonos es lo que debe activar las alertas de [[HU31-radar-oportunidades-alertas|HU 31]].
 - **Dónde está.** `/admin/proyectos` → botón **Carga masiva**. Lo ve solo el administrador de una
   inmobiliaria, y los proyectos quedan **siempre en la inmobiliaria de su sesión**. El administrador
   global de RutaHogar no ve el botón: cargar proyectos para un cliente desde RutaHogar necesita otro
@@ -109,8 +113,8 @@ todo funciona hasta **Confirmar carga**, que mostrará "No se pudo completar la 
 
 ## Implementación
 
-`frontend/src/lib/catalog/projectImport.js` y `readXlsx.js` (librería `read-excel-file`, cargada
-solo al subir un `.xlsx`), el modal `frontend/src/components/ProjectBulkImport.jsx`, la plantilla
+`frontend/src/lib/catalog/projectImport.js` y `readXlsx.js` (librería `exceljs`, la misma de las
+exportaciones de HU 22, cargada solo al subir un `.xlsx`), el modal `frontend/src/components/ProjectBulkImport.jsx`, la plantilla
 `frontend/public/plantillas/plantilla-proyectos-rutahogar.xlsx` (generada por
 `frontend/scripts/build-import-template.mjs`), la función `importar_proyectos()` (migración
 `20261102120000`) y el plan `docs/stories/HU25-carga-masiva-proyectos/PLAN.md`. Esta historia

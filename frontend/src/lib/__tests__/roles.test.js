@@ -76,3 +76,19 @@ describe("existing roles keep their routes", () => {
     expect(canViewStaffPage("metricas", roles.user)).toBe(false);
   });
 });
+
+describe("HU 21 — priorización comercial", () => {
+  it("resuelve /admin/priorizacion para ambos admins", () => {
+    expect(resolveStaffRoute("/admin/priorizacion", roles.admin_inmo)).toEqual({ page: "admin-priorizacion" });
+    expect(resolveStaffRoute("/admin/priorizacion", roles.admin)).toEqual({ page: "admin-priorizacion" });
+  });
+
+  it("exige un admin con inmobiliaria: ni el admin global ni ejecutivos ni leads", () => {
+    expect(canViewStaffPage("admin-priorizacion", roles.admin_inmo, "tenant-1")).toBe(true);
+    expect(canViewStaffPage("admin-priorizacion", roles.admin, "tenant-1")).toBe(true);
+    expect(canViewStaffPage("admin-priorizacion", roles.admin, null)).toBe(false);
+    expect(canViewStaffPage("admin-priorizacion", roles.admin_inmo)).toBe(false);
+    expect(canViewStaffPage("admin-priorizacion", roles.sales, "tenant-1")).toBe(false);
+    expect(canViewStaffPage("admin-priorizacion", roles.user, "tenant-1")).toBe(false);
+  });
+});

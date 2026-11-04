@@ -31,6 +31,13 @@ describe("sesión revocada en el servidor", () => {
     expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
+  it("does not dispatch a staff read if the session changed after selecting its account", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { access_token: "valid-b", user: { id: "staff-b" } } }, error: null });
+    globalThis.fetch = vi.fn();
+    await expect(getStaffEvaluations({ expectedUserId: "staff-a" })).rejects.toThrow("La cuenta cambió");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("keeps the session on other backend errors", async () => {
     mocks.getSession.mockResolvedValue({ data: { session: { access_token: "valid" } }, error: null });
     globalThis.fetch = respond(403, { detail: { code: "owner_mismatch" } });

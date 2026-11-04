@@ -1,0 +1,25 @@
+{
+  "content": "CERTIFICADO LABORAL\nNombre: PERSONA_SINTETICA_NO_GUARDAR\nTipo de contrato: Indefinido\nFecha de ingreso: 01/10/2024\nFecha de emisión: 25 de octubre de 2026",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "lines": [
+        {
+          "content": "CERTIFICADO LABORAL"
+        },
+        {
+          "content": "Nombre: PERSONA_SINTETICA_NO_GUARDAR"
+        },
+        {
+          "content": "Tipo de contrato: Indefinido"
+        },
+        {
+          "content": "Fecha de ingreso: 01/10/2024"
+        },
+        {
+          "content": "Fecha de emisión: 25 de octubre de 2026"
+        }
+      ]
+    }
+  ]
+}
