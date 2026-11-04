@@ -2,15 +2,15 @@
 -- RutaHogar — HU 26: métricas de interés por proyecto
 -- =============================================================
 -- Diseño: docs/stories/HU26-metricas-interes-proyecto/PLAN.md (Entities) y
--- docs/algorithms/ALG-19-project-interest-metrics.md (Inputs).
+-- docs/algorithms/ALG-20-project-interest-metrics.md (Inputs).
 --
 -- · proyecto_visualizaciones: una fila por lead, proyecto y día de Santiago
---   (ALG-19 A2). Guarda solo el día: es dato de comportamiento del lead.
+--   (ALG-20 A2). Guarda solo el día: es dato de comportamiento del lead.
 --   Sin policies ni grants para los roles del navegador; se escribe solo con
 --   registrar_visualizacion_proyecto(). on delete cascade en profiles mantiene
 --   la cancelación ARCO.
 -- · project_interest_facts(): de solo lectura, para el admin de la inmobiliaria.
---   Devuelve { now, proyectos, leads } con conteos por lead anónimo; ALG-19
+--   Devuelve { now, proyectos, leads } con conteos por lead anónimo; ALG-20
 --   calcula todo en el navegador. No sale id de perfil, email ni instante de una
 --   interacción: lead_id es un número dentro de la llamada.
 --
@@ -31,7 +31,7 @@ create index if not exists proyecto_visualizaciones_proyecto_idx
 alter table public.proyecto_visualizaciones enable row level security;
 revoke all on table public.proyecto_visualizaciones from public, anon, authenticated;
 
--- Staff navegando el catálogo no es demanda (ALG-19 A7), y un aviso del portal
+-- Staff navegando el catálogo no es demanda (ALG-20 A7), y un aviso del portal
 -- (proyectos_rag) no es un proyecto de una inmobiliaria: ambos devuelven false.
 create or replace function public.registrar_visualizacion_proyecto(p_proyecto uuid)
 returns boolean

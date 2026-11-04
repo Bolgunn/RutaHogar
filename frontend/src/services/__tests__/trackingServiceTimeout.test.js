@@ -6,7 +6,7 @@ vi.mock("../../utils/supabase", () => ({
   supabase: { auth: { getSession: mocks.getSession } },
 }));
 
-import { getTracking } from "../trackingService";
+import { appendTrackingEvent, getTracking } from "../trackingService";
 
 describe("HU13 tracking transport timeout", () => {
   const realFetch = globalThis.fetch;
@@ -22,5 +22,11 @@ describe("HU13 tracking transport timeout", () => {
 
     await expect(getTracking({ timeoutMs: 5 }))
       .rejects.toEqual(expect.objectContaining({ name: "RequestTimeoutError", message: "El seguimiento tardó demasiado. Intenta nuevamente." }));
+  });
+  it("does not send a previous account's evaluation using a new session", async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: { access_token: "token-b", user: { id: "b" } } }, error: null });
+    globalThis.fetch = vi.fn();
+    await expect(appendTrackingEvent({ input: { ingreso_mensual: 1500000 } }, { expectedUserId: "a" })).rejects.toThrow("La cuenta cambió");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

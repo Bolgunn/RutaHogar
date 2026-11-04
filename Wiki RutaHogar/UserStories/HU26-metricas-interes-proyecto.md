@@ -4,11 +4,6 @@
 > proyectos por tracción (visualizaciones, simulaciones y favoritos) y viabilidad financiera de los
 > leads interesados en cada uno, con los motivos que frenan la compra.
 
-> **Número en conflicto.** El índice del backlog asigna "HU 26" a
-> [[HU26-simulacion-subsidios|Simulación avanzada de subsidios habitacionales]]. Esta historia llegó
-> como "HU26 - Métricas de interés por proyecto"; quien mantiene el backlog debe decidir cuál conserva
-> el número antes del merge.
-
 ---
 
 ## Resumen
@@ -16,9 +11,11 @@
 | Campo | Valor |
 | :---- | :---- |
 | **Categoría** | Deseable |
-| **Puntos de Historia** | *(sin definir en la historia)* |
+| **Puntos de Historia** | 5 |
 | **Actor** | Administrador inmobiliario |
+| **Sprint** | Sprint 3 |
 | **Estado** | ⚠️ Construida, pendiente de merge |
+| **Responsable** | Mauro — ver [[../Sprint3-Division\|División del Sprint 3]] |
 
 ---
 
@@ -30,20 +27,23 @@
 
 ## Criterios de aceptación
 
-### E1
+### E1 - Ranking de tracción
 
 **Dado** que el administrador accede al dashboard de métricas, **cuando** seleccione la vista por proyectos, **entonces** el sistema debe mostrar un ranking ordenado de las propiedades que generan mayor tracción, detallando la cantidad de visualizaciones, simulaciones realizadas y veces que fueron guardadas como favoritas.
 
-### E2
+### E2 - Leads incompatibles por proyecto
 
 **Dado** que existen proyectos siendo evaluados por los leads, **cuando** el administrador analice su desempeño, **entonces** el sistema debe mostrar cuántos de los leads interesados resultaron incompatibles o fueron rechazados por no alcanzar el score financiero requerido para ese proyecto en particular.
 
-### E3
+### E3 - Motivos de rechazo agrupados
 
 **Dado** que un proyecto presenta leads calificados como incompatibles, **cuando** el administrador consulte el detalle de sus métricas de rechazo, **entonces** el sistema debe agrupar y mostrar claramente cuáles son los motivos principales que están frenando la compra para ese proyecto específico.
 
+---
+
 ## Notas
 
+- Se suma a las métricas comerciales de [[HU15-dashboard-conversion-tiempos|HU 15]] (`CommercialMetrics.jsx`). La exportación de estas métricas la cubre [[HU22-centro-exportacion-dossier|HU 22]].
 - **Dónde está.** Página `/metricas` (la de [[HU15-dashboard-conversion-tiempos|HU 15]]), pestaña
   **Interés por proyecto**. Solo la ve el administrador de una inmobiliaria (`admin_inmobiliario`, o
   `admin` con inmobiliaria); el ejecutivo conserva las dos pestañas de HU 15.
@@ -71,8 +71,8 @@
   sale de la base. Las visualizaciones guardan solo el día y se borran con la cuenta del lead.
 - **Pendiente de confirmar con el cliente.** Si la inmobiliaria quiere fijar su propio score mínimo
   por proyecto, si quiere ver los favoritos "alguna vez marcados" y si necesita filtrar por período.
-  Están registrados como supuestos en ALG-19.
-- Especificación de cada número: [ALG-19 — Métricas de interés por proyecto](../../docs/algorithms/ALG-19-project-interest-metrics.md).
+  Están registrados como supuestos en ALG-20.
+- Especificación de cada número: [ALG-20 — Métricas de interés por proyecto](../../docs/algorithms/ALG-20-project-interest-metrics.md).
   Implementación: `frontend/src/lib/commercial/projectInterestMetrics.js`, las funciones
   `registrar_visualizacion_proyecto()` y `project_interest_facts()` (migración `20261026120000`) y
   el plan `docs/stories/HU26-metricas-interes-proyecto/PLAN.md`.

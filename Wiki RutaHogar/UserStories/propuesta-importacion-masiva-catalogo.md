@@ -1,5 +1,7 @@
 # Propuesta — Importación masiva del catálogo desde CSV
 
+> **✅ Entró al backlog** como [[HU25-carga-masiva-proyectos|HU 25]]. Se conserva como antecedente del análisis.
+
 > **Propuesta sin numerar.** Cargar un catálogo completo desde un archivo CSV, con validación previa fila por fila y confirmación explícita antes de escribir nada. Resuelve volumen; la granularidad la resuelve [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]].
 
 ---

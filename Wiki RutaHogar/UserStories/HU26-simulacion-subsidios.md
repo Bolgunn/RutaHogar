@@ -1,6 +1,8 @@
-# HU 26 - Simulación avanzada de subsidios habitacionales
+# ~~HU 26~~ (retirada) - Simulación avanzada de subsidios habitacionales
 
-> **🗓 Planificada - Sprint 3.** Estima de forma referencial el impacto de un subsidio habitacional en el pie, el dividendo o el valor financiable del objetivo del lead.
+> **⛔ Retirada del Sprint 3.** El tablero del Sprint 3 (octubre 2026) renumeró el sprint y esta historia no quedó en él. Vuelve a ser una propuesta sin numerar; su número ahora pertenece a otra historia.
+
+> **Descripción original.** Estima de forma referencial el impacto de un subsidio habitacional en el pie, el dividendo o el valor financiable del objetivo del lead.
 
 ---
 
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Lead |
 | **Sprint** | Sprint 3 |
-| **Estado** | 🗓 Planificada |
+| **Estado** | ⛔ Retirada del backlog |
 
 ---
 

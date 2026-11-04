@@ -5,7 +5,7 @@ import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 
 export const FORBIDDEN_MESSAGE = "Solo el administrador de una inmobiliaria puede ver el interés por proyecto.";
 
-// Devuelve { now, proyectos, leads } tal como los lee ALG-19. Sin Supabase devuelve null: el
+// Devuelve { now, proyectos, leads } tal como los lee ALG-20. Sin Supabase devuelve null: el
 // camino local no tiene métricas.
 export async function getProjectInterestFacts() {
   if (!isSupabaseDataConfigured) return null;
@@ -19,7 +19,7 @@ export async function getProjectInterestFacts() {
   return { now: data.now, proyectos: data.proyectos, leads: data.leads };
 }
 
-// Una visualización por lead, proyecto y día (ALG-19 A2); la base ignora al staff y a los avisos
+// Una visualización por lead, proyecto y día (ALG-20 A2); la base ignora al staff y a los avisos
 // del portal. Nunca lanza: medir el interés no puede interrumpir al lead.
 export async function registerProjectView(proyectoId) {
   if (!isSupabaseDataConfigured || !proyectoId) return;

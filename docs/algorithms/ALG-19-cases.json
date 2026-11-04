@@ -1,206 +1,183 @@
 {
   "algorithm": "ALG-19",
-  "version": "hu26-project-interest-v1",
-  "nota": "Shorthand. `proyectos` is a list of ids; each expands to { id, nombre: id, comuna: 'Ñuñoa', tipo: 'departamento', precio_min_uf: 3000, precio_max_uf: 4000, estado: 'en_venta' }, in that order. A lead's `interacciones` entries default to visualizaciones 0, favorito false, simulaciones 0. `sin_evaluacion: true` makes evaluacion_actual null; otherwise it is an opaque object and `alg10` maps a proyecto_id to the ALG-10 verdict the fake match returns for that pair: `motivo_exclusion` null means a match (with `clasificacion`, default 'Compatible', and `alcanza_precio_min`, default true), anything else an excluded row; `codigo` is bloqueador_principal.codigo (null = no bloqueador_principal). The fake match fails the test if it is called with a project the lead is not interested in, or for a lead without an evaluation. `expect` is a deep-partial match; `ranking` lists rows in the expected order (every row, so its length is asserted).",
+  "version": "hu21-commercial-priority-v1",
+  "note": "Asserted by backend/tests/test_alg19_cases.py against calculate_commercial_priority. 'criterios' is a partial override merged over DEFAULT_CRITERIOS; null means defaults. Cases tagged 'default' also assert invariant 1: same action, reason and send_to_crm as the pre-HU21 engine.",
   "cases": [
     {
-      "name": "ranking_por_interesados_no_por_volumen",
-      "why": "R2 key 1. One lead opening P1 on ten days is less demand than two leads opening P2 once.",
-      "proyectos": ["P1", "P2"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 10 }], "alg10": { "P1": { "motivo_exclusion": null } } },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P2", "visualizaciones": 1 }], "alg10": { "P2": { "motivo_exclusion": null } } },
-        { "lead_id": "3", "interacciones": [{ "proyecto_id": "P2", "visualizaciones": 1 }], "alg10": { "P2": { "motivo_exclusion": null } } }
-      ],
-      "expect": {
-        "n_leads": 3,
-        "totales": { "visualizaciones": 12, "favoritos": 0, "simulaciones": 0 },
-        "ranking": [
-          { "proyecto_id": "P2", "posicion": 1, "interesados": 2, "visualizaciones": 2 },
-          { "proyecto_id": "P1", "posicion": 2, "interesados": 1, "visualizaciones": 10 }
-        ]
-      }
+      "name": "default_alto_compatible_contact_now",
+      "tags": ["default"],
+      "why": "R4 under defaults: today's happy path.",
+      "input": {
+        "classification": "Alto", "score": 82,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "6_a_12_meses", "tiene_propiedad_vista": false },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true, "promoted": false, "fixed_rule": false,
+        "reason": "Lead con alta preparación financiera y compatible con el objetivo inmobiliario." }
     },
     {
-      "name": "desempate_favoritos_simulaciones_visualizaciones_orden_de_entrada",
-      "why": "R2 keys 2-5. Equal interesados: favorite beats saved simulation beats views; P4 and P1 tie on every count and keep the input order (P4 is listed first).",
-      "proyectos": ["P4", "P1", "P2", "P3"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 5 }], "alg10": { "P1": { "motivo_exclusion": null } } },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P2", "favorito": true }], "alg10": { "P2": { "motivo_exclusion": null } } },
-        { "lead_id": "3", "interacciones": [{ "proyecto_id": "P3", "simulaciones": 1 }], "alg10": { "P3": { "motivo_exclusion": null } } },
-        { "lead_id": "4", "interacciones": [{ "proyecto_id": "P4", "visualizaciones": 5 }], "alg10": { "P4": { "motivo_exclusion": null } } }
-      ],
-      "expect": {
-        "ranking": [
-          { "proyecto_id": "P2", "favoritos": 1 },
-          { "proyecto_id": "P3", "simulaciones": 1 },
-          { "proyecto_id": "P4", "visualizaciones": 5 },
-          { "proyecto_id": "P1", "visualizaciones": 5 }
-        ]
-      }
+      "name": "default_alto_compatible_both_signals_reason",
+      "tags": ["default"],
+      "why": "R4 reason variant needs both signals; 0_3_meses is an alias of inmediato.",
+      "input": {
+        "classification": "Alto", "score": 82,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "0_3_meses", "tiene_propiedad_vista": true },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true,
+        "reason": "Lead con alta preparación financiera, objetivo compatible, compra pronta y propiedad o proyecto visto." }
     },
     {
-      "name": "proyecto_sin_interes_aparece_al_final",
-      "why": "R2: every project appears; one nobody looked at is the finding. Its rate is null, never 0 (R3).",
-      "proyectos": ["P1", "P2"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P2", "visualizaciones": 1, "favorito": true, "simulaciones": 2 }], "alg10": { "P2": { "motivo_exclusion": null } } }
-      ],
-      "expect": {
-        "n_leads": 1,
-        "totales": { "visualizaciones": 1, "favoritos": 1, "simulaciones": 2 },
-        "ranking": [
-          { "proyecto_id": "P2", "posicion": 1, "interesados": 1, "visualizaciones": 1, "favoritos": 1, "simulaciones": 2 },
-          {
-            "proyecto_id": "P1", "posicion": 2, "interesados": 0, "visualizaciones": 0, "favoritos": 0, "simulaciones": 0,
-            "compatibilidad": { "compatibles": 0, "incompatibles": 0, "sin_datos": 0, "evaluables": 0, "tasa_incompatibles": null },
-            "motivos": []
-          }
-        ]
-      }
+      "name": "default_medio_cercano_with_signal_review",
+      "tags": ["default"],
+      "why": "R5 under defaults; a signal changes the reason only, never the action (R5b off).",
+      "input": {
+        "classification": "Medio", "score": 58,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": null
+      },
+      "expect": { "action_key": "contact_with_review", "send_to_crm": true, "promoted": false,
+        "reason": "Lead con potencial comercial y señales de intención de compra; requiere revisión antes de avanzar." }
     },
     {
-      "name": "entrada_vacia_no_es_interes",
-      "why": "R1: an entry with no view, no favorite and no simulation does not make the lead interesado, and match is never asked about it.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1" }], "alg10": {} }
-      ],
-      "expect": {
-        "n_leads": 0,
-        "ranking": [{ "proyecto_id": "P1", "interesados": 0 }]
-      }
-    },
-    {
-      "name": "lead_en_dos_proyectos_cuenta_una_vez",
-      "why": "R1: a lead interested in two projects is in both rows and once in n_leads. R3: the verdict is per pair.",
-      "proyectos": ["P1", "P2"],
-      "leads": [
-        {
-          "lead_id": "1",
-          "interacciones": [{ "proyecto_id": "P1", "favorito": true }, { "proyecto_id": "P2", "visualizaciones": 1 }],
-          "alg10": { "P1": { "motivo_exclusion": null }, "P2": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "pie_insuficiente_para_proyecto" } }
+      "name": "locked_morosidad_vigente_never_routed",
+      "tags": ["default", "locked"],
+      "why": "R2 is fixed: the most permissive configuration still yields do_not_route (invariant 3).",
+      "input": {
+        "classification": "Alto", "score": 90,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [{ "code": "morosidad_vigente" }], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": true },
+        "criterios": {
+          "contactar_ahora": { "clasificaciones": ["Alto", "Medio"], "compatibilidades": ["Compatible", "Cercano"] },
+          "subir_con_senales": 1
         }
-      ],
-      "expect": {
-        "n_leads": 1,
-        "ranking": [
-          { "proyecto_id": "P1", "interesados": 1, "compatibilidad": { "compatibles": 1, "incompatibles": 0, "tasa_incompatibles": 0 }, "motivos": [] },
-          { "proyecto_id": "P2", "interesados": 1, "compatibilidad": { "compatibles": 0, "incompatibles": 1, "tasa_incompatibles": 1 }, "motivos": [{ "motivo": "pie_insuficiente_para_proyecto", "n": 1, "proporcion": 1 }] }
-        ]
-      }
+      },
+      "expect": { "action_key": "do_not_route", "send_to_crm": false, "fixed_rule": true }
     },
     {
-      "name": "buckets_de_compatibilidad",
-      "why": "R3 C1-C4. A near-miss match is compatible (A8); G0 and a missing evaluation are sin_datos and stay out of the rate's denominator.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": null, "clasificacion": "Compatible" } } },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": null, "clasificacion": "Cercano", "alcanza_precio_min": false } } },
-        { "lead_id": "3", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "bloqueador_critico", "codigo": "morosidad_vigente" } } },
-        { "lead_id": "4", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "pie_insuficiente_para_proyecto" } } },
-        { "lead_id": "5", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_requiere_antecedentes", "codigo": null } } },
-        { "lead_id": "6", "sin_evaluacion": true, "interacciones": [{ "proyecto_id": "P1", "favorito": true }] }
-      ],
-      "expect": {
-        "ranking": [
-          {
-            "proyecto_id": "P1", "interesados": 6,
-            "compatibilidad": { "compatibles": 2, "incompatibles": 2, "sin_datos": 2, "evaluables": 4, "tasa_incompatibles": 0.5 }
-          }
-        ]
-      }
+      "name": "locked_complemento_incompleto_request_info",
+      "tags": ["default", "locked"],
+      "why": "R1 precedes R2 and is fixed.",
+      "input": {
+        "classification": "Alto", "score": 80,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [{ "code": "complemento_incompleto" }, { "code": "carga_total_alta" }], "data": {},
+        "criterios": null
+      },
+      "expect": { "action_key": "request_info", "fixed_rule": true,
+        "reason": "Faltan antecedentes del complemento de renta antes de priorizar comercialmente." }
     },
     {
-      "name": "motivos_agrupados_y_ordenados",
-      "why": "R4 M1 and M3; grouping sorted by n descending, then motivo ascending.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "renta_insuficiente_para_proyecto" } } },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "renta_insuficiente_para_proyecto" } } },
-        { "lead_id": "3", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "pie_insuficiente_para_proyecto" } } },
-        { "lead_id": "4", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "bloqueador_critico", "codigo": "morosidad_vigente" } } },
-        { "lead_id": "5", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "bloqueador_critico", "codigo": "carga_total_alta" } } },
-        { "lead_id": "6", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": null } } }
-      ],
-      "expect": {
-        "ranking": [
-          {
-            "proyecto_id": "P1",
-            "compatibilidad": { "compatibles": 1, "incompatibles": 5, "sin_datos": 0, "evaluables": 6 },
-            "motivos": [
-              { "motivo": "renta_insuficiente_para_proyecto", "n": 2, "proporcion": 0.4 },
-              { "motivo": "carga_total_alta", "n": 1, "proporcion": 0.2 },
-              { "motivo": "morosidad_vigente", "n": 1, "proporcion": 0.2 },
-              { "motivo": "pie_insuficiente_para_proyecto", "n": 1, "proporcion": 0.2 }
-            ]
-          }
-        ]
-      }
+      "name": "medio_admitted_to_contact_now",
+      "why": "R4 with Medio enabled: the higher level wins over R5.",
+      "input": {
+        "classification": "Medio", "score": 60,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": {},
+        "criterios": { "contactar_ahora": { "clasificaciones": ["Alto", "Medio"], "compatibilidades": ["Compatible"] } }
+      },
+      "expect": { "action_key": "contact_now", "promoted": false }
     },
     {
-      "name": "motivo_de_capacidad_no_toma_un_bloqueador_no_critico",
-      "why": "R4 M2 and M4. A pair excluded by capacity whose bloqueador_principal is a non-critical blocker (ALG-10 R3 step 4) or absent reports capacidad_insuficiente; a critical exclusion without a code reports bloqueador_critico.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": "edad_plazo_riesgoso" } } },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_insuficiente", "codigo": null } } },
-        { "lead_id": "3", "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "bloqueador_critico", "codigo": null } } }
-      ],
-      "expect": {
-        "ranking": [
-          {
-            "proyecto_id": "P1",
-            "motivos": [
-              { "motivo": "capacidad_insuficiente", "n": 2 },
-              { "motivo": "bloqueador_critico", "n": 1 }
-            ]
-          }
-        ]
-      }
+      "name": "promotion_with_one_signal",
+      "why": "R5b: Medio + Cercano with an immediate purchase term is promoted one level.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 1 }
+      },
+      "expect": { "action_key": "contact_now", "send_to_crm": true, "promoted": true,
+        "reason": "Lead con potencial comercial y señales de intención de compra; tu inmobiliaria prioriza contactarlo ahora." }
     },
     {
-      "name": "solo_sin_datos_tasa_nula",
-      "why": "R3: when no interested lead is evaluable the rate is null, never 0, and there are no motivos.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "sin_evaluacion": true, "interacciones": [{ "proyecto_id": "P1", "visualizaciones": 2 }] },
-        { "lead_id": "2", "interacciones": [{ "proyecto_id": "P1", "simulaciones": 1 }], "alg10": { "P1": { "motivo_exclusion": "capacidad_requiere_antecedentes", "codigo": null } } }
-      ],
-      "expect": {
-        "ranking": [
-          {
-            "proyecto_id": "P1", "interesados": 2,
-            "compatibilidad": { "compatibles": 0, "incompatibles": 0, "sin_datos": 2, "evaluables": 0, "tasa_incompatibles": null },
-            "motivos": []
-          }
-        ]
-      }
+      "name": "promotion_needs_two_signals",
+      "why": "R5b with subir_con_senales = 2 and only one signal: no promotion.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 2 }
+      },
+      "expect": { "action_key": "contact_with_review", "promoted": false }
     },
     {
-      "name": "interaccion_fuera_del_catalogo_se_ignora",
-      "why": "R1: an entry for a project not in `proyectos` counts nowhere.",
-      "proyectos": ["P1"],
-      "leads": [
-        { "lead_id": "1", "interacciones": [{ "proyecto_id": "PX", "visualizaciones": 3, "favorito": true }], "alg10": {} }
-      ],
-      "expect": {
-        "n_leads": 0,
-        "totales": { "visualizaciones": 0, "favoritos": 0, "simulaciones": 0 },
-        "ranking": [{ "proyecto_id": "P1", "interesados": 0 }]
-      }
+      "name": "mas_12_meses_never_a_signal",
+      "why": "A5: mas_12_meses cannot be configured as a signal, so promotion cannot fire on it.",
+      "input": {
+        "classification": "Medio", "score": 55,
+        "project_fit": { "classification": "Compatible", "status": "compatible", "compatible": true },
+        "blockers": [], "data": { "plazo_compra": "mas_12_meses", "tiene_propiedad_vista": false },
+        "criterios": { "subir_con_senales": 1, "senales": { "plazos": ["inmediato", "3_a_6_meses", "6_a_12_meses"], "propiedad_vista": true } }
+      },
+      "expect": { "action_key": "contact_with_review", "promoted": false }
     },
     {
-      "name": "sin_proyectos",
-      "why": "Edge case: an inmobiliaria without projects gets an empty ranking, not an error.",
-      "proyectos": [],
-      "leads": [],
-      "expect": {
-        "n_leads": 0,
-        "totales": { "visualizaciones": 0, "favoritos": 0, "simulaciones": 0 },
-        "ranking": []
-      }
+      "name": "nurture_never_promoted",
+      "why": "A3: Bajo is nurture even with both signals and promotion on.",
+      "input": {
+        "classification": "Bajo", "score": 30,
+        "project_fit": { "classification": "Cercano", "status": "near", "compatible": false },
+        "blockers": [], "data": { "plazo_compra": "inmediato", "tiene_propiedad_vista": true },
+        "criterios": { "subir_con_senales": 1 }
+      },
+      "expect": { "action_key": "nurture", "promoted": false }
+    },
+    {
+      "name": "reorient_threshold_raised",
+      "why": "R6 with umbral 75: a 72 out-of-reach Alto falls through to R8 instead of reorient.",
+      "input": {
+        "classification": "Alto", "score": 72,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": { "umbral_reorientar": 75 }
+      },
+      "expect": { "action_key": "request_info" }
+    },
+    {
+      "name": "default_reorient_at_70",
+      "tags": ["default"],
+      "why": "R6 under defaults.",
+      "input": {
+        "classification": "Alto", "score": 72,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": null
+      },
+      "expect": { "action_key": "reorient", "send_to_crm": false }
+    },
+    {
+      "name": "review_admits_fuera_de_alcance_before_reorient",
+      "why": "Precedence: with Fuera de alcance in R5, a Medio out-of-reach lead is reviewed, not reoriented.",
+      "input": {
+        "classification": "Medio", "score": 70,
+        "project_fit": { "classification": "Fuera de alcance", "status": "out_of_reach", "compatible": false },
+        "blockers": [], "data": {},
+        "criterios": { "contactar_con_revision": { "clasificaciones": ["Medio"], "compatibilidades": ["Compatible", "Cercano", "Fuera de alcance"] } }
+      },
+      "expect": { "action_key": "contact_with_review" }
+    },
+    {
+      "name": "legacy_evaluation_without_fit",
+      "tags": ["default"],
+      "why": "Edge case: missing project_fit and classification fall through to R8, as today.",
+      "input": { "classification": null, "score": 50, "project_fit": null, "blockers": null, "data": null, "criterios": null },
+      "expect": { "action_key": "request_info",
+        "reason": "Se requieren más antecedentes antes de definir una prioridad comercial." }
     }
+  ],
+  "invalid_criterios": [
+    { "name": "bajo_in_contact_now", "criterios": { "contactar_ahora": { "clasificaciones": ["Alto", "Bajo"], "compatibilidades": ["Compatible"] } }, "error_key": "contactar_ahora.clasificaciones" },
+    { "name": "fuera_de_alcance_in_contact_now", "criterios": { "contactar_ahora": { "clasificaciones": ["Alto"], "compatibilidades": ["Compatible", "Fuera de alcance"] } }, "error_key": "contactar_ahora.compatibilidades" },
+    { "name": "empty_plazos", "criterios": { "senales": { "plazos": [], "propiedad_vista": true } }, "error_key": "senales.plazos" },
+    { "name": "mas_12_meses_as_signal", "criterios": { "senales": { "plazos": ["mas_12_meses"], "propiedad_vista": true } }, "error_key": "senales.plazos" },
+    { "name": "two_signals_without_property", "criterios": { "subir_con_senales": 2, "senales": { "plazos": ["inmediato"], "propiedad_vista": false } }, "error_key": "subir_con_senales" },
+    { "name": "umbral_off_step", "criterios": { "umbral_reorientar": 72 }, "error_key": "umbral_reorientar" },
+    { "name": "umbral_out_of_range", "criterios": { "umbral_reorientar": 90 }, "error_key": "umbral_reorientar" },
+    { "name": "six_priority_projects", "criterios": { "proyectos_prioritarios": ["p1", "p2", "p3", "p4", "p5", "p6"] }, "error_key": "proyectos_prioritarios" },
+    { "name": "unknown_key", "criterios": { "peso_ingreso": 0.4 }, "error_key": "peso_ingreso" }
   ]
 }

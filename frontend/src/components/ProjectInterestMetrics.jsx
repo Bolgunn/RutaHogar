@@ -3,7 +3,7 @@ import FieldTooltip from "./FieldTooltip";
 import { computeProjectInterestMetrics } from "../lib/commercial/projectInterestMetrics";
 import { getProjectInterestFacts } from "../services/projectInterestService";
 
-// HU 26 — interés por proyecto. Todo número sale de ALG-19 (computeProjectInterestMetrics); esta
+// HU 26 — interés por proyecto. Todo número sale de ALG-20 (computeProjectInterestMetrics); esta
 // vista solo ordena y dibuja. La ayuda explica en palabras, nunca con los umbrales de ALG-10.
 
 const HELP = {

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import FieldTooltip from "../FieldTooltip";
+import FormattedAmountInput from "../FormattedAmountInput";
+export { formattedAmountCursorPosition } from "../FormattedAmountInput";
 import { rangeSimulationOptions } from "../../lib/financing/benefitScenario";
 
 const money = (value) => new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0));
@@ -8,18 +10,6 @@ const percentage = (value, total) => Number(total) > 0 ? (Number(value || 0) / N
 const ufLabel = (value) => `${Number(value || 0).toLocaleString("es-CL", { maximumFractionDigits: 1 })} UF`;
 const oneDecimal = (value) => Math.round(Number(value || 0) * 10) / 10;
 const preventWheel = (event) => event.currentTarget.blur();
-const amountLabel = (value) => new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(Math.max(0, Number(value) || 0));
-
-export function formattedAmountCursorPosition(formatted, digitsBeforeCursor) {
-  if (digitsBeforeCursor === 0) return 0;
-  let seenDigits = 0;
-  let position = formatted.length;
-  for (let index = 0; index < formatted.length; index += 1) {
-    if (/\d/.test(formatted[index])) seenDigits += 1;
-    if (seenDigits >= digitsBeforeCursor) { position = index + 1; break; }
-  }
-  return position;
-}
 
 export function normalizedDecimalInput(value, { maxIntegerDigits = 3, decimalPlaces = 2, maxValue } = {}) {
   const rawValue = String(value).replace(",", ".");
@@ -32,27 +22,6 @@ export function normalizedDecimalInput(value, { maxIntegerDigits = 3, decimalPla
     rawValue,
     value: numericValue,
   };
-}
-
-function FormattedAmountInput({ value, onChange, ...props }) {
-  const inputRef = useRef(null);
-  const maxDigits = props.maxDigits || 12;
-  const maxLength = maxDigits + Math.floor((maxDigits - 1) / 3);
-  const changeValue = (event) => {
-    const digitsBeforeCursor = event.target.value.slice(0, event.target.selectionStart || 0).replace(/\D/g, "").length;
-    const nextRaw = event.target.value.replace(/\D/g, "").slice(0, maxDigits);
-    onChange(nextRaw === "" ? 0 : Number(nextRaw));
-    const formatted = amountLabel(nextRaw === "" ? 0 : nextRaw);
-    requestAnimationFrame(() => {
-      const input = inputRef.current;
-      if (!input) return;
-      const position = formattedAmountCursorPosition(formatted, digitsBeforeCursor);
-      input.setSelectionRange(position, position);
-    });
-  };
-  const { maxDigits: _maxDigits, ...inputProps } = props;
-  return <input {...inputProps} ref={inputRef} type="text" inputMode="numeric" autoComplete="off" maxLength={maxLength}
-    value={amountLabel(value)} onChange={changeValue} />;
 }
 
 function DecimalInput({ value, onChange, maxIntegerDigits = 3, decimalPlaces = 2, maxValue, ...props }) {

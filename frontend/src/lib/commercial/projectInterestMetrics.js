@@ -1,10 +1,10 @@
 import { matchLeadToProjects } from "../matching/leadProjectMatching";
 
-// ALG-19 — métricas de interés por proyecto (HU 26). Especificación:
-// docs/algorithms/ALG-19-project-interest-metrics.md; casos en ALG-19-cases.json.
+// ALG-20 — métricas de interés por proyecto (HU 26). Especificación:
+// docs/algorithms/ALG-20-project-interest-metrics.md; casos en ALG-20-cases.json.
 // La compatibilidad y los motivos son de ALG-10: aquí solo se cuentan.
 
-export const ALG19_VERSION = "hu26-project-interest-v1";
+export const ALG20_VERSION = "hu26-project-interest-v1";
 
 const CAPACITY_CODES = new Set(["pie_insuficiente_para_proyecto", "renta_insuficiente_para_proyecto"]);
 
@@ -113,7 +113,7 @@ export function computeProjectInterestMetrics({ proyectos, leads }, { match = ma
   const sum = (key) => ranking.reduce((total, row) => total + row[key], 0);
 
   return {
-    version: ALG19_VERSION,
+    version: ALG20_VERSION,
     n_leads: nLeads,
     totales: { visualizaciones: sum("visualizaciones"), favoritos: sum("favoritos"), simulaciones: sum("simulaciones") },
     ranking,

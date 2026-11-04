@@ -1,10 +1,10 @@
-# ALG-19 — Métricas de interés por proyecto (project interest metrics)
+# ALG-20 — Métricas de interés por proyecto (project interest metrics)
 
 | Field | Value |
 | :---- | :---- |
-| **Version** | `hu26-project-interest-v1` (`ALG19_VERSION`) |
+| **Version** | `hu26-project-interest-v1` (`ALG20_VERSION`) |
 | **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/projectInterestMetrics.js` (pure, no Supabase, no fetch, no clock) |
-| **Cases** | `docs/algorithms/ALG-19-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js` (**vitest**) |
+| **Cases** | `docs/algorithms/ALG-20-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js` (**vitest**) |
 | **Open assumptions** | 9 open — see the log below |
 | **Last changed** | 2026-10-26 · HU 26 · created |
 

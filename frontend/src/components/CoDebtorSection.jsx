@@ -56,7 +56,7 @@ function ResendControls({ invitation, invitationBusy, onResend, onEditInvitation
   </>;
 }
 
-export function CoDebtorPanel({ invitation, declaredComplement, declaredRelation, email, rut, onEmailChange, onRutChange, onInvite, onResend, onEditInvitation, onCancelEditInvitation, editingInvitation = false, invitationBusy = false, onUpdateScore, updatingScore = false, scoreUpdateRequired = false, message = "", error = "" }) {
+export function CoDebtorPanel({ managementOnly = false, invitation, declaredComplement, declaredRelation, email, rut, onEmailChange, onRutChange, onInvite, onResend, onEditInvitation, onCancelEditInvitation, editingInvitation = false, invitationBusy = false, onUpdateScore, updatingScore = false, scoreUpdateRequired = false, message = "", error = "" }) {
   if (!invitation) return null;
   const status = invitation?.status || "none";
   if (status === "none") return null;
@@ -66,11 +66,12 @@ export function CoDebtorPanel({ invitation, declaredComplement, declaredRelation
   return <section className="co-debtor-section" aria-labelledby="co-debtor-section-title">
     <header className="co-debtor-section__header"><div><span className="eyebrow">Complemento de renta</span><h2 id="co-debtor-section-title">Co-deudor</h2></div><span className={`co-debtor-section__status co-debtor-section__status--${status}`}>{invitationStatusLabel(status)}</span></header>
 
-    {status === "pending" && <><p>Invitación enviada a <strong>{invitation.recipientEmail}</strong>. Expira el {dateLabel(invitation.expiresAt)}.</p><p className="co-debtor-section__note">Tu score actual sigue usando los datos que declaraste. Este complemento está <strong>No confirmado</strong>.</p>{!editingInvitation && <button type="button" className="text-button" onClick={onEditInvitation}>Reemplazar invitación</button>}{editingInvitation && <InvitationForm {...formProps} onCancel={onCancelEditInvitation} />}</>}
-    {status === "expired" && <><p>La invitación para <strong>{invitation.recipientEmail}</strong> expiró. Tu evaluación continúa usando el complemento declarado como <strong>No confirmado</strong>.</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
+    {status === "pending" && <><p>Invitación enviada a <strong>{invitation.recipientEmail}</strong>. Expira el {dateLabel(invitation.expiresAt)}.</p>{!managementOnly && <p className="co-debtor-section__note">Tu score actual sigue usando los datos que declaraste. Este complemento está <strong>No confirmado</strong>.</p>}{!editingInvitation && <button type="button" className="text-button" onClick={onEditInvitation}>Reemplazar invitación</button>}{editingInvitation && <InvitationForm {...formProps} onCancel={onCancelEditInvitation} />}</>}
+    {status === "expired" && <><p>La invitación para <strong>{invitation.recipientEmail}</strong> expiró.{!managementOnly && <> Tu evaluación continúa usando el complemento declarado como <strong>No confirmado</strong>.</>}</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
     {status === "delivery_failed" && <><p>Tu precalificación se realizó, pero no pudimos enviar la invitación a <strong>{invitation.recipientEmail}</strong>.</p><p className="co-debtor-section__note">Puedes reintentarlo sin volver a completar tu precalificación.</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
-    {isConfirmed && <><p>Los antecedentes aportados por el co-deudor prevalecerán sobre los que declaraste al actualizar tu score.</p><dl className="co-debtor-section__details">{confirmedFields.map(([field, label, formatter]) => <div key={field}><dt>{label}</dt><dd>{formatter(invitation.confirmation[field])}</dd></div>)}<div><dt>Relación</dt><dd>{formatFormValue(declaredRelation)}</dd></div></dl><p className="co-debtor-section__note">La relación es información declarada por ti.</p>{scoreUpdateRequired && <button type="button" className="primary-button co-debtor-section__update" onClick={onUpdateScore} disabled={updatingScore}>{updatingScore ? "Actualizando score..." : "Actualizar score con datos confirmados"}</button>}</>}
-    {status === "confirmed" && !isConfirmed && <p>No pudimos verificar los antecedentes confirmados. Actualiza la página antes de continuar.</p>}
+    {isConfirmed && !managementOnly && <><p>Los antecedentes aportados por el co-deudor prevalecerán sobre los que declaraste al actualizar tu score.</p><dl className="co-debtor-section__details">{confirmedFields.map(([field, label, formatter]) => <div key={field}><dt>{label}</dt><dd>{formatter(invitation.confirmation[field])}</dd></div>)}<div><dt>Relación</dt><dd>{formatFormValue(declaredRelation)}</dd></div></dl><p className="co-debtor-section__note">La relación es información declarada por ti.</p>{scoreUpdateRequired && <button type="button" className="primary-button co-debtor-section__update" onClick={onUpdateScore} disabled={updatingScore}>{updatingScore ? "Actualizando score..." : "Actualizar score con datos confirmados"}</button>}</>}
+    {managementOnly && status === "confirmed" && <p>La participación está confirmada. Revisa su incorporación en el resultado de tu evaluación.</p>}
+    {!managementOnly && status === "confirmed" && !isConfirmed && <p>No pudimos verificar los antecedentes confirmados. Actualiza la página antes de continuar.</p>}
     {status === "revoked" && <><p>El co-deudor revocó su consentimiento. Sus antecedentes dejarán de utilizarse en futuras evaluaciones.</p><p className="co-debtor-section__note">Tus evaluaciones históricas siguen disponibles y no se modifican.</p><ResendControls invitation={invitation} invitationBusy={invitationBusy} onResend={onResend} onEditInvitation={onEditInvitation} onCancelEditInvitation={onCancelEditInvitation} editingInvitation={editingInvitation} formProps={formProps} /></>}
     {status === "declined" && <><p>El co-deudor no autorizó el uso de sus datos. Este complemento de renta no se utilizará.</p><InvitationForm {...formProps} /></>}
     {message && <p className="success-message co-debtor-section__feedback" role="status">{message}</p>}
@@ -78,7 +79,7 @@ export function CoDebtorPanel({ invitation, declaredComplement, declaredRelation
   </section>;
 }
 
-export default function CoDebtorSection({ evaluation, trackingState, onScoreUpdated }) {
+export default function CoDebtorSection({ evaluation, trackingState, onScoreUpdated, managementOnly = false }) {
   const evaluationId = evaluation?.id || null;
   const declaredComplement = Boolean(evaluation?.input?.complemento_renta);
   const declaredComplementValues = {
@@ -88,8 +89,8 @@ export default function CoDebtorSection({ evaluation, trackingState, onScoreUpda
     continuidad_laboral_complementario: evaluation?.input?.continuidad_laboral_complementario,
     morosidad_complementario: evaluation?.input?.morosidad_complementario,
   };
-  const declaredRelation = evaluation?.input?.relacion_complementario;
   const [invitation, setInvitation] = useState(null);
+  const declaredRelation = invitation?.declaredRelation || evaluation?.input?.relacion_complementario;
   const [email, setEmail] = useState("");
   const [rut, setRut] = useState("");
   const [editingInvitation, setEditingInvitation] = useState(false);
@@ -121,8 +122,8 @@ export default function CoDebtorSection({ evaluation, trackingState, onScoreUpda
 
   const sendInvitation = async (recipientEmail, recipientRut) => {
     const declaredValues = invitation?.declaredComplement || declaredComplementValues;
-    const sent = await createCoDebtorInvitation(recipientEmail, recipientRut, declaredValues);
-    rememberInvitation(pendingInvitationFromSend(recipientEmail, recipientRut, sent, declaredValues));
+    const sent = await createCoDebtorInvitation(recipientEmail, recipientRut, declaredValues, declaredRelation);
+    rememberInvitation({ ...pendingInvitationFromSend(recipientEmail, recipientRut, sent, declaredValues), declaredRelation });
     setEditingInvitation(false);
     setMessage("Enviamos la invitación por correo. Quedará pendiente hasta que el co-deudor complete sus antecedentes.");
   };
@@ -151,7 +152,7 @@ export default function CoDebtorSection({ evaluation, trackingState, onScoreUpda
   };
 
   if (loading || loadedEvaluationId !== evaluationId) return declaredComplement ? <section className="co-debtor-section" aria-live="polite"><p>Cargando el estado del co-deudor...</p></section> : null;
-  return <CoDebtorPanel invitation={invitation} declaredComplement={declaredComplement} declaredRelation={declaredRelation} email={email} rut={rut} onEmailChange={setEmail} onRutChange={setRut} onInvite={handleInvite} onResend={handleResend} onEditInvitation={handleEditInvitation} onCancelEditInvitation={handleCancelEditInvitation} editingInvitation={editingInvitation} invitationBusy={invitationBusy} onUpdateScore={handleUpdateScore} updatingScore={updatingScore} scoreUpdateRequired={scoreUpdateRequired} message={message} error={error} />;
+  return <CoDebtorPanel managementOnly={managementOnly} invitation={invitation} declaredComplement={declaredComplement} declaredRelation={declaredRelation} email={email} rut={rut} onEmailChange={setEmail} onRutChange={setRut} onInvite={handleInvite} onResend={handleResend} onEditInvitation={handleEditInvitation} onCancelEditInvitation={handleCancelEditInvitation} editingInvitation={editingInvitation} invitationBusy={invitationBusy} onUpdateScore={handleUpdateScore} updatingScore={updatingScore} scoreUpdateRequired={scoreUpdateRequired} message={message} error={error} />;
 }
 
 export function pendingInvitationFromSend(recipientEmail, recipientRut, sent, declaredComplement) {

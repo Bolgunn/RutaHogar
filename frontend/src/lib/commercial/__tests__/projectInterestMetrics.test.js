@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ALG19_VERSION, computeProjectInterestMetrics } from "../projectInterestMetrics";
+import { ALG20_VERSION, computeProjectInterestMetrics } from "../projectInterestMetrics";
 
-const casesUrl = new URL("../../../../../docs/algorithms/ALG-19-cases.json", import.meta.url);
+const casesUrl = new URL("../../../../../docs/algorithms/ALG-20-cases.json", import.meta.url);
 const alg10CasesUrl = new URL("../../../../../docs/algorithms/ALG-10-cases.json", import.meta.url);
 const sourceUrl = new URL("../projectInterestMetrics.js", import.meta.url);
 const spec = JSON.parse(readFileSync(fileURLToPath(casesUrl), "utf-8"));
 
-// --- Shorthand expansion (see `nota` in ALG-19-cases.json) ---
+// --- Shorthand expansion (see `nota` in ALG-20-cases.json) ---
 
 function expandProyecto(id) {
   return { id, nombre: id, comuna: "Ñuñoa", tipo: "departamento", precio_min_uf: 3000, precio_max_uf: 4000, estado: "en_venta" };
@@ -70,10 +70,10 @@ function deepFreeze(value) {
   return value;
 }
 
-// --- Invariants 1–7 (ALG-19), asserted on every case ---
+// --- Invariants 1–7 (ALG-20), asserted on every case ---
 
 function assertInvariants(input, output) {
-  expect(output.version).toBe(ALG19_VERSION);
+  expect(output.version).toBe(ALG20_VERSION);
   const ids = output.ranking.map((row) => row.proyecto_id);
   expect([...ids].sort()).toEqual(input.proyectos.map((p) => p.id).sort());
   expect(output.ranking.map((row) => row.posicion)).toEqual(ids.map((_, index) => index + 1));
@@ -104,9 +104,9 @@ function assertInvariants(input, output) {
   }
 }
 
-describe("ALG-19 cases", () => {
+describe("ALG-20 cases", () => {
   it("covers the spec version", () => {
-    expect(spec.version).toBe(ALG19_VERSION);
+    expect(spec.version).toBe(ALG20_VERSION);
   });
 
   for (const testCase of spec.cases) {
@@ -123,7 +123,7 @@ describe("ALG-19 cases", () => {
   }
 });
 
-describe("ALG-19 invariants 8–9", () => {
+describe("ALG-20 invariants 8–9", () => {
   it("is deterministic and does not mutate its (frozen) inputs", () => {
     for (const testCase of spec.cases) {
       const { input, alg10ByEvaluation, interestByEvaluation } = expandCase(testCase);
@@ -143,7 +143,7 @@ describe("ALG-19 invariants 8–9", () => {
 });
 
 // Pins the wiring to ALG-10's real row shape: exclusion reasons and pair-scoped blockers.
-describe("ALG-19 through the real ALG-10", () => {
+describe("ALG-20 through the real ALG-10", () => {
   const alg10 = JSON.parse(readFileSync(fileURLToPath(alg10CasesUrl), "utf-8"));
   const base = alg10.cases.find((c) => c.name === "comuna_alternativa_es_declaracion_no_preferencia").evaluacion;
   const capacidad = base.result.financial_indicators.capacidad_compra_estimada_uf;

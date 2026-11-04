@@ -8,17 +8,17 @@
 - **Number collision:** the wiki already has `HU26-simulacion-subsidios.md` (WIKI-RENUMBER backlog).
   This story was handed over as "HU26 - Métricas de interés por proyecto"; the backlog owner must
   decide which one keeps the number before merge. Renaming is a docs-only change (story page,
-  this folder, `ALG-19` "Last changed").
+  this folder, `ALG-20` "Last changed").
 - **Branch:** `feat/hu26-metricas-interes-proyecto` (from `develop`)
 
 ## Start here
 
-- Read first: `docs/algorithms/ALG-19-project-interest-metrics.md` and `ALG-19-cases.json` — every
+- Read first: `docs/algorithms/ALG-20-project-interest-metrics.md` and `ALG-20-cases.json` — every
   number on the tab. This plan never restates its rules.
-- Read first: `docs/algorithms/ALG-10-lead-project-affinity.md` — the verdicts ALG-19 consumes.
+- Read first: `docs/algorithms/ALG-10-lead-project-affinity.md` — the verdicts ALG-20 consumes.
 - Read first: `supabase/migrations/20261005150000_hu15_commercial_funnel_facts.sql` — the RPC style
   (tenant scope, `row_number()` lead ids, `clock_timestamp()`) mirrored here.
-- Stop and report if: a metric seems to need a weight or threshold ALG-19 does not give; the RPC
+- Stop and report if: a metric seems to need a weight or threshold ALG-20 does not give; the RPC
   seems to need a profile id, email or interaction timestamp; anything would change `POST /score`,
   `scoring_engine/`, `ALG-10` or an existing RLS policy.
 
@@ -32,28 +32,28 @@ invisible to the inmobiliaria, and favorites/simulations were owner-only rows no
 ## Approach & decisions
 
 Same shape as HU 15: one `SECURITY DEFINER` read RPC returns anonymized facts for the caller's
-tenant, a pure `lib/` function (ALG-19) turns them into every metric, and the page only renders.
+tenant, a pure `lib/` function (ALG-20) turns them into every metric, and the page only renders.
 The one new piece of data is a per-day view log, written through a function rather than a table
 grant.
 
 | Decision | Rationale |
 | :------- | :-------- |
 | A third tab, "Interés por proyecto", on the existing Métricas page, **admins only** | E1 says "accede al dashboard de métricas, cuando seleccione la vista por proyectos". The story's actor is the admin; ejecutivos keep the two HU 15 tabs |
-| The HU 15 filter bar is hidden on this tab | Its filters (afinidad, capacidad, prioridad) apply to HU 15's facts, not to ALG-19's. Showing them would imply they filter this tab |
-| Views live in a new table `proyecto_visualizaciones (usuario_id, proyecto_id, dia)`, PK on the three | One row per lead × project × Santiago day (ALG-19 A2): idempotent insert, immune to refreshes and React double mounts, and it stores no more than a day |
+| The HU 15 filter bar is hidden on this tab | Its filters (afinidad, capacidad, prioridad) apply to HU 15's facts, not to ALG-20's. Showing them would imply they filter this tab |
+| Views live in a new table `proyecto_visualizaciones (usuario_id, proyecto_id, dia)`, PK on the three | One row per lead × project × Santiago day (ALG-20 A2): idempotent insert, immune to refreshes and React double mounts, and it stores no more than a day |
 | Views are written only by `registrar_visualizacion_proyecto(p_proyecto)`, `SECURITY DEFINER`; the table has RLS on, no policies and no grants to browser roles | A lead cannot read, forge another user's or delete views. The function ignores staff (A7) and ids that are not a `proyectos` row (portal listings from `proyectos_rag` are not a tenant's projects) |
 | The view is recorded where the catalog already fires the GA4 `project_compatibility_viewed` event (`ProjectEvaluationModal`), fire-and-forget | Same moment, same once-per-open guard; a failed write never blocks the lead |
-| Simulación = saved financing scenario (`mortgage_scenarios.project_id`) | ALG-19 A3: the HU 6 page pre-selects the first project, so selections are not a signal |
+| Simulación = saved financing scenario (`mortgage_scenarios.project_id`) | ALG-20 A3: the HU 6 page pre-selects the first project, so selections are not a signal |
 | Read RPC `project_interest_facts()` returns `{ now, proyectos, leads }`; a lead row is `{ lead_id, evaluacion_actual, interacciones }` with **counts only** | ALG-10 must run in the browser (ALG-10 header), so the latest evaluation travels, as in HU 15. Ids are `row_number()`, no interaction timestamp leaves the database |
 | Only `admin_inmobiliario` / `admin` with an inmobiliaria; everyone else gets `forbidden` (`42501`) | Story actor. Global admin is already redirected away from `/metricas` (`App.jsx`) |
-| Incompatible = ALG-10 exclusion; reasons = ALG-10's pair-scoped blocker | ALG-19 A1, R3–R4. The executive's lead panel (HU 10) and this tab cannot disagree on a pair |
+| Incompatible = ALG-10 exclusion; reasons = ALG-10's pair-scoped blocker | ALG-20 A1, R3–R4. The executive's lead panel (HU 10) and this tab cannot disagree on a pair |
 | No chart library | Guardrail 1. Count bars reuse HU 15's `cm-hbar` styles |
 
 ## Standing questions
 
 | # | Question | Answer |
 | :- | :------- | :----- |
-| 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-19`** (no tunable numbers). `ALG-10` consumed unchanged |
+| 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-20`** (no tunable numbers). `ALG-10` consumed unchanged |
 | 2 | Needs RLS / multi-tenant scoping? | Yes. New table with RLS on and no browser grants; the read RPC scopes to `get_my_inmobiliaria()` and admin roles. No existing policy changes |
 | 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `20261026120000_hu26_project_interest.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — never pasted into the SQL editor |
 | 4 | Changes the `POST /score` contract? | No |
@@ -95,25 +95,25 @@ profile with at least one view, favorite or saved scenario on one of them. Grant
 
 ## Algorithms
 
-- **`ALG-19`** — project interest metrics. **New**, written before the code:
-  `docs/algorithms/ALG-19-project-interest-metrics.md`, cases `ALG-19-cases.json`. Implemented in
+- **`ALG-20`** — project interest metrics. **New**, written before the code:
+  `docs/algorithms/ALG-20-project-interest-metrics.md`, cases `ALG-20-cases.json`. Implemented in
   `frontend/src/lib/commercial/projectInterestMetrics.js`; asserted by
   `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js`. 9 open assumptions.
 - **`ALG-10`** — implemented as-is, no changes. Called once per interested lead.
 
 **Local logic** (story-local): the Spanish labels of each `motivo`; the tab's alternative sorts by
-column; per-day view dedup (in SQL, ALG-19 A2).
+column; per-day view dedup (in SQL, ALG-20 A2).
 
 ## Scope
 
-**In:** the migration (table, two functions), rollback, `schema.sql` sync, SQL tests; ALG-19 and
+**In:** the migration (table, two functions), rollback, `schema.sql` sync, SQL tests; ALG-20 and
 its tests; `services/projectInterestService.js`; the view hook in `ProjectEvaluationModal`; the
 "Interés por proyecto" tab; the wiki story page.
 
 **Out:**
 
-- A period filter ("este mes") → follow-up (ALG-19 A9).
-- A per-project minimum score set by the inmobiliaria → its own story (ALG-19 A1).
+- A period filter ("este mes") → follow-up (ALG-20 A9).
+- A per-project minimum score set by the inmobiliaria → its own story (ALG-20 A1).
 - Favorite history ("alguna vez favorito") → needs an event log on `proyecto_favoritos` (A4).
 - Interest on portal listings (`proyectos_rag`, HU 19) → they belong to no tenant.
 - Anonymous visitors' views → a lead must be signed in to be a lead; GA4 already covers traffic.
@@ -121,7 +121,7 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
 
 ## Steps
 
-1. **ALG-19** document and cases (done before code).
+1. **ALG-20** document and cases (done before code).
 2. **Migration** `supabase/migrations/20261026120000_hu26_project_interest.sql` per **Entities**,
    in `begin; … commit;`, idempotent. Rollback in `supabase/rollback/` dropping only what it
    created. Append the same DDL to `supabase/schema.sql`.
@@ -136,9 +136,9 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
    7. No profile id or email in the result; `lead_id`s are `"1" … "n"`; a lead without evaluation
       has `evaluacion_actual = null`.
    8. Deleting a profile deletes its views (ARCO).
-4. **ALG-19** `frontend/src/lib/commercial/projectInterestMetrics.js`:
-   `computeProjectInterestMetrics({ proyectos, leads }, { match })`, `ALG19_VERSION`.
-5. **ALG-19 tests**: every case in `ALG-19-cases.json` with invariants 1–9 asserted on each output,
+4. **ALG-20** `frontend/src/lib/commercial/projectInterestMetrics.js`:
+   `computeProjectInterestMetrics({ proyectos, leads }, { match })`, `ALG20_VERSION`.
+5. **ALG-20 tests**: every case in `ALG-20-cases.json` with invariants 1–9 asserted on each output,
    frozen inputs, determinism; plus one case through the **real** `matchLeadToProjects` so the
    wiring to ALG-10's row shape is pinned.
 6. **Service** `frontend/src/services/projectInterestService.js`: `getProjectInterestFacts()`
@@ -149,11 +149,11 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
 8. **Tab** `frontend/src/components/ProjectInterestMetrics.jsx`, rendered by `CommercialMetrics`
    when the admin picks "Interés por proyecto": KPI tiles (leads interesados, visualizaciones,
    simulaciones, favoritos); the ranking table (position, project, interesados, the three counts,
-   incompatibles with their rate, motivo principal) with a sort selector whose default is ALG-19
+   incompatibles with their rate, motivo principal) with a sort selector whose default is ALG-20
    R2; a detail panel for the selected project with the compatibility split and the grouped
    reasons. Help tooltips explain each term in words, never with ALG-10's numbers. `null` rate → "—".
 9. **Wiki** story page `Wiki RutaHogar/UserStories/HU26-metricas-interes-proyecto.md` (Spanish,
-   criteria verbatim, implementation notes linking ALG-19).
+   criteria verbatim, implementation notes linking ALG-20).
 
 ## Acceptance criteria map
 
