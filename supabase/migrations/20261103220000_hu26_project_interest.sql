@@ -9,10 +9,15 @@
 --   Sin policies ni grants para los roles del navegador; se escribe solo con
 --   registrar_visualizacion_proyecto(). on delete cascade en profiles mantiene
 --   la cancelación ARCO.
--- · project_interest_facts(): de solo lectura, para el admin de la inmobiliaria.
---   Devuelve { now, proyectos, leads } con conteos por lead anónimo; ALG-20
---   calcula todo en el navegador. No sale id de perfil, email ni instante de una
---   interacción: lead_id es un número dentro de la llamada.
+-- · hu26_project_interest_source(p_actor): fuente privada de la Edge Function
+--   project-interest-metrics, como hu30_commercial_funnel_source en HU 15.
+--   Solo service_role: el navegador recibe agregados, nunca esta fuente.
+-- · Alcance de los datos financieros: ver, simular o marcar como favorito
+--   cuenta como interés, pero la evaluación de un lead solo se usa para los
+--   proyectos a los que ya pertenece según lead_belongs_to_proyecto (favorito o
+--   comuna declarada), la misma regla que usa el resto del staff. Cada
+--   interacción lleva en_alcance; un lead sin ninguna en alcance no lleva
+--   evaluación. Tampoco viaja una evaluación con codeudor que HU 30 oculta.
 --
 -- Se aplica después del merge con `supabase db push` (nunca en el editor SQL).
 begin;
@@ -58,7 +63,7 @@ begin
 end;
 $$;
 
-create or replace function public.project_interest_facts()
+create or replace function public.hu26_project_interest_source(p_actor uuid)
 returns jsonb
 language plpgsql
 stable
@@ -66,15 +71,16 @@ security definer
 set search_path = public
 as $$
 declare
-  v_role text := public.get_my_role();
-  v_tenant uuid := public.get_my_inmobiliaria();
+  v_now timestamptz := clock_timestamp();
+  v_role text;
+  v_tenant uuid;
   v_scope uuid[];
   v_proyectos jsonb;
   v_leads jsonb;
 begin
-  if auth.uid() is null
-     or v_tenant is null
-     or coalesce(v_role, '') not in ('admin_inmobiliario', 'admin') then
+  -- p_actor lo entrega solo el servidor después de Auth.getUser, nunca un cliente.
+  select role, inmobiliaria_id into v_role, v_tenant from public.profiles where id = p_actor;
+  if v_tenant is null or coalesce(v_role, '') not in ('admin_inmobiliario', 'admin') then
     raise exception 'forbidden' using errcode = '42501';
   end if;
 
@@ -120,48 +126,64 @@ begin
     union
     select usuario_id, proyecto_id from simulaciones
   ),
+  pares_alcance as (
+    select pa.usuario_id, pa.proyecto_id,
+           public.lead_belongs_to_proyecto(pa.usuario_id, pa.proyecto_id) as en_alcance
+    from pares pa
+    join public.profiles pf on pf.id = pa.usuario_id and pf.role = 'usuario'
+  ),
   leads as (
     select pa.usuario_id,
            row_number() over (order by pa.usuario_id) as n,
+           bool_or(pa.en_alcance) as alguno_en_alcance,
            jsonb_agg(jsonb_build_object(
              'proyecto_id', pa.proyecto_id,
+             'en_alcance', pa.en_alcance,
              'visualizaciones', coalesce(vi.n, 0),
              'favorito', fa.usuario_id is not null,
              'simulaciones', coalesce(si.n, 0)
            ) order by array_position(v_scope, pa.proyecto_id)) as interacciones
-    from pares pa
-    join public.profiles pf on pf.id = pa.usuario_id and pf.role = 'usuario'
+    from pares_alcance pa
     left join vistas vi on vi.usuario_id = pa.usuario_id and vi.proyecto_id = pa.proyecto_id
     left join favoritos fa on fa.usuario_id = pa.usuario_id and fa.proyecto_id = pa.proyecto_id
     left join simulaciones si on si.usuario_id = pa.usuario_id and si.proyecto_id = pa.proyecto_id
     group by pa.usuario_id
+  ),
+  ultima as (
+    select l.n, l.usuario_id, l.alguno_en_alcance, l.interacciones, e.financial_data, pf.onboarding_data
+    from leads l
+    join public.profiles pf on pf.id = l.usuario_id
+    left join lateral (
+      select ev.financial_data
+      from public.evaluations ev
+      where ev.user_id = l.usuario_id
+      order by ev.created_at desc, ev.id desc
+      limit 1
+    ) e on true
   )
   select coalesce(jsonb_agg(jsonb_build_object(
-           'lead_id', l.n::text,
-           'evaluacion_actual', (
-             select jsonb_build_object(
-                      'input', coalesce(e.financial_data -> 'input', '{}'::jsonb),
-                      'onboarding', coalesce(pf.onboarding_data, '{}'::jsonb),
-                      'result', coalesce(e.financial_data -> 'result', '{}'::jsonb)
-                    )
-             from public.evaluations e
-             join public.profiles pf on pf.id = e.user_id
-             where e.user_id = l.usuario_id
-             order by e.created_at desc, e.id desc
-             limit 1
-           ),
-           'interacciones', l.interacciones
-         ) order by l.n), '[]'::jsonb)
+           'lead_id', u.n::text,
+           'evaluacion_actual', case
+             when u.financial_data is null or not u.alguno_en_alcance then null
+             when not public.hu30_funnel_can_view_snapshot(u.usuario_id, u.financial_data, v_now) then null
+             else jsonb_build_object(
+               'input', coalesce(u.financial_data -> 'input', '{}'::jsonb),
+               'onboarding', coalesce(u.onboarding_data, '{}'::jsonb),
+               'result', coalesce(u.financial_data -> 'result', '{}'::jsonb)
+             )
+           end,
+           'interacciones', u.interacciones
+         ) order by u.n), '[]'::jsonb)
     into v_leads
-  from leads l;
+  from ultima u;
 
-  return jsonb_build_object('now', clock_timestamp(), 'proyectos', v_proyectos, 'leads', v_leads);
+  return jsonb_build_object('now', v_now, 'proyectos', v_proyectos, 'leads', v_leads);
 end;
 $$;
 
 revoke all on function public.registrar_visualizacion_proyecto(uuid) from public, anon, authenticated;
 grant execute on function public.registrar_visualizacion_proyecto(uuid) to authenticated;
-revoke all on function public.project_interest_facts() from public, anon, authenticated;
-grant execute on function public.project_interest_facts() to authenticated;
+revoke all on function public.hu26_project_interest_source(uuid) from public, anon, authenticated;
+grant execute on function public.hu26_project_interest_source(uuid) to service_role;
 
 commit;
