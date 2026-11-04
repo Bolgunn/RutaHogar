@@ -106,6 +106,21 @@ export function mergeEvaluationEvents(rows, annotations) {
   }));
 }
 
+async function withEvaluationEvents(rows) {
+  const evaluationIds = [...new Set((rows || []).map((row) => row.evaluation_id).filter(Boolean))];
+  if (!evaluationIds.length) return rows;
+  let query = supabase.from("evaluation_events").select("*");
+  query = evaluationIds.length === 1
+    ? query.eq("evaluation_id", evaluationIds[0])
+    : query.in("evaluation_id", evaluationIds);
+  const { data, error } = await query.order("recorded_at", { ascending: true });
+  if (error) {
+    logSupabaseError(error);
+    return rows;
+  }
+  return mergeEvaluationEvents(rows, data || []);
+}
+
 function buildScoringHistoryRow(userId, evaluationId, evaluationPayload) {
   const result = evaluationPayload.result || {};
   return {

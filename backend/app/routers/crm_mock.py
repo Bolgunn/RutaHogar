@@ -4,9 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import logging
-
 import os
-from pathlib import Path
 
 # Configurar el logger en INFO para que imprima en la consola
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")

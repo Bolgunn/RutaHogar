@@ -86,7 +86,7 @@ describe("HU18 lead co-debtor service", () => {
   it("prefers a new pending invitation over an older revoked consent", async () => {
     const query = invitationQuery({ data: [
       { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "revoked", created_at: "2026-10-06T12:00:00Z" },
-      { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending", expires_at: "2026-10-12T12:00:00Z", created_at: "2026-10-05T12:00:00Z" },
+      { recipient_email: "co.deudor@correo.cl", recipient_rut: "12345678-5", status: "pending", expires_at: "2099-10-12T12:00:00Z", created_at: "2026-10-05T12:00:00Z" },
     ], error: null });
     mocks.read.mockResolvedValue({ items: query.data });
 
