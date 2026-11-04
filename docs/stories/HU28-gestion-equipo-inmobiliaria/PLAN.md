@@ -21,7 +21,7 @@ session"); only what is specific to this story goes here.
   - `docs/database.md`, and `docs/research/spike2-e2-auditoria-historial-versionado.md` §5.5–5.6 for the audit shape.
 - Stop and report if:
   - PR #171 changed after `cb713a8`, or is not applied in prod when you need to test against prod's shape.
-  - HU 27 introduced its own account-status column, or `estado_acceso` was not agreed with Andrés.
+  - HU 27 introduced its own account-status column.
   - Prod's `get_my_role()`, `list_inmobiliaria_executives` or `profiles` policies differ from what this plan assumes. Prod's bodies are the source of truth, not the repo.
   - Making `get_my_role()` return `NULL` lets any caller pass an `if not ...` check. List every such check first; `can_admin_inmobiliaria` was the known case and #171 fixed it.
   - Any screen depends on reading another inmobiliaria's profiles once Step 3 narrows the policies.
@@ -66,7 +66,16 @@ database trigger writing their audit entries.
 
 Prod was read on 2026-11-02 before writing the migration. The body of `get_my_role()`, `list_inmobiliaria_executives` and the `profiles` policies matched what this plan assumes, with one addition: prod also has `"Profiles select own"` and `hu27_auth_hook_profile_read`, and both stay. No screen needs another tenant's profiles: the browser only reads its own row and `fetchExecutiveNames`, on the feature branch and on `main`.
 
-**Open: `estado_acceso` has not been agreed with Andrés.** The name appears only in the migration, its rollback, `schema.sql`, `hu30_guard_profile_privileges`, `create-executive`, `repository.py`, `team.py` and the tests, so renaming it before deployment is one search and replace.
+**Resolved 2026-11-03: the contract with HU 27 is the Supabase Auth ban, not `estado_acceso`.** The team decided to keep HU 27 (#175, merged) exactly as Andrés built it, so nothing needs agreeing. HU 27 never reads `estado_acceso`; it recognizes a deactivated account because HU 28 also bans it in Auth:
+
+- **Sign-in:** Auth refuses a banned user (`user_banned`).
+- **Open sessions:** HU 27's session check calls `GET /auth/v1/user`, which rejects a banned user even with an access token issued before the ban (supabase/auth#2642; production runs Auth v2.197.0, which includes it). HU 27 then signs out locally and returns to login. A token refresh is refused too.
+- **Requests in between:** `get_my_role()` returns nothing for a `desactivado` profile, so RLS returns no data.
+
+Known limits, accepted with HU 27 untouched:
+
+- The login shows HU 27's generic "No se pudo completar el acceso…" message, not one that says the access was deactivated.
+- If the Auth ban fails after the status is saved, the person can still sign in until an administrator uses "Reintentar". The database still denies their data, and the backend answers `owner_mismatch` (403), which HU 27 does not treat as a sign-out, so they see empty screens.
 
 | Change from the plan | Why |
 | :------------------- | :-- |
@@ -129,7 +138,7 @@ Prod-only item left as it is: `hu23_may_upload` uses `get_my_role()<>'usuario'`,
 
 | Entity | New / existing | Change |
 | :----- | :------------- | :----- |
-| `profiles.estado_acceso` | **new** | `text not null default 'activo'`, check `activo` / `desactivado`. Existing rows become `activo`. Name to be agreed with Andrés. |
+| `profiles.estado_acceso` | **new** | `text not null default 'activo'`, check `activo` / `desactivado`. Existing rows become `activo`. Internal to HU 28: HU 27 never reads it (see the Auth-ban contract above). |
 | `public.audit_events` | **new** | Spike 2 columns plus `inmobiliaria_id`. `actor_id` and `inmobiliaria_id` are plain `uuid` with no cascading FK, so entries outlive what they describe. RLS on with no browser policy. Update, delete and truncate are refused. Index on `(inmobiliaria_id, occurred_at desc)`. |
 | `get_my_role()` | existing | Returns `NULL` for a `desactivado` account, so policies and RPCs fail closed. `get_my_inmobiliaria()` stays unchanged. |
 | `hu30_guard_profile_privileges()` | existing | Also refuses browser changes to `estado_acceso`. |
@@ -214,8 +223,8 @@ Pop-ups close with `Esc`, the backdrop or "Cerrar", and return focus to the butt
 
 ## Assumptions
 
-- **HU 27 is partly in prod but not in the repo.** `hu27_access_token_hook`, `hu27_guard_own_access` and `hu27_guard_profile_rut` exist in production with no migration in the ledger after `20261030120000`, no branch and no PR. None of them handles deactivation, and no status column exists yet. The build must not overwrite them. Ask Andrés before finalizing `estado_acceso`.
+- **HU 27 is partly in prod but not in the repo.** `hu27_access_token_hook`, `hu27_guard_own_access` and `hu27_guard_profile_rut` exist in production with no migration in the ledger after `20261030120000`, no branch and no PR. None of them handles deactivation, and no status column exists yet. The build must not overwrite them. HU 27 later merged unchanged and recognizes deactivation through the Auth ban (see above).
 - **PR #171 reaches prod first.** This branch holds its current version. Until it reaches `develop`, HU 28's PR also shows its changes.
 - **HU 21 merges first.** HU 21 and #170 conflict in six files, including `staff.py`, `repository.py` and `evaluationService.js`, which this story also edits. Rebase if #169 or #170 merges first.
 - **The mockup has no phone menu.** The real page uses the app's existing mobile navigation.
-- **Screens outside `/admin/equipo` show no message for deactivated people.** They simply lose access until HU 27 adds the messages. The build does not need a stub for this.
+- **Screens outside `/admin/equipo` show no message for deactivated people.** They lose access, and HU 27 signs them out at its next session check; the login then shows HU 27's generic error. The build does not need a stub for this.

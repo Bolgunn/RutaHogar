@@ -42,7 +42,7 @@
 ## Notas
 
 - **Implementación:** página `/admin/equipo` para `admin_inmobiliario` y `admin`. El admin global elige primero la inmobiliaria. Plan y decisiones: `docs/stories/HU28-gestion-equipo-inmobiliaria/PLAN.md`.
-- **Pendiente de acordar con Andrés:** el nombre `profiles.estado_acceso`, que comparte con [[HU27-gestion-acceso-cuentas|HU 27]].
+- **Contrato con [[HU27-gestion-acceso-cuentas|HU 27]] (resuelto el 2026-11-03):** HU 27 queda tal como la construyó Andrés. La desactivación se le comunica por el ban de Supabase Auth, no por `profiles.estado_acceso`, que es interno de HU 28: Auth rechaza el inicio de sesión y, en las sesiones abiertas, la verificación de HU 27 (`GET /auth/v1/user`) rechaza al usuario baneado y lo devuelve al login. El mensaje de login es el genérico de HU 27.
 - **Por verificar en el dominio real:** un correo de invitación enviado por Resend, la duración del enlace y que `https://www.rutahogar.cl/definir-password` sea una URL de redirección permitida.
 - Parte de las cuentas de ejecutivo existentes (`supabase/migrations/20260731_executive_accounts.sql`, `inmobiliaria_id`) y del rol `admin_inmobiliario`.
 - La desactivación de E2 la hace cumplir [[HU27-gestion-acceso-cuentas|HU 27]] al iniciar sesión; la bitácora de E3 es la misma que necesitan [[HU21-configuracion-comercial-priorizacion|HU 21]], [[HU22-centro-exportacion-dossier|HU 22]] y HU 27.
