@@ -90,6 +90,15 @@ export async function createExecutive({ email, full_name, phone, inmobiliaria_id
     };
   }
 
+  return invokeCreateExecutive(payload);
+}
+
+// HU 28: la función comprueba que la persona sea del equipo y que aún no haya entrado.
+export function resendExecutiveInvitation(memberId, inmobiliariaId) {
+  return invokeCreateExecutive({ reenviar: true, miembro_id: memberId, inmobiliaria_id: inmobiliariaId });
+}
+
+async function invokeCreateExecutive(payload) {
   const { data, error } = await supabase.functions.invoke("create-executive", { body: payload });
 
   // Un status !== 2xx llega como FunctionsHttpError: el detalle viene en el body.

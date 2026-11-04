@@ -146,9 +146,17 @@ describe("HU18 public consent management", () => {
 
     expect(html).toContain("Tu participación está activa");
     expect(html).toContain("Revocar mi consentimiento");
+    expect(html).toContain('class="danger-button"');
     expect(html).not.toContain("900000");
     expect(confirmation).toContain("¿Quieres revocar tu consentimiento?");
     expect(confirmation).toContain("Confirmar revocación");
+    expect(confirmation).toContain('class="secondary-button"');
+    expect(confirmation).toContain('class="danger-button"');
+  });
+
+  it("keeps destructive confirmation disabled with loading feedback", () => {
+    const html = management({ status: "confirmed", can_revoke: true }, { confirmRevoke: true, busy: true });
+    expect(html).toMatch(/class="danger-button"[^>]*disabled=""[^>]*aria-busy="true"[^>]*>Revocando/);
   });
 
   it("hides the management CTA and all financial values after revocation", () => {

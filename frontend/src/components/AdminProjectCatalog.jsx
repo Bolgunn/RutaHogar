@@ -4,6 +4,7 @@ import { paginateRows } from "../lib/adminPagination";
 import "./admin-management.css";
 import React, { useEffect, useMemo, useState } from "react";
 import FieldTooltip from "./FieldTooltip";
+import ProjectBulkImport from "./ProjectBulkImport";
 import { comunasMvp } from "../constants/comunas";
 import {
   estadoProyectoLabels,
@@ -109,6 +110,7 @@ export default function AdminProjectCatalog() {
   const [executiveSubmitAttempted, setExecutiveSubmitAttempted] = useState(false);
 
   const [adminModal, setAdminModal] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [adminInmobiliaria, setAdminInmobiliaria] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [assigningAdmin, setAssigningAdmin] = useState(false);
@@ -271,6 +273,25 @@ export default function AdminProjectCatalog() {
     setModal({ mode: "create", project: null });
   };
 
+  const openBulkImport = () => {
+    setFeedback(null);
+    setBulkImportOpen(true);
+  };
+
+  const handleBulkImported = async ({ creados, actualizados }) => {
+    setBulkImportOpen(false);
+    const partes = [
+      creados ? `${creados} ${creados === 1 ? "proyecto creado" : "proyectos creados"}` : null,
+      actualizados ? `${actualizados} ${actualizados === 1 ? "proyecto actualizado" : "proyectos actualizados"}` : null,
+    ].filter(Boolean);
+    setFeedback({ type: "success", text: `Carga masiva completada: ${partes.join(" y ")}.` });
+    try {
+      await refresh();
+    } catch (err) {
+      setFeedback({ type: "error", text: err.message || "No se pudieron cargar los proyectos." });
+    }
+  };
+
   const openEditModal = (project) => {
     setModalError("");
     setProjectSubmitAttempted(false);
@@ -426,7 +447,6 @@ export default function AdminProjectCatalog() {
   const openExecutiveModal = () => {
     setExecutiveModalError("");
     setExecutiveSubmitAttempted(false);
-    setNewExecutiveCredentials(null);
     setExecutiveForm({
       ...emptyExecutiveForm,
       inmobiliaria_id: isGlobalAdmin
@@ -659,6 +679,11 @@ export default function AdminProjectCatalog() {
                 <button type="button" onClick={openCreateModal} disabled={!tenant}>
                   Nuevo proyecto
                 </button>
+                {tenant && !isGlobalAdmin && (
+                  <button type="button" className="secondary-button" onClick={openBulkImport}>
+                    Carga masiva
+                  </button>
+                )}
                 <button type="button" className="secondary-button" onClick={openExecutiveModal} disabled={!tenant}>
                   Nuevo ejecutivo
                 </button>
@@ -673,6 +698,11 @@ export default function AdminProjectCatalog() {
                   </button>
                 )}
               </div>
+              {isGlobalAdmin && (
+                <p className="admin-bulk-hint">
+                  La carga masiva de proyectos la hace el administrador de cada inmobiliaria desde su propia cuenta.
+                </p>
+              )}
             </div>
           </article>
 
@@ -755,17 +785,17 @@ export default function AdminProjectCatalog() {
                   const { total, vinculados, pendientes } = countExecutives(project);
                   return (
                     <tr key={project.id} className="admin-project-table__row">
-                      {isGlobalAdmin && <td>{project.inmobiliaria_nombre || "-"}</td>}
-                      <td className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
-                      <td>{project.comuna}</td>
-                      <td>{tipoProyectoLabels[project.tipo] || project.tipo}</td>
-                      <td><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
-                      <td>
+                      {isGlobalAdmin && <td data-label="Inmobiliaria">{project.inmobiliaria_nombre || "-"}</td>}
+                      <td data-label="Proyecto" className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
+                      <td data-label="Comuna">{project.comuna}</td>
+                      <td data-label="Tipo">{tipoProyectoLabels[project.tipo] || project.tipo}</td>
+                      <td data-label="Rango UF"><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
+                      <td data-label="Estado">
                         <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
                           {estadoProyectoLabels[project.estado] || project.estado}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Ejecutivos">
                         <span className="admin-coverage-count"><i className="ti ti-users" aria-hidden="true" />{vinculados}</span>
                         {pendientes > 0 && <small>{pendientes} pendientes</small>}
                       </td>
@@ -961,10 +991,10 @@ export default function AdminProjectCatalog() {
               <tbody>
                 {teamPagination.rows.map((executive) => (
                   <tr key={executive.id}>
-                    {isGlobalAdmin && <td>{executive.inmobiliaria_nombre || "-"}</td>}
-                    <td><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className="ti ti-user" /></span><strong>{executive.full_name || "Sin nombre"}</strong></div></td>
-                    <td><a href={`mailto:${executive.email}`}>{executive.email}</a></td>
-                    <td><span className="admin-coverage-count"><i className="ti ti-building" aria-hidden="true" />{executive.proyectos_asignados}</span></td>
+                    {isGlobalAdmin && <td data-label="Inmobiliaria">{executive.inmobiliaria_nombre || "-"}</td>}
+                    <td data-label="Nombre"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className="ti ti-user" /></span><strong>{executive.full_name || "Sin nombre"}</strong></div></td>
+                    <td data-label="Correo"><a href={`mailto:${executive.email}`}>{executive.email}</a></td>
+                    <td data-label="Proyectos asignados"><span className="admin-coverage-count"><i className="ti ti-building" aria-hidden="true" />{executive.proyectos_asignados}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -1108,6 +1138,14 @@ export default function AdminProjectCatalog() {
             </div>
           </div>
         </div>
+      )}
+
+      {bulkImportOpen && (
+        <ProjectBulkImport
+          tenant={tenant}
+          onClose={() => setBulkImportOpen(false)}
+          onImported={handleBulkImported}
+        />
       )}
 
       {/* ── Popup: Nuevo / editar proyecto ───────────────────────────── */}

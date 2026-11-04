@@ -35,7 +35,9 @@ const navByRole = {
         { id: "admin", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg> },
         { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-5h4v5" /></svg> },
         { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+        { id: "admin-equipo", label: "Equipo", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0-3-3.85" /></svg> },
         { id: "admin-reports", label: "Reportes", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg> },
+        { id: "admin-priorizacion", label: "Priorización", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="9" y2="18" /></svg> },
         { id: "metricas", label: "Métricas", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> },
       ]
     },
@@ -46,7 +48,9 @@ const navByRole = {
         { id: "admin", label: "Inicio", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg> },
         { id: "admin-projects", label: "Proyectos", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-5h4v5" /></svg> },
         { id: "leads", label: "Leads", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+        { id: "admin-equipo", label: "Equipo", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0-3-3.85" /></svg> },
         { id: "admin-reports", label: "Reportes", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg> },
+        { id: "admin-priorizacion", label: "Priorización", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="9" y2="18" /></svg> },
         { id: "metricas", label: "Métricas", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> },
       ]
     },
@@ -81,11 +85,49 @@ const sidebarSupportByRole = {
 };
 
 export default function Navbar({ profile, page, inmobiliariaId, currentScore, onNavigate, onLogout }) {
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const menuRef = React.useRef(null);
+  const toggleRef = React.useRef(null);
+  const menuId = React.useId();
+  React.useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const closeOnDesktop = () => { if (!media.matches) setMobileOpen(false); };
+    media.addEventListener("change", closeOnDesktop);
+    return () => media.removeEventListener("change", closeOnDesktop);
+  }, []);
+  React.useEffect(() => { setMobileOpen(false); }, [page, profile?.role]);
+  React.useEffect(() => {
+    if (!mobileOpen || !window.matchMedia("(max-width: 767px)").matches) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const menu = menuRef.current;
+    const focusable = () => [...menu.querySelectorAll('a[href], button:not([disabled]), [tabindex="0"]')]
+      .filter((element) => element.getClientRects().length && getComputedStyle(element).display !== "none");
+    const focusFrame = window.requestAnimationFrame(() => focusable()[0]?.focus({ preventScroll: true }));
+    const handleKey = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); setMobileOpen(false); }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!menu.contains(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first)?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKey);
+      if (window.matchMedia("(max-width: 767px)").matches) toggleRef.current?.focus();
+    };
+  }, [mobileOpen]);
   const role = profile?.role || roles.user;
   const isAdmin = isAdminRole(role);
   const fallbackRole = isAdmin ? roles.admin : roles.user;
   // HU 15: las métricas son por inmobiliaria; el admin global no tiene una.
-  const hidden = isGlobalAdmin(role, inmobiliariaId) ? new Set(["metricas"]) : new Set();
+  // HU 21: la priorización comercial también es por inmobiliaria.
+  const hidden = isGlobalAdmin(role, inmobiliariaId) ? new Set(["metricas", "admin-priorizacion"]) : new Set();
   const groups = (navByRole[role] || navByRole[fallbackRole])
     .map((group) => ({ ...group, items: group.items.filter((item) => !hidden.has(item.id)) }));
   const supportCard = sidebarSupportByRole[role] || sidebarSupportByRole[fallbackRole];
@@ -97,11 +139,26 @@ export default function Navbar({ profile, page, inmobiliariaId, currentScore, on
   const brandHref = isAdmin ? "/admin" : "/inicio";
 
   const handleNavigate = (id) => {
+    setMobileOpen(false);
     onNavigate(id);
   };
 
   return (
-    <aside className={`sidebar ${isAdmin ? "sidebar--admin" : ""}`} role="navigation" aria-label="Navegación principal">
+    <>
+    <header className="mobile-navigation">
+      <a href={brandHref} onClick={(event) => { event.preventDefault(); handleNavigate(brandTarget); }}>
+        <img src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
+      </a>
+      <button ref={toggleRef} type="button" aria-expanded={mobileOpen} aria-controls={menuId} onClick={() => setMobileOpen(true)}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        Menú
+      </button>
+    </header>
+    {mobileOpen && <div className="mobile-navigation-backdrop" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
+    <aside ref={menuRef} id={menuId} className={`sidebar ${isAdmin ? "sidebar--admin" : ""} ${mobileOpen ? "sidebar--mobile-open" : ""}`} role={mobileOpen ? "dialog" : "navigation"} aria-modal={mobileOpen ? true : undefined} aria-label="Navegación principal">
+      <button className="mobile-navigation-close" type="button" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </button>
       <a className="sidebar-brand" href={brandHref} onClick={(e) => { e.preventDefault(); handleNavigate(brandTarget); }}>
         <span className="sidebar-brand__pill">
           <img className="sidebar-brand__logo" src="/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar" />
@@ -147,10 +204,11 @@ export default function Navbar({ profile, page, inmobiliariaId, currentScore, on
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
 
-      <button className="nav-item sidebar-logout" type="button" onClick={onLogout}>
+      <button className="nav-item sidebar-logout" type="button" onClick={() => { setMobileOpen(false); onLogout(); }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
         <span className="sidebar__label">Salir</span>
       </button>
     </aside>
+    </>
   );
 }

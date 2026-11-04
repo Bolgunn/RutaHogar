@@ -13,7 +13,8 @@ handbookmd
 
 .agents
 skills-lock.json
-.claude
+.claude/settings.local.json
+.claude/worktrees/
 .impeccable
 .opencode
 

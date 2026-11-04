@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import "./notification-toast.css";
 
 export function notificationLayout(items, heights = {}) {
-  const ordered = [...items].sort((a, b) => Number(!a.className.includes("high-score")) - Number(!b.className.includes("high-score")));
+  const isHighScore = (item) => (item.className || "").includes("high-score");
+  const ordered = [...items].sort((a, b) => Number(!isHighScore(a)) - Number(!isHighScore(b)));
   let bottom = 0;
   return ordered.map((item) => {
     const entry = { ...item, bottom };
@@ -23,20 +24,20 @@ function ToastCard({ item, onMeasure }) {
     observer?.observe(node);
     return () => observer?.disconnect();
   }, [item.id, onMeasure]);
-  const opportunity = item.className.includes("opportunities");
+  const opportunity = (item.className || "").includes("opportunities");
   return <div ref={ref} className={`notification-toast ${item.className}`} style={{ bottom: item.bottom || 0 }} role="status">
     <button type="button" className="notification-content" onClick={item.onClick}>
       <span className="notification-icon" aria-hidden="true">{item.icon || <i className={`ti ${opportunity ? "ti-trending-up" : "ti-user-check"}`} />}</span>
-      <span className="notification-text"><strong>{item.title || `${item.count} lead${item.count > 1 ? "s" : ""} con score alto`}</strong><span>{item.message || "Nuevos prospectos calificados para revisar."}</span><span className="notification-link">{opportunity ? "Revisar oportunidades" : "Ver leads"}<i className="ti ti-arrow-right" aria-hidden="true" /></span></span>
+      <span className="notification-text"><strong>{item.title || `${item.count} lead${item.count > 1 ? "s" : ""} con score alto`}</strong><span>{item.message || "Nuevos prospectos calificados para revisar."}</span><span className="notification-link">{item.actionLabel || (opportunity ? "Revisar oportunidades" : "Ver leads")}<i className="ti ti-arrow-right" aria-hidden="true" /></span></span>
     </button>
     <button type="button" className="notification-close" onClick={item.onClose} aria-label={`Cerrar notificación: ${item.title || "leads con score alto"}`}><i className="ti ti-x" aria-hidden="true" /></button>
   </div>;
 }
 
-export default function NotificationToast({ items, count, onClick, onClose, title, message, icon, className = "" }) {
+export default function NotificationToast({ items, count, onClick, onClose, title, message, icon, actionLabel, className = "" }) {
   const [heights, setHeights] = useState({});
   const measure = useCallback((id, height) => setHeights((current) => current[id] === height ? current : { ...current, [id]: height }), []);
-  const activeItems = (items || [{ id: "single", count, onClick, onClose, title, message, icon, className }])
+  const activeItems = (items || [{ id: "single", count, onClick, onClose, title, message, icon, actionLabel, className }])
     .filter((item) => item.count > 0);
   if (!activeItems.length) return null;
   const layout = notificationLayout(activeItems, heights);

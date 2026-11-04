@@ -1,0 +1,2 @@
+# Preserve the manifest's existing CRLF bytes; avoid whole-file review diffs.
+frontend/package.json -text

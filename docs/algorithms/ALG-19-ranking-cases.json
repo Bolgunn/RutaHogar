@@ -1,0 +1,75 @@
+{
+  "algorithm": "ALG-19",
+  "rule": "R9",
+  "version": "hu21-commercial-priority-v1",
+  "note": "Asserted by frontend/src/lib/matching/__tests__/leadRanking.test.js against the R9 comparator. Rows carry the already-resolved fields R9 reads; ALG-10 affinity and the priority-project flag are precomputed here so the case tests ordering only. 'expect_order' lists ids top to bottom.",
+  "cases": [
+    {
+      "name": "action_tier_beats_affinity",
+      "why": "Tier 1 dominates: a high-affinity nurture lead never outranks a contact_now lead.",
+      "sortBy": "afinidad",
+      "rows": [
+        { "id": "a", "action_key": "nurture", "prioritario_compatible": false, "afinidad": 98, "capacidad_uf": 5000, "created_at": "2026-10-20T10:00:00Z" },
+        { "id": "b", "action_key": "contact_now", "prioritario_compatible": false, "afinidad": 40, "capacidad_uf": 2000, "created_at": "2026-10-01T10:00:00Z" },
+        { "id": "c", "action_key": "do_not_route", "prioritario_compatible": true, "afinidad": 99, "capacidad_uf": 6000, "created_at": "2026-10-25T10:00:00Z" }
+      ],
+      "expect_order": ["b", "a", "c"]
+    },
+    {
+      "name": "full_tier_order",
+      "why": "A6: the fixed order of the six actions plus sin_prioridad last.",
+      "sortBy": "afinidad",
+      "rows": [
+        { "id": "s", "action_key": "sin_prioridad", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "d", "action_key": "do_not_route", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "n", "action_key": "nurture", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "i", "action_key": "request_info", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "r", "action_key": "reorient", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "w", "action_key": "contact_with_review", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "c", "action_key": "contact_now", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1, "created_at": "2026-10-01T00:00:00Z" }
+      ],
+      "expect_order": ["c", "w", "r", "i", "n", "d", "s"]
+    },
+    {
+      "name": "priority_project_within_tier",
+      "why": "Tier 2: inside the same action, a lead compatible with a priority project goes first even with lower affinity.",
+      "sortBy": "afinidad",
+      "rows": [
+        { "id": "a", "action_key": "contact_now", "prioritario_compatible": false, "afinidad": 95, "capacidad_uf": 4000, "created_at": "2026-10-10T00:00:00Z" },
+        { "id": "b", "action_key": "contact_now", "prioritario_compatible": true, "afinidad": 72, "capacidad_uf": 3000, "created_at": "2026-10-10T00:00:00Z" }
+      ],
+      "expect_order": ["b", "a"]
+    },
+    {
+      "name": "tie_break_affinity_vs_capacity",
+      "why": "Tier 3 follows sortBy; the same rows reorder when the executive switches to capacidad.",
+      "sortBy": "capacidad",
+      "rows": [
+        { "id": "a", "action_key": "contact_with_review", "prioritario_compatible": false, "afinidad": 90, "capacidad_uf": 2500, "created_at": "2026-10-10T00:00:00Z" },
+        { "id": "b", "action_key": "contact_with_review", "prioritario_compatible": false, "afinidad": 60, "capacidad_uf": 4200, "created_at": "2026-10-10T00:00:00Z" }
+      ],
+      "expect_order": ["b", "a"]
+    },
+    {
+      "name": "missing_affinity_sorts_last_in_tier",
+      "why": "No project selected and no tenant project matched: afinidad null is treated as -1.",
+      "sortBy": "afinidad",
+      "rows": [
+        { "id": "a", "action_key": "nurture", "prioritario_compatible": false, "afinidad": null, "capacidad_uf": 3000, "created_at": "2026-10-20T00:00:00Z" },
+        { "id": "b", "action_key": "nurture", "prioritario_compatible": false, "afinidad": 10, "capacidad_uf": 100, "created_at": "2026-10-01T00:00:00Z" }
+      ],
+      "expect_order": ["b", "a"]
+    },
+    {
+      "name": "recency_then_id",
+      "why": "Tiers 4 and 5: most recent evaluation first, then id ascending - a total order (invariant 6).",
+      "sortBy": "afinidad",
+      "rows": [
+        { "id": "z", "action_key": "request_info", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1000, "created_at": "2026-10-01T00:00:00Z" },
+        { "id": "m", "action_key": "request_info", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1000, "created_at": "2026-10-15T00:00:00Z" },
+        { "id": "b", "action_key": "request_info", "prioritario_compatible": false, "afinidad": 50, "capacidad_uf": 1000, "created_at": "2026-10-15T00:00:00Z" }
+      ],
+      "expect_order": ["b", "m", "z"]
+    }
+  ]
+}

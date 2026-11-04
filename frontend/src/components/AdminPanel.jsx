@@ -4,6 +4,7 @@ import { isAdminRole, isGlobalAdmin } from "../lib/roles";
 import { PROVIDER, getTenantContext } from "../services/projectService";
 import AdminArcoRequests from "./AdminArcoRequests";
 import AdminReportedLeads from "./AdminReportedLeads";
+import AdminSupportTickets from "../features/assistant/AdminSupportTickets";
 import "./admin-panel-overview.css";
 
 function formatFecha(value) {
@@ -35,7 +36,6 @@ function DistributionRow({ label, count, total, tone }) {
 }
 
 export default function AdminPanel({ evaluations, profile }) {
-
   const [canSeeArco, setCanSeeArco] = useState(false);
 
   useEffect(() => {
@@ -44,12 +44,10 @@ export default function AdminPanel({ evaluations, profile }) {
     getTenantContext()
       .then((context) => {
         if (!active) return;
-
         setCanSeeArco(PROVIDER === "local" || isGlobalAdmin(profile?.role, context.inmobiliaria_id));
       })
       .catch(() => {
         if (!active) return;
-
         setCanSeeArco(PROVIDER === "local");
       });
 
@@ -247,9 +245,14 @@ export default function AdminPanel({ evaluations, profile }) {
       
 
       {canSeeArco && (
-        <div className="admin-surface admin-panel-arco-surface admin-section-gap">
-          <AdminArcoRequests />
-        </div>
+        <>
+          <div className="admin-surface admin-panel-arco-surface admin-section-gap">
+            <AdminSupportTickets />
+          </div>
+          <div className="admin-surface admin-panel-arco-surface admin-section-gap">
+            <AdminArcoRequests />
+          </div>
+        </>
       )}
 
       <div className="admin-section-gap">

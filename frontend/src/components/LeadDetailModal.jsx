@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import useModalFocus from "./useModalFocus";
-import { getScoringHistoryByEvaluation } from "../services/getScoringHistory";
-import { getEvaluations } from "../services/evaluationService";
+import ExportAction from "./ExportAction";
+import { normalizeEvaluation } from "../services/evaluationService";
+import useStaffProjectionRead from "../hooks/useStaffProjectionRead";
 import { getStaffLeadDetail } from "../services/trackingService";
 import { reportLead, resolveLeadStatus } from "../services/leadManagementService";
 import { buildContactQuestions } from "../lib/commercial/contactQuestions";
+import { resolvedPriorityDetail } from "../lib/commercial/priorityActions";
 import { comunasDeclaradas, matchLeadToProjects } from "../lib/matching/leadProjectMatching";
 import { displayItemBenefit, displayItemText } from "../utils/text";
 import CommercialStagePanel from "./CommercialStagePanel";
+import DocumentBacking from "./documents/DocumentBacking";
 import ExecutiveCoDebtorSection from "./ExecutiveCoDebtorSection";
 import { getCommercialRecords } from "../services/commercialStageService";
 import { createLeadRecordsReloader } from "../lib/commercial/leadRecordsReloader";
@@ -95,39 +98,6 @@ function formatEventAt(value) {
 
 function leadIdentity(item) {
   return item?.user_id || item?.email || item?.id || null;
-}
-
-function evaluationsForSameLead(items = [], lead) {
-  const key = leadIdentity(lead);
-  if (!key) return [];
-  return items
-    .filter((item) => leadIdentity(item) === key)
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-}
-
-function historyFallbackFromEvaluation(item) {
-  if (!item) return null;
-  const result = item.result || {};
-  return {
-    id: `evaluation-${item.id}`,
-    evaluation_id: item.id,
-    score: result.score,
-    base_score: result.base_score,
-    adjusted_score: result.adjusted_score,
-    score_adjustment_reason: result.score_adjustment_reason || "",
-    original_classification: result.original_classification || "",
-    classification: result.classification,
-    snapshot: {
-      ...(item.input || {}),
-      input: item.input || {},
-      onboarding: item.onboarding || {},
-      result,
-    },
-    component_scores: result.component_scores || {},
-    algorithm_version: result.algorithm_version || "",
-    created_at: item.created_at,
-    events: [],
-  };
 }
 
 function renderEventDetail(event) {
@@ -291,7 +261,28 @@ function buildHistoryTimeline(history = [], project = null) {
   };
 }
 
-export default function LeadDetailModal({
+function StaffDetailPending({ onClose, loading, error, onRetry }) {
+  useModalFocus(true, onClose);
+  return <div className="admin-modal" onClick={onClose}><div className="admin-modal-card" role="dialog" aria-modal="true" aria-label="Ficha comercial" onClick={(event) => event.stopPropagation()}><h2>Ficha comercial</h2>{loading ? <p role="status">Consultando expediente autorizado...</p> : <><p role="alert">{error || "No hay una evaluación disponible para este lead."}</p><button type="button" onClick={onRetry}>Reintentar</button></>}<button type="button" className="secondary-button" onClick={onClose}>Cerrar</button></div></div>;
+}
+
+export default function LeadDetailModal(props) {
+  const leadId = props.lead?.user_id || props.lead?.id;
+  const scope = `${props.staffScopeKey || props.profile?.id || props.executiveScope?.id || "staff"}:${props.role || "admin"}:${props.profile?.inmobiliaria_id || ""}:${leadId}`;
+  const detail = useStaffProjectionRead({ scopeKey: scope,
+    load: () => getStaffLeadDetail(leadId),
+    projections: (data) => [data.co_debtor, ...(data.history || []).map((row) => row.co_debtor)],
+  });
+  const raw = detail.data?.evaluation;
+  if (!raw?.id || raw.user_id !== leadId) return <StaffDetailPending onClose={props.onClose} loading={detail.loading} error={detail.error} onRetry={detail.refresh} />;
+  // Only contact metadata comes from the list; financial state/history are one authorized response.
+  const contact = props.lead || {};
+  const lead = normalizeEvaluation({ ...raw, full_name: contact.full_name, email: contact.email,
+    phone: contact.phone || contact.profile?.phone, reliability_status: contact.reliability_status });
+  return <LeadDetailView {...props} key={scope} lead={lead} coDebtor={detail.data.co_debtor} authorizedHistory={detail.data.history || []} />;
+}
+
+export function LeadDetailView({
   lead,
   onClose,
   evaluations = [],
@@ -303,8 +294,13 @@ export default function LeadDetailModal({
   commercialRecords = null,
   onStageChanged = null,
   crm = null,
+  loadDocumentBacking,
+  coDebtor = null,
+  authorizedHistory = [],
 }) {
-  const [activeLead, setActiveLead] = useState(lead);
+  const [localLead, setActiveLead] = useState(lead);
+  const activeLead = { ...lead, reliability_status: localLead.reliability_status ?? lead.reliability_status };
+  const history = authorizedHistory;
   const [isReporting, setIsReporting] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [adminAction, setAdminAction] = useState(null); // { status }
@@ -312,88 +308,7 @@ export default function LeadDetailModal({
   const [resolving, setResolving] = useState(false);
   const [showAllContactQuestions, setShowAllContactQuestions] = useState(false);
   const [questionsCopied, setQuestionsCopied] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [coDebtor, setCoDebtor] = useState(null);
   const [ownCommercialRecords, setOwnCommercialRecords] = useState({});
-
-  useEffect(() => {
-    setActiveLead(lead);
-  }, [lead]);
-
-  // Load evaluation details if missing (e.g. opened from admin reported list with minimal payload)
-  useEffect(() => {
-    const targetUserId = activeLead?.user_id || activeLead?.id;
-    if ((!activeLead?.result || !activeLead?.result?.score) && targetUserId) {
-      const foundInList = (evaluations || []).find(
-        (e) => (e.user_id && e.user_id === targetUserId) || e.id === targetUserId
-      );
-      if (foundInList && foundInList.result?.score) {
-        setActiveLead((prev) => ({ ...foundInList, ...prev, result: foundInList.result, input: foundInList.input, onboarding: foundInList.onboarding }));
-      } else {
-        getEvaluations(targetUserId, role)
-          .then((list) => {
-            if (list && list.length > 0) {
-              const latest = list[0];
-              setActiveLead((prev) => ({
-                ...latest,
-                ...prev,
-                result: latest.result || {},
-                input: latest.input || {},
-                onboarding: latest.onboarding || {},
-              }));
-            }
-          })
-          .catch(() => {});
-      }
-    }
-  }, [activeLead?.id, activeLead?.user_id, evaluations, role]);
-
-  // Load scoring history
-  const selectedLeadEvaluations = useMemo(
-    () => evaluationsForSameLead(evaluations, activeLead),
-    [evaluations, activeLead]
-  );
-
-  useEffect(() => {
-    if (!activeLead) {
-      setHistory([]);
-      setCoDebtor(null);
-      return;
-    }
-    let active = true;
-    const evaluationIds = selectedLeadEvaluations.length
-      ? selectedLeadEvaluations.map((item) => item.id)
-      : [activeLead.id].filter(Boolean);
-    const loadLegacyHistory = () => Promise.all(evaluationIds.map((id) => getScoringHistoryByEvaluation(id).catch(() => [])))
-      .then((groups) => {
-        const rows = groups.flat().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-        return rows.length ? rows : selectedLeadEvaluations.map(historyFallbackFromEvaluation).filter(Boolean);
-      });
-
-    // OVERLAP: HU18 sirve historial + codeudor desde el backend (sin datos crudos del codeudor);
-    // la lectura directa de scoring_history (HU16) queda como respaldo hasta unificar.
-    const leadUserId = activeLead.user_id || activeLead.id;
-    getStaffLeadDetail(leadUserId)
-      .then((detail) => {
-        if (!active) return null;
-        setCoDebtor(detail.co_debtor || null);
-        return detail.history?.length ? detail.history : loadLegacyHistory();
-      })
-      .catch(() => {
-        if (active) setCoDebtor(null);
-        return loadLegacyHistory();
-      })
-      .then((rows) => {
-        if (active && rows) setHistory(rows);
-      })
-      .catch(() => {
-        if (active) setHistory([]);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [activeLead, selectedLeadEvaluations]);
 
   // Sin registros del padre (p. ej. AdminReportedLeads), la ficha carga los suyos.
   useEffect(() => {
@@ -418,7 +333,12 @@ export default function LeadDetailModal({
   const selectedAdjustment = getClassificationAdjustment(selectedResult);
   const selectedMainBlocker = hasObjectData(selectedResult.main_blocker) ? selectedResult.main_blocker : null;
   const selectedProjectFit = hasObjectData(selectedResult.project_fit) ? selectedResult.project_fit : null;
-  const selectedPriority = hasObjectData(selectedResult.commercial_priority_detail) ? selectedResult.commercial_priority_detail : null;
+  const resolvedPriority = resolvedPriorityDetail(activeLead);
+  const selectedPriority = hasObjectData(resolvedPriority) ? resolvedPriority : null;
+  // HU 21: cuando los criterios del tenant cambian la acción, se muestra también la del motor.
+  const enginePriority = activeLead?.differs_from_engine && hasObjectData(selectedResult.commercial_priority_detail)
+    ? selectedResult.commercial_priority_detail
+    : null;
   const selectedFinancialIndicators = hasObjectData(selectedResult.financial_indicators) ? selectedResult.financial_indicators : {};
   const selectedCommunes = activeLead ? comunasDeclaradas(activeLead).declaradas : [];
   const selectedProjectGoal = selectedInput.project_goal || null;
@@ -529,6 +449,7 @@ export default function LeadDetailModal({
           </button>
         </div>
 
+        <ExportAction kind="dossier" candidates={[{ id: activeLead.id, name: activeLead.full_name }]} projectId={selectedProject?.id} />
         <nav className="executive-lead-detail__nav" aria-label="Secciones de la ficha">
           {[["Resumen", ".executive-lead-brief"], ["Perfil y encaje", ".executive-lead-snapshot"], ["Contacto", ".executive-contact-questions"], ["Historial", ".executive-lead-detail__history"]].map(([label, target]) => (
             <button type="button" key={target} onClick={(event) => {
@@ -776,6 +697,7 @@ export default function LeadDetailModal({
                 </dl>
               </article>
 
+              <DocumentBacking mode="staff" leadId={activeLead?.user_id || activeLead?.id} refreshKey={activeLead.id} loadStaffProjection={loadDocumentBacking} />
               <ExecutiveCoDebtorSection coDebtor={coDebtor} />
 
               {selectedMainBlocker && (
@@ -855,6 +777,11 @@ export default function LeadDetailModal({
                     <DetailRow label="Motivo">{selectedPriority.reason || "Sin motivo registrado"}</DetailRow>
                     <DetailRow label="Derivación sugerida">{booleanText(selectedPriority.send_to_crm)}</DetailRow>
                   </dl>
+                  {enginePriority && (
+                    <p className="lead-cell-sub">
+                      Prioridad según criterios de tu inmobiliaria · el motor sugiere: {enginePriority.action || enginePriority.level}
+                    </p>
+                  )}
                 </article>
               )}
 

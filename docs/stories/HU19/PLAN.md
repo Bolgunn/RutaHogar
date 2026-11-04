@@ -19,8 +19,8 @@ Como lead, quiero buscar opciones de vivienda utilizando descripciones naturales
 | Pieza | Dónde |
 |---|---|
 | Catálogo vectorial `proyectos_rag` (pgvector, HNSW, RPC `match_proyectos_rag`) | `supabase/migrations/20260920000000_hu19_proyectos_rag.sql` |
-| Escritura solo para `service_role` | `supabase/migrations/20261005150000_hu19_proyectos_rag_lock_writes.sql` |
-| Tipos en singular (corrige filas ya cargadas) | `supabase/migrations/20261005160000_hu19_proyectos_rag_tipo_singular.sql` |
+| Escritura solo para `service_role` | `supabase/migrations/20261005150001_hu19_proyectos_rag_lock_writes.sql` |
+| Tipos en singular (corrige filas ya cargadas) | `supabase/migrations/20261024130100_hu19_proyectos_rag_tipo_singular.sql` |
 | Ingesta Apify → e5 → Supabase | `backend/scripts/dump_apify.py`, `backend/scripts/ingest_apify.py` (ver `README_INGESTION.md`) |
 | Búsqueda semántica, intención (tipo, comuna, dormitorios, baños, UF) y umbral | `backend/app/properties_search.py` |
 | Endpoint `POST /api/properties/search` | `backend/app/main.py` |
@@ -62,7 +62,7 @@ La IA no participa: el veredicto sale de `lib/simulation/compatibility.js`.
 ## 4. Despliegue
 
 1. Variable `HUGGINGFACE_API_KEY` en Vercel (sin ella el portal responde 503).
-2. Aplicar a mano en el Supabase hosteado, en orden: `20261005150000_hu19_proyectos_rag_lock_writes.sql` y `20261005160000_hu19_proyectos_rag_tipo_singular.sql` (la tabla base ya existe).
+2. Aplicar a mano en el Supabase hosteado, en orden: `20261005150001_hu19_proyectos_rag_lock_writes.sql` y `20261024130100_hu19_proyectos_rag_tipo_singular.sql` (la tabla base ya existe).
 3. La ingesta usa `SUPABASE_SERVICE_ROLE_KEY`; los volcados `raw_apify_dump*.json` no se versionan.
 
 ## 5. Limitaciones conocidas

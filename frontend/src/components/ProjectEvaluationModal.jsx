@@ -12,6 +12,7 @@ import {
   trackGeneratedLead,
   trackProjectCompatibilityViewed,
 } from "../lib/analytics";
+import { registerProjectView } from "../services/projectInterestService";
 
 const statusClass = {
   Compatible: "compatible",
@@ -52,6 +53,7 @@ export default function ProjectEvaluationModal({
     if (!project?.id || viewedProjectIdsRef.current.has(project.id)) return;
 
     viewedProjectIdsRef.current.add(project.id);
+    registerProjectView(project.id);
     trackProjectCompatibilityViewed({
       projectId: project.id,
       projectType: project.tipo_vivienda,

@@ -7,6 +7,13 @@ const high = { id: "high", className: "notification-toast--high-score" };
 const opportunity = { id: "opportunity", className: "notification-toast--opportunities" };
 
 describe("notification stacking", () => {
+  it("reuses the toast for result feedback without a staff action label", () => {
+    const html = renderToStaticMarkup(<NotificationToast count={1} title="Evaluación actualizada"
+      message="Los antecedentes fueron incorporados a una nueva evaluación." actionLabel="Ver resultado" />);
+    expect(html).toContain("Ver resultado");
+    expect(html).toContain("Los antecedentes fueron incorporados a una nueva evaluación.");
+    expect(html).not.toContain("Ver leads");
+  });
   it("renders a shared stack without a provider and hides dismissed items", () => {
     const items = [{ ...high, count: 2, title: "Leads altos" }, { ...opportunity, count: 3, title: "Oportunidades" }];
     const both = renderToStaticMarkup(<NotificationToast items={items} />);
@@ -38,5 +45,9 @@ describe("notification stacking", () => {
     expect(html).toContain('Cerrar notificación: 11 oportunidades nuevas');
     expect(html).toContain('Revisar oportunidades');
     expect((html.match(/type="button"/g) || []).length).toBe(2);
+  });
+  it("renders items that omit className", () => {
+    const html = renderToStaticMarkup(<NotificationToast items={[{ id: "plain", count: 1 }, { ...opportunity, count: 1 }]} />);
+    expect((html.match(/role="status"/g) || []).length).toBe(2);
   });
 });
