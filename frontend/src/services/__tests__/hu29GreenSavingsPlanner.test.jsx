@@ -821,12 +821,17 @@ describe("HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Ve
         />,
       );
 
+      // Mantiene el monto total, el faltante y la vinculación al proyecto objetivo
+      expect(htmlSinVerde).toContain("Meta de Pie (10% · Plaza Ñuñoa)");
+      expect(htmlSinVerde).toContain("$23.852.500");
+      expect(htmlSinVerde).toContain("$22.852.500");
+      expect(htmlSinVerde).toContain("580,00 UF");
+
+      // Modifica solo el ahorro sugerido y el tiempo mínimo, retirando la etiqueta
       expect(htmlSinVerde).not.toContain("Ahorro Pie (Venta en Verde)");
       expect(htmlSinVerde).toContain("Ahorro Pie");
-      expect(htmlSinVerde).toContain("Meta de Pie (10%)");
-      expect(htmlSinVerde).not.toContain("Meta de Pie (10% · Plaza Ñuñoa)");
       expect(htmlSinVerde).toContain("$244.000/m");
-      expect(htmlSinVerde).toContain("1 año y 10 meses");
+      expect(htmlSinVerde).toContain("7 años y 10 meses");
       expect(htmlSinVerde).not.toContain("(32,22 UF / mes)");
       expect(htmlSinVerde).not.toContain("⚠️ Exigencia de venta en verde");
       expect(htmlSinVerde).toContain('data-testid="conventional-savings-notice"');

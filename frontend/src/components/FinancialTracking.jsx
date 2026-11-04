@@ -333,17 +333,26 @@ export default function FinancialTracking({
   // Unificación de variables cuando aplica venta en verde / meta periódica
   const isGreenActive = Boolean(unifiedGoal.isApplicable && useGreenSavingsPlan);
 
-  const effectivePieTotalClp = isGreenActive ? unifiedGoal.pieTotalClp : pie_necesario;
-  const effectiveBrechaPie = isGreenActive ? unifiedGoal.brechaPieClp : brecha_pie_minimo;
-  const effectivePieProgressPercent = isGreenActive ? unifiedGoal.pieProgressPercent : pieProgressPercent;
+  // El monto total y la brecha del pie se mantienen anclados al proyecto objetivo
+  const effectivePieTotalClp = unifiedGoal.isApplicable ? unifiedGoal.pieTotalClp : pie_necesario;
+  const effectiveBrechaPie = unifiedGoal.isApplicable ? unifiedGoal.brechaPieClp : brecha_pie_minimo;
+  const effectivePieProgressPercent = unifiedGoal.isApplicable ? unifiedGoal.pieProgressPercent : pieProgressPercent;
 
+  // Solo se modifican el ahorro sugerido y el tiempo mínimo:
+  // Con plazo en verde activo: cuota fijada por la entrega inmobiliaria.
+  // Sin plazo en verde: cuota ordinaria según la capacidad mensual del usuario.
   const effectivePlanAhorro = isGreenActive && unifiedGoal.cuotaMensualClp > 0
     ? unifiedGoal.cuotaMensualClp
     : currentPlanAhorro;
 
+  // Tiempo mínimo para cubrir la brecha del proyecto a tu ritmo:
+  const conventionalMonthsForProject = effectiveBrechaPie > 0 && currentPlanAhorro > 0
+    ? Math.ceil(effectiveBrechaPie / currentPlanAhorro)
+    : (effectiveBrechaPie > 0 ? 999 : 0);
+
   const effectivePlanMonths = isGreenActive && unifiedGoal.plazoMeses > 0
     ? unifiedGoal.plazoMeses
-    : currentPlanMonths;
+    : (unifiedGoal.isApplicable ? conventionalMonthsForProject : currentPlanMonths);
 
   // Calculos de Deuda y Morosidad (E3)
   const currentDeudaMensual = Number(evaluation?.input?.deuda_mensual) || 0;
@@ -478,7 +487,7 @@ export default function FinancialTracking({
 
   const effectiveDesiredMonths = isGreenActive && unifiedGoal.plazoMeses > 0
     ? unifiedGoal.plazoMeses
-    : baseEffectiveDesiredMonths;
+    : (unifiedGoal.isApplicable ? Math.max(1, conventionalMonthsForProject) : baseEffectiveDesiredMonths);
 
   const conventionalCapacity = planType === "acelerado" ? ahorro_mensual_acelerado : ahorro_mensual_conservador;
   const isCapacityExceeded = isGreenActive && conventionalCapacity > 0 && effectivePlanAhorro > conventionalCapacity;
@@ -623,7 +632,7 @@ export default function FinancialTracking({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
               <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
-                {isGreenActive
+                {unifiedGoal.isApplicable
                   ? `Meta de Pie (${Math.round((unifiedGoal.pieTotalUf / (unifiedGoal.propertyUf || 1)) * 100)}%${unifiedGoal.projectName ? " · " + unifiedGoal.projectName : ""})`
                   : "Meta de Pie (10%)"}
               </h3>
@@ -662,9 +671,9 @@ export default function FinancialTracking({
                 {formatCurrency(effectiveBrechaPie)}
               </strong>
             </div>
-            {isGreenActive && (
+            {unifiedGoal.isApplicable && (
               <p className="tracking-indicator-note" style={{ margin: "0.5rem 0 0 0", fontSize: "0.76rem" }}>
-                Pie total: <strong>{formatUfAmount(unifiedGoal.pieTotalUf)}</strong> ({formatCurrency(effectivePieTotalClp)} hoy) · {unifiedGoal.plazoMeses} meses.
+                Pie total: <strong>{formatUfAmount(unifiedGoal.pieTotalUf)}</strong> ({formatCurrency(effectivePieTotalClp)} hoy){isGreenActive ? ` · ${unifiedGoal.plazoMeses} meses.` : "."}
               </p>
             )}
           </div>
