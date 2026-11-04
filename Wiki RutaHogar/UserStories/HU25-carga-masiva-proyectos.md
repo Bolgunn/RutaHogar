@@ -89,7 +89,7 @@
 
 Archivos de ejemplo en `docs/stories/HU25-carga-masiva-proyectos/samples/`.
 
-**Requisito:** la migración `20261102120000_hu25_importar_proyectos.sql` aplicada en un Supabase de
+**Requisito:** la migración `20261103210000_hu25_importar_proyectos.sql` aplicada en un Supabase de
 pruebas (no producción) y una cuenta `admin_inmobiliario` de una inmobiliaria con algunos proyectos.
 Si solo tienes el administrador global: en `/admin/proyectos` usa **Asignar administrador** con una
 cuenta de prueba ya registrada y una inmobiliaria demo, y entra con esa cuenta. Sin la migración
@@ -117,6 +117,6 @@ todo funciona hasta **Confirmar carga**, que mostrará "No se pudo completar la 
 exportaciones de HU 22, cargada solo al subir un `.xlsx`), el modal `frontend/src/components/ProjectBulkImport.jsx`, la plantilla
 `frontend/public/plantillas/plantilla-proyectos-rutahogar.xlsx` (generada por
 `frontend/scripts/build-import-template.mjs`), la función `importar_proyectos()` (migración
-`20261102120000`) y el plan `docs/stories/HU25-carga-masiva-proyectos/PLAN.md`. Esta historia
+`20261103210000`) y el plan `docs/stories/HU25-carga-masiva-proyectos/PLAN.md`. Esta historia
 implementa la propuesta [[propuesta-importacion-masiva-catalogo|Importación masiva del catálogo]]
 (salvo su E4, tipologías).

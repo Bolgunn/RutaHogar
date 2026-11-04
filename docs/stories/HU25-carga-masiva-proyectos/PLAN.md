@@ -29,7 +29,7 @@
 | :- | :------- | :----- |
 | 1 | Touches scoring? Which ALG, numbers changed? | No. No ALG: the import has no business numbers; row rules are `validateProject()`'s, reused as-is |
 | 2 | Needs RLS / multi-tenant scoping? | Yes, and it reuses what exists. The new RPC is `security invoker`, so every row passes the existing `proyectos` insert/update policies. The tenant is always the session's (`get_my_inmobiliaria()`): there is no argument to choose it and a key in the file is ignored. No policy changes |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes, one function: `20261102120000_hu25_importar_proyectos.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — never pasted into the SQL editor |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes, one function: `20261103210000_hu25_importar_proyectos.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — never pasted into the SQL editor |
 | 4 | Changes the `POST /score` contract? | No |
 | 5 | Consent / privacy impact? | None. Rows are commercial project data, no personal data. The file is parsed in the browser and never stored; only the validated rows reach the database |
 
@@ -45,7 +45,7 @@ catalog (and so in the lead feed and the matching) the moment the load is confir
 
 A pure module in `lib/catalog/` turns the file's rows into an analysis: each row run through
 `validateProject()`, plus the file-level checks only a batch has (headers, size, duplicates). A
-`.xlsx` is turned into rows by `read-excel-file`, loaded on demand; a `.csv` by our own parser. The
+`.xlsx` is turned into rows by `exceljs` (already used by HU 22), loaded on demand; a `.csv` by our own parser. The
 modal only renders the analysis and enables **Confirmar carga** when it has zero errors. The write
 is one RPC call: a PL/pgSQL function is a single transaction, which is what makes "todo o nada"
 true; writing row by row from the browser cannot.
@@ -53,7 +53,7 @@ true; writing row by row from the browser cannot.
 | Decision | Rationale |
 | :------- | :-------- |
 | **`.xlsx` and `.csv`** are accepted. `.xls` (pre-2007), `.ods` and `.numbers` get a message asking to save as `.xlsx` or CSV | E1 says "CSV/Excel" and admins work in Excel. Legacy `.xls` is a different binary format no small reader handles |
-| `.xlsx` is read with **`read-excel-file@9.3.12`** (MIT, read-only), pinned exactly and loaded with a dynamic `import()` of its `universal` build | Guardrail 1 needs a concrete reason: here it is E1. Alternatives rejected: `xlsx` (SheetJS) on npm is frozen at 0.18.5 with unpatched advisories; `exceljs` is ~22 MB with nine dependencies. The chosen one brings four direct dependencies (`fflate`, `saxen`, the author's `unzipper-esm` and `worker-f`) and two transitive ones (`graceful-fs`, `node-int64`, used only by the Node build), no audit findings, and a 17 KB gzip chunk downloaded only when someone uploads a `.xlsx`. The `universal` build avoids a web worker; files are capped at 1 MB, so blocking is negligible |
+| `.xlsx` is read with **`exceljs`**, the library HU 22 (#174) already brought in, loaded with a dynamic `import()` | One spreadsheet library for HU 22 and HU 25, as the HU 22 story asks (review of #177). An earlier version used `read-excel-file`; it was dropped once `exceljs` landed on `develop`, so HU 25 adds no dependency. exceljs returns formulas, hyperlinks and rich text as objects, so `readXlsx.js` flattens them to the visible value and trims the template's 500 formatted empty rows. Files are capped at 1 MB, so parsing on the main thread is negligible |
 | The reader keeps blank rows in place (it fills rows absent from the sheet XML), so record *i* is spreadsheet row *i + 1* — the same contract as the CSV parser | E2 "exactamente qué filas". Verified on files written by LibreOffice, including rows missing from the XML and blank rows before the header |
 | Two templates: a static **`.xlsx`** (`public/plantillas/plantilla-proyectos-rutahogar.xlsx`) and the generated **CSV** | The `.xlsx` brings drop-down lists for `comuna`, `tipo` and `estado`, `entrega_estimada` formatted as text (so Excel does not turn `2027-06` into a date), and an *Instrucciones* sheet. It is a static file built by `frontend/scripts/build-import-template.mjs` from the validator's own constants, so no Excel-writing library is needed; a test fails if the published file drifts from those constants |
 | CSV: UTF-8 with BOM, `;` separator, CRLF; the parser accepts `;` or `,`, detected from the header line, RFC 4180 quotes | Excel in a Chilean locale opens it in columns with accents; Google Sheets and LibreOffice default to `,` |
@@ -105,8 +105,7 @@ set search_path = public`, granted to `authenticated` only.
 HU 12 `estado` trigger all fire as for a manual edit). No new table, column or policy.
 
 **Frontend:** `services/projectService.js` gains `importProjects(proyectos)`. The frozen contract
-(`getProjects` shape) is untouched. New dependency `read-excel-file` (exact version) in
-`frontend/package.json`. New static asset `frontend/public/plantillas/plantilla-proyectos-rutahogar.xlsx`.
+(`getProjects` shape) is untouched. No new dependency: `.xlsx` is read with HU 22's `exceljs`. New static asset `frontend/public/plantillas/plantilla-proyectos-rutahogar.xlsx`.
 
 ## Algorithms
 
@@ -133,9 +132,9 @@ story page and the proposal's status.
 
 ## Steps
 
-1. **Migration** `supabase/migrations/20261102120000_hu25_importar_proyectos.sql` per **Entities**,
+1. **Migration** `supabase/migrations/20261103210000_hu25_importar_proyectos.sql` per **Entities**,
    in `begin; … commit;`, idempotent (`create or replace`). Rollback
-   `supabase/rollback/20261102120000_hu25_importar_proyectos_rollback.sql` drops only the function.
+   `supabase/rollback/20261103210000_hu25_importar_proyectos_rollback.sql` drops only the function.
    Append the same DDL to `supabase/schema.sql`.
 2. **SQL tests** `supabase/tests/importar_proyectos.sql` (style of `project_interest_facts.sql`),
    each case as the `authenticated` role so RLS applies:
