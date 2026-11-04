@@ -179,12 +179,12 @@ Para apuntar el frontend local a ese proyecto sin tocar `.env`, crear `frontend/
 (ignorado por git) con `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`, y correr
 `npm --prefix frontend run dev -- --mode pruebas`.
 
-⚠️ **Deriva conocida: `can_admin_inmobiliaria()` y `assign_admin()`.** La versión vigente en
-`schema.sql` (commit `47a3b03`, "Vistas y accesos admin inmobiliario") acepta el rol
-`admin_inmobiliario`; la última migración que las define (`20260729_project_catalog.sql`) no. Una base
-armada solo con migraciones no deja al `admin_inmobiliario` crear ni editar proyectos (tampoco con
-HU 25). `node scripts/check-schema-drift.js` lo reporta. Falta la migración que las alinee; mientras
-tanto, el script de arriba repasa `schema.sql` al final para dejar la versión vigente.
+⚠️ **Deriva conocida: `assign_admin()`.** `can_admin_inmobiliaria()` ya quedó alineada con
+`schema.sql` en la migración `20261031120000_profiles_privilege_guard_fix.sql` (acepta
+`admin_inmobiliario`), que corre antes que la de HU 25, así que una base armada con migraciones deja al
+`admin_inmobiliario` crear, editar y cargar proyectos. `assign_admin()` sigue con la versión de
+`20260729_project_catalog.sql`; `node scripts/check-schema-drift.js` lo reporta. Mientras falte la
+migración que la alinee, el script de arriba repasa `schema.sql` al final para dejar la versión vigente.
 
 ## Market snapshots (SCORING-BCCH)
 
