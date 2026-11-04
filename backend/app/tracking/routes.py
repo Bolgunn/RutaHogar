@@ -3,42 +3,57 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from .commercial_config import CommercialConfigService, InvalidCriteria
 from .contracts import ConfirmationCommand, CorrectionCommand, TrackingCommand, TrackingError
 from .repository import TrackingRepository
 from .service import TrackingService, client_tracking_view
 from .staff import StaffLeadService
+from .team import TeamService
+from .owner_reads import OwnerReadService
 
-router = APIRouter(prefix="/tracking", tags=["tracking"])
+PRIVATE_HEADERS = {"Cache-Control": "private, no-store", "Pragma": "no-cache", "Vary": "Authorization"}
+
+
+def private_response(response: Response):
+    response.headers.update(PRIVATE_HEADERS)
+
+
+router = APIRouter(prefix="/tracking", tags=["tracking"], dependencies=[Depends(private_response)])
 bearer = HTTPBearer(auto_error=False)
 
 
 def repository(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
     if credentials is None:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"}, headers=PRIVATE_HEADERS)
     return checked(TrackingRepository)
 
 
 def checked(call):
     try:
         return call()
+    except InvalidCriteria as error:
+        raise HTTPException(status_code=422, detail={"code": error.code, "errors": error.errors}) from None
     except TrackingError as error:
         status = {
             "unauthenticated": 401, "owner_mismatch": 403, "not_found": 404,
             "idempotency_conflict": 409, "lineage_conflict": 409, "persistence_unavailable": 503,
-            "market_data_unavailable": 503, "co_debtor_confirmation_required": 409,
+            "market_data_unavailable": 503, "co_debtor_revision_conflict": 409,
+            "co_debtor_relation_conflict": 409, "co_debtor_participation_closed": 409, "co_debtor_confirmation_required": 409,
             "co_debtor_consent_revoked": 409, "co_debtor_confirmation_already_applied": 409,
+            "config_version_conflict": 409, "self_change_forbidden": 409, "last_active_admin": 409,
+            "member_deactivated": 409, "auth_sync_failed": 503,
         }.get(error.code, 422)
-        raise HTTPException(status_code=status, detail={"code": error.code}) from None
+        raise HTTPException(status_code=status, detail={"code": error.code}, headers=PRIVATE_HEADERS) from None
 
 
 def context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
             repo=Depends(repository)):
     if credentials is None:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"}, headers=PRIVATE_HEADERS)
     user_id = checked(lambda: repo.authenticate(credentials.credentials))
     return user_id, repo, TrackingService(repo)
 
@@ -46,22 +61,64 @@ def context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(
 def staff_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
                   repo=Depends(repository)):
     if credentials is None:
-        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"}, headers=PRIVATE_HEADERS)
     return credentials.credentials, StaffLeadService(repo)
+
+
+def owner_view(repo, user_id, value):
+    if not callable(getattr(repo, "co_debtor_rows", None)):
+        return value
+    return OwnerReadService(repo, user_id).tracking_view(value)
+
+
+@router.get("/owner/evaluations")
+def owner_evaluations(ctx=Depends(context)):
+    user_id, repo, _ = ctx
+    return checked(lambda: OwnerReadService(repo, user_id).evaluations())
+
+
+@router.get("/owner/scoring-history")
+def owner_history(ctx=Depends(context)):
+    user_id, repo, _ = ctx
+    return checked(lambda: OwnerReadService(repo, user_id).history())
+
+
+@router.get("/evaluations/{evaluation_id}/history")
+def evaluation_history(evaluation_id: UUID, ctx=Depends(context),
+                       credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)] = None):
+    user_id, repo, _ = ctx
+
+    def read():
+        identity = repo.evaluation_identity(str(evaluation_id))
+        if not identity:
+            raise TrackingError("owner_mismatch")
+        if identity["user_id"] != user_id:
+            staff = StaffLeadService(repo)
+            return staff.evaluation_history(credentials.credentials, identity["user_id"], str(evaluation_id))
+        return {"items": [row for row in OwnerReadService(repo, identity["user_id"]).history()["items"]
+                          if row.get("evaluation_id") == str(evaluation_id)]}
+
+    return checked(read)
+
+
+@router.get("/owner/co-debtor")
+def owner_co_debtor(ctx=Depends(context)):
+    user_id, repo, _ = ctx
+    return checked(lambda: {"items": list(OwnerReadService(repo, user_id).invitations_view())})
 
 
 @router.get("")
 def summary(ctx=Depends(context), as_of: AwareDatetime | None = None):
-    user_id, _, service = ctx
-    return checked(lambda: client_tracking_view(service.read(user_id, as_of)))
+    user_id, repo, service = ctx
+    return checked(lambda: owner_view(repo, user_id, client_tracking_view(service.read(user_id, as_of))))
 
 
 @router.get("/history")
 def history(ctx=Depends(context), view: Literal["active", "audit"] = "active",
             cursor: Annotated[int, Query(ge=0)] = 0,
             limit: Annotated[int, Query(ge=1, le=200)] = 50):
-    user_id, _, service = ctx
-    result = checked(lambda: client_tracking_view(service.read(user_id)))
+    user_id, repo, service = ctx
+    result = checked(lambda: owner_view(repo, user_id, client_tracking_view(service.read(user_id))))
     rows = result[f"{view}_line"]
     return {"items": rows[cursor:cursor + limit], "view": view,
             "next_cursor": cursor + limit if cursor + limit < len(rows) else None}
@@ -69,34 +126,136 @@ def history(ctx=Depends(context), view: Literal["active", "audit"] = "active",
 
 @router.post("/events")
 def append(command: TrackingCommand, ctx=Depends(context)):
-    user_id, _, service = ctx
-    return checked(lambda: service.execute(user_id, command.model_dump(mode="json")))
+    user_id, repo, service = ctx
+    return checked(lambda: owner_view(repo, user_id, service.execute(user_id, command.model_dump(mode="json"))))
 
 
 @router.post("/events/{target_event_id}/corrections")
 def correct(target_event_id: UUID, command: CorrectionCommand, ctx=Depends(context)):
-    user_id, _, service = ctx
-    return checked(lambda: service.execute(user_id, command.model_dump(mode="json"), str(target_event_id)))
+    user_id, repo, service = ctx
+    return checked(lambda: owner_view(repo, user_id, service.execute(user_id, command.model_dump(mode="json"), str(target_event_id))))
 
 
 @router.post("/goals/{goal_id}/confirmations")
 def confirm(goal_id: UUID, command: ConfirmationCommand, ctx=Depends(context)):
     user_id, repo, _ = ctx
     if not command.reason.strip():
-        raise HTTPException(status_code=422, detail={"code": "invalid_reason"})
-    return checked(lambda: repo.confirm(user_id, str(goal_id), command.model_dump(mode="json")))
+        raise HTTPException(status_code=422, detail={"code": "invalid_reason"}, headers=PRIVATE_HEADERS)
+    return checked(lambda: owner_view(repo, user_id, repo.confirm(user_id, str(goal_id), command.model_dump(mode="json"))))
 
 
 @router.get("/projection")
 def projection(ctx=Depends(context), as_of: AwareDatetime | None = None):
-    user_id, _, service = ctx
-    return checked(lambda: service.projection(user_id, as_of))
+    user_id, repo, service = ctx
+    def read_projection():
+        if not callable(getattr(repo, "co_debtor_rows", None)):
+            return service.projection(user_id, as_of)
+        owner = OwnerReadService(repo, user_id)
+        evidence = owner.projection_evidence()
+        value = service.projection(user_id, as_of, visible_evaluations=evidence)
+        # In the filtered path ALG-13 has seen only visible immutable inputs.
+        return value if evidence is not None else owner.tracking_view(value)
+    return checked(read_projection)
 
 
 @router.get("/staff/evaluations")
 def staff_evaluations(ctx=Depends(staff_context)):
     token, service = ctx
     return checked(lambda: service.evaluations(token))
+
+
+def commercial_config_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                              repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, CommercialConfigService(repo)
+
+
+class CommercialConfigCommand(BaseModel):
+    """criterios is validated by ALG-19 R0 in the service, with per-key errors."""
+
+    model_config = ConfigDict(extra="forbid")
+    base_version: int | None = Field(default=None, ge=1)
+    criterios: dict
+
+
+@router.get("/staff/commercial-config")
+def staff_commercial_config(ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.config(token))
+
+
+@router.post("/staff/commercial-config/preview")
+def staff_commercial_config_preview(command: CommercialConfigCommand, ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.preview_config(token, command.model_dump()))
+
+
+@router.post("/staff/commercial-config")
+def staff_commercial_config_save(command: CommercialConfigCommand, ctx=Depends(commercial_config_context)):
+    token, service = ctx
+    return checked(lambda: service.save_config(token, command.model_dump()))
+
+
+def team_context(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+                 repo=Depends(repository)):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail={"code": "unauthenticated"})
+    return credentials.credentials, TeamService(repo)
+
+
+class TeamMemberUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    nombre: str = Field(min_length=1, max_length=160)
+    telefono: str = Field(default="", max_length=20)
+
+
+class TeamRoleCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rol: Literal["ejecutivo", "admin_inmobiliario"]
+
+
+class TeamAccessCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    estado: Literal["activo", "desactivado"]
+
+
+@router.get("/staff/team")
+def staff_team(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.team(token, inmobiliaria_id))
+
+
+@router.get("/staff/team/history")
+def staff_team_history(ctx=Depends(team_context), inmobiliaria_id: UUID | None = None,
+                       miembro_id: UUID | None = None,
+                       cursor: Annotated[str | None, Query(max_length=80)] = None,
+                       limit: Annotated[int, Query(ge=1, le=200)] = 50):
+    token, service = ctx
+    member = str(miembro_id) if miembro_id else None
+    return checked(lambda: service.history(token, member, cursor, limit, inmobiliaria_id))
+
+
+@router.patch("/staff/team/{member_id}")
+def staff_team_update(member_id: UUID, command: TeamMemberUpdate, ctx=Depends(team_context),
+                      inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.update_member(
+        token, str(member_id), command.nombre, command.telefono, inmobiliaria_id))
+
+
+@router.post("/staff/team/{member_id}/role")
+def staff_team_role(member_id: UUID, command: TeamRoleCommand, ctx=Depends(team_context),
+                    inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.set_role(token, str(member_id), command.rol, inmobiliaria_id))
+
+
+@router.post("/staff/team/{member_id}/access")
+def staff_team_access(member_id: UUID, command: TeamAccessCommand, ctx=Depends(team_context),
+                      inmobiliaria_id: UUID | None = None):
+    token, service = ctx
+    return checked(lambda: service.set_access(token, str(member_id), command.estado, inmobiliaria_id))
 
 
 @router.get("/staff/leads/{lead_id}")
@@ -124,11 +283,11 @@ def update_score_with_confirmed_co_debtor(
     _command: CoDebtorConfirmationEvaluationCommand | None = None,
     ctx=Depends(context),
 ):
-    user_id, _, service = ctx
-    return checked(lambda: service.update_score_with_confirmed_co_debtor(user_id))
+    user_id, repo, service = ctx
+    return checked(lambda: owner_view(repo, user_id, service.update_score_with_confirmed_co_debtor(user_id)))
 
 
 @router.post("/evaluations/{evaluation_id}/events")
 def annotate(evaluation_id: UUID, command: EvaluationAnnotation, ctx=Depends(context)):
     user_id, repo, _ = ctx
-    return checked(lambda: repo.annotate(user_id, str(evaluation_id), command.model_dump(mode="json")))
+    return checked(lambda: owner_view(repo, user_id, repo.annotate(user_id, str(evaluation_id), command.model_dump(mode="json"))))

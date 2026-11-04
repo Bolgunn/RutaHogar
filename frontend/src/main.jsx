@@ -18,6 +18,7 @@ import "./components/user-design-system.css";
 import "./components/executive-leads.css";
 import "./components/staff-view-consistency.css";
 import "./components/notification-toast.css";
+import "./components/mobile-responsive.css";
 
 createRoot(document.getElementById("root")).render(
   <BrowserRouter>

@@ -17,7 +17,7 @@ la máquina de quien hace la ingesta.
 |---|---|
 | `APIFY_API_KEY` | Solo `dump_apify.py` |
 | `SUPABASE_URL` | Proyecto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Escritura del catálogo. Desde `20261005150000_hu19_proyectos_rag_lock_writes.sql` solo `service_role` puede escribir `proyectos_rag` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Escritura del catálogo. Desde `20261005150001_hu19_proyectos_rag_lock_writes.sql` solo `service_role` puede escribir `proyectos_rag` |
 | `HUGGINGFACE_API_KEY` | Solo con `--hf-embeddings`; por defecto la ingesta vectoriza en local |
 
 ---

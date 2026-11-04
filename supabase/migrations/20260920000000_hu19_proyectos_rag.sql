@@ -32,7 +32,7 @@ create index if not exists proyectos_rag_comuna_idx
   on public.proyectos_rag (lower(comuna));
 
 -- Lectura pública para el portal. Solo service_role (que salta RLS) escribe el
--- catálogo; ver 20261005150000_hu19_proyectos_rag_lock_writes.sql.
+-- catálogo; ver 20261005150001_hu19_proyectos_rag_lock_writes.sql.
 alter table public.proyectos_rag enable row level security;
 
 drop policy if exists "Allow public read access to proyectos_rag" on public.proyectos_rag;

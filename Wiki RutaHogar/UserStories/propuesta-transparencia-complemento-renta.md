@@ -1,5 +1,7 @@
 # Propuesta — Transparencia del complemento de renta para el lead
 
+> **✅ Entró al backlog** como [[HU30-codeudor-capacidad-bipersonal|HU 30]]. Se conserva como antecedente del análisis.
+
 > **Propuesta sin numerar.** Hoy un lead puede declarar un co-deudor completo y ser evaluado en silencio como si estuviera solo. Esta historia le dice si su complemento se consideró, por qué no, y qué falta para que cuente.
 
 ---

@@ -158,9 +158,9 @@ async function fetchExecutiveNames(ejecutivoIds) {
   const ids = [...new Set(ejecutivoIds.filter(Boolean))];
   if (!ids.length) return {};
 
-  const { data, error } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+  const { data, error } = await supabase.rpc("list_staff_names", { p_ids: ids });
   if (error) {
-    // RLS puede ocultar perfiles de otro tenant: se muestra el correo y listo.
+    // Sólo llegan nombres del propio equipo: de cualquier otro se muestra el correo y listo.
     logSupabaseError(error);
     return {};
   }
@@ -515,6 +515,36 @@ export async function deleteProject(id) {
   return true;
 }
 
+// HU 25: carga masiva. `proyectos` ya viene validado por lib/catalog/projectImport;
+// importar_proyectos() lo escribe en una transacción, todo o nada, con los
+// permisos de quien llama y siempre en la inmobiliaria de la sesión.
+export async function importProjects(proyectos) {
+  if (PROVIDER === "local") {
+    throw new Error("La carga masiva requiere Supabase configurado.");
+  }
+
+  const { data, error } = await supabase.rpc("importar_proyectos", { p_proyectos: proyectos });
+
+  if (error) {
+    logSupabaseError(error);
+    if (error.code === "42501") {
+      throw new Error("La carga masiva solo está disponible para el administrador de una inmobiliaria.");
+    }
+    if (error.code === "22023" && error.message?.includes("nombre_repetido")) {
+      throw new Error("El archivo repite el nombre de un proyecto. No se guardó ningún proyecto.");
+    }
+    if (error.code === "22023") {
+      throw new Error("El archivo no tiene un formato válido. No se guardó ningún proyecto.");
+    }
+    if (error.code === "23514" || error.code === "23502") {
+      throw new Error("Una fila no cumple las reglas del catálogo. No se guardó ningún proyecto.");
+    }
+    throw new Error("No se pudo completar la carga. No se guardó ningún proyecto.");
+  }
+
+  return { creados: Number(data?.creados) || 0, actualizados: Number(data?.actualizados) || 0 };
+}
+
 // ---------------------------------------------------------------
 // Ejecutivos del proyecto
 // ---------------------------------------------------------------
@@ -556,7 +586,7 @@ export async function getProjectExecutives(projectId) {
   }));
 }
 
-export async function assignExecutive(projectId, email) {
+export async function assignExecutive(projectId, email, origen) {
   const correo = normalizeEmail(email);
   if (!projectId) throw new Error("ID de proyecto requerido.");
   if (!correo.includes("@")) throw new Error("Ingresa un correo válido.");
@@ -591,6 +621,7 @@ export async function assignExecutive(projectId, email) {
   const { error } = await supabase.rpc("assign_executive", {
     p_project_id: projectId,
     p_email: correo,
+    ...(origen ? { p_origen: origen } : {}),
   });
 
   if (error) {
@@ -600,7 +631,7 @@ export async function assignExecutive(projectId, email) {
   return getProjectExecutives(projectId);
 }
 
-export async function unassignExecutive(projectId, email) {
+export async function unassignExecutive(projectId, email, origen) {
   const correo = normalizeEmail(email);
   if (!projectId || !correo) throw new Error("Proyecto y correo requeridos.");
 
@@ -616,6 +647,7 @@ export async function unassignExecutive(projectId, email) {
   const { error } = await supabase.rpc("unassign_executive", {
     p_project_id: projectId,
     p_email: correo,
+    ...(origen ? { p_origen: origen } : {}),
   });
 
   if (error) {

@@ -1,5 +1,7 @@
 # Propuesta — Importación masiva del catálogo desde CSV
 
+> **Implementada como [[HU25-carga-masiva-proyectos|HU 25]]** (E1–E3; E4 sigue pendiente de las tipologías). Se conserva como registro del diseño.
+>
 > **Propuesta sin numerar.** Cargar un catálogo completo desde un archivo CSV, con validación previa fila por fila y confirmación explícita antes de escribir nada. Resuelve volumen; la granularidad la resuelve [[propuesta-carga-proyectos-por-unidad|Carga de proyectos por unidad y tipología]].
 
 ---
@@ -12,7 +14,7 @@
 | **Puntos de Historia** | 5 |
 | **Actor** | Administrador inmobiliario |
 | **Sprint** | — *(fuera del backlog numerado)* |
-| **Estado** | Propuesta |
+| **Estado** | Implementada en [[HU25-carga-masiva-proyectos\|HU 25]] (E1–E3) |
 
 ---
 
@@ -83,11 +85,11 @@
 
 ## Estado frente al código
 
-Historia propuesta, sin implementación.
+Construida en [[HU25-carga-masiva-proyectos|HU 25]], pendiente de merge.
 
 | Criterio | Estado | Evidencia |
 | :------- | :----- | :-------- |
-| `E1` | ❌ | No existe plantilla ni vista de importación; `AdminProjectCatalog.jsx` solo tiene alta unitaria por formulario y `projectValidation.js` valida un proyecto, no un lote. |
-| `E2` | ❌ | Sin previsualización ni escritura transaccional de lote. |
-| `E3` | ❌ | Sin ruta de importación que forzar al tenant. |
+| `E1` | ⚠️ | Plantillas Excel (.xlsx) y CSV, y validación completa antes de escribir: `lib/catalog/projectImport.js`, que reutiliza `validateProject()`. |
+| `E2` | ⚠️ | Confirmación explícita y escritura todo o nada en `importar_proyectos()`; informa creados y actualizados. |
+| `E3` | ⚠️ | El tenant sale de la sesión; una columna `inmobiliaria_id` se ignora. Casos SQL 3 y 6. |
 | `E4` | ❌ | Depende de [[propuesta-carga-proyectos-por-unidad\|Carga de proyectos por unidad y tipología]]. |

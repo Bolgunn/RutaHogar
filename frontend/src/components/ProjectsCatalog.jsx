@@ -29,12 +29,16 @@ function ProjectsCarousel({ children }) {
   const stripRef = useRef(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
+  const [currentCard, setCurrentCard] = useState(1);
+  const cardCount = React.Children.count(children);
 
   const updateArrows = useCallback(() => {
     const el = stripRef.current;
     if (!el) return;
     setCanPrev(el.scrollLeft > 4);
     setCanNext(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const step = el.children[1] ? el.children[1].offsetLeft - el.children[0].offsetLeft : el.clientWidth;
+    setCurrentCard(Math.min(el.children.length, Math.round(el.scrollLeft / (step || 1)) + 1));
   }, []);
 
   useEffect(() => {
@@ -50,11 +54,16 @@ function ProjectsCarousel({ children }) {
       window.removeEventListener("resize", updateArrows);
       observer.disconnect();
     };
-  }, [updateArrows]);
+  }, [updateArrows, cardCount]);
 
   const scrollByPage = (direction) => {
     const el = stripRef.current;
     if (!el) return;
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      const step = el.children[1] ? el.children[1].offsetLeft - el.children[0].offsetLeft : el.clientWidth;
+      el.scrollTo({ left: (Math.round(el.scrollLeft / (step || 1)) + direction) * step, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      return;
+    }
     const amount = Math.max(el.clientWidth * 0.8, 280) * direction;
     el.scrollBy({ left: amount, behavior: "smooth" });
   };
@@ -73,6 +82,7 @@ function ProjectsCarousel({ children }) {
       <div className="simulation-carousel-strip projects-catalog-carousel-strip" ref={stripRef}>
         {children}
       </div>
+      <span className="mobile-carousel-status" aria-live="polite">{currentCard} de {cardCount}</span>
       <button
         type="button"
         className="simulation-carousel-arrow is-right"

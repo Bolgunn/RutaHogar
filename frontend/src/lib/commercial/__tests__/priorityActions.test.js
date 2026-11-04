@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PRIORITY_ACTIONS, priorityKeyFromDetail } from "../priorityActions";
+import { ACTION_TIERS } from "../../matching/leadRanking";
+import { PRIORITY_ACTIONS, priorityKeyFromDetail, resolvedPriorityDetail } from "../priorityActions";
 
 const constantsUrl = new URL("../../../../../backend/app/scoring_engine/constants.py", import.meta.url);
 
@@ -38,5 +39,22 @@ describe("PRIORITY_ACTIONS parity with constants.py", () => {
     const python = commercialActionsFromPython();
     expect(Object.keys(python)).toHaveLength(6);
     expect(PRIORITY_ACTIONS).toEqual(python);
+  });
+});
+
+describe("HU 21 — prioridad configurada por el tenant", () => {
+  it("resolvedPriorityDetail prefiere la configurada y cae a la del motor", () => {
+    const motor = { action: "Contactar con revisión" };
+    const tenant = { action_key: "contact_now", action: "Contactar ahora" };
+    expect(resolvedPriorityDetail({ result: { commercial_priority_detail: motor }, commercial_priority_configured: tenant })).toBe(tenant);
+    expect(resolvedPriorityDetail({ result: { commercial_priority_detail: motor }, commercial_priority_configured: null })).toBe(motor);
+    expect(resolvedPriorityDetail({})).toBeNull();
+  });
+
+  it("ACTION_TIERS (R9, A6) coincide con COMMERCIAL_ACTION_TIERS de constants.py", () => {
+    const source = readFileSync(fileURLToPath(constantsUrl), "utf-8");
+    const block = source.match(/^COMMERCIAL_ACTION_TIERS\s*=\s*\{([\s\S]*?)^\}/m);
+    const python = Object.fromEntries([...block[1].matchAll(/"([^"]+)"\s*:\s*(\d+)/g)].map(([, key, tier]) => [key, Number(tier)]));
+    expect(ACTION_TIERS).toEqual(python);
   });
 });
