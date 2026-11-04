@@ -110,6 +110,12 @@ jobs:
           set -euo pipefail
           supabase functions deploy co-debtor-consent --project-ref "$SUPABASE_PROJECT_REF"
 
+      - name: Deploy create-executive function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy create-executive --project-ref "$SUPABASE_PROJECT_REF"
+
       - name: Deploy commercial funnel aggregate function
         shell: bash
         run: |
