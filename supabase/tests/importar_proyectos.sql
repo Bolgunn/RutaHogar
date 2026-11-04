@@ -10,8 +10,8 @@ grant select, insert, update on public.proyectos to authenticated;
 insert into public.inmobiliarias(id, nombre) values
   ('a2500000-0000-0000-0000-000000000001', 'HU25 Inmobiliaria A'),
   ('a2500000-0000-0000-0000-000000000002', 'HU25 Inmobiliaria B');
-insert into public.proyectos(id, inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado) values
-  ('b2500000-0000-0000-0000-000000000001', 'a2500000-0000-0000-0000-000000000001', 'HU25 Existente', 'Macul', 'casa', 2500, 3500, 'disponible');
+insert into public.proyectos(id, inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado, descripcion, entrega_estimada) values
+  ('b2500000-0000-0000-0000-000000000001', 'a2500000-0000-0000-0000-000000000001', 'HU25 Existente', 'Macul', 'casa', 2500, 3500, 'disponible', 'Descripción previa', '2027-01');
 
 -- AI: admin_inmobiliario of A · AA: admin of A · GA: global admin · E1: ejecutivo of A · L1: lead.
 insert into auth.users(id, email) values
@@ -72,12 +72,13 @@ end;
 $$;
 
 -- Case 2: a name already in the tenant (any case) updates that project and keeps its id.
+-- Optional columns left blank or missing keep the stored value instead of clearing it.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'c2500000-0000-0000-0000-000000000001', true);
 do $$
 declare
   v_result jsonb := public.importar_proyectos('[
-    {"nombre": "hu25 existente", "comuna": "Macul", "tipo": "casa", "precio_min_uf": 2600, "precio_max_uf": 3600, "estado": "agotado"},
+    {"nombre": "hu25 existente", "comuna": "Macul", "tipo": "casa", "precio_min_uf": 2600, "precio_max_uf": 3600, "estado": "agotado", "descripcion": "  "},
     {"nombre": "HU25 Nuevo Tres", "comuna": "Santiago", "tipo": "departamento", "precio_min_uf": 2000, "precio_max_uf": 2500, "estado": "disponible"}
   ]');
 begin
@@ -93,6 +94,9 @@ begin
   assert (select estado = 'agotado' and precio_min_uf = 2600 and nombre = 'hu25 existente'
           from public.proyectos where id = 'b2500000-0000-0000-0000-000000000001'),
     'case 2: existing row updated in place';
+  assert (select descripcion = 'Descripción previa' and entrega_estimada = '2027-01'
+          from public.proyectos where id = 'b2500000-0000-0000-0000-000000000001'),
+    'case 2: blank or missing optional fields keep the stored value';
 end;
 $$;
 

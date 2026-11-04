@@ -15,7 +15,8 @@
 --   tiene inmobiliaria propia, recibe forbidden; cargar proyectos para un
 --   cliente desde RutaHogar es otra historia.
 -- · Un nombre ya existente en la inmobiliaria (sin distinguir mayúsculas)
---   actualiza ese proyecto; si no, se crea. Es la misma identidad del índice
+--   actualiza ese proyecto; si no, se crea. Al actualizar, descripcion y
+--   entrega_estimada vacías conservan el valor guardado. Es la misma identidad del índice
 --   proyectos_nombre_por_inmobiliaria_idx.
 -- · 500 filas: tope del plan (Local logic), el mismo que valida el navegador.
 --
@@ -66,6 +67,9 @@ begin
       inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado,
       descripcion, entrega_estimada
     )
+    -- Misma normalización que createProject/updateProject en
+    -- frontend/src/services/projectService.js (trim, vacío → null): si una cambia,
+    -- cambiar la otra.
     select
       v_tenant,
       btrim(r.nombre),
@@ -87,8 +91,10 @@ begin
       precio_min_uf = excluded.precio_min_uf,
       precio_max_uf = excluded.precio_max_uf,
       estado = excluded.estado,
-      descripcion = excluded.descripcion,
-      entrega_estimada = excluded.entrega_estimada
+      -- Las columnas opcionales pueden faltar en el archivo o venir vacías: en
+      -- ese caso se conserva lo guardado en vez de borrarlo.
+      descripcion = coalesce(excluded.descripcion, p.descripcion),
+      entrega_estimada = coalesce(excluded.entrega_estimada, p.entrega_estimada)
     returning (p.xmax = 0) as creado
   )
   select count(*) filter (where creado), count(*) filter (where not creado)

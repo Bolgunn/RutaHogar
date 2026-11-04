@@ -6676,7 +6676,7 @@ revoke all on function public.submit_ticket_user_feedback(uuid, text, text) from
 
 -- =============================================================
 -- HU 25 — Carga masiva de proyectos desde archivo
--- Espejo de supabase/migrations/20261102120000_hu25_importar_proyectos.sql
+-- Espejo de supabase/migrations/20261103210000_hu25_importar_proyectos.sql
 -- SECURITY INVOKER: las policies de proyectos deciden cada fila.
 -- =============================================================
 
@@ -6724,6 +6724,9 @@ begin
       inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado,
       descripcion, entrega_estimada
     )
+    -- Misma normalización que createProject/updateProject en
+    -- frontend/src/services/projectService.js (trim, vacío → null): si una cambia,
+    -- cambiar la otra.
     select
       v_tenant,
       btrim(r.nombre),
@@ -6745,8 +6748,10 @@ begin
       precio_min_uf = excluded.precio_min_uf,
       precio_max_uf = excluded.precio_max_uf,
       estado = excluded.estado,
-      descripcion = excluded.descripcion,
-      entrega_estimada = excluded.entrega_estimada
+      -- Las columnas opcionales pueden faltar en el archivo o venir vacías: en
+      -- ese caso se conserva lo guardado en vez de borrarlo.
+      descripcion = coalesce(excluded.descripcion, p.descripcion),
+      entrega_estimada = coalesce(excluded.entrega_estimada, p.entrega_estimada)
     returning (p.xmax = 0) as creado
   )
   select count(*) filter (where creado), count(*) filter (where not creado)

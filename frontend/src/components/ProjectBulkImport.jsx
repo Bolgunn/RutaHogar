@@ -246,6 +246,12 @@ export default function ProjectBulkImport({ tenant, onClose, onImported }) {
                 </dl>
               )}
 
+              {analysis.summary.actualizar > 0 && (
+                <p className="admin-bulk-hint">
+                  En los proyectos que se actualizan, una <code>descripcion</code> o <code>entrega_estimada</code> vacía conserva el valor que ya tenían.
+                </p>
+              )}
+
               {rowErrors.length > 0 && (
                 <div className="admin-bulk-errors">
                   <p>
