@@ -65,6 +65,11 @@ echo "Errores registrados (los de migraciones antiguas ya cubiertas por schema.s
 grep ERROR "$LOG" | sort | uniq -c | sort -rn | head -20
 echo
 echo "Comprobación de HU 25:"
-psql_run -Atc "select 'importar_proyectos: ' || coalesce((select 'ok' from pg_proc where proname = 'importar_proyectos'), 'FALTA')"
-psql_run -Atc "select 'can_admin_inmobiliaria acepta admin_inmobiliario: ' || (pg_get_functiondef('public.can_admin_inmobiliaria(uuid)'::regprocedure) like '%admin_inmobiliario%')"
 rm -f "$LOG"
+check="$(psql_run -Atc "select (select count(*) from pg_proc where proname = 'importar_proyectos') = 1
+  and coalesce(pg_get_functiondef(to_regprocedure('public.can_admin_inmobiliaria(uuid)')) like '%admin_inmobiliario%', false)")"
+if [[ "$check" != "t" ]]; then
+  echo "FALLÓ: falta importar_proyectos o can_admin_inmobiliaria no acepta admin_inmobiliario." >&2
+  exit 1
+fi
+echo "ok: importar_proyectos existe y can_admin_inmobiliaria acepta admin_inmobiliario."
