@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock HU 28 · Equipo · v1</title>
+<link rel="stylesheet" href="/public/brand/rutahogar/rutahogar-brand.css">
+<link rel="stylesheet" href="/src/styles.css">
+<link rel="stylesheet" href="/src/components/admin-management.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.1/dist/tabler-icons.min.css">
+<style>
+  /* Mock-only styles for HU 28. Everything else comes from the app's CSS. */
+  .mock-bar{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border-radius:999px;background:var(--rh-blue-dark);color:#fff;font-size:.75rem;font-weight:700;box-shadow:var(--rh-shadow-md)}
+  .mock-bar button{min-height:28px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:.75rem}
+  .mock-bar button.is-active{background:var(--rh-yellow);color:var(--rh-text)}
+
+  .eq-page{max-width:1180px;margin:0 auto}
+  .eq-page .section-heading{max-width:none;margin:0 0 var(--rh-space-5)}
+  .eq-tenant{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:var(--rh-space-4)}
+  .eq-tenant label{display:grid;gap:6px;min-width:min(320px,100%);font-size:.82rem;font-weight:700;color:var(--rh-text-secondary)}
+  .eq-tenant select{margin:0}
+  .eq-empty{display:grid;justify-items:center;gap:8px;padding:48px 20px;text-align:center;color:var(--rh-text-secondary)}
+  .eq-empty i{font-size:2rem;color:var(--rh-text-muted)}
+  .eq-empty strong{color:var(--rh-text);font-size:1.05rem}
+  .eq-empty p{margin:0;max-width:44ch}
+
+  .eq-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:var(--rh-space-4)}
+  .eq-stat{display:grid;gap:2px;padding:14px 16px;border:1px solid var(--rh-border);border-radius:12px;background:var(--rh-surface);text-align:left;color:var(--rh-text);min-height:0}
+  .eq-stat:hover{border-color:var(--rh-border-strong);opacity:1}
+  .eq-stat.is-active{border-color:var(--rh-blue);box-shadow:inset 0 0 0 1px var(--rh-blue)}
+  .eq-stat strong{font-family:var(--rh-font-mono);font-size:1.5rem;line-height:1.1}
+  .eq-stat span{color:var(--rh-text-secondary);font-size:.8rem;font-weight:600}
+
+  .eq-alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin-bottom:var(--rh-space-4);border:1px solid rgba(196,132,29,.45);border-radius:12px;background:var(--rh-score-medio-bg);color:#7A5210;font-size:.88rem;line-height:1.45}
+  .eq-alert i{font-size:1.15rem;margin-top:1px}
+  .eq-alert--modal{margin:0}
+  .eq-alert--danger{border-color:rgba(184,50,50,.35);background:var(--rh-score-bajo-bg);color:#8C2424}
+  .eq-alert--info{border-color:var(--rh-border);background:var(--rh-blue-light);color:var(--rh-text-secondary)}
+
+  .eq-tabs{display:inline-flex;gap:4px;padding:4px;margin-bottom:var(--rh-space-4);border:1px solid var(--rh-border);border-radius:999px;background:var(--rh-surface)}
+  .eq-tab{min-height:38px;padding:0 18px;border-radius:999px;background:transparent;color:var(--rh-text-secondary);font-size:.88rem}
+  .eq-tab:hover{opacity:1;color:var(--rh-text)}
+  .eq-tab.is-active{background:var(--rh-blue);color:#fff}
+
+  .eq-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .eq-search{position:relative;flex:1 1 280px;max-width:380px}
+  .eq-search i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--rh-text-muted)}
+  .eq-search input{width:100%;margin:0;padding-left:36px}
+
+  .eq-table{width:100%;border-collapse:collapse;font-size:.9rem}
+  .eq-table th{padding:8px 12px;border-bottom:1px solid var(--rh-border);color:var(--rh-text-muted);font-size:.72rem;letter-spacing:.06em;text-align:left;text-transform:uppercase}
+  .eq-table td{padding:12px;border-bottom:1px solid var(--rh-border);vertical-align:middle}
+  .eq-table tbody tr:last-child td{border-bottom:0}
+  .eq-table tbody tr.is-off{background:rgba(245,243,239,.65)}
+  .eq-person{display:flex;align-items:center;gap:10px;min-width:0}
+  .eq-avatar{display:inline-flex;flex:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--rh-blue-light);color:var(--rh-blue);font-size:.76rem;font-weight:800}
+  .is-off .eq-avatar{background:var(--rh-surface-alt);color:var(--rh-text-muted)}
+  .eq-person div{min-width:0}
+  .eq-person strong{display:block}
+  .eq-person small{display:block;overflow:hidden;color:var(--rh-text-secondary);font-size:.8rem;text-overflow:ellipsis}
+  .eq-you{margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--rh-yellow-light);color:#7A5C14;font-size:.7rem;font-weight:800}
+  .eq-state{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:700;white-space:nowrap}
+  .eq-state::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .eq-state--activo{background:var(--rh-score-alto-bg);color:#1F6B3A}
+  .eq-state--invitado{background:var(--rh-score-medio-bg);color:#8A5B10}
+  .eq-state--desactivado{background:var(--rh-surface-alt);color:var(--rh-text-secondary)}
+  .eq-state-note{display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--rh-danger);font-size:.76rem;font-weight:700}
+  .eq-projects{color:var(--rh-text-secondary);font-size:.84rem}
+  .eq-projects strong{color:var(--rh-text)}
+  .eq-actions{text-align:right;white-space:nowrap}
+
+  .eq-history{display:grid;margin:0;padding:0;list-style:none}
+  .eq-history li{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--rh-border)}
+  .eq-history li:last-child{border-bottom:0}
+  .eq-history__icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--rh-blue-light);color:var(--rh-blue)}
+  .eq-history p{margin:0;font-size:.9rem;line-height:1.45}
+  .eq-history small{display:block;margin-top:2px;color:var(--rh-text-muted);font-size:.78rem}
+  .eq-history time{color:var(--rh-text-secondary);font-family:var(--rh-font-mono);font-size:.76rem;white-space:nowrap}
+  .eq-history-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .eq-history-filter label{font-size:.84rem;font-weight:700;color:var(--rh-text-secondary)}
+  .eq-history-filter select{width:auto;min-width:220px;margin:0}
+
+  .eq-modal-sections{display:grid;gap:14px}
+  .eq-block{display:grid;gap:10px;padding:14px;border:1px solid var(--rh-border);border-radius:12px;background:var(--rh-surface)}
+  .eq-block h3{margin:0;font-family:var(--rh-font);font-size:.95rem}
+  .eq-block > p{margin:0;color:var(--rh-text-secondary);font-size:.84rem;line-height:1.45}
+  .eq-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .eq-field{display:grid;gap:5px;font-size:.82rem;font-weight:700;color:var(--rh-text-secondary)}
+  .eq-field--wide{grid-column:1/-1}
+  .eq-field input,.eq-field select{width:100%;margin:0;font-weight:500}
+  .eq-field input:read-only{background:var(--rh-surface-alt);color:var(--rh-text-secondary)}
+  .eq-roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .eq-role{display:grid;gap:3px;padding:12px;border:1px solid var(--rh-border);border-radius:10px;background:var(--rh-surface);color:var(--rh-text);font-weight:400;text-align:left;min-height:0}
+  .eq-role:hover:not(:disabled){border-color:var(--rh-blue);opacity:1}
+  .eq-role.is-active{border-color:var(--rh-blue);background:var(--rh-blue-light);box-shadow:inset 0 0 0 1px var(--rh-blue)}
+  .eq-role:disabled{cursor:not-allowed;opacity:.65}
+  .eq-role strong{font-size:.9rem}
+  .eq-role span{color:var(--rh-text-secondary);font-size:.78rem;line-height:1.4}
+  .eq-assigned{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+  .eq-assigned li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--rh-surface-alt);font-size:.88rem}
+  .eq-assign-row{display:flex;gap:8px}
+  .eq-assign-row select{flex:1;min-width:0;margin:0}
+  .eq-link{min-height:0;padding:0;background:none;color:var(--rh-blue);font-size:.82rem;font-weight:800}
+  .eq-link:hover{text-decoration:underline;opacity:1}
+  .eq-link--danger{color:var(--rh-danger)}
+  .eq-row-end{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .danger-button{background:var(--rh-danger);color:#fff}
+  .eq-check{display:flex;align-items:center;gap:9px;font-size:.88rem;font-weight:500;color:var(--rh-text)}
+  .eq-check input{width:18px;min-width:18px;height:18px;min-height:18px;margin:0;accent-color:var(--rh-blue)}
+  .eq-effects{display:grid;gap:8px;margin:0;padding:0;list-style:none;font-size:.9rem;line-height:1.45}
+  .eq-effects li{display:flex;gap:8px}
+  .eq-effects i{margin-top:2px;color:var(--rh-text-secondary)}
+  .eq-mock-cases{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border:1px dashed var(--rh-border-strong);border-radius:10px}
+  .eq-mock-cases span{width:100%;color:var(--rh-text-muted);font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+  .eq-mock-cases button{min-height:28px;padding:0 10px;border:1px solid var(--rh-border);border-radius:999px;background:var(--rh-surface);color:var(--rh-text-secondary);font-size:.76rem}
+  .eq-toast{position:fixed;left:50%;bottom:64px;z-index:70;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);padding:11px 16px;border-radius:10px;background:var(--rh-blue-dark);color:#fff;box-shadow:var(--rh-shadow-md);font-size:.88rem;transform:translateX(-50%)}
+  .eq-toast[hidden]{display:none}
+
+  @media (max-width:1180px){
+    .eq-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+    .eq-table,.eq-table tbody,.eq-table tr,.eq-table td{display:block;width:100%}
+    .eq-table tr{margin-bottom:10px;padding:12px;border:1px solid var(--rh-border);border-radius:12px}
+    .eq-table td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:5px 0;border:0;text-align:right}
+    .eq-table td::before{content:attr(data-label);color:var(--rh-text-muted);font-size:.76rem;font-weight:700;text-align:left;white-space:nowrap}
+    .eq-table td.eq-td-person{display:block;padding-bottom:8px;text-align:left}
+    .eq-table td.eq-td-person::before{content:none}
+    .eq-actions{padding-top:8px!important}
+    .eq-actions::before{content:none!important}
+    .eq-actions button{width:100%}
+  }
+  @media (max-width:760px){
+    .eq-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .eq-tabs{display:flex}
+    .eq-tab{flex:1}
+    .eq-search{max-width:none}
+    .eq-toolbar > button{width:100%}
+    .eq-history li{grid-template-columns:34px 1fr}
+    .eq-history time{grid-column:2}
+    .eq-fields,.eq-roles{grid-template-columns:1fr}
+    .mock-bar{left:16px;right:16px;justify-content:center}
+    .mock-bar > span{display:none}
+    .eq-page{padding-bottom:64px}
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar sidebar--admin" role="navigation" aria-label="Navegación principal">
+    <a class="sidebar-brand" href="#"><span class="sidebar-brand__pill"><img class="sidebar-brand__logo" src="/public/brand/rutahogar/logo-rutahogar.svg" alt="RutaHogar"></span></a>
+    <nav class="nav-group" aria-label="Administración">
+      <span class="nav-group__label">Administración</span>
+      <button class="nav-item" type="button"><i class="ti ti-home" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Inicio</span></button>
+      <button class="nav-item" type="button"><i class="ti ti-building" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Proyectos</span></button>
+      <button class="nav-item" type="button"><i class="ti ti-user-search" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Leads</span></button>
+      <button class="nav-item is-active" type="button" aria-current="page"><i class="ti ti-users" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Equipo</span></button>
+      <button class="nav-item" type="button"><i class="ti ti-flag" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Reportes</span></button>
+      <button class="nav-item" type="button" data-tenant-only><i class="ti ti-list-details" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Priorización</span></button>
+      <button class="nav-item" type="button" data-tenant-only><i class="ti ti-chart-line" style="font-size:20px" aria-hidden="true"></i><span class="sidebar__label">Métricas</span></button>
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <button class="sidebar-user" type="button">
+      <span class="avatar" id="user-initials">EC</span>
+      <span class="sidebar-user__meta"><span class="sidebar-user__role" id="user-role">Admin inmobiliaria</span><strong id="user-name">Ellison Caram</strong></span>
+    </button>
+  </aside>
+
+  <main class="content"><div class="content-inner">
+    <section class="section-block admin-catalog admin-catalog-page eq-page">
+      <div class="section-heading">
+        <span class="eyebrow">Administración</span>
+        <h1>Equipo</h1>
+        <p id="page-subtitle"></p>
+      </div>
+      <div id="view"></div>
+    </section>
+  </div></main>
+</div>
+
+<div id="modal-root"></div>
+<div class="eq-toast" id="toast" role="status" hidden></div>
+
+<div class="mock-bar" aria-label="Controles del mockup">
+  <span>Ver como</span>
+  <button type="button" data-mock="tenant">Admin inmobiliaria</button>
+  <button type="button" data-mock="global">Admin global</button>
+  <button type="button" data-mock="reset" title="Vuelve a los datos iniciales">Reiniciar</button>
+</div>
+
+<script>
+// Fake data and just enough behaviour to click through the HU 28 design. Not production code.
+const ROLE = { ejecutivo: "Ejecutivo", admin_inmobiliario: "Administrador inmobiliario" };
+const STATE = { activo: "Activo", invitado: "Invitado", desactivado: "Desactivado" };
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+const NOW = "02-11-2026 12:30";
+
+const seed = () => ({
+  ei: {
+    nombre: "Echeverría Izquierdo",
+    proyectos: ["Altos de Macul", "Parque Lo Espejo", "Mirador Ñuñoa", "Portal Sur"],
+    members: [
+      { id: "ec", nombre: "Ellison Caram", email: "ellison.caram@ejemplo.cl", telefono: "+56 9 5555 0101", rol: "admin_inmobiliario", estado: "activo", proyectos: [], ingreso: "02-11-2026 09:14" },
+      { id: "pr", nombre: "Paula Rojas", email: "paula.rojas@ejemplo.cl", telefono: "+56 9 5555 0102", rol: "admin_inmobiliario", estado: "activo", proyectos: [], ingreso: "31-10-2026 17:40" },
+      { id: "cs", nombre: "Camila Soto", email: "camila.soto@ejemplo.cl", telefono: "+56 9 5555 0103", rol: "ejecutivo", estado: "activo", proyectos: ["Altos de Macul", "Parque Lo Espejo"], ingreso: "01-11-2026 11:02" },
+      { id: "df", nombre: "Diego Fuentes", email: "diego.fuentes@ejemplo.cl", telefono: "+56 9 5555 0104", rol: "ejecutivo", estado: "activo", proyectos: ["Mirador Ñuñoa"], ingreso: "30-10-2026 10:21" },
+      { id: "jm", nombre: "Javiera Muñoz", email: "javiera.munoz@ejemplo.cl", telefono: "", rol: "ejecutivo", estado: "invitado", proyectos: ["Altos de Macul"], ingreso: null, invitada: "30-10-2026 16:05" },
+      { id: "tv", nombre: "Tomás Vera", email: "tomas.vera@ejemplo.cl", telefono: "+56 9 5555 0106", rol: "ejecutivo", estado: "desactivado", proyectos: [], ingreso: "12-09-2026 08:47" },
+    ],
+    history: [
+      { at: "01-11-2026 18:12", actor: "Paula Rojas", member: "cs", icon: "building-plus", text: "asignó <strong>Parque Lo Espejo</strong> a <strong>Camila Soto</strong>", origin: "Desde Proyectos" },
+      { at: "30-10-2026 16:05", actor: "Ellison Caram", member: "jm", icon: "mail-forward", text: "invitó a <strong>Javiera Muñoz</strong> como Ejecutivo" },
+      { at: "28-10-2026 09:30", actor: "Ellison Caram", member: "pr", icon: "shield-up", text: "cambió la función de <strong>Paula Rojas</strong> de Ejecutivo a Administrador inmobiliario" },
+      { at: "15-09-2026 12:20", actor: "Ellison Caram", member: "tv", icon: "user-off", text: "desactivó a <strong>Tomás Vera</strong> y retiró sus proyectos: <strong>Portal Sur</strong>" },
+    ],
+  },
+  andes: {
+    nombre: "Inmobiliaria Andes",
+    proyectos: ["Costa Laguna"],
+    members: [
+      { id: "ms", nombre: "Marcela Silva", email: "marcela.silva@ejemplo.cl", telefono: "+56 9 5555 0201", rol: "admin_inmobiliario", estado: "activo", proyectos: [], ingreso: "29-10-2026 15:33" },
+      { id: "rn", nombre: "Rodrigo Núñez", email: "rodrigo.nunez@ejemplo.cl", telefono: "", rol: "ejecutivo", estado: "activo", proyectos: ["Costa Laguna"], ingreso: "27-10-2026 09:03" },
+    ],
+    history: [{ at: "20-10-2026 10:00", actor: "Marcela Silva", member: "rn", icon: "mail-forward", text: "invitó a <strong>Rodrigo Núñez</strong> como Ejecutivo" }],
+  },
+});
+
+const ACTORS = {
+  tenant: { id: "ec", nombre: "Ellison Caram", rol: "Admin inmobiliaria", subtitle: "Invita a tu equipo, define su función y sus proyectos, y controla su acceso." },
+  global: { id: null, nombre: "Equipo RutaHogar", rol: "Admin global", subtitle: "Elige una inmobiliaria para administrar su equipo." },
+};
+let data = seed();
+let ui = { actor: "tenant", tenant: "ei", tab: "miembros", query: "", filter: "todos", historyMember: "" };
+const actor = () => ACTORS[ui.actor];
+const team = () => data[ui.tenant];
+const memberById = (id) => team().members.find((m) => m.id === id);
+const activeAdmins = () => team().members.filter((m) => m.rol === "admin_inmobiliario" && m.estado !== "desactivado");
+const isSelf = (m) => m.id === actor().id;
+const isLastAdmin = (m) => m.rol === "admin_inmobiliario" && m.estado !== "desactivado" && activeAdmins().length === 1;
+const activeOn = (project) => team().members.filter((m) => m.estado !== "desactivado" && m.proyectos.includes(project));
+const uncovered = () => team().proyectos.filter((p) => !activeOn(p).length);
+const lockReason = (m) => isSelf(m) ? "No puedes cambiar tu propia función ni desactivar tu acceso. Otro administrador debe hacerlo."
+  : isLastAdmin(m) ? "Es el único administrador activo de esta inmobiliaria. Asigna otro administrador antes de hacer este cambio." : "";
+
+function log(member, icon, text) { team().history.unshift({ at: NOW, actor: actor().nombre, member: member.id, icon, text }); }
+function toast(message) {
+  const node = document.getElementById("toast");
+  node.textContent = message; node.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { node.hidden = true; }, 3200);
+}
+
+function statsHtml() {
+  const count = (state) => team().members.filter((m) => m.estado === state).length;
+  const cards = [["todos", team().members.length, "Miembros"], ["activo", count("activo"), "Activos"], ["invitado", count("invitado"), "Invitados"], ["desactivado", count("desactivado"), "Desactivados"]];
+  return `<div class="eq-stats">${cards.map(([key, n, label]) => `<button type="button" class="eq-stat ${ui.filter === key ? "is-active" : ""}" data-filter="${key}" aria-pressed="${ui.filter === key}"><strong>${n}</strong><span>${label}</span></button>`).join("")}</div>`;
+}
+
+function memberRows() {
+  const q = ui.query.trim().toLowerCase();
+  const rows = team().members.filter((m) => (ui.filter === "todos" || m.estado === ui.filter) && (!q || `${m.nombre} ${m.email}`.toLowerCase().includes(q)));
+  if (!rows.length) return `<div class="eq-empty"><i class="ti ti-user-search" aria-hidden="true"></i><strong>Sin resultados</strong><p>Prueba con otro nombre o limpia el filtro.</p></div>`;
+  return `<div class="table-wrap"><table class="eq-table"><thead><tr><th>Persona</th><th>Función</th><th>Estado</th><th>Proyectos</th><th>Último ingreso</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>${rows.map((m) => `
+    <tr class="${m.estado === "desactivado" ? "is-off" : ""}">
+      <td class="eq-td-person"><div class="eq-person"><span class="eq-avatar" aria-hidden="true">${esc(initials(m.nombre))}</span><div><strong>${esc(m.nombre)}${isSelf(m) ? '<span class="eq-you">Tú</span>' : ""}</strong><small>${esc(m.email)}</small></div></div></td>
+      <td data-label="Función">${ROLE[m.rol]}</td>
+      <td data-label="Estado"><div><span class="eq-state eq-state--${m.estado}">${STATE[m.estado]}</span>${m.correoFallido ? '<span class="eq-state-note"><i class="ti ti-mail-off" aria-hidden="true"></i>Correo no enviado</span>' : ""}</div></td>
+      <td data-label="Proyectos" class="eq-projects">${m.proyectos.length ? `<strong>${m.proyectos.length}</strong> · ${esc(m.proyectos.join(", "))}` : "Sin proyectos"}</td>
+      <td data-label="Último ingreso" class="eq-projects">${m.ingreso ? m.ingreso.slice(0, 10) : "Nunca"}</td>
+      <td class="eq-actions"><button type="button" class="secondary-button compact-button" data-open="${m.id}">Gestionar</button></td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+
+function historyHtml() {
+  const entries = team().history.filter((e) => !ui.historyMember || e.member === ui.historyMember);
+  return `<section class="admin-surface"><div class="eq-history-filter"><label for="history-member">Ver cambios de</label>
+    <select id="history-member"><option value="">Todo el equipo</option>${team().members.map((m) => `<option value="${m.id}" ${ui.historyMember === m.id ? "selected" : ""}>${esc(m.nombre)}</option>`).join("")}</select></div>
+    ${entries.length ? `<ol class="eq-history">${entries.map((e) => `<li><span class="eq-history__icon"><i class="ti ti-${e.icon}" aria-hidden="true"></i></span><div><p><strong>${esc(e.actor)}</strong> ${e.text}</p>${e.origin ? `<small>${esc(e.origin)}</small>` : ""}</div><time>${e.at}</time></li>`).join("")}</ol>`
+      : '<div class="eq-empty"><i class="ti ti-history" aria-hidden="true"></i><strong>Sin cambios registrados</strong></div>'}</section>`;
+}
+
+function render() {
+  document.getElementById("page-subtitle").textContent = actor().subtitle;
+  document.getElementById("user-name").textContent = actor().nombre;
+  document.getElementById("user-role").textContent = actor().rol;
+  document.getElementById("user-initials").textContent = ui.actor === "global" ? "RH" : "EC";
+  document.querySelectorAll("[data-tenant-only]").forEach((node) => { node.hidden = ui.actor === "global"; });
+  document.querySelectorAll("[data-mock]").forEach((node) => node.classList.toggle("is-active", node.dataset.mock === ui.actor));
+
+  const selector = ui.actor === "global" ? `<div class="eq-tenant"><label>Inmobiliaria<select id="tenant-select"><option value="">Selecciona una inmobiliaria</option>${Object.entries(data).map(([key, t]) => `<option value="${key}" ${ui.tenant === key ? "selected" : ""}>${esc(t.nombre)}</option>`).join("")}</select></label></div>` : "";
+  if (!ui.tenant) {
+    document.getElementById("view").innerHTML = `${selector}<section class="admin-surface"><div class="eq-empty"><i class="ti ti-building-community" aria-hidden="true"></i><strong>Elige una inmobiliaria</strong><p>Verás su equipo, su historial y las mismas acciones que tiene su administrador.</p></div></section>`;
+    return;
+  }
+  const gaps = uncovered();
+  const alert = gaps.length ? `<div class="eq-alert" role="status"><i class="ti ti-alert-triangle" aria-hidden="true"></i><span><strong>${gaps.length === 1 ? "1 proyecto sin ejecutivo activo:" : `${gaps.length} proyectos sin ejecutivo activo:`}</strong> ${esc(gaps.join(", "))}. Sus leads no tienen a nadie asignado para hacerles seguimiento.</span></div>` : "";
+  const members = `<section class="admin-surface"><div class="eq-toolbar"><div class="eq-search"><i class="ti ti-search" aria-hidden="true"></i><input id="search" type="search" aria-label="Buscar por nombre o correo" placeholder="Buscar por nombre o correo" value="${esc(ui.query)}"></div><button type="button" data-invite>Invitar ejecutivo</button></div><div id="rows">${memberRows()}</div></section>`;
+  document.getElementById("view").innerHTML = `${selector}${statsHtml()}${alert}
+    <div class="eq-tabs" role="tablist" aria-label="Secciones de equipo">
+      <button type="button" class="eq-tab ${ui.tab === "miembros" ? "is-active" : ""}" role="tab" aria-selected="${ui.tab === "miembros"}" data-tab="miembros">Miembros</button>
+      <button type="button" class="eq-tab ${ui.tab === "historial" ? "is-active" : ""}" role="tab" aria-selected="${ui.tab === "historial"}" data-tab="historial">Historial</button>
+    </div>${ui.tab === "miembros" ? members : historyHtml()}`;
+}
+
+let lastFocus = null;
+function openModal(html, size = "md", label = "Detalle") {
+  if (!document.querySelector(".admin-modal")) lastFocus = document.activeElement;
+  document.getElementById("modal-root").innerHTML = `<div class="admin-modal" data-backdrop><div class="admin-modal-card admin-modal-card--${size}" role="dialog" aria-modal="true" aria-label="${esc(label)}" tabindex="-1">${html}</div></div>`;
+  document.querySelector(".admin-modal-card").focus();
+}
+function closeModal() { document.getElementById("modal-root").innerHTML = ""; lastFocus?.focus?.(); }
+const modalHeader = (title, text) => `<div class="admin-modal-header"><div class="admin-modal-heading"><h2>${title}</h2>${text ? `<p>${text}</p>` : ""}</div><button type="button" class="secondary-button compact-button" data-close>Cerrar</button></div>`;
+
+let openMemberId = null;
+function memberModal(id) {
+  openMemberId = id;
+  const m = memberById(id);
+  const reason = lockReason(m);
+  const off = m.estado === "desactivado";
+  const free = team().proyectos.filter((p) => !m.proyectos.includes(p));
+  const roleCard = (key, text) => `<button type="button" class="eq-role ${m.rol === key ? "is-active" : ""}" data-role="${key}" aria-pressed="${m.rol === key}" ${reason || off ? "disabled" : ""}><strong>${ROLE[key]}</strong><span>${text}</span></button>`;
+  const status = m.correoFallido ? "La invitación no llegó a enviarse."
+    : m.estado === "invitado" ? `Invitación enviada el ${m.invitada?.slice(0, 10) || NOW.slice(0, 10)}. Aún no define su contraseña.`
+    : off ? "No puede entrar a RutaHogar. Su historial se conserva." : m.ingreso ? `Último ingreso: ${m.ingreso}.` : "";
+  const access = reason ? `<div class="eq-alert eq-alert--info eq-alert--modal"><i class="ti ti-lock" aria-hidden="true"></i><span>${reason}</span></div>`
+    : off ? `<div class="eq-row-end"><span>Volverá a entrar con su contraseña. Sus proyectos anteriores no se recuperan.</span><button type="button" data-reactivate="${m.id}">Reactivar acceso</button></div>`
+      : `<div class="eq-row-end"><span>Pierde el acceso de inmediato y se retira de sus proyectos.</span><button type="button" class="danger-button" data-deactivate="${m.id}">Desactivar acceso</button></div>`;
+  openModal(`${modalHeader(`${esc(m.nombre)}${isSelf(m) ? '<span class="eq-you">Tú</span>' : ""}`, `<span class="eq-state eq-state--${m.estado}">${STATE[m.estado]}</span> ${esc(status)}`)}
+    <div class="admin-modal-body"><div class="eq-modal-sections">
+      <section class="eq-block"><h3>Datos</h3><div class="eq-fields">
+        <label class="eq-field">Nombre completo<input id="edit-nombre" value="${esc(m.nombre)}"></label>
+        <label class="eq-field">Teléfono<input id="edit-telefono" value="${esc(m.telefono)}" placeholder="+56 9 ..."></label>
+        <label class="eq-field eq-field--wide">Correo<input value="${esc(m.email)}" readonly></label></div>
+        <div class="eq-row-end"><span></span><button type="button" class="secondary-button compact-button" data-save="${m.id}">Guardar datos</button></div></section>
+      ${m.estado === "invitado" ? `<section class="eq-block"><h3>Invitación</h3>${m.correoFallido ? '<div class="eq-alert eq-alert--danger eq-alert--modal"><i class="ti ti-mail-off" aria-hidden="true"></i><span>No pudimos enviar el correo. Revisa la dirección y reenvía la invitación.</span></div>' : ""}<div class="eq-row-end"><span>${m.correoFallido ? "La cuenta ya está creada, pero aún no recibe el enlace." : "Si el enlace venció, reenvía la invitación para enviar uno nuevo."}</span><button type="button" class="secondary-button compact-button" data-resend="${m.id}">Reenviar invitación</button></div></section>` : ""}
+      <section class="eq-block"><h3>Función</h3>${reason ? "" : "<p>Define qué puede hacer en RutaHogar.</p>"}<div class="eq-roles">
+        ${roleCard("ejecutivo", "Gestiona leads de sus proyectos asignados.")}
+        ${roleCard("admin_inmobiliario", "Además administra el equipo, los proyectos y la priorización.")}</div></section>
+      <section class="eq-block"><h3>Proyectos</h3>
+        ${m.proyectos.length ? `<ul class="eq-assigned">${m.proyectos.map((p) => `<li>${esc(p)}<button type="button" class="eq-link eq-link--danger" data-unassign="${esc(p)}" aria-label="Quitar ${esc(p)}">Quitar</button></li>`).join("")}</ul>` : "<p>Sin proyectos asignados.</p>"}
+        ${off ? "<p>Reactiva a esta persona para asignarle proyectos.</p>" : free.length ? `<div class="eq-assign-row"><select id="assign-project" aria-label="Proyecto para asignar">${free.map((p) => `<option>${esc(p)}</option>`).join("")}</select><button type="button" class="secondary-button compact-button" data-assign="${m.id}">Asignar</button></div>` : ""}</section>
+      <section class="eq-block"><h3>Acceso</h3>${access}</section>
+    </div></div>
+    <div class="admin-modal-footer"><button type="button" class="eq-link" data-member-history="${m.id}">Ver historial de esta persona</button></div>`, "md", `Gestionar a ${m.nombre}`);
+}
+
+function deactivateModal(id) {
+  const m = memberById(id);
+  const orphaned = m.proyectos.filter((p) => activeOn(p).length === 1);
+  openModal(`${modalHeader(`¿Desactivar a ${esc(m.nombre)}?`)}
+    <div class="admin-modal-body"><div class="eq-modal-sections">
+      <ul class="eq-effects">
+        <li><i class="ti ti-lock" aria-hidden="true"></i><span>Pierde el acceso a RutaHogar de inmediato.</span></li>
+        ${m.proyectos.length ? `<li><i class="ti ti-building" aria-hidden="true"></i><span>Se retira de ${m.proyectos.length === 1 ? "este proyecto" : `estos ${m.proyectos.length} proyectos`}: <strong>${esc(m.proyectos.join(", "))}</strong>.</span></li>` : ""}
+        <li><i class="ti ti-history" aria-hidden="true"></i><span>Su historial se conserva. Si reactivas este acceso, deberás asignarle los proyectos de nuevo.</span></li>
+      </ul>
+      ${orphaned.length ? `<div class="eq-alert eq-alert--danger eq-alert--modal"><i class="ti ti-alert-triangle" aria-hidden="true"></i><span><strong>${esc(orphaned.join(", "))}</strong> ${orphaned.length === 1 ? "quedará" : "quedarán"} sin ejecutivo activo.</span></div>` : ""}
+    </div></div>
+    <div class="admin-modal-footer"><button type="button" class="secondary-button" data-back="${m.id}">Cancelar</button><button type="button" class="danger-button" data-confirm-deactivate="${m.id}">Desactivar acceso</button></div>`, "sm", `Desactivar a ${m.nombre}`);
+}
+
+const CASES = {
+  nuevo: { email: "nueva.persona@ejemplo.cl", label: "Correo nuevo" },
+  fallo: { email: "correo.rebotado@ejemplo.cl", label: "Falla el envío" },
+  sin: { email: "sin.inmobiliaria@ejemplo.cl", label: "Ejecutivo sin inmobiliaria" },
+  equipo: { email: "camila.soto@ejemplo.cl", label: "Ya en el equipo", error: "Esta persona ya es parte de tu equipo." },
+  lead: { email: "comprador@ejemplo.cl", label: "Lead", error: "Este correo pertenece a una cuenta de comprador en RutaHogar. Usa otro correo, como el laboral." },
+  otra: { email: "otra.inmo@ejemplo.cl", label: "Otra inmobiliaria", error: "Este correo pertenece a una persona de otra inmobiliaria." },
+  admin: { email: "administracion@ejemplo.cl", label: "Administrador", error: "Esta cuenta es de un administrador: no se puede vincular como ejecutivo." },
+};
+function inviteModal() {
+  openModal(`${modalHeader("Invitar ejecutivo", "Recibirá un correo para definir su contraseña. Entra como Ejecutivo y luego puedes cambiar su función.")}
+    <div class="admin-modal-body"><div class="eq-modal-sections">
+      <div id="invite-error" class="error-message" role="alert" hidden></div>
+      <div class="eq-fields">
+        <label class="eq-field">Nombre completo<input id="invite-nombre" placeholder="Ej: Ana Soto"></label>
+        <label class="eq-field">Teléfono (opcional)<input id="invite-telefono" placeholder="+56 9 ..."></label>
+        <label class="eq-field eq-field--wide">Correo<input id="invite-email" type="email" placeholder="nombre@empresa.cl"></label>
+      </div>
+      <section class="eq-block"><h3>Proyectos (opcional)</h3>${team().proyectos.map((p) => `<label class="eq-check"><input type="checkbox" value="${esc(p)}" data-invite-project>${esc(p)}</label>`).join("")}</section>
+      <div class="eq-mock-cases"><span>Solo mockup · probar un correo</span>${Object.entries(CASES).map(([key, c]) => `<button type="button" data-case="${key}">${c.label}</button>`).join("")}</div>
+    </div></div>
+    <div class="admin-modal-footer"><button type="button" class="secondary-button" data-close>Cancelar</button><button type="button" data-send-invite>Enviar invitación</button></div>`, "md", "Invitar ejecutivo");
+}
+
+function sendInvite() {
+  const nombre = document.getElementById("invite-nombre").value.trim();
+  const email = document.getElementById("invite-email").value.trim().toLowerCase();
+  const fail = (message) => { const node = document.getElementById("invite-error"); node.textContent = message; node.hidden = false; };
+  if (!nombre) return fail("Ingresa el nombre.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Ingresa un correo válido.");
+  const refused = Object.values(CASES).find((c) => c.email === email && c.error);
+  if (refused) return fail(refused.error);
+  if (team().members.some((m) => m.email === email)) return fail(CASES.equipo.error);
+  const linked = email === CASES.sin.email;
+  const failed = email === CASES.fallo.email;
+  const m = { id: `n${Date.now()}`, nombre, email, telefono: document.getElementById("invite-telefono").value.trim(), rol: "ejecutivo", estado: linked ? "activo" : "invitado", proyectos: [...document.querySelectorAll("[data-invite-project]:checked")].map((n) => n.value), ingreso: linked ? "28-10-2026 13:15" : null, invitada: NOW, correoFallido: failed };
+  team().members.push(m);
+  log(m, failed ? "mail-off" : "mail-forward", linked ? `vinculó a <strong>${esc(nombre)}</strong> al equipo como Ejecutivo` : failed ? `invitó a <strong>${esc(nombre)}</strong> como Ejecutivo, pero el correo no se pudo enviar` : `invitó a <strong>${esc(nombre)}</strong> como Ejecutivo`);
+  closeModal(); render();
+  toast(linked ? `${nombre} ya tenía cuenta: se sumó al equipo y le avisamos por correo.` : failed ? `La cuenta se creó, pero no pudimos enviar el correo a ${email}.` : `Invitación enviada a ${email}.`);
+}
+
+document.addEventListener("input", (event) => {
+  if (event.target.id === "search") { ui.query = event.target.value; document.getElementById("rows").innerHTML = memberRows(); }
+});
+document.addEventListener("change", (event) => {
+  if (event.target.id === "tenant-select") { ui.tenant = event.target.value; ui.tab = "miembros"; ui.filter = "todos"; ui.historyMember = ""; ui.query = ""; render(); }
+  if (event.target.id === "history-member") { ui.historyMember = event.target.value; render(); document.getElementById("history-member").focus(); }
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && document.querySelector(".admin-modal")) closeModal(); });
+document.addEventListener("click", (event) => {
+  if (event.target.matches("[data-backdrop]")) return closeModal();
+  const button = event.target.closest("button");
+  if (!button) return;
+  const d = button.dataset;
+  if (d.mock === "reset") { data = seed(); ui = { ...ui, tenant: ui.actor === "tenant" ? "ei" : "", tab: "miembros", filter: "todos", query: "", historyMember: "" }; closeModal(); render(); return; }
+  if (d.mock) { ui = { ...ui, actor: d.mock, tenant: d.mock === "tenant" ? "ei" : "", tab: "miembros", filter: "todos", query: "", historyMember: "" }; closeModal(); render(); return; }
+  if (d.filter) { ui.filter = d.filter; ui.tab = "miembros"; render(); return; }
+  if (d.tab) { ui.tab = d.tab; render(); return; }
+  if (d.open) return memberModal(d.open);
+  if ("close" in d) return closeModal();
+  if (d.back) return memberModal(d.back);
+  if ("invite" in d) return inviteModal();
+  if ("sendInvite" in d) return sendInvite();
+  if (d.case) { document.getElementById("invite-email").value = CASES[d.case].email; if (!document.getElementById("invite-nombre").value) document.getElementById("invite-nombre").value = "Ana Soto"; return; }
+  if (d.memberHistory) { ui.tab = "historial"; ui.historyMember = d.memberHistory; closeModal(); render(); return; }
+  if (d.save) {
+    const m = memberById(d.save);
+    m.nombre = document.getElementById("edit-nombre").value.trim() || m.nombre;
+    m.telefono = document.getElementById("edit-telefono").value.trim();
+    log(m, "pencil", `actualizó los datos de <strong>${esc(m.nombre)}</strong>`);
+    render(); memberModal(m.id); toast("Datos guardados."); return;
+  }
+  if (d.resend) { const m = memberById(d.resend); m.invitada = NOW; m.correoFallido = false; log(m, "mail-forward", `reenvió la invitación de <strong>${esc(m.nombre)}</strong>`); render(); memberModal(m.id); toast(`Invitación reenviada a ${m.email}.`); return; }
+  if (d.role) {
+    const m = memberById(openMemberId);
+    if (m.rol === d.role) return;
+    const previous = ROLE[m.rol]; m.rol = d.role;
+    log(m, d.role === "admin_inmobiliario" ? "shield-up" : "shield-down", `cambió la función de <strong>${esc(m.nombre)}</strong> de ${previous} a ${ROLE[d.role]}`);
+    render(); memberModal(m.id); toast("Función actualizada."); return;
+  }
+  if (d.assign) {
+    const m = memberById(d.assign); const project = document.getElementById("assign-project").value;
+    m.proyectos.push(project); log(m, "building-plus", `asignó <strong>${esc(project)}</strong> a <strong>${esc(m.nombre)}</strong>`);
+    render(); memberModal(m.id); return;
+  }
+  if (d.unassign) {
+    const m = memberById(openMemberId);
+    m.proyectos = m.proyectos.filter((p) => p !== d.unassign); log(m, "building-minus", `retiró <strong>${esc(d.unassign)}</strong> de <strong>${esc(m.nombre)}</strong>`);
+    render(); memberModal(m.id); return;
+  }
+  if (d.deactivate) return deactivateModal(d.deactivate);
+  if (d.confirmDeactivate) {
+    const m = memberById(d.confirmDeactivate); const removed = m.proyectos;
+    m.estado = "desactivado"; m.proyectos = [];
+    log(m, "user-off", `desactivó a <strong>${esc(m.nombre)}</strong>${removed.length ? ` y retiró sus proyectos: <strong>${esc(removed.join(", "))}</strong>` : ""}`);
+    closeModal(); render(); toast(`${m.nombre} ya no tiene acceso.`); return;
+  }
+  if (d.reactivate) {
+    const m = memberById(d.reactivate);
+    m.estado = m.ingreso ? "activo" : "invitado";
+    log(m, "user-check", `reactivó a <strong>${esc(m.nombre)}</strong>`);
+    render(); memberModal(m.id); toast(`${m.nombre} puede volver a entrar.`); return;
+  }
+});
+render();
+</script>
+</body>
+</html>

@@ -102,7 +102,7 @@ con `inmobiliaria_id` en `NULL` es **admin global** y ve todos los tenants.
 
 | Tabla | `usuario` | `ejecutivo` | `admin` |
 | :---- | :-------- | :---------- | :------ |
-| `profiles` | lo suyo | lo suyo | los ejecutivos de su inmobiliaria |
+| `profiles` | lo suyo | lo suyo; de su equipo sólo el nombre, por `list_staff_names` | lo suyo; de su equipo sólo el nombre; todo si es global |
 | `evaluations` | las suyas | **todas** ⚠️ | **todas** ⚠️ |
 | `improvement_goals` | las suyas | — | — |
 | `scoring_history` | lo suyo | lectura de staff | lectura de staff |
@@ -213,6 +213,40 @@ Tabla vacía = valores por defecto, que reproducen la prioridad del motor; por e
 `20261029120000_hu21_configuracion_comercial.sql` puede aplicarse antes o después del código.
 Se aplica como archivo único (`supabase db query --linked -f <archivo>` y luego
 `supabase migration repair --status applied 20261029120000`), **nunca con `supabase db push`**.
+
+---
+
+## Equipo y auditoría (HU 28)
+
+`profiles.estado_acceso` (`activo` / `desactivado`) es la capa de acceso: con `desactivado`,
+`get_my_role()` devuelve `NULL` y policies y RPC fallan cerradas desde la siguiente request.
+`get_my_inmobiliaria()` no cambia. La segunda capa es el baneo de Auth, que impide iniciar sesión y
+renovar el token. El backend confirma la desactivación antes de banear y levanta el baneo antes de
+reactivar, y ambos sentidos se pueden reintentar.
+
+**El resultado de una función de autorización nunca puede ser `NULL`.** `if not f()` no lanza con
+`NULL`. Por eso `can_admin_inmobiliaria()` e `is_global_admin()` terminan en `coalesce(..., false)`.
+
+Desde HU 28, el navegador no escribe el perfil de otra persona: `"Profiles update admin"` ya no
+existe. El rol, la inmobiliaria y el estado cambian en las RPC `hu28_*`, que sólo ejecuta
+`service_role`, o en `assign_executive` y `assign_admin`.
+
+`public.audit_events` es **insert-only**, con RLS y sin policies: el navegador no la lee ni la
+escribe, y un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` para cualquier rol. Lleva
+`inmobiliaria_id` y `actor_id` sin FK, para que una entrada sobreviva a lo que describe. `event_type`
+es una lista cerrada: una historia que agregue tipos cambia `audit_events_event_type_check`. `details`
+nunca lleva valores financieros: los cambios de datos guardan qué campos cambiaron, no sus valores.
+
+Las asignaciones se registran con triggers porque también se hacen desde el catálogo. En un borrado
+en cascada el proyecto ya no existe cuando cae la fila hija, así que escribe el trigger `BEFORE
+DELETE` de `proyectos` y el de `proyecto_ejecutivos` se salta esa fila.
+
+`profiles.password_pendiente` marca a quien recibió una invitación y aún no guarda su contraseña. Lo
+limpia un trigger sobre `auth.users` cuando cambia `encrypted_password`. `last_sign_in_at` no sirve
+para esto: GoTrue lo escribe al abrir el enlace de recuperación, aunque lo abra un filtro de correo.
+
+Pruebas: `supabase/tests/hu28_gestion_equipo.sql` y `supabase/tests/hu28_team_stack.mjs`. El orden de
+despliegue está en `docs/stories/HU28-gestion-equipo-inmobiliaria/PLAN.md`.
 
 ---
 

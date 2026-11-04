@@ -28,6 +28,7 @@ export function resolveStaffRoute(path, role) {
     if (path === "/metricas") return { page: "metricas" };
     if (path === "/admin/reportes") return { page: "admin-reports" };
     if (path === "/admin/priorizacion") return { page: "admin-priorizacion" };
+    if (path === "/admin/equipo") return { page: "admin-equipo" };
     if (path === "/proyectos") return { page: "admin-projects", path: "/admin/proyectos" };
     if (path === "/dashboard" || path === "/ejecutivo/leads") return { page: "leads", path: "/dashboard" };
     if (path === "/inicio") return { page: "admin", path: "/admin" };
@@ -48,6 +49,8 @@ const staffPageGuards = {
   "admin-reports": isAdminRole,
   // HU 21: los criterios comerciales son de una inmobiliaria; el admin global no tiene una.
   "admin-priorizacion": (role, inmobiliariaId) => isAdminRole(role) && Boolean(inmobiliariaId),
+  // HU 28: el admin global también entra, y elige la inmobiliaria en la página.
+  "admin-equipo": isAdminRole,
 };
 
 export function canViewStaffPage(page, role, inmobiliariaId = null) {

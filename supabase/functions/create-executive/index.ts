@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Alta de ejecutivos comerciales por parte del admin de una inmobiliaria.
+// Alta de ejecutivos comerciales por parte del admin de una inmobiliaria: invita,
+// vincula a un ejecutivo sin inmobiliaria y reenvía la invitación.
 // Vive en una Edge Function porque crear cuentas exige la service_role key,
 // que nunca puede viajar al frontend.
 
@@ -16,7 +17,18 @@ type CreateExecutivePayload = {
   full_name?: string | null;
   phone?: string | null;
   inmobiliaria_id?: string | null;
+  reenviar?: boolean | null;
+  miembro_id?: string | null;
 };
+
+const DEFAULT_APP_URL = "https://www.rutahogar.cl";
+const ADMIN_ROLES = ["admin", "admin_inmobiliario"];
+// Bajo el límite de la función: un Resend colgado debe alcanzar a quedar en el registro.
+const RESEND_TIMEOUT_MS = 10_000;
+
+function appUrl() {
+  return (Deno.env.get("APP_URL") || DEFAULT_APP_URL).replace(/\/$/, "");
+}
 
 function cleanText(value: unknown, maxLength = 254) {
   return String(value || "").trim().slice(0, maxLength);
@@ -44,48 +56,47 @@ function randomPassword() {
   return btoa(String.fromCharCode(...bytes)).replace(/[^a-zA-Z0-9]/g, "").slice(0, 24) + "aA1!";
 }
 
-function buildInviteEmail(fullName: string, inmobiliariaNombre: string, actionLink: string) {
-  const safe = {
-    nombre: escapeHtml(fullName || "ejecutivo/a"),
-    inmobiliaria: escapeHtml(inmobiliariaNombre || "tu inmobiliaria"),
-    link: escapeHtml(actionLink),
-  };
+type EmailContent = {
+  titulo: string;
+  textoHtml: string;
+  boton: string;
+  link: string;
+  nota: string;
+};
+
+function buildEmail({ titulo, textoHtml, boton, link, nota }: EmailContent) {
+  const safeLink = escapeHtml(link);
+  const logoUrl = escapeHtml(`${appUrl()}/brand/rutahogar/logo-rutahogar.png`);
 
   return `
-    <div style="margin:0;padding:0;background-color:#eef3f8;color:#172033;font-family:Arial,Helvetica,sans-serif;">
+    <div style="margin:0;padding:0;background-color:#eef3f8;color:#132b4a;font-family:Arial,Helvetica,sans-serif;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;background-color:#eef3f8;">
         <tr>
           <td align="center" style="padding:32px 16px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;border-collapse:collapse;background-color:#ffffff;border:1px solid #d7e0ea;border-radius:12px;">
               <tr>
-                <td style="padding:28px 32px;background-color:#246354;border-radius:12px 12px 0 0;">
-                  <img src="https://score-leads-one.vercel.app/Logo%20ScoreLeads.png" alt="ScoreLeads" width="160" style="display:block;width:100%;max-width:160px;height:auto;border:0;margin:0 0 16px;">
-                  <div style="font-size:14px;line-height:20px;font-weight:700;letter-spacing:0.4px;color:#ffffff;">ScoreLeads</div>
+                <td style="padding:24px 32px;background-color:#ffffff;border-bottom:3px solid #132b4a;border-radius:12px 12px 0 0;">
+                  <img src="${logoUrl}" alt="RutaHogar" width="170" style="display:block;width:100%;max-width:170px;height:auto;border:0;margin:0;">
                 </td>
               </tr>
               <tr>
                 <td style="padding:32px;">
-                  <h1 style="margin:0 0 8px;font-size:26px;line-height:34px;color:#172033;">Tu cuenta de ejecutivo está lista</h1>
-                  <p style="margin:0 0 24px;font-size:15px;line-height:23px;color:#526174;">
-                    Hola ${safe.nombre}: ${safe.inmobiliaria} creó tu cuenta de ejecutivo comercial en ScoreLeads.
-                    Define tu contraseña con el siguiente enlace para entrar por primera vez.
-                  </p>
+                  <h1 style="margin:0 0 8px;font-size:26px;line-height:34px;color:#132b4a;">${escapeHtml(titulo)}</h1>
+                  <p style="margin:0 0 24px;font-size:15px;line-height:23px;color:#526174;">${textoHtml}</p>
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;">
                     <tr>
-                      <td style="background-color:#246354;border-radius:8px;">
-                        <a href="${safe.link}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">Definir mi contraseña</a>
+                      <td style="background-color:#132b4a;border-radius:8px;">
+                        <a href="${safeLink}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">${escapeHtml(boton)}</a>
                       </td>
                     </tr>
                   </table>
-                  <p style="margin:0 0 8px;font-size:13px;line-height:20px;color:#64748b;">
-                    Si el botón no funciona, copia y pega este enlace en tu navegador:
-                  </p>
-                  <p style="margin:0;font-size:12px;line-height:18px;color:#246354;word-break:break-all;">${safe.link}</p>
+                  <p style="margin:0 0 8px;font-size:13px;line-height:20px;color:#64748b;">${escapeHtml(nota)}</p>
+                  <p style="margin:0;font-size:12px;line-height:18px;color:#132b4a;word-break:break-all;">${safeLink}</p>
                 </td>
               </tr>
               <tr>
                 <td align="center" style="padding:22px 32px;background-color:#f8fafc;border-top:1px solid #d7e0ea;border-radius:0 0 12px 12px;">
-                  <p style="margin:0;font-size:12px;line-height:18px;color:#64748b;">Este correo fue generado automáticamente por ScoreLeads.</p>
+                  <p style="margin:0;font-size:12px;line-height:18px;color:#64748b;">Este correo fue generado automáticamente por RutaHogar.</p>
                 </td>
               </tr>
             </table>
@@ -96,35 +107,82 @@ function buildInviteEmail(fullName: string, inmobiliariaNombre: string, actionLi
   `;
 }
 
-async function sendInviteEmail(email: string, fullName: string, inmobiliariaNombre: string, actionLink: string) {
+function buildInviteEmail(fullName: string, inmobiliariaNombre: string, actionLink: string) {
+  return buildEmail({
+    titulo: "Tu cuenta de ejecutivo está lista",
+    textoHtml: `Hola ${escapeHtml(fullName || "ejecutivo/a")}: ${escapeHtml(inmobiliariaNombre || "tu inmobiliaria")} creó tu cuenta de ejecutivo comercial en RutaHogar.
+                    Define tu contraseña con el siguiente enlace para entrar por primera vez.`,
+    boton: "Definir mi contraseña",
+    link: actionLink,
+    nota: "Si el botón no funciona, copia y pega este enlace en tu navegador. Si ya venció, pide a tu administrador que te reenvíe la invitación.",
+  });
+}
+
+function buildLinkedEmail(fullName: string, inmobiliariaNombre: string) {
+  return buildEmail({
+    titulo: "Te sumaron a un equipo en RutaHogar",
+    textoHtml: `Hola ${escapeHtml(fullName || "ejecutivo/a")}: ${escapeHtml(inmobiliariaNombre || "una inmobiliaria")} te sumó a su equipo como ejecutivo comercial.
+                    Entra con tu cuenta de siempre para ver tus proyectos.`,
+    boton: "Entrar a RutaHogar",
+    link: appUrl(),
+    nota: "Si el botón no funciona, copia y pega este enlace en tu navegador:",
+  });
+}
+
+async function sendEmail(email: string, subject: string, html: string) {
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("EJECUTIVO_FROM_EMAIL") || "ScoreLeads <onboarding@resend.dev>";
+  const fromEmail = Deno.env.get("EJECUTIVO_FROM_EMAIL") || "RutaHogar <onboarding@resend.dev>";
 
   if (!resendApiKey) {
-    console.warn("Falta RESEND_API_KEY: la cuenta se creó pero no se envió el correo.");
+    console.warn("Falta RESEND_API_KEY: no se envió el correo.");
     return false;
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${resendApiKey}`,
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [email],
-      subject: "Tu cuenta de ejecutivo en ScoreLeads",
-      html: buildInviteEmail(fullName, inmobiliariaNombre, actionLink),
-    }),
-  });
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({ from: fromEmail, to: [email], subject, html }),
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+    });
 
-  if (!response.ok) {
-    console.error("Resend rechazó el envío:", await response.text());
+    if (!response.ok) {
+      console.error("Resend rechazó el envío:", await response.text());
+      return false;
+    }
+  } catch (error) {
+    console.error("No se pudo contactar a Resend:", error);
     return false;
   }
 
   return true;
+}
+
+// Enlace de un solo uso para que la persona defina su propia contraseña. Un fallo aquí
+// no deshace la cuenta: se registra y el administrador la reenvía desde Equipo.
+async function deliverInvite(adminClient: SupabaseClient, email: string, fullName: string, inmobiliariaNombre: string) {
+  const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${appUrl()}/definir-password` },
+  });
+
+  if (linkError) {
+    console.error("No se pudo generar el enlace de acceso:", linkError);
+    return false;
+  }
+
+  const actionLink = linkData?.properties?.action_link || "";
+  if (!actionLink) return false;
+
+  return await sendEmail(
+    email,
+    "Tu cuenta de ejecutivo en RutaHogar",
+    buildInviteEmail(fullName, inmobiliariaNombre, actionLink),
+  );
 }
 
 serve(async (req) => {
@@ -164,7 +222,7 @@ serve(async (req) => {
 
     const { data: callerProfile, error: profileError } = await adminClient
       .from("profiles")
-      .select("id, role, inmobiliaria_id")
+      .select("id, role, inmobiliaria_id, estado_acceso")
       .eq("id", callerData.user.id)
       .maybeSingle();
 
@@ -173,21 +231,14 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo validar el administrador." }, 500);
     }
 
-    if (callerProfile?.role !== "admin" && callerProfile?.role !== "admin_inmobiliario") {
+    if (!ADMIN_ROLES.includes(callerProfile?.role) || callerProfile?.estado_acceso !== "activo") {
       return jsonResponse({ error: "Solo un administrador puede crear ejecutivos." }, 403);
+    }
+    if (callerProfile.role === "admin_inmobiliario" && !callerProfile.inmobiliaria_id) {
+      return jsonResponse({ error: "Tu cuenta no tiene una inmobiliaria asignada." }, 403);
     }
 
     const payload: CreateExecutivePayload = await req.json();
-    const email = cleanText(payload.email).toLowerCase();
-    const fullName = cleanText(payload.full_name, 160);
-    const phone = cleanText(payload.phone, 20) || null;
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return jsonResponse({ error: "Correo inválido." }, 400);
-    }
-    if (!fullName) {
-      return jsonResponse({ error: "Ingresa el nombre del ejecutivo." }, 400);
-    }
 
     // Un admin acotado solo puede crear en SU inmobiliaria: el valor del body
     // se ignora. El admin global debe declarar explícitamente cuál.
@@ -209,6 +260,88 @@ serve(async (req) => {
       return jsonResponse({ error: "Inmobiliaria no encontrada." }, 404);
     }
 
+    const logEvent = async (subject: string, eventType: string, details: Record<string, unknown>) => {
+      const { error } = await adminClient.rpc("hu28_log_event", {
+        p_inmobiliaria: inmobiliaria.id,
+        p_actor: callerProfile.id,
+        p_actor_role: callerProfile.role,
+        p_subject: subject,
+        p_event_type: eventType,
+        p_details: details,
+      });
+      if (error) console.error("No se pudo registrar el evento:", eventType, error);
+      return !error;
+    };
+
+    // Primero el registro del intento, después el correo: un correo salido no se puede deshacer.
+    // Si sólo falla el resultado, la lista muestra "Correo no enviado" y se puede reenviar.
+    const registerSend = async (subject: string, email: string, fullName: string, reenvio: boolean) => {
+      const details = reenvio ? { reenvio: true } : { rol: "ejecutivo" };
+      if (!(await logEvent(subject, "equipo.invitacion_creada", details))) return { attempted: false };
+      const sent = await deliverInvite(adminClient, email, fullName, inmobiliaria.nombre);
+      const okEvent = reenvio ? "equipo.invitacion_reenviada" : "equipo.invitacion_enviada";
+      const recorded = await logEvent(subject, sent ? okEvent : "equipo.invitacion_fallida", details);
+      return { attempted: true, sent, recorded };
+    };
+
+    // --- Reenvío: sólo alguien de este equipo que aún no entra ---
+    if (payload.reenviar) {
+      const memberId = cleanText(payload.miembro_id, 64);
+      const { data: member, error: memberError } = await adminClient
+        .from("profiles")
+        .select("id, full_name, role, inmobiliaria_id, estado_acceso, password_pendiente")
+        .eq("id", memberId)
+        .eq("inmobiliaria_id", inmobiliaria.id)
+        .maybeSingle();
+
+      if (memberError) {
+        console.error("Error leyendo a la persona:", memberError);
+        return jsonResponse({ error: "No se pudo verificar a esta persona." }, 500);
+      }
+      if (!member || (member.role !== "ejecutivo" && !ADMIN_ROLES.includes(member.role))) {
+        return jsonResponse({ error: "Esta persona no es parte de tu equipo." }, 404);
+      }
+      if (member.estado_acceso !== "activo") {
+        return jsonResponse({ error: "Esta persona está desactivada. Reactívala antes de reenviar la invitación." }, 409);
+      }
+
+      if (!member.password_pendiente) {
+        return jsonResponse({ error: "Esta persona ya definió su contraseña: no necesita otra invitación." }, 409);
+      }
+
+      const { data: account, error: accountError } = await adminClient.auth.admin.getUserById(member.id);
+      if (accountError || !account?.user?.email) {
+        console.error("Error leyendo la cuenta:", accountError);
+        return jsonResponse({ error: "No se pudo verificar a esta persona." }, 500);
+      }
+
+      const send = await registerSend(member.id, account.user.email, member.full_name || "", true);
+      if (!send.attempted) {
+        return jsonResponse({ error: "No se pudo registrar el reenvío y el correo no salió. Inténtalo de nuevo." }, 500);
+      }
+      if (!send.recorded) {
+        return jsonResponse({ error: "No se pudo registrar el resultado del envío. Revisa el correo y reenvía si hace falta." }, 500);
+      }
+
+      return jsonResponse({
+        ok: true,
+        created: false,
+        ejecutivo: { id: member.id, email: account.user.email, full_name: member.full_name },
+        email_enviado: send.sent,
+      });
+    }
+
+    const email = cleanText(payload.email).toLowerCase();
+    const fullName = cleanText(payload.full_name, 160);
+    const phone = cleanText(payload.phone, 20) || null;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return jsonResponse({ error: "Correo inválido." }, 400);
+    }
+    if (!fullName) {
+      return jsonResponse({ error: "Ingresa el nombre del ejecutivo." }, 400);
+    }
+
     const { data: existingId, error: lookupError } = await adminClient.rpc("find_user_id_by_email", {
       p_email: email,
     });
@@ -218,7 +351,7 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo verificar el correo." }, 500);
     }
 
-    // --- Cuenta ya existente: se promueve y se vincula, no se recrea ---
+    // --- Cuenta ya existente: sólo se vincula a un ejecutivo sin inmobiliaria ---
     if (existingId) {
       const { data: existingProfile, error: existingProfileError } = await adminClient
         .from("profiles")
@@ -231,39 +364,51 @@ serve(async (req) => {
         return jsonResponse({ error: "No se pudo verificar la cuenta existente." }, 500);
       }
 
+      // La cuenta de un lead guarda sus finanzas: un correo mal escrito no la convierte en staff.
+      if (existingProfile?.role !== "ejecutivo" && !ADMIN_ROLES.includes(existingProfile?.role)) {
+        return jsonResponse({ error: "Este correo pertenece a una cuenta de comprador en RutaHogar. Usa otro correo, como el laboral." }, 409);
+      }
+
+      if (existingProfile.inmobiliaria_id === targetInmobiliaria) {
+        return jsonResponse({ error: "Esta persona ya es parte de tu equipo." }, 409);
+      }
+
       // service_role salta el guard de profiles: este es el único freno para no
       // degradar a un administrador, global o de otra inmobiliaria.
-      if (existingProfile?.role === "admin" || existingProfile?.role === "admin_inmobiliario") {
+      if (ADMIN_ROLES.includes(existingProfile.role)) {
         return jsonResponse({ error: "Esta cuenta es de un administrador: no se puede vincular como ejecutivo." }, 409);
       }
 
-      if (
-        existingProfile?.inmobiliaria_id &&
-        existingProfile.inmobiliaria_id !== targetInmobiliaria
-      ) {
-        return jsonResponse({ error: "Este ejecutivo ya pertenece a otra inmobiliaria." }, 409);
+      if (existingProfile.inmobiliaria_id) {
+        return jsonResponse({ error: "Este correo pertenece a una persona de otra inmobiliaria." }, 409);
       }
 
-      const { error: promoteError } = await adminClient
-        .from("profiles")
-        .upsert({
-          id: existingId,
-          full_name: existingProfile?.full_name || fullName,
-          role: "ejecutivo",
-          inmobiliaria_id: targetInmobiliaria,
-          updated_at: new Date().toISOString(),
-        });
+      // Vínculo y registro van en una transacción: o quedan los dos, o ninguno.
+      const { error: linkProfileError } = await adminClient.rpc("hu28_link_executive", {
+        p_inmobiliaria: inmobiliaria.id,
+        p_member: existingId,
+        p_actor: callerProfile.id,
+        p_actor_role: callerProfile.role,
+      });
 
-      if (promoteError) {
-        console.error("Error promoviendo la cuenta:", promoteError);
+      if (linkProfileError) {
+        console.error("Error vinculando la cuenta:", linkProfileError);
         return jsonResponse({ error: "No se pudo vincular la cuenta existente." }, 500);
       }
+
+      const nombre = existingProfile.full_name || fullName;
+      const sent = await sendEmail(
+        email,
+        "Te sumaron a un equipo en RutaHogar",
+        buildLinkedEmail(nombre, inmobiliaria.nombre),
+      );
 
       return jsonResponse({
         ok: true,
         created: false,
-        ejecutivo: { id: existingId, email, full_name: existingProfile?.full_name || fullName },
-        email_enviado: false,
+        vinculado: true,
+        ejecutivo: { id: existingId, email, full_name: nombre },
+        email_enviado: sent,
         mensaje: "La cuenta ya existía: se vinculó como ejecutivo de esta inmobiliaria.",
       });
     }
@@ -291,6 +436,7 @@ serve(async (req) => {
       role: "ejecutivo",
       inmobiliaria_id: targetInmobiliaria,
       phone,
+      password_pendiente: true,
       updated_at: new Date().toISOString(),
     });
 
@@ -301,31 +447,22 @@ serve(async (req) => {
       return jsonResponse({ error: "No se pudo crear el perfil del ejecutivo." }, 500);
     }
 
-    // Enlace para que el ejecutivo defina su propia contraseña.
-    const appUrl = Deno.env.get("APP_URL") || "https://score-leads-one.vercel.app";
-    let emailSent = false;
-    let actionLink = "";
-
-    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo: `${appUrl}/definir-password` },
-    });
-
-    if (linkError) {
-      console.error("No se pudo generar el enlace de acceso:", linkError);
-    } else {
-      actionLink = linkData?.properties?.action_link || "";
-      if (actionLink) {
-        emailSent = await sendInviteEmail(email, fullName, inmobiliaria.nombre, actionLink);
-      }
+    const send = await registerSend(created.user.id, email, fullName, false);
+    if (!send.attempted) {
+      // Nada salió todavía: una cuenta sin registro no se queda.
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(created.user.id);
+      if (deleteError) console.error("No se pudo revertir la cuenta sin registro:", deleteError);
+      return jsonResponse({ error: "No se pudo registrar la invitación. Inténtalo de nuevo." }, 500);
+    }
+    if (!send.recorded) {
+      return jsonResponse({ error: "La cuenta se creó, pero el resultado del envío no quedó registrado. Revisa el equipo y reenvía la invitación." }, 500);
     }
 
     return jsonResponse({
       ok: true,
       created: true,
       ejecutivo: { id: created.user.id, email, full_name: fullName },
-      email_enviado: emailSent,
+      email_enviado: send.sent,
     });
   } catch (error) {
     console.error("create-executive falló:", error);
