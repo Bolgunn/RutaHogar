@@ -31,8 +31,10 @@ invisible to the inmobiliaria, and favorites/simulations were owner-only rows no
 
 ## Approach & decisions
 
-Same shape as HU 15: one `SECURITY DEFINER` read RPC returns anonymized facts for the caller's
-tenant, a pure `lib/` function (ALG-20) turns them into every metric, and the page only renders.
+Same shape as HU 15 after HU 30: a private `SECURITY DEFINER` source (service_role only) returns
+the facts for the actor's tenant, the Edge Function `project-interest-metrics` runs ALG-20 (a pure
+`lib/` function, with ALG-10 unchanged) on them, and the browser receives and renders only the
+aggregates.
 The one new piece of data is a per-day view log, written through a function rather than a table
 grant.
 
@@ -44,8 +46,10 @@ grant.
 | Views are written only by `registrar_visualizacion_proyecto(p_proyecto)`, `SECURITY DEFINER`; the table has RLS on, no policies and no grants to browser roles | A lead cannot read, forge another user's or delete views. The function ignores staff (A7) and ids that are not a `proyectos` row (portal listings from `proyectos_rag` are not a tenant's projects) |
 | The view is recorded where the catalog already fires the GA4 `project_compatibility_viewed` event (`ProjectEvaluationModal`), fire-and-forget | Same moment, same once-per-open guard; a failed write never blocks the lead |
 | Simulación = saved financing scenario (`mortgage_scenarios.project_id`) | ALG-20 A3: the HU 6 page pre-selects the first project, so selections are not a signal |
-| Read RPC `project_interest_facts()` returns `{ now, proyectos, leads }`; a lead row is `{ lead_id, evaluacion_actual, interacciones }` with **counts only** | ALG-10 must run in the browser (ALG-10 header), so the latest evaluation travels, as in HU 15. Ids are `row_number()`, no interaction timestamp leaves the database |
-| Only `admin_inmobiliario` / `admin` with an inmobiliaria; everyone else gets `forbidden` (`42501`) | Story actor. Global admin is already redirected away from `/metricas` (`App.jsx`) |
+| Source `hu26_project_interest_source(p_actor)` returns `{ now, proyectos, leads }`, granted to `service_role` only; the Edge Function returns `{ now, proyectos, metrics }` | Review of #176: no evaluation may reach the browser. HU 15 already moved ALG-10/ALG-18 server-side the same way (`commercial-funnel-metrics`), so ALG-20 follows it instead of keeping a browser RPC |
+| A lead's evaluation is used only for projects it belongs to (`lead_belongs_to_proyecto`: favorite or declared commune); each interaction carries `en_alcance` | Review of #176: a single view or simulation must not pull a lead's finances into a tenant it does not belong to. Interest is still counted; the pair is `sin_datos` (ALG-20 R3 C0, A10) |
+| An evaluation HU 30 hides (co-debtor not confirmed or past its window, `hu30_funnel_can_view_snapshot`) is not sent | Same rule as HU 15's source |
+| Only `admin_inmobiliario` / `admin` with an inmobiliaria; everyone else gets `forbidden` (`42501`). The tab is hidden for the global admin | Story actor. The global admin has no projects of its own (as in HU 25) |
 | Incompatible = ALG-10 exclusion; reasons = ALG-10's pair-scoped blocker | ALG-20 A1, R3–R4. The executive's lead panel (HU 10) and this tab cannot disagree on a pair |
 | No chart library | Guardrail 1. Count bars reuse HU 15's `cm-hbar` styles |
 
@@ -54,10 +58,10 @@ grant.
 | # | Question | Answer |
 | :- | :------- | :----- |
 | 1 | Touches scoring? Which ALG, numbers changed? | No scoring change. **New `ALG-20`** (no tunable numbers). `ALG-10` consumed unchanged |
-| 2 | Needs RLS / multi-tenant scoping? | Yes. New table with RLS on and no browser grants; the read RPC scopes to `get_my_inmobiliaria()` and admin roles. No existing policy changes |
-| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `20261026120000_hu26_project_interest.sql` + rollback + `schema.sql` sync. Applied by the CTO with `supabase db push` after merge — never pasted into the SQL editor |
+| 2 | Needs RLS / multi-tenant scoping? | Yes. New table with RLS on and no browser grants; the source scopes to the actor's inmobiliaria and admin roles, and to `lead_belongs_to_proyecto` for evaluations. No existing policy changes |
+| 3 | Needs a migration? Who applies it to hosted Supabase? | Yes: `20261103220000_hu26_project_interest.sql` + rollback + `schema.sql` sync, and the Edge Function `project-interest-metrics` (deployed by `deploy-supabase-functions.yml`). Applied by the CTO with `supabase db push` after merge — never pasted into the SQL editor |
 | 4 | Changes the `POST /score` contract? | No |
-| 5 | Consent / privacy impact? | Views are new behavioral data about the lead, stored only as (lead, project, day). Staff never see them per lead: the RPC returns counts per anonymous row. Favorites become visible to the admin **only as counts**, which `proyecto_favoritos`'s migration names as the condition for exposing them. `on delete cascade` on `profiles` keeps ARCO cancelación working. No new consent needed: the lead already consented to the precalificación, and nothing identifies them on the admin side |
+| 5 | Consent / privacy impact? | Views are new behavioral data about the lead, stored only as (lead, project, day). Staff never see them per lead: the browser receives aggregates only. Favorites become visible to the admin **only as counts**, which `proyecto_favoritos`'s migration names as the condition for exposing them. `on delete cascade` on `profiles` keeps ARCO cancelación working. No new consent needed: the lead already consented to the precalificación, and nothing identifies them on the admin side |
 
 > 1 and 3 are checked against the diff by CI.
 
@@ -74,21 +78,27 @@ security definer set search_path = public`. Returns `false` (and writes nothing)
 inserts `(auth.uid(), p_proyecto, (now() at time zone 'America/Santiago')::date)` `on conflict do
 nothing` and returns whether a row was added. Granted to `authenticated` only.
 
-**New — `public.project_interest_facts() returns jsonb`**, `stable security definer`. Raises
-`forbidden` unless `get_my_inmobiliaria()` is set and `get_my_role()` ∈ {`admin_inmobiliario`,
-`admin`}. Returns:
+**New — `public.hu26_project_interest_source(p_actor uuid) returns jsonb`**, `stable security
+definer`. `p_actor` comes from the Edge Function after `Auth.getUser`. Raises `forbidden` unless
+the actor's profile has an inmobiliaria and role ∈ {`admin_inmobiliario`, `admin`}. Returns:
 
 ```json
 { "now": "<clock_timestamp()>",
   "proyectos": [ { "id", "nombre", "comuna", "tipo", "precio_min_uf", "precio_max_uf", "estado" } ],
   "leads": [ { "lead_id": "1",
                "evaluacion_actual": { "input", "onboarding", "result" } | null,
-               "interacciones": [ { "proyecto_id", "visualizaciones", "favorito", "simulaciones" } ] } ] }
+               "interacciones": [ { "proyecto_id", "en_alcance", "visualizaciones", "favorito", "simulaciones" } ] } ] }
 ```
 
 `proyectos` = every project of the tenant, ordered `nombre, id`. A lead is a `role = 'usuario'`
-profile with at least one view, favorite or saved scenario on one of them. Granted to
-`authenticated` only.
+profile with at least one view, favorite or saved scenario on one of them. `en_alcance` is
+`lead_belongs_to_proyecto(lead, project)`. `evaluacion_actual` is `null` when the lead has no
+evaluation, no interaction in scope, or an evaluation HU 30 hides. Granted to `service_role` only.
+
+**New — Edge Function `project-interest-metrics`** (`supabase/functions/`, `verify_jwt = false`
+like `commercial-funnel-metrics`): `POST {}` with the user's bearer → `Auth.getUser` → the source
+→ `computeProjectInterestMetrics` → `{ now, proyectos, metrics }`. Any body field is `422`; errors
+never carry provider payloads.
 
 **Read, unchanged:** `profiles`, `evaluations`, `proyectos`, `proyecto_favoritos`,
 `mortgage_scenarios`. No existing rows change.
@@ -98,7 +108,8 @@ profile with at least one view, favorite or saved scenario on one of them. Grant
 - **`ALG-20`** — project interest metrics. **New**, written before the code:
   `docs/algorithms/ALG-20-project-interest-metrics.md`, cases `ALG-20-cases.json`. Implemented in
   `frontend/src/lib/commercial/projectInterestMetrics.js`; asserted by
-  `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js`. 9 open assumptions.
+  `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js`. 10 open assumptions.
+  Renumbered from ALG-19, which HU 21 (#169) took on `develop`.
 - **`ALG-10`** — implemented as-is, no changes. Called once per interested lead.
 
 **Local logic** (story-local): the Spanish labels of each `motivo`; the tab's alternative sorts by
@@ -106,8 +117,8 @@ column; per-day view dedup (in SQL, ALG-20 A2).
 
 ## Scope
 
-**In:** the migration (table, two functions), rollback, `schema.sql` sync, SQL tests; ALG-20 and
-its tests; `services/projectInterestService.js`; the view hook in `ProjectEvaluationModal`; the
+**In:** the migration (table, two functions), rollback, `schema.sql` sync, SQL tests; the Edge
+Function and its Deno tests; ALG-20 and its tests; `services/projectInterestService.js`; the view hook in `ProjectEvaluationModal`; the
 "Interés por proyecto" tab; the wiki story page.
 
 **Out:**
@@ -122,13 +133,14 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
 ## Steps
 
 1. **ALG-20** document and cases (done before code).
-2. **Migration** `supabase/migrations/20261026120000_hu26_project_interest.sql` per **Entities**,
+2. **Migration** `supabase/migrations/20261103220000_hu26_project_interest.sql` per **Entities**,
    in `begin; … commit;`, idempotent. Rollback in `supabase/rollback/` dropping only what it
    created. Append the same DDL to `supabase/schema.sql`.
-3. **SQL tests** `supabase/tests/project_interest_facts.sql` (style of `commercial_funnel_facts.sql`):
+3. **SQL tests** `supabase/tests/hu26_project_interest_source.sql` (style of `commercial_funnel_facts.sql`):
    1. A lead's first view of the day returns `true`, the second `false`; one row.
    2. An ejecutivo's or admin's view, and a view of an unknown id, return `false` and write nothing.
-   3. `anon` cannot execute either function; `authenticated` cannot select or insert the table.
+   3. Neither `anon` nor `authenticated` can execute the source; `anon` cannot record a view;
+      `authenticated` cannot select or insert the table.
    4. `admin_inmobiliario` of A: `proyectos` = all of A's projects, including one with no interest;
       counts per lead and project are correct (two days → 2 views; favorite; two scenarios → 2).
    5. A lead interacting only with B's project is absent for A; B's project never appears.
@@ -136,13 +148,18 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
    7. No profile id or email in the result; `lead_id`s are `"1" … "n"`; a lead without evaluation
       has `evaluacion_actual = null`.
    8. Deleting a profile deletes its views (ARCO).
+   9. A lead that only viewed a project outside its scope counts, with `en_alcance = false` and no
+      evaluation; its income is nowhere in the result.
+   10. An evaluation with an unconfirmed co-debtor is not sent, even for an in-scope project.
 4. **ALG-20** `frontend/src/lib/commercial/projectInterestMetrics.js`:
    `computeProjectInterestMetrics({ proyectos, leads }, { match })`, `ALG20_VERSION`.
 5. **ALG-20 tests**: every case in `ALG-20-cases.json` with invariants 1–9 asserted on each output,
    frozen inputs, determinism; plus one case through the **real** `matchLeadToProjects` so the
    wiring to ALG-10's row shape is pinned.
-6. **Service** `frontend/src/services/projectInterestService.js`: `getProjectInterestFacts()`
-   (`null` without Supabase; `forbidden` → a Spanish message) and `registerProjectView(id)`
+6. **Edge Function** `supabase/functions/project-interest-metrics/` (`handler.ts`, `index.ts`,
+   `handler.test.ts`) and its deploy step. **Service** `frontend/src/services/projectInterestService.js`:
+   `getProjectInterestMetrics()` (`null` without Supabase; `forbidden` → a Spanish message) and
+   `registerProjectView(id)`
    (no-op without Supabase; errors logged, never thrown).
 7. **View hook**: `ProjectEvaluationModal` calls `registerProjectView` next to
    `trackProjectCompatibilityViewed`.
@@ -162,4 +179,4 @@ its tests; `services/projectInterestService.js`; the view hook in `ProjectEvalua
 | `E1` — ranking by traction with visualizaciones, simulaciones, favoritos | 2–8 | `ranking_por_interesados_no_por_volumen`, `desempate_*`, `proyecto_sin_interes_aparece_al_final`; SQL cases 1, 4; reviewer: as a lead open two projects and favorite one, then as the tenant admin open Métricas → "Interés por proyecto" |
 | `E2` — interested leads incompatible with each project | 4, 5, 8 | `buckets_de_compatibilidad`, `lead_en_dos_proyectos_cuenta_una_vez`, `solo_sin_datos_tasa_nula`; reviewer: the "Incompatibles" column and the detail split |
 | `E3` — grouped main reasons per project | 4, 5, 8 | `motivos_agrupados_y_ordenados`, `motivo_de_capacidad_no_toma_un_bloqueador_no_critico`; reviewer: select a project with incompatible leads, read its reasons |
-| Scope and privacy | 2, 3 | SQL cases 2, 3, 5, 6, 7, 8 |
+| Scope and privacy | 2, 3, 6 | SQL cases 2, 3, 5, 6, 7, 8, 9, 10; ALG-20 case `fuera_de_alcance_cuenta_como_interes_sin_datos`; Deno `handler.test.ts` (aggregates only, no lead id or financial value) |

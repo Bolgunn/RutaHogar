@@ -111,7 +111,7 @@ con `inmobiliaria_id` en `NULL` es **admin global** y ve todos los tenants.
 | `proyectos` | catálogo publicado | **sólo donde está asignado** | los de su inmobiliaria |
 | `proyecto_ejecutivos` | — | **sólo sus asignaciones, dentro de su tenant** | las de su inmobiliaria |
 | `configuracion_comercial` | — | — | — (sólo el backend, `service_role`) |
-| `proyecto_visualizaciones` | — (escribe sólo vía `registrar_visualizacion_proyecto()`) | — | — (conteos anónimos vía `project_interest_facts()`, HU 26) |
+| `proyecto_visualizaciones` | — (escribe sólo vía `registrar_visualizacion_proyecto()`) | — | — (sólo conteos, vía la Edge Function `project-interest-metrics`, HU 26) |
 
 ⚠️ **`evaluations` no está acotada por tenant.** La tabla no tiene `inmobiliaria_id` y cualquier
 `ejecutivo`/`admin` lee todas las evaluaciones. Es un hueco conocido contra la salvaguarda **S6**,

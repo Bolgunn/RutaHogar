@@ -46,7 +46,8 @@
 - Se suma a las métricas comerciales de [[HU15-dashboard-conversion-tiempos|HU 15]] (`CommercialMetrics.jsx`). La exportación de estas métricas la cubre [[HU22-centro-exportacion-dossier|HU 22]].
 - **Dónde está.** Página `/metricas` (la de [[HU15-dashboard-conversion-tiempos|HU 15]]), pestaña
   **Interés por proyecto**. Solo la ve el administrador de una inmobiliaria (`admin_inmobiliario`, o
-  `admin` con inmobiliaria); el ejecutivo conserva las dos pestañas de HU 15.
+  `admin` con inmobiliaria); el ejecutivo conserva las dos pestañas de HU 15 y el administrador
+  global, que no tiene proyectos propios, no la ve.
 - **E1 — qué se cuenta.**
   - *Visualización*: un lead abre el detalle de un proyecto en el catálogo. Cuenta como máximo una
     vez por lead, proyecto y día, para que recargar la página no infle el ranking. Antes de HU 26 las
@@ -64,15 +65,21 @@
   de compra está lejos del precio de entrada del proyecto o si tiene un bloqueador crítico (morosidad
   vigente o carga financiera total alta). Los leads sin precalificación suficiente se muestran aparte
   y no cuentan como incompatibles. El porcentaje se calcula sobre los leads que sí se pudieron evaluar.
+  - La precalificación de un lead solo se compara con los proyectos a los que ya pertenece (lo marcó
+    como favorito o declaró su comuna), la misma regla del resto del staff. Si solo vio o simuló un
+    proyecto, cuenta como interesado, pero queda en "sin datos suficientes" para ese proyecto.
 - **E3 — motivos.** Cada lead incompatible aporta un motivo: morosidad vigente, carga financiera
   total alta, ahorro insuficiente para el pie, renta insuficiente para el dividendo o capacidad de
   compra insuficiente. Al elegir un proyecto en el ranking se ven sus motivos agrupados y ordenados.
-- **Privacidad.** El administrador solo ve conteos: ningún nombre, email ni identificador de lead
-  sale de la base. Las visualizaciones guardan solo el día y se borran con la cuenta del lead.
+- **Privacidad.** El administrador solo ve conteos: los cálculos corren en el servidor (Edge
+  Function `project-interest-metrics`, igual que HU 15) y al navegador no llega ninguna
+  precalificación, nombre, email ni identificador de lead. Una precalificación con codeudor que
+  HU 30 oculta no se usa. Las visualizaciones guardan solo el día y se borran con la cuenta del lead.
 - **Pendiente de confirmar con el cliente.** Si la inmobiliaria quiere fijar su propio score mínimo
   por proyecto, si quiere ver los favoritos "alguna vez marcados" y si necesita filtrar por período.
   Están registrados como supuestos en ALG-20.
 - Especificación de cada número: [ALG-20 — Métricas de interés por proyecto](../../docs/algorithms/ALG-20-project-interest-metrics.md).
-  Implementación: `frontend/src/lib/commercial/projectInterestMetrics.js`, las funciones
-  `registrar_visualizacion_proyecto()` y `project_interest_facts()` (migración `20261026120000`) y
-  el plan `docs/stories/HU26-metricas-interes-proyecto/PLAN.md`.
+  Implementación: `frontend/src/lib/commercial/projectInterestMetrics.js`, la Edge Function
+  `supabase/functions/project-interest-metrics`, las funciones `registrar_visualizacion_proyecto()`
+  y `hu26_project_interest_source()` (migración `20261103220000`) y el plan
+  `docs/stories/HU26-metricas-interes-proyecto/PLAN.md`.

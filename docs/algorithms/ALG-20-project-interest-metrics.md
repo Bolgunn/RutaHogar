@@ -2,16 +2,16 @@
 
 | Field | Value |
 | :---- | :---- |
-| **Version** | `hu26-project-interest-v1` (`ALG20_VERSION`) |
-| **Runs on / implemented in** | **frontend** · `frontend/src/lib/commercial/projectInterestMetrics.js` (pure, no Supabase, no fetch, no clock) |
+| **Version** | `hu26-project-interest-v2` (`ALG20_VERSION`) |
+| **Runs on / implemented in** | **Edge Function** `project-interest-metrics` · code in `frontend/src/lib/commercial/projectInterestMetrics.js` (pure, no Supabase, no fetch, no clock) |
 | **Cases** | `docs/algorithms/ALG-20-cases.json` — asserted by `frontend/src/lib/commercial/__tests__/projectInterestMetrics.test.js` (**vitest**) |
-| **Open assumptions** | 9 open — see the log below |
-| **Last changed** | 2026-10-26 · HU 26 · created |
+| **Open assumptions** | 10 open — see the log below |
+| **Last changed** | 2026-11-03 · HU 26 review · runs server-side; R3 C0 (scope); renumbered from ALG-19, which HU 21 uses |
 
-> **Why this one runs on the frontend.** Same reason as `ALG-10` and `ALG-18`: compatibility is
-> `ALG-10`, which lives in `frontend/src/lib/matching/`, and the backend cannot see `proyectos`.
-> The database side (`project_interest_facts()`) only decides **which facts the caller may see**;
-> every number on the page is computed here.
+> **Where it runs.** Like `ALG-18` since HU 30, in a Supabase Edge Function
+> (`supabase/functions/project-interest-metrics`) that imports this module and `ALG-10` unchanged.
+> The private source `hu26_project_interest_source(p_actor)` (service_role only) decides **which
+> facts may be used**; the browser receives only this algorithm's output, never an evaluation.
 
 ## Purpose
 
@@ -58,8 +58,8 @@ The second argument is the test seam only.
 | Field | Type | Notes |
 | :---- | :--- | :---- |
 | `lead_id` | string | Stable within one call only (`row_number()`); never a profile id |
-| `evaluacion_actual` | `{ input, onboarding, result }` or `null` | The lead's latest evaluation, the shape `ALG-10` reads. `null` when the lead has none |
-| `interacciones` | `[{ proyecto_id, visualizaciones, favorito, simulaciones }]` | One entry per project the lead interacted with |
+| `evaluacion_actual` | `{ input, onboarding, result }` or `null` | The lead's latest evaluation, the shape `ALG-10` reads. `null` when the lead has none, when no interaction is `en_alcance`, or when HU 30 hides it (co-debtor not confirmed or past its window) |
+| `interacciones` | `[{ proyecto_id, en_alcance, visualizaciones, favorito, simulaciones }]` | One entry per project the lead interacted with. `en_alcance` is `lead_belongs_to_proyecto(lead, project)` (favorite or declared commune); `false` keeps the evaluation away from that project (R3 C0). Absent means `true` |
 
 Interaction units, as the database records them:
 
@@ -73,7 +73,7 @@ Interaction units, as the database records them:
 
 ```js
 {
-  version: "hu26-project-interest-v1",
+  version: "hu26-project-interest-v2",
   n_leads,                                  // leads interested in at least one project
   totales: { visualizaciones, favoritos, simulaciones },
   ranking: [ ProyectoRow ]                  // every project in `proyectos`, R2 order
@@ -126,12 +126,14 @@ sorts on the same columns; that is presentation, not this rule.
 ### R3 — Compatibility of the interested leads
 
 For each lead, call `match(evaluacion_actual, projectsOfInterest)` once, where `projectsOfInterest`
-are the `proyectos` rows the lead is interested in (R1). `ALG-10` is pair-scoped, so the verdict
+are the `proyectos` rows the lead is interested in (R1) **and** whose entry is not
+`en_alcance: false`. `ALG-10` is pair-scoped, so the verdict
 of a pair does not depend on which other projects are passed. Each interested pair `(l, p)` falls
 in exactly one bucket:
 
 | # | Condition | Bucket |
 | :- | :-------- | :----- |
+| C0 | the entry is `en_alcance: false` (`match` is not called for it) | `sin_datos` |
 | C1 | `evaluacion_actual` is `null` (`match` is not called) | `sin_datos` |
 | C2 | the pair is in `excluidos` with `motivo_exclusion == "capacidad_requiere_antecedentes"` (`ALG-10` G0) | `sin_datos` |
 | C3 | the pair is in `excluidos` with `motivo_exclusion` ∈ {`"bloqueador_critico"`, `"capacidad_insuficiente"`} (`ALG-10` G1, G2) | `incompatibles` |
@@ -188,6 +190,7 @@ element is the project's **motivo principal**.
 | `leads` empty | every project with zeros and `tasa_incompatibles: null` | No interest yet |
 | lead interested in a project, no evaluation | `sin_datos` for every one of its pairs (C1) | A lead can browse before precalificarse |
 | lead interested in two projects | counted in both rows, once in `n_leads` | R1 |
+| lead only viewed or simulated a project outside its scope | counted as interest; `sin_datos` for that pair (C0) | A view must not pull a lead's finances into a tenant it does not belong to (A10) |
 | project `estado == "agotado"` | ranked like any other | Past interest is still the finding; `ALG-10` does not gate on `estado` either |
 | near-miss pair (`ALG-10` R1 band) | `compatibles` | `ALG-10` deliberately keeps it in `matches` (A8) |
 
@@ -204,3 +207,4 @@ element is the project's **motivo principal**.
 | A7 | Only interactions of profiles with `role = 'usuario'` are recorded or counted; staff previews never are | HU 26 build | 2026-10-26 | — (staff browsing the catalog is not demand) | open |
 | A8 | A near-miss pair counts as `compatibles` | HU 26 build | 2026-10-26 | The admin reads "compatible" as "can buy today". `ALG-10` R1 argues these leads are the most callable segment; the page's help text says so | open |
 | A9 | No time window: all interactions since the counters exist (views start at the HU 26 deploy) | HU 26 build | 2026-10-26 | The admin needs "this month". A period filter is a follow-up, not a rule change | open |
+| A10 | A lead's evaluation is compared only with projects it belongs to under `lead_belongs_to_proyecto` (favorite or declared commune), the rule every other staff view uses. A view or a saved simulation alone counts as interest but not for compatibility | HU 26 review | 2026-11-03 | The client wants every interested lead evaluated. That widens which leads' finances an inmobiliaria may use and needs an explicit consent decision first | open |
