@@ -456,9 +456,10 @@ describe("HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Ve
           onNavigate={vi.fn()}
         />,
       );
-      expect(financialTrackingHtml).toContain('data-testid="dashboard-green-savings-goal"');
-      expect(financialTrackingHtml).toContain("Meta periódica en verde fijada:");
-      expect(financialTrackingHtml).toContain("25,00 UF/mes");
+      // En FinancialTracking se refleja de forma directa y limpia en la tarjeta sin bloques azules duplicados
+      expect(financialTrackingHtml).not.toContain('data-testid="dashboard-green-savings-goal"');
+      expect(financialTrackingHtml).toContain("Ahorro Pie (Venta en Verde)");
+      expect(financialTrackingHtml).toContain("25,00 UF / mes");
 
       const progressViewHtml = renderToStaticMarkup(
         <ProgressView
@@ -473,6 +474,52 @@ describe("HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Ve
       expect(progressViewHtml).toContain('data-testid="progress-green-savings-goal"');
       expect(progressViewHtml).toContain("Meta de ahorro periódica — Pie en verde/blanco");
       expect(progressViewHtml).toContain("25,00 UF / mes");
+    });
+
+    it("no muestra el bloque ni botón de fijar meta cuando no hay proyecto en construcción, y lo integra en E1 cuando sí existe proyecto", () => {
+      // 1. Sin proyecto en construcción (sin project prop, sin input.project_goal y sin meta previa):
+      // El bloque green-goal-connection y el botón 'Fijar meta de pie en verde' NO deben aparecer
+      const htmlWithoutProject = renderToStaticMarkup(
+        <GreenSavingsPlanner
+          evaluation={{
+            ...baseEvaluation,
+            input: { ...baseEvaluation.input, project_goal: null },
+            housing_plan: {},
+          }}
+          trackingState={activeTrackingState}
+          project={null}
+        />,
+      );
+
+      expect(htmlWithoutProject).not.toContain('data-testid="green-goal-connection"');
+      expect(htmlWithoutProject).not.toContain("Fijar meta de pie en verde");
+
+      // 2. Con proyecto en construcción:
+      // Debe aparecer dentro del bloque E1 de simulación (data-testid="green-savings-planner-e1")
+      // sin crear una tarjeta o sección separada al final del componente
+      const htmlWithProject = renderToStaticMarkup(
+        <GreenSavingsPlanner
+          evaluation={baseEvaluation}
+          trackingState={activeTrackingState}
+          project={baseEvaluation.input.project_goal}
+        />,
+      );
+
+      expect(htmlWithProject).toContain('data-testid="green-goal-connection"');
+      expect(htmlWithProject).toContain("Fijar meta de pie en verde");
+      expect(htmlWithProject).toContain("Seguimiento mensual (HU 13)");
+
+      // Verificamos que green-goal-connection esté integrado dentro del bloque de simulación E1
+      // (después de las métricas E1 y antes del cronograma expandible y las secciones posteriores E2/E3)
+      const e1MetricsIndex = htmlWithProject.indexOf('data-testid="green-monthly-uf"');
+      const connectionIndex = htmlWithProject.indexOf('data-testid="green-goal-connection"');
+      const detailsIndex = htmlWithProject.indexOf("green-planner__schedule-details");
+      const e3Index = htmlWithProject.indexOf('data-testid="green-inflation-protection"');
+
+      expect(e1MetricsIndex).toBeGreaterThan(-1);
+      expect(connectionIndex).toBeGreaterThan(e1MetricsIndex);
+      expect(detailsIndex).toBeGreaterThan(connectionIndex);
+      expect(e3Index).toBeGreaterThan(detailsIndex);
     });
 
     it("deshabilita la fijación de la meta periódica cuando el usuario aún no tiene activo el seguimiento del plan de mejora (HU 13)", () => {
@@ -837,6 +884,160 @@ describe("HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Ve
       expect(htmlSinVerde).toContain('data-testid="conventional-savings-notice"');
       expect(htmlSinVerde).toContain("Ahorro a tu propio ritmo según tu capacidad mensual (sin exigir el plazo de 18 meses)");
       expect(htmlSinVerde).toContain("Volver a plazo en verde");
+    });
+    it("conserva el plan de ahorro ordinario y no activa venta en verde por el mero montaje del simulador sin proyecto ni meta", () => {
+      // 1. Verificación en resolveUnifiedTrackingGoal:
+      // Incluso si existe un schedule válido generado por defecto en el simulador,
+      // la ausencia de un proyecto en verde/blanco y de una meta guardada impide activar la meta unificada.
+      const fakeSchedule = {
+        isValid: true,
+        pieUf: 450,
+        plazoMeses: 18,
+        cuotaMensualUfDisplay: 25,
+        cuotaMensualClpHoy: 962500,
+      };
+
+      const unifiedWithoutGreen = resolveUnifiedTrackingGoal({
+        evaluation: {
+          id: "eval-conventional-1",
+          input: { ahorro_disponible: 1000000 },
+          result: { financial_indicators: { pie_minimo_clp: 6000000, brecha_pie_minimo: 5000000 } },
+        },
+        trackingState: { is_active: true },
+        projectGoal: null,
+        ufValueClp: 38500,
+        activeSchedule: fakeSchedule,
+      });
+
+      expect(unifiedWithoutGreen.isApplicable).toBe(false);
+      expect(unifiedWithoutGreen.cuotaMensualClp).toBe(0);
+      expect(unifiedWithoutGreen.plazoMeses).toBe(0);
+
+      // 2. Verificación de renderizado en FinancialTracking:
+      // Evaluación estándar convencional (sin input.project_goal y sin housing_plan.green_savings_goal).
+      const conventionalEval = {
+        ...baseEvaluation,
+        input: {
+          ...baseEvaluation.input,
+          project_goal: null,
+          ahorro_disponible: 1000000,
+        },
+        result: {
+          ...baseEvaluation.result,
+          financial_indicators: {
+            ...baseEvaluation.result.financial_indicators,
+            pie_minimo_clp: 6192945,
+            brecha_pie_minimo: 5192945,
+            ahorro_mensual_conservador: 244000,
+            ahorro_mensual_acelerado: 488000,
+            meses_conservador: 22,
+          },
+        },
+        housing_plan: {},
+      };
+
+      const dashboardHtml = renderToStaticMarkup(
+        <FinancialTracking
+          evaluation={conventionalEval}
+          trackingState={activeTrackingState}
+          onAcceptPlan={vi.fn()}
+          onStartEvaluation={vi.fn()}
+          onOpenProgress={vi.fn()}
+          onOpenHousingPlan={vi.fn()}
+          onNavigate={vi.fn()}
+        />,
+      );
+
+      // Tarjeta 2: Debe conservar la Meta de Pie (10%) genérica con la brecha ordinaria de $5.192.945
+      expect(dashboardHtml).toContain("Meta de Pie (10%)");
+      expect(dashboardHtml).not.toContain("Meta de Pie (10% · ");
+      expect(dashboardHtml).toContain("$5.192.945");
+      expect(dashboardHtml).not.toContain("23.852.500");
+
+      // Tarjeta 4: Debe conservar el título 'Ahorro Pie' sin la etiqueta '(Venta en Verde)'
+      expect(dashboardHtml).not.toContain("Ahorro Pie (Venta en Verde)");
+      expect(dashboardHtml).toContain("Ahorro Pie");
+
+      // Debe conservar el ahorro ordinario ($244.000/m) y el plazo ordinario (22 meses = 1 año y 10 meses)
+      expect(dashboardHtml).toContain("$244.000/m");
+      expect(dashboardHtml).toContain("1 año y 10 meses");
+
+      // NO debe adoptar el plazo por defecto de 18 meses ni reemplazar el ahorro por la cuota del simulador
+      expect(dashboardHtml).not.toContain('data-testid="toggle-green-savings-mode"');
+      expect(dashboardHtml).not.toContain("⚠️ Exigencia de venta en verde");
+    });
+
+    it("trata la capacidad de ahorro cero como insuficiente y conserva la advertencia de inviabilidad con venta en verde activa", () => {
+      const ufRate = 41125;
+      const zeroCapacityEval = {
+        ...baseEvaluation,
+        input: {
+          ...baseEvaluation.input,
+          uf_value_clp: ufRate,
+          ahorro_disponible: 1000000,
+          project_goal: {
+            id: "p-plaza-nunoa",
+            nombre: "Plaza Ñuñoa",
+            precio_min_uf: 5800,
+            estado: "en_construccion",
+            entrega_estimada: "2028-05",
+          },
+        },
+        result: {
+          ...baseEvaluation.result,
+          financial_indicators: {
+            ...baseEvaluation.result.financial_indicators,
+            capacidad_supuestos: {
+              market_snapshot: {
+                uf_value_clp: ufRate,
+                effective_date: "2026-04-15",
+              },
+            },
+            pie_minimo_clp: 6192945,
+            brecha_pie_minimo: 5192945,
+            // Capacidad de ahorro cero y tiempo no proyectable
+            ahorro_mensual_conservador: 0,
+            ahorro_mensual_acelerado: 0,
+            meses_conservador: 999,
+            meses_acelerado: 999,
+          },
+        },
+        housing_plan: {
+          green_savings_goal: {
+            type: "pie_en_verde_blanco",
+            project_id: "p-plaza-nunoa",
+            project_name: "Plaza Ñuñoa",
+            property_uf: 5800,
+            pie_total_uf: 580,
+            pie_total_clp: 23852500,
+            cuota_mensual_uf: 32.22,
+            cuota_mensual_clp: 1325066,
+            plazo_meses: 18,
+            uf_value_clp: ufRate,
+          },
+        },
+      };
+
+      const dashboardHtml = renderToStaticMarkup(
+        <FinancialTracking
+          evaluation={zeroCapacityEval}
+          trackingState={activeTrackingState}
+          initialUseGreenSavingsPlan={true}
+          onAcceptPlan={vi.fn()}
+          onStartEvaluation={vi.fn()}
+          onOpenProgress={vi.fn()}
+          onOpenHousingPlan={vi.fn()}
+          onNavigate={vi.fn()}
+        />,
+      );
+
+      // Debe conservar la advertencia de inviabilidad y no ocultarla bajo el plazo de 18 meses
+      expect(dashboardHtml).toContain("Plan no viable temporalmente.");
+      expect(dashboardHtml).toContain("Tu capacidad de ahorro proyectada es insuficiente.");
+
+      // NUNCA debe comunicar cumplimiento a quien no tiene capacidad de ahorro
+      expect(dashboardHtml).not.toContain("¡Plan sincronizado!");
+      expect(dashboardHtml).not.toContain("Cubre la cuota exigida por la inmobiliaria");
     });
   });
 });

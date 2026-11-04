@@ -9,7 +9,6 @@ import AiExplanationBlock from "./AiExplanationBlock";
 import FieldTooltip from "./FieldTooltip";
 import GreenSavingsPlanner from "./GreenSavingsPlanner";
 import {
-  describeGreenSavingsGoalProgress,
   formatClpExact,
   formatUfAmount,
   getEffectiveGreenSavingsGoal,
@@ -329,6 +328,7 @@ export default function FinancialTracking({
 
   const currentPlanMonths = planType === "acelerado" ? computedMesesAcelerado : computedMesesConservador;
   const currentPlanAhorro = planType === "acelerado" ? ahorro_mensual_acelerado : ahorro_mensual_conservador;
+  const conventionalCapacity = currentPlanAhorro;
 
   // Unificación de variables cuando aplica venta en verde / meta periódica
   const isGreenActive = Boolean(unifiedGoal.isApplicable && useGreenSavingsPlan);
@@ -350,7 +350,12 @@ export default function FinancialTracking({
     ? Math.ceil(effectiveBrechaPie / currentPlanAhorro)
     : (effectiveBrechaPie > 0 ? 999 : 0);
 
-  const effectivePlanMonths = isGreenActive && unifiedGoal.plazoMeses > 0
+  // Validación de viabilidad: si el aporte requerido es positivo,
+  // una capacidad de ahorro cero o insuficiente hace el plan inviable (999 meses).
+  const isRequiredAportePositive = effectiveBrechaPie > 0 || (isGreenActive && unifiedGoal.cuotaMensualClp > 0);
+  const isConventionalPlanViable = conventionalCapacity > 0 || !isRequiredAportePositive;
+
+  const effectivePlanMonths = isGreenActive && unifiedGoal.plazoMeses > 0 && isConventionalPlanViable
     ? unifiedGoal.plazoMeses
     : (unifiedGoal.isApplicable ? conventionalMonthsForProject : currentPlanMonths);
 
@@ -485,12 +490,11 @@ export default function FinancialTracking({
     ? Math.max(1, computedMesesAcelerado)
     : baseDesiredMonths;
 
-  const effectiveDesiredMonths = isGreenActive && unifiedGoal.plazoMeses > 0
+  const effectiveDesiredMonths = isGreenActive && unifiedGoal.plazoMeses > 0 && isConventionalPlanViable
     ? unifiedGoal.plazoMeses
     : (unifiedGoal.isApplicable ? Math.max(1, conventionalMonthsForProject) : baseEffectiveDesiredMonths);
 
-  const conventionalCapacity = planType === "acelerado" ? ahorro_mensual_acelerado : ahorro_mensual_conservador;
-  const isCapacityExceeded = isGreenActive && conventionalCapacity > 0 && effectivePlanAhorro > conventionalCapacity;
+  const isCapacityExceeded = isGreenActive && effectivePlanAhorro > 0 && (conventionalCapacity <= 0 || effectivePlanAhorro > conventionalCapacity);
 
 
 
@@ -854,35 +858,6 @@ export default function FinancialTracking({
                 </button>
               </div>
             )}
-
-            {isGreenActive && greenSavingsGoal && (() => {
-              const greenProgress = describeGreenSavingsGoalProgress(greenSavingsGoal);
-              return (
-                <div
-                  data-testid="dashboard-green-savings-goal"
-                  style={{
-                    marginBottom: "0.75rem",
-                    padding: "0.5rem 0.65rem",
-                    backgroundColor: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    borderRadius: "6px",
-                    fontSize: "0.82rem",
-                    color: "#1e40af",
-                  }}
-                >
-                  <div>
-                    <strong>Meta periódica en verde fijada:</strong>{" "}
-                    {formatUfAmount(greenSavingsGoal.cuota_mensual_uf)}/mes (
-                    {formatClpExact(greenSavingsGoal.cuota_mensual_clp)}/m) · {greenSavingsGoal.plazo_meses} meses
-                  </div>
-                  {greenProgress && (
-                    <div style={{ marginTop: "0.25rem", color: "#1d4ed8", fontSize: "0.78rem" }}>
-                      Mes {greenProgress.mesActual} de {greenProgress.plazoMeses} · Acumulado esperado: {formatUfAmount(greenProgress.acumuladoEsperadoUf)}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
             {effectiveBrechaPie === 0 && totalSaneamientoRequerido === 0 ? (
               <div style={{ color: "var(--color-success)", fontSize: "0.85rem", padding: "0.5rem", backgroundColor: "#f0fdf4", borderRadius: "6px", textAlign: "center" }}>

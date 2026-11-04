@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { formatDeliveryMonth } from "../lib/simulation/projectAdapter";
 import {
   buildDeveloperInstallmentComparison,
@@ -10,6 +10,7 @@ import {
   getEffectiveGreenSavingsGoal,
   GREEN_PLANNER_TERM_PRESETS,
   isTrackingPlanActive,
+  isUnderConstructionProject,
   resolveGreenPlannerUfReference,
   persistGreenSavingsGoal,
   resolveInitialPieUf,
@@ -86,6 +87,9 @@ export default function GreenSavingsPlanner({
     [evaluation, trackingState],
   );
 
+  const isConstructionProject = isUnderConstructionProject(comparisonProject);
+  const hasConstructionProject = isConstructionProject || Boolean(existingGoal?.type === "pie_en_verde_blanco");
+
   const [pieUfInput, setPieUfInput] = useState(() => {
     if (initialPieUf != null && Number(initialPieUf) > 0) return String(initialPieUf);
     if (existingGoal?.pie_total_uf > 0) return String(existingGoal.pie_total_uf);
@@ -99,9 +103,29 @@ export default function GreenSavingsPlanner({
     return "18";
   });
 
-  const [selectedInstrument, setSelectedInstrument] = useState(
-    () => existingGoal?.instrumento_sugerido || "cuenta_uf",
-  );
+  const isPlazoEditedRef = useRef(false);
+  const prevProjectIdRef = useRef(projectId);
+
+  // Si cambia el proyecto seleccionado, se reinicia la bandera de edición manual
+  useEffect(() => {
+    if (prevProjectIdRef.current !== projectId) {
+      prevProjectIdRef.current = projectId;
+      isPlazoEditedRef.current = false;
+    }
+  }, [projectId]);
+
+  // Actualizar el plazo al resolver la fecha si el usuario todavía no lo editó
+  // y no existe un plazo fijado explícitamente (ni por prop initialPlazoMeses ni por meta guardada)
+  useEffect(() => {
+    const hasExplicitPlazo =
+      (initialPlazoMeses != null && Number(initialPlazoMeses) > 0) ||
+      Boolean(existingGoal?.plazo_meses > 0);
+
+    if (!isPlazoEditedRef.current && !hasExplicitPlazo && deliveryMonths && deliveryMonths > 0) {
+      setPlazoMesesInput(String(deliveryMonths));
+    }
+  }, [deliveryMonths, initialPlazoMeses, existingGoal]);
+
   const [savedGoal, setSavedGoal] = useState(existingGoal);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
@@ -122,18 +146,18 @@ export default function GreenSavingsPlanner({
         pieUf: numericPieUf,
         plazoMeses: numericPlazoMeses,
         ufValueClp: ufRef.ufValueClp,
-        entregaEstimada: project?.entrega_estimada || null,
+        entregaEstimada: comparisonProject?.entrega_estimada || null,
         ufEffectiveDate: ufRef.effectiveDate,
         ufSourceLabel: ufRef.sourceLabel,
       }),
-    [numericPieUf, numericPlazoMeses, ufRef, project?.entrega_estimada],
+    [numericPieUf, numericPlazoMeses, ufRef, comparisonProject?.entrega_estimada],
   );
 
   useEffect(() => {
-    if (onScheduleChange && schedule.isValid) {
+    if (onScheduleChange && schedule.isValid && (project || existingGoal)) {
       onScheduleChange(schedule);
     }
-  }, [schedule, onScheduleChange]);
+  }, [schedule, onScheduleChange, project, existingGoal]);
 
   const developerComparison = useMemo(
     () =>
@@ -161,6 +185,7 @@ export default function GreenSavingsPlanner({
   const deliveryLabel = formatDeliveryMonth(comparisonProject?.entrega_estimada);
 
   const handleSelectPresetTerm = (months) => {
+    isPlazoEditedRef.current = true;
     setPlazoMesesInput(String(months));
     setSaveMessage("");
   };
@@ -180,7 +205,7 @@ export default function GreenSavingsPlanner({
       const payload = buildGreenSavingsGoalPayload({
         schedule,
         project: comparisonProject || project,
-        instrument: selectedInstrument,
+        instrument: existingGoal?.instrumento_sugerido || "cuenta_uf",
       });
       const { status } = await persistGreenSavingsGoal({
         payload,
@@ -277,6 +302,7 @@ export default function GreenSavingsPlanner({
             step="1"
             value={plazoMesesInput}
             onChange={(e) => {
+              isPlazoEditedRef.current = true;
               setPlazoMesesInput(e.target.value);
               setSaveMessage("");
             }}
@@ -356,6 +382,54 @@ export default function GreenSavingsPlanner({
             {schedule.supuestos.ufEffectiveDate ? ` · Fecha: ${schedule.supuestos.ufEffectiveDate}` : ""}).{" "}
             {schedule.supuestos.formula}.
           </div>
+
+          {/* E4: Fijar meta de pie en verde directamente en el bloque de simulación E1 solo si hay proyecto en construcción */}
+          {hasConstructionProject && (
+            <div
+              className="green-goal-connection green-planner__e1-action"
+              data-testid="green-goal-connection"
+            >
+              <div className="green-goal-connection__layout">
+                <div className="green-goal-connection__info">
+                  <span className="eyebrow">Seguimiento mensual (HU 13)</span>
+                  <h3>Fijar cuota como meta de ahorro periódica</h3>
+                  <p>
+                    {trackingActive
+                      ? `Al fijar esta meta, tu cuota mensual sugerida de ${formatUfAmount(schedule.cuotaMensualUfDisplay)} (${formatClpExact(schedule.cuotaMensualClpHoy)}/mes hoy) quedará vinculada automáticamente a tu dashboard de seguimiento mensual para monitorear tus abonos hasta la entrega de la vivienda.`
+                      : "Activa primero el seguimiento de tu Plan de Mejora (HU 13) para poder fijar esta cuota mensual en tu dashboard personal."}
+                  </p>
+                  {savedGoal && !saveMessage && (
+                    <div className="inline-note" style={{ marginTop: "0.85rem", color: "var(--rh-text-secondary, #5A6A7E)" }}>
+                      <strong>Meta periódica activa:</strong> {formatUfAmount(savedGoal.cuota_mensual_uf)} / mes (
+                      {formatClpExact(savedGoal.cuota_mensual_clp)}/mes) durante {savedGoal.plazo_meses} meses.
+                    </div>
+                  )}
+                </div>
+
+                <div className="green-goal-connection__actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={!trackingActive || saving}
+                    onClick={handleFixGreenGoal}
+                  >
+                    {saving ? "Guardando meta..." : "Fijar meta de pie en verde"}
+                  </button>
+                </div>
+              </div>
+
+              {saveMessage && (
+                <div
+                  className={saveStatus === "synced" ? "success-message" : "warning-note"}
+                  role={saveStatus === "synced" ? "status" : "alert"}
+                  data-testid="green-goal-save-message"
+                  style={{ marginTop: "0.85rem" }}
+                >
+                  {saveMessage}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Cronograma resumido/expandible E1 */}
           <details
@@ -575,66 +649,6 @@ export default function GreenSavingsPlanner({
               </div>
             </div>
           )}
-
-          {/* E4: Conexión con seguimiento mensual (HU 13) */}
-          <div
-            className="green-goal-connection"
-            data-testid="green-goal-connection"
-          >
-            <div className="green-goal-connection__layout">
-              <div className="green-goal-connection__info">
-                <span className="eyebrow">Seguimiento mensual (E4 · HU 13)</span>
-                <h3>Fijar cuota como meta de ahorro periódica</h3>
-                <p>
-                  {trackingActive
-                    ? `Al fijar esta meta, tu cuota mensual sugerida de ${formatUfAmount(schedule.cuotaMensualUfDisplay)} (${formatClpExact(schedule.cuotaMensualClpHoy)}/mes hoy) quedará vinculada automáticamente a tu dashboard de seguimiento mensual para monitorear tus abonos hasta la entrega de la vivienda.`
-                    : "Activa primero el seguimiento de tu Plan de Mejora (HU 13) para poder fijar esta cuota mensual en tu dashboard personal."}
-                </p>
-              </div>
-
-              <div className="green-goal-connection__actions">
-                <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--rh-navy, #132B4A)" }}>
-                  Instrumento preferido:{" "}
-                  <select
-                    aria-label="Instrumento preferido para ahorrar el pie"
-                    value={selectedInstrument}
-                    onChange={(e) => setSelectedInstrument(e.target.value)}
-                    disabled={!trackingActive}
-                  >
-                    <option value="cuenta_uf">Cuenta de Ahorro en UF</option>
-                    <option value="deposito_plazo">Depósito a Plazo (DAP)</option>
-                  </select>
-                </label>
-
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={!trackingActive || saving}
-                  onClick={handleFixGreenGoal}
-                >
-                  {saving ? "Guardando meta..." : "Fijar meta de pie en verde"}
-                </button>
-              </div>
-            </div>
-
-            {saveMessage && (
-              <div
-                className={saveStatus === "synced" ? "success-message" : "warning-note"}
-                role={saveStatus === "synced" ? "status" : "alert"}
-                data-testid="green-goal-save-message"
-                style={{ marginTop: "0.85rem" }}
-              >
-                {saveMessage}
-              </div>
-            )}
-
-            {savedGoal && !saveMessage && (
-              <div className="inline-note" style={{ marginTop: "0.85rem", color: "var(--rh-text-secondary, #5A6A7E)" }}>
-                <strong>Meta periódica activa:</strong> {formatUfAmount(savedGoal.cuota_mensual_uf)} / mes (
-                {formatClpExact(savedGoal.cuota_mensual_clp)}/mes) durante {savedGoal.plazo_meses} meses.
-              </div>
-            )}
-          </div>
         </>
       )}
     </section>

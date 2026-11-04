@@ -704,6 +704,17 @@ export function describeGreenSavingsGoalProgress(goal, asOf = new Date()) {
  * 2. Plazo de la venta en verde y horizonte objetivo.
  * 3. Ahorro sugerido mensual, empatando con la exigencia periódica de la inmobiliaria.
  */
+export function isUnderConstructionProject(project) {
+  if (!project) return false;
+  return Boolean(
+    project.estado === "en_construccion" ||
+    project.estado_proyecto === "verde" ||
+    project.estado_proyecto === "blanco" ||
+    project.entrega_estimada ||
+    project.esquema_pie_inmobiliaria
+  );
+}
+
 export function resolveUnifiedTrackingGoal({
   evaluation = null,
   trackingState = null,
@@ -716,17 +727,14 @@ export function resolveUnifiedTrackingGoal({
   const currentAhorro = Number(evaluation?.input?.ahorro_disponible) || 0;
 
   // Determinar si aplica el contexto de compra en verde/blanco
-  const isGreenProject = Boolean(
-    projectGoal && (
-      projectGoal.estado === "en_construccion" ||
-      projectGoal.estado_proyecto === "verde" ||
-      projectGoal.estado_proyecto === "blanco" ||
-      projectGoal.entrega_estimada ||
-      projectGoal.esquema_pie_inmobiliaria
-    )
-  );
+  const isGreenProject = isUnderConstructionProject(projectGoal);
 
-  const isApplicable = Boolean(greenSavingsGoal || isGreenProject || activeSchedule?.isValid);
+  const hasExplicitGoal = Boolean(greenSavingsGoal && Number(greenSavingsGoal.cuota_mensual_uf) > 0);
+
+  // La meta unificada de venta en verde SOLO aplica si existe una meta fijada explícita
+  // o si la evaluación está vinculada a un proyecto en verde/blanco/en construcción.
+  // El mero montaje del simulador con un cronograma inicial NO acredita esa elección.
+  const isApplicable = Boolean(hasExplicitGoal || isGreenProject);
 
   if (!isApplicable) {
     return {
@@ -752,20 +760,20 @@ export function resolveUnifiedTrackingGoal({
   let cuotaMensualUf = 0;
   let cuotaMensualClp = 0;
   let propertyUf = 0;
-  const isFixed = Boolean(greenSavingsGoal && Number(greenSavingsGoal.cuota_mensual_uf) > 0);
+  const isFixed = hasExplicitGoal;
 
-  if (activeSchedule?.isValid) {
-    pieTotalUf = Number(activeSchedule.pieUf) || 0;
-    plazoMeses = Number(activeSchedule.plazoMeses) || 18;
-    cuotaMensualUf = Number(activeSchedule.cuotaMensualUfDisplay) || 0;
-    cuotaMensualClp = Number(activeSchedule.cuotaMensualClpHoy) || 0;
-    propertyUf = Number(projectGoal?.precio_min_uf) || Number(evaluation?.input?.property_value_uf) || (pieTotalUf * 10);
-  } else if (isFixed) {
+  if (isFixed) {
     pieTotalUf = Number(greenSavingsGoal.pie_total_uf) || (Number(greenSavingsGoal.cuota_mensual_uf) * Number(greenSavingsGoal.plazo_meses));
     plazoMeses = Number(greenSavingsGoal.plazo_meses) || 18;
     cuotaMensualUf = Number(greenSavingsGoal.cuota_mensual_uf);
     cuotaMensualClp = Number(greenSavingsGoal.cuota_mensual_clp);
     propertyUf = Number(greenSavingsGoal.property_uf) || Number(projectGoal?.precio_min_uf) || (pieTotalUf * 10);
+  } else if (activeSchedule?.isValid && isGreenProject) {
+    pieTotalUf = Number(activeSchedule.pieUf) || 0;
+    plazoMeses = Number(activeSchedule.plazoMeses) || 18;
+    cuotaMensualUf = Number(activeSchedule.cuotaMensualUfDisplay) || 0;
+    cuotaMensualClp = Number(activeSchedule.cuotaMensualClpHoy) || 0;
+    propertyUf = Number(projectGoal?.precio_min_uf) || Number(evaluation?.input?.property_value_uf) || (pieTotalUf * 10);
   } else {
     // Derivado del proyecto en verde
     const initialPieInfo = resolveInitialPieUf({
