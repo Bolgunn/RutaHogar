@@ -154,11 +154,11 @@ await step("Edge Function: un admin global tampoco degrada a otro admin", async 
   assert.equal((await profile(tenantAdmin.id)).inmobiliaria_id, tenantA.id);
 });
 
-await step("Edge Function: un lead existente sigue vinculándose (decisión abierta de HU 28)", async () => {
+await step("Edge Function: un lead existente se rechaza (HU 28)", async () => {
   const res = await createExecutive(tenantAdmin.token, { email: lead.email, full_name: "Lead" });
-  assert.equal(res.status, 200, res.text);
-  assert.equal(res.json.created, false);
-  assert.equal((await profile(lead.id)).role, "ejecutivo");
+  assert.equal(res.status, 409, res.text);
+  assert.match(res.json.error, /comprador/);
+  assert.deepEqual(await profile(lead.id), { role: "usuario", inmobiliaria_id: null, reliability_status: "normal" });
 });
 
 await step("Edge Function: un lead no puede invocarla", async () => {

@@ -124,7 +124,7 @@ export function decideExecutiveBinding({ execInmobiliariaId, projectInmobiliaria
   return "reject_conflict";
 }
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateExecutive(input = {}) {
   const errors = {};

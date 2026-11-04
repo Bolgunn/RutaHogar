@@ -239,10 +239,10 @@ begin
   perform pg_temp.act_as('authenticated', global_admin);
   perform pg_temp.expect_guard('global admin changes own role',
     format($q$update public.profiles set role = 'usuario' where id = %L$q$, global_admin));
-  -- Policy "Profiles update admin": a global admin managing someone else stays allowed.
+  -- HU 28 dropped "Profiles update admin": a browser reaches no other profile, even a global admin.
   update public.profiles set role = 'ejecutivo' where id = lead;
-  update public.profiles set role = 'usuario' where id = lead;
   perform pg_temp.act_as_system();
+  perform pg_temp.expect_profile('global admin changed a lead through the table', lead, 'usuario', null);
   perform pg_temp.expect_profile('tenant admin did not promote', exec, 'ejecutivo', 'a3000000-0000-0000-0000-000000000001');
 end $$;
 
@@ -402,7 +402,7 @@ declare
   v_unassign text := format($q$select public.unassign_executive(%L, 'pg-exec-free@example.invalid')$q$, project);
   v_fn text;
 begin
-  foreach v_fn in array array['public.assign_executive(uuid, text)', 'public.unassign_executive(uuid, text)'] loop
+  foreach v_fn in array array['public.assign_executive(uuid, text, text)', 'public.unassign_executive(uuid, text, text)'] loop
     if has_function_privilege('anon', v_fn, 'execute') then
       raise exception 'anon can execute %', v_fn;
     end if;
