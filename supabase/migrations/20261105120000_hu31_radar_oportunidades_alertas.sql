@@ -180,7 +180,38 @@ $$;
 revoke all on function public.configurar_alerta_favorito(uuid, boolean) from public, anon, authenticated;
 grant execute on function public.configurar_alerta_favorito(uuid, boolean) to authenticated;
 
--- 5. Función pura en SQL para recalcular compatibilidad referencial con precio UF y bono pie
+-- 5. Compatibilidad referencial con precio UF y bono pie.
+-- Espejo de recalculateOpportunityCompatibility (frontend/src/lib/simulation/opportunityRadar.js)
+-- y de recalculate_favorite_compatibility (backend/app/lead_changes/service.py):
+-- mismos umbrales, mismos estados y mismas etiquetas. Si una cambia, cambiar las tres.
+
+-- financial_data viene de cada evaluación: un valor no numérico se trata como
+-- ausente en vez de abortar la edición del catálogo con un error de cast.
+create or replace function public.oportunidad_num(p_value jsonb)
+returns numeric
+language sql
+immutable
+set search_path = public
+as $$
+  select case jsonb_typeof(p_value)
+    when 'number' then (p_value #>> '{}')::numeric
+    when 'string' then case
+      when btrim(p_value #>> '{}') ~ '^-?[0-9]+(\.[0-9]+)?$' then btrim(p_value #>> '{}')::numeric
+    end
+  end;
+$$;
+
+-- UF redondeadas con punto de miles, igual que toLocaleString("es-CL") en el
+-- frontend. Un patrón con D y FM deja el separador decimal colgando ("3200.").
+create or replace function public.oportunidad_fmt_uf(p_value numeric)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select replace(to_char(round(coalesce(p_value, 0)), 'FM999,999,999,990'), ',', '.');
+$$;
+
 create or replace function public.calcular_compatibilidad_oportunidad_uf(
   p_financial_data jsonb,
   p_precio_min_uf numeric,
@@ -192,67 +223,123 @@ immutable
 set search_path = public
 as $$
 declare
-  v_fin jsonb := coalesce(p_financial_data, '{}'::jsonb);
-  v_input jsonb := coalesce(v_fin -> 'input', v_fin -> 'input_snapshot', v_fin);
-  v_result jsonb := coalesce(v_fin -> 'result', v_fin -> 'result_snapshot', '{}'::jsonb);
-  v_indicators jsonb := coalesce(v_result -> 'financial_indicators', '{}'::jsonb);
-  v_supuestos jsonb := coalesce(v_indicators -> 'capacidad_supuestos', '{}'::jsonb);
-  v_uf_clp numeric := coalesce(
-    nullif((v_supuestos ->> 'uf_value_clp')::numeric, 0),
-    nullif((v_input ->> 'uf_value_clp')::numeric, 0),
-    38000
-  );
-  v_ahorro_clp numeric := greatest(0, coalesce((v_input ->> 'ahorro_disponible')::numeric, 0));
-  v_ahorro_uf numeric := case when v_uf_clp > 0 then v_ahorro_clp / v_uf_clp else 0 end;
-  v_base_cap_uf numeric := (v_indicators ->> 'capacidad_compra_estimada_uf')::numeric;
-  v_bono numeric := greatest(0, least(coalesce(p_bono_pie_pct, 0), 30));
-  v_precio numeric := greatest(0, coalesce(p_precio_min_uf, 0));
-  v_pie_min_rate numeric := greatest(0, 0.10 - (v_bono / 100.0));
-  v_pie_rec_rate numeric := greatest(0, 0.20 - (v_bono / 100.0));
-  v_pie_min_req_uf numeric := v_precio * v_pie_min_rate;
-  v_pie_rec_req_uf numeric := v_precio * v_pie_rec_rate;
-  v_brecha_min_uf numeric := greatest(0, v_pie_min_req_uf - v_ahorro_uf);
-  v_brecha_rec_uf numeric := greatest(0, v_pie_rec_req_uf - v_ahorro_uf);
-  v_bono_aporte_uf numeric := v_precio * (v_bono / 100.0);
-  v_cap_efectiva_uf numeric;
-  v_status text;
+  v_ctx jsonb := case when jsonb_typeof(p_financial_data) = 'object' then p_financial_data else '{}'::jsonb end;
+  v_result jsonb;
+  v_input jsonb;
+  v_indicators jsonb;
+  v_market jsonb;
+  v_uf numeric;
+  v_ahorro numeric;
+  v_cap numeric;
+  v_precio numeric := p_precio_min_uf;
+  v_bono numeric := greatest(0, least(30, coalesce(p_bono_pie_pct, 0)));
+  v_pie_min_rate numeric;
+  v_pie_rec_rate numeric;
+  v_ahorro_uf numeric;
+  v_aporte numeric;
+  v_cap_ef numeric;
+  v_pie_min_req numeric;
+  v_status text := 'no_compatible';
+  v_label text := 'Aún fuera de alcance';
 begin
-  if v_base_cap_uf is not null then
-    v_cap_efectiva_uf := v_base_cap_uf + v_bono_aporte_uf;
-  elsif v_pie_min_rate > 0 then
-    v_cap_efectiva_uf := v_ahorro_uf / v_pie_min_rate;
-  else
-    v_cap_efectiva_uf := v_precio;
+  v_result := case
+    when jsonb_typeof(v_ctx -> 'result') = 'object' then v_ctx -> 'result'
+    when jsonb_typeof(v_ctx -> 'result_snapshot') = 'object' then v_ctx -> 'result_snapshot'
+    else v_ctx
+  end;
+  v_input := case
+    when jsonb_typeof(v_ctx -> 'input') = 'object' then v_ctx -> 'input'
+    when jsonb_typeof(v_ctx -> 'input_snapshot') = 'object' then v_ctx -> 'input_snapshot'
+    else v_ctx
+  end;
+  v_indicators := case
+    when jsonb_typeof(v_result -> 'financial_indicators') = 'object' then v_result -> 'financial_indicators'
+    when jsonb_typeof(v_ctx -> 'financial_indicators') = 'object' then v_ctx -> 'financial_indicators'
+    else '{}'::jsonb
+  end;
+  v_market := case
+    when jsonb_typeof(v_result -> 'market_context') = 'object' then v_result -> 'market_context'
+    when jsonb_typeof(v_indicators #> '{capacidad_supuestos,market_snapshot}') = 'object'
+      then v_indicators #> '{capacidad_supuestos,market_snapshot}'
+    when jsonb_typeof(v_ctx -> 'market_context') = 'object' then v_ctx -> 'market_context'
+    else '{}'::jsonb
+  end;
+
+  v_uf := coalesce(
+    nullif(public.oportunidad_num(v_market -> 'uf_value'), 0),
+    nullif(public.oportunidad_num(v_market -> 'uf_value_clp'), 0),
+    nullif(public.oportunidad_num(v_ctx -> 'uf_value_clp'), 0),
+    nullif(public.oportunidad_num(v_input -> 'uf_value_clp'), 0),
+    39000
+  );
+  if v_uf <= 0 then
+    v_uf := 39000;
   end if;
 
-  if v_precio <= 0 then
-    v_status := 'Requiere ajuste';
-  elsif v_cap_efectiva_uf >= v_precio and v_brecha_rec_uf <= 0 then
-    v_status := 'Compatible';
-  elsif v_cap_efectiva_uf >= (v_precio * 0.80)
-        and (v_brecha_min_uf <= 0 or (v_pie_min_req_uf > 0 and (v_brecha_min_uf / v_pie_min_req_uf) <= 0.25)) then
-    v_status := 'Cercano';
-  else
-    v_status := 'Requiere ajuste';
+  v_ahorro := coalesce(
+    public.oportunidad_num(v_input -> 'ahorro_disponible'),
+    public.oportunidad_num(v_input -> 'ahorro'),
+    public.oportunidad_num(v_ctx -> 'ahorro_disponible')
+  );
+  v_cap := coalesce(
+    public.oportunidad_num(v_indicators -> 'capacidad_compra_estimada_uf'),
+    public.oportunidad_num(v_ctx -> 'capacidad_compra_estimada_uf')
+  );
+  if v_cap is null and v_ahorro > 0 then
+    v_cap := round(v_ahorro / v_uf / 0.1, 1);
+  end if;
+
+  v_pie_min_rate := greatest(0.05, 0.10 - v_bono / 100);
+  v_pie_rec_rate := greatest(0.05, 0.20 - v_bono / 100);
+  v_ahorro_uf := case when v_ahorro is not null then round(v_ahorro / v_uf, 1) end;
+  v_aporte := case when v_precio > 0 then round(v_precio * v_bono / 100, 1) else 0 end;
+  v_cap_ef := case when v_cap is not null then round(v_cap + v_aporte, 1) end;
+  v_pie_min_req := case when v_precio > 0 then round(v_precio * v_pie_min_rate, 1) else 0 end;
+
+  if v_cap_ef is null or v_precio is null or v_precio <= 0 then
+    return jsonb_build_object(
+      'status', 'unknown',
+      'label', 'Compatibilidad por confirmar',
+      'capacidad_base_uf', round(v_cap, 1),
+      'capacidad_efectiva_uf', v_cap_ef,
+      'aporte_bono_pie_uf', v_aporte,
+      'bono_pie_pct', v_bono,
+      'pie_minimo_requerido_uf', v_pie_min_req,
+      'ahorro_estimado_uf', v_ahorro_uf,
+      'brecha_uf', null,
+      'brecha_pie_uf', null
+    );
+  end if;
+
+  if v_cap_ef >= v_precio
+     and (v_ahorro_uf is null or v_ahorro_uf >= round(v_precio * v_pie_rec_rate, 1)) then
+    v_status := 'compatible';
+    v_label := 'Compatible hoy';
+  elsif v_cap_ef >= round(v_precio * 0.9, 1)
+     and (v_ahorro_uf is null or v_ahorro_uf >= v_pie_min_req) then
+    v_status := 'compatible_con_ajustes';
+    v_label := 'Compatible con ajustes';
   end if;
 
   return jsonb_build_object(
     'status', v_status,
-    'capacidad_base_uf', round(coalesce(v_base_cap_uf, v_cap_efectiva_uf), 1),
-    'capacidad_efectiva_uf', round(v_cap_efectiva_uf, 1),
-    'ahorro_disponible_uf', round(v_ahorro_uf, 1),
+    'label', v_label,
+    'capacidad_base_uf', round(v_cap, 1),
+    'capacidad_efectiva_uf', v_cap_ef,
+    'aporte_bono_pie_uf', v_aporte,
     'bono_pie_pct', v_bono,
-    'bono_aporte_uf', round(v_bono_aporte_uf, 1),
-    'pie_minimo_requerido_uf', round(v_pie_min_req_uf, 1),
-    'pie_recomendado_requerido_uf', round(v_pie_rec_req_uf, 1),
-    'brecha_pie_minimo_uf', round(v_brecha_min_uf, 1),
-    'alcanza_proyecto', (v_cap_efectiva_uf >= v_precio and v_brecha_min_uf <= 0)
+    'pie_minimo_requerido_uf', v_pie_min_req,
+    'ahorro_estimado_uf', v_ahorro_uf,
+    'brecha_uf', greatest(0, round(v_precio - v_cap_ef, 1)),
+    'brecha_pie_uf', case when v_ahorro_uf is not null then greatest(0, round(v_pie_min_req - v_ahorro_uf, 1)) else 0 end
   );
 end;
 $$;
 
--- 6. Trigger E2: detectar rebaja de precio o bono pie al actualizar public.proyectos
+-- 6. Trigger E2: detectar rebaja de precio (desde o hasta) o alza de bono pie al actualizar public.proyectos.
 -- Cubre tanto la edición manual (updateProject) como la carga masiva (importar_proyectos, HU 25).
+-- El evento tiene la misma forma que evaluateFavoriteOpportunityChange (opportunityRadar.js)
+-- y que _favorite_opportunity_events (service.py), que es la que lee Inicio.
 create or replace function public.evaluar_alertas_oportunidad_proyecto()
 returns trigger
 language plpgsql
@@ -266,141 +353,150 @@ declare
   v_prev_max numeric;
   v_prev_bono numeric;
   v_curr_min numeric := new.precio_min_uf;
-  v_curr_max numeric := new.precio_max_uf;
-  v_curr_bono numeric := coalesce(new.bono_pie_pct, 0);
-  v_price_drop numeric;
-  v_bono_gain numeric;
-  v_prev_comp jsonb;
-  v_curr_comp jsonb;
-  v_prev_status text;
-  v_curr_status text;
+  v_curr_max numeric := coalesce(new.precio_max_uf, new.precio_min_uf);
+  v_curr_bono numeric := greatest(0, coalesce(new.bono_pie_pct, 0));
+  v_price_dropped boolean;
+  v_bono_increased boolean;
+  v_comp_before jsonb;
+  v_comp_after jsonb;
+  v_label_after text;
   v_title text;
   v_summary text;
-  v_prev_label text;
-  v_curr_label text;
 begin
   if new.estado = 'agotado' then
     return new;
   end if;
 
   for v_fav in
-    select f.*
+    select f.usuario_id, f.umbral_precio_min_uf, f.umbral_precio_max_uf, f.umbral_bono_pie_pct
     from public.proyecto_favoritos f
     where f.proyecto_id = new.id
       and f.notificar_cambios = true
   loop
-    v_prev_min := coalesce(v_fav.umbral_precio_min_uf, old.precio_min_uf);
-    v_prev_max := coalesce(v_fav.umbral_precio_max_uf, old.precio_max_uf);
-    v_prev_bono := coalesce(v_fav.umbral_bono_pie_pct, old.bono_pie_pct, 0);
+    -- Un lead que no se puede evaluar no puede deshacer la edición del admin
+    -- ni la carga masiva completa: se registra y se sigue con el resto.
+    begin
+      v_prev_min := coalesce(v_fav.umbral_precio_min_uf, old.precio_min_uf, v_curr_min);
+      v_prev_max := coalesce(v_fav.umbral_precio_max_uf, old.precio_max_uf, v_prev_min);
+      v_prev_bono := greatest(0, coalesce(v_fav.umbral_bono_pie_pct, old.bono_pie_pct, 0));
 
-    v_price_drop := greatest(0, v_prev_min - v_curr_min);
-    v_bono_gain := greatest(0, v_curr_bono - v_prev_bono);
+      v_price_dropped := coalesce(v_curr_min < v_prev_min, false)
+                      or coalesce(v_curr_max < v_prev_max, false);
+      v_bono_increased := v_curr_bono > v_prev_bono;
 
-    if v_price_drop <= 0 and v_bono_gain <= 0 then
-      continue;
-    end if;
+      if not v_price_dropped and not v_bono_increased then
+        continue;
+      end if;
 
-    select ev.id, ev.financial_data, ev.score, ev.classification
-      into v_eval
-    from public.evaluations ev
-    where ev.user_id = v_fav.usuario_id
-    order by ev.created_at desc nulls last, ev.id desc
-    limit 1;
+      select ev.id, ev.financial_data
+        into v_eval
+      from public.evaluations ev
+      where ev.user_id = v_fav.usuario_id
+      order by ev.created_at desc nulls last, ev.id desc
+      limit 1;
 
-    v_prev_comp := public.calcular_compatibilidad_oportunidad_uf(
-      v_eval.financial_data, v_prev_min, v_prev_bono
-    );
-    v_curr_comp := public.calcular_compatibilidad_oportunidad_uf(
-      v_eval.financial_data, v_curr_min, v_curr_bono
-    );
-    v_prev_status := v_prev_comp ->> 'status';
-    v_curr_status := v_curr_comp ->> 'status';
+      v_comp_before := public.calcular_compatibilidad_oportunidad_uf(v_eval.financial_data, v_prev_min, v_prev_bono);
+      v_comp_after := public.calcular_compatibilidad_oportunidad_uf(v_eval.financial_data, v_curr_min, v_curr_bono);
+      v_label_after := v_comp_after ->> 'label';
 
-    if v_price_drop > 0 and v_bono_gain > 0 then
-      v_title := format('%s bajó %s UF y activó Bono Pie de %s %%', new.nombre, trim(to_char(v_price_drop, 'FM999G999D9')), trim(to_char(v_curr_bono, 'FM990D9')));
-      v_summary := format(
-        'El valor desde bajó de %s UF a %s UF y se aplicó un Bono Pie del %s %%. Recalculamos tu compatibilidad referencial: %s.',
-        trim(to_char(v_prev_min, 'FM999G999D9')),
-        trim(to_char(v_curr_min, 'FM999G999D9')),
-        trim(to_char(v_curr_bono, 'FM990D9')),
-        v_curr_status
-      );
-    elsif v_price_drop > 0 then
-      v_title := format('%s redujo su precio en %s UF', new.nombre, trim(to_char(v_price_drop, 'FM999G999D9')));
-      v_summary := format(
-        'El valor desde bajó de %s UF a %s UF. Recalculamos tu compatibilidad referencial: %s.',
-        trim(to_char(v_prev_min, 'FM999G999D9')),
-        trim(to_char(v_curr_min, 'FM999G999D9')),
-        v_curr_status
-      );
-    else
-      v_title := format('%s lanzó Bono Pie del %s %%', new.nombre, trim(to_char(v_curr_bono, 'FM990D9')));
-      v_summary := format(
-        'La inmobiliaria aplicó un Bono Pie del %s %% sobre %s (desde %s UF). Recalculamos tu compatibilidad referencial: %s.',
-        trim(to_char(v_curr_bono, 'FM990D9')),
-        new.nombre,
-        trim(to_char(v_curr_min, 'FM999G999D9')),
-        v_curr_status
-      );
-    end if;
+      if v_price_dropped and v_bono_increased then
+        v_title := format('Bajó el precio y se activó bono pie de %s%% en %s', trim_scale(v_curr_bono), new.nombre);
+        v_summary := format(
+          '%s bajó desde %s UF a %s UF y sumó un bono pie de %s%%. Tu compatibilidad referencial ahora es: %s.',
+          new.nombre,
+          public.oportunidad_fmt_uf(v_prev_min),
+          public.oportunidad_fmt_uf(v_curr_min),
+          trim_scale(v_curr_bono),
+          v_label_after
+        );
+      elsif v_price_dropped then
+        v_title := format('Bajó el precio en tu favorito %s', new.nombre);
+        v_summary := format(
+          '%s redujo su precio desde %s UF a %s UF. Tu compatibilidad referencial ahora es: %s.',
+          new.nombre,
+          public.oportunidad_fmt_uf(v_prev_min),
+          public.oportunidad_fmt_uf(v_curr_min),
+          v_label_after
+        );
+      else
+        v_title := format('%s activó un bono pie de %s%%', new.nombre, trim_scale(v_curr_bono));
+        v_summary := format(
+          'Tu favorito %s aplicó un bono pie de %s%% (desde %s UF). Tu compatibilidad referencial ahora es: %s.',
+          new.nombre,
+          trim_scale(v_curr_bono),
+          public.oportunidad_fmt_uf(v_curr_min),
+          v_label_after
+        );
+      end if;
 
-    v_prev_label := format(
-      'Desde %s UF%s · %s',
-      trim(to_char(v_prev_min, 'FM999G999D9')),
-      case when v_prev_bono > 0 then format(' · Bono pie %s %%', trim(to_char(v_prev_bono, 'FM990D9'))) else '' end,
-      v_prev_status
-    );
-    v_curr_label := format(
-      'Desde %s UF%s · %s',
-      trim(to_char(v_curr_min, 'FM999G999D9')),
-      case when v_curr_bono > 0 then format(' · Bono pie %s %%', trim(to_char(v_curr_bono, 'FM990D9'))) else '' end,
-      v_curr_status
-    );
-
-    perform public.lead_changes_record_event(jsonb_build_object(
-      'user_id', v_fav.usuario_id,
-      'event_type', 'favorite_project_opportunity',
-      'materiality_key', format('fav-opp:%s:%s:%s', new.id, v_curr_min, v_curr_bono),
-      'occurred_at', clock_timestamp(),
-      'project_id', new.id,
-      'project_name', new.nombre,
-      'tone', 'positive',
-      'title', v_title,
-      'summary', v_summary,
-      'previous_value', jsonb_build_object(
-        'label', v_prev_label,
-        'precio_min_uf', v_prev_min,
-        'precio_max_uf', v_prev_max,
-        'bono_pie_pct', v_prev_bono,
-        'compatibility_status', v_prev_status
-      ),
-      'current_value', jsonb_build_object(
-        'label', v_curr_label,
-        'precio_min_uf', v_curr_min,
-        'precio_max_uf', v_curr_max,
-        'bono_pie_pct', v_curr_bono,
-        'compatibility_status', v_curr_status
-      ),
-      'payload', jsonb_build_object(
+      perform public.lead_changes_record_event(jsonb_build_object(
+        'user_id', v_fav.usuario_id,
+        'event_type', 'favorite_project_opportunity',
+        'materiality_key', format(
+          'fav-opp:%s:%s:%s:%s', new.id, trim_scale(v_curr_min), trim_scale(v_curr_max), trim_scale(v_curr_bono)
+        ),
+        'occurred_at', clock_timestamp(),
         'project_id', new.id,
         'project_name', new.nombre,
-        'comuna', new.comuna,
-        'price_drop_uf', v_price_drop,
-        'bono_pie_pct', v_curr_bono,
-        'previous_bono_pie_pct', v_prev_bono,
-        'previous_compatibility', v_prev_comp,
-        'current_compatibility', v_curr_comp,
-        'latest_evaluation_id', v_eval.id
-      ),
-      'source', 'catalog_update'
-    ));
+        'tone', 'positive',
+        'title', v_title,
+        'summary', v_summary,
+        'previous_value', jsonb_build_object(
+          'label', format(
+            'Desde %s UF%s',
+            public.oportunidad_fmt_uf(v_prev_min),
+            case when v_prev_bono > 0 then format(' · Bono pie %s%%', trim_scale(v_prev_bono)) else ' · Sin bono pie' end
+          ),
+          'precio_min_uf', v_prev_min,
+          'precio_max_uf', v_prev_max,
+          'bono_pie_pct', v_prev_bono,
+          'compatibility_status', v_comp_before ->> 'status',
+          'compatibility_label', v_comp_before ->> 'label'
+        ),
+        'current_value', jsonb_build_object(
+          'label', format(
+            'Desde %s UF%s (%s)',
+            public.oportunidad_fmt_uf(v_curr_min),
+            case when v_curr_bono > 0 then format(' · Bono pie %s%%', trim_scale(v_curr_bono)) else ' · Sin bono pie' end,
+            v_label_after
+          ),
+          'precio_min_uf', v_curr_min,
+          'precio_max_uf', v_curr_max,
+          'bono_pie_pct', v_curr_bono,
+          'compatibility_status', v_comp_after ->> 'status',
+          'compatibility_label', v_label_after
+        ),
+        'payload', jsonb_build_object(
+          'project_id', new.id,
+          'project_name', new.nombre,
+          'comuna', new.comuna,
+          'tipo', new.tipo,
+          'price_dropped', v_price_dropped,
+          'bono_pie_increased', v_bono_increased,
+          'precio_min_anterior_uf', v_prev_min,
+          'precio_min_actual_uf', v_curr_min,
+          'precio_max_anterior_uf', v_prev_max,
+          'precio_max_actual_uf', v_curr_max,
+          'descuento_uf', greatest(0, coalesce(v_prev_min, 0) - coalesce(v_curr_min, 0)),
+          'bono_pie_anterior_pct', v_prev_bono,
+          'bono_pie_actual_pct', v_curr_bono,
+          'compatibility_before', v_comp_before,
+          'compatibility_after', v_comp_after,
+          'latest_evaluation_id', v_eval.id
+        ),
+        'source', 'catalog_update'
+      ));
 
-    update public.proyecto_favoritos
-    set umbral_precio_min_uf = v_curr_min,
-        umbral_precio_max_uf = v_curr_max,
-        umbral_bono_pie_pct = v_curr_bono
-    where usuario_id = v_fav.usuario_id
-      and proyecto_id = new.id;
+      update public.proyecto_favoritos
+      set umbral_precio_min_uf = v_curr_min,
+          umbral_precio_max_uf = v_curr_max,
+          umbral_bono_pie_pct = v_curr_bono
+      where usuario_id = v_fav.usuario_id
+        and proyecto_id = new.id;
+    exception when others then
+      raise warning 'HU 31: no se pudo evaluar la alerta del proyecto % para el usuario %: %',
+        new.id, v_fav.usuario_id, sqlerrm;
+    end;
   end loop;
 
   return new;

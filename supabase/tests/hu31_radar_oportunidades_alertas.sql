@@ -78,7 +78,7 @@ where id = 'b3100000-0000-0000-0000-000000000001';
 
 reset role;
 
--- Verificar evento generado y compatibilidad recalculada (pasa de Cercano a Compatible).
+-- Verificar evento generado y compatibilidad recalculada (pasa de compatible con ajustes a compatible).
 do $$
 declare
   v_event public.lead_change_events%rowtype;
@@ -91,8 +91,13 @@ begin
 
   assert v_event.id is not null, 'E2 manual: evento registrado';
   assert v_event.seen_at is null, 'E2 manual: evento pendiente para próximo ingreso';
-  assert (v_event.payload ->> 'price_drop_uf')::numeric = 300, 'E2 manual: rebaja de 300 UF registrada';
-  assert (v_event.current_value ->> 'compatibility_status') = 'Compatible', 'E2 manual: compatibilidad recalculada a Compatible';
+  assert (v_event.payload ->> 'descuento_uf')::numeric = 300, 'E2 manual: rebaja de 300 UF registrada';
+  assert (v_event.current_value ->> 'compatibility_status') = 'compatible', 'E2 manual: compatibilidad recalculada a compatible';
+  assert (v_event.payload #>> '{compatibility_before,label}') = 'Compatible con ajustes', 'E2 manual: Inicio lee la etiqueta previa';
+  assert (v_event.payload #>> '{compatibility_after,label}') = 'Compatible hoy', 'E2 manual: Inicio lee la etiqueta actual';
+  assert v_event.title = 'Bajó el precio en tu favorito HU31 Edificio Radar', 'E2 manual: título igual al del frontend';
+  assert v_event.summary like 'HU31 Edificio Radar redujo su precio desde 3.200 UF a 2.900 UF.%', 'E2 manual: UF sin separador decimal colgando';
+  assert (v_event.current_value ->> 'label') = 'Desde 2.900 UF · Sin bono pie (Compatible hoy)', 'E2 manual: etiqueta actual';
 end;
 $$;
 
@@ -125,8 +130,36 @@ begin
     and event_type = 'favorite_project_opportunity';
 
   assert v_event.id is not null, 'E2 carga masiva HU25: evento registrado por bono pie 5 %';
-  assert (v_event.payload ->> 'bono_pie_pct')::numeric = 5, 'E2 carga masiva HU25: bono pie 5 % en payload';
-  assert (v_event.current_value ->> 'compatibility_status') = 'Compatible', 'E2 carga masiva HU25: bono pie 5 % eleva compatibilidad a Compatible';
+  assert (v_event.payload ->> 'bono_pie_actual_pct')::numeric = 5, 'E2 carga masiva HU25: bono pie 5 % en payload';
+  assert (v_event.current_value ->> 'compatibility_status') = 'compatible', 'E2 carga masiva HU25: bono pie 5 % eleva compatibilidad a compatible';
+  assert v_event.title = 'HU31 Parque Masivo activó un bono pie de 5%', 'E2 carga masiva HU25: título igual al del frontend';
+end;
+$$;
+
+-- Un dato no numérico en la evaluación de un lead no puede deshacer la edición del admin.
+update public.evaluations
+set financial_data = jsonb_set(financial_data, '{input,ahorro_disponible}', '"no informado"')
+where id = 'd3100000-0000-0000-0000-000000000001';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'c3100000-0000-0000-0000-000000000001', true);
+
+update public.proyectos
+set precio_min_uf = 2700
+where id = 'b3100000-0000-0000-0000-000000000001';
+
+reset role;
+
+do $$
+begin
+  assert (select precio_min_uf from public.proyectos where id = 'b3100000-0000-0000-0000-000000000001') = 2700,
+    'E2: la edición del admin se guarda aunque la evaluación del lead tenga datos no numéricos';
+  assert exists (
+    select 1 from public.lead_change_events
+    where user_id = 'c3100000-0000-0000-0000-000000000002'
+      and project_id = 'b3100000-0000-0000-0000-000000000001'
+      and (current_value ->> 'precio_min_uf')::numeric = 2700
+  ), 'E2: el dato no numérico se trata como ausente y el evento igual se registra';
 end;
 $$;
 

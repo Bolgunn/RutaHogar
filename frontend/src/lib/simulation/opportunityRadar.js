@@ -199,10 +199,10 @@ export function evaluateFavoriteOpportunityChange({
   } (${compAfter.label})`;
 
   const event = {
-    id: `fav-opp-${projectId}-${currMin}-${currBono}`,
+    id: `fav-opp-${projectId}-${currMin}-${currMax}-${currBono}`,
     user_id: userId || favoriteAlert.usuario_id || null,
     event_type: "favorite_project_opportunity",
-    materiality_key: `fav-opp:${projectId}:${currMin}:${currBono}`,
+    materiality_key: `fav-opp:${projectId}:${currMin ?? ""}:${currMax ?? ""}:${currBono}`,
     occurred_at: nowIso,
     project_id: projectId,
     project_name: projectName,

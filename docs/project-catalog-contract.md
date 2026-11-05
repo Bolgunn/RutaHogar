@@ -21,6 +21,7 @@ Contrato congelado que expone [[HU7-ProjectCatalog|HU 7]] y consume
   nombre, comuna,
   tipo,                        // 'departamento' | 'casa'
   precio_min_uf, precio_max_uf,
+  bono_pie_pct,                // HU 31 · número 0..30, 0 = sin bono pie
   estado,                      // 'disponible' | 'en_construccion' | 'agotado'
   descripcion,                 // opcional · texto de vitrina, null si no se cargó
   entrega_estimada,            // opcional · 'YYYY-MM', null si no se comprometió
@@ -63,6 +64,17 @@ que HU 13 se especifica igual con o sin ella.
   matching, con su propia fila de penalización y una redistribución del
   presupuesto de 100 puntos: es una decisión de diseño de HU 13, no un efecto
   secundario de esta migración.
+
+### Enmienda aditiva — bono pie promocional (HU 31)
+
+`bono_pie_pct` es el porcentaje de bono pie que la inmobiliaria aplica al
+proyecto (0 a 30, `check` en la base y en `projectValidation.js`). Lo agrega
+`supabase/migrations/20261105120000_hu31_radar_oportunidades_alertas.sql` con
+`default 0`, así que **siempre llega como número**: 0 significa sin promoción.
+
+Es aditiva igual que la anterior. Hoy solo la usa el radar de oportunidades de
+HU 31 (alertas sobre favoritos); **no es señal del matching de HU 13**: usarla
+para ordenar o penalizar sería una regla nueva de ese diseño.
 
 ---
 

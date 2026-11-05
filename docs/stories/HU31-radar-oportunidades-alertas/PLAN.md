@@ -107,6 +107,25 @@ Ningún `ALG-*` modificado.
    - Renderizar `favorite_project_opportunity` en `App.jsx` (`LeadChangeDetail`, `leadChangeGroupSummary`) con navegación directa al proyecto y en `ProfilePage.jsx`.
 6. **Pruebas Automatizadas:** Implementar `backend/tests/test_lead_changes_hu31.py` y `frontend/src/components/__tests__/hu31OpportunityRadar.test.jsx`.
 
+## Deploy
+
+El orden importa: el frontend (`projectColumns`) y el job diario
+(`repository.available_projects`) piden `proyectos.bono_pie_pct` siempre. Si el
+código llega antes que la columna, PostgREST responde 400 y se caen el catálogo
+del lead, el catálogo del admin y el job.
+
+1. Aplicar `supabase/migrations/20261105120000_hu31_radar_oportunidades_alertas.sql`
+   en prod como archivo suelto (`supabase db query --linked -f …`) y registrarla
+   con `supabase migration repair --status applied 20261105120000`. No usar
+   `db push`: el ledger de prod tiene migraciones sin registrar.
+2. Confirmar que existen `proyectos.bono_pie_pct`, el trigger
+   `proyectos_evaluar_alertas_favoritos` y `oportunidad_num` / `oportunidad_fmt_uf`.
+3. Recién entonces mergear y desplegar frontend y backend.
+
+El rollback (`supabase/rollback/…_rollback.sql`) va en el orden inverso: primero
+volver al código anterior, después correr el script, que restaura
+`importar_proyectos` y `lead_changes_due_leads` a sus versiones previas.
+
 ## Acceptance criteria map
 
 | Criterion | Step(s) | Verified by |

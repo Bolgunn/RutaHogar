@@ -283,27 +283,27 @@ class LeadChangeService:
             if price_dropped and bono_increased:
                 title = f"Bajó el precio y se activó bono pie de {curr_bono:g}% en {project_name}"
                 summary = (
-                    f"{project_name} bajó desde {round(prev_min):,} UF a {round(curr_min):,} UF "
+                    f"{project_name} bajó desde {_uf(prev_min)} UF a {_uf(curr_min)} UF "
                     f"y sumó un bono pie de {curr_bono:g}%. Tu compatibilidad referencial ahora es: {comp_after['label']}."
                 )
             elif price_dropped:
                 title = f"Bajó el precio en tu favorito {project_name}"
                 summary = (
-                    f"{project_name} redujo su precio desde {round(prev_min):,} UF a {round(curr_min):,} UF. "
+                    f"{project_name} redujo su precio desde {_uf(prev_min)} UF a {_uf(curr_min)} UF. "
                     f"Tu compatibilidad referencial ahora es: {comp_after['label']}."
                 )
             else:
                 title = f"{project_name} activó un bono pie de {curr_bono:g}%"
                 summary = (
                     f"Tu favorito {project_name} aplicó un bono pie de {curr_bono:g}% "
-                    f"(desde {round(curr_min or 0):,} UF). Tu compatibilidad referencial ahora es: {comp_after['label']}."
+                    f"(desde {_uf(curr_min)} UF). Tu compatibilidad referencial ahora es: {comp_after['label']}."
                 )
 
-            prev_label = f"Desde {round(prev_min or 0):,} UF" + (
+            prev_label = f"Desde {_uf(prev_min)} UF" + (
                 f" · Bono pie {prev_bono:g}%" if prev_bono > 0 else " · Sin bono pie"
             )
             curr_label = (
-                f"Desde {round(curr_min or 0):,} UF"
+                f"Desde {_uf(curr_min)} UF"
                 + (f" · Bono pie {curr_bono:g}%" if curr_bono > 0 else " · Sin bono pie")
                 + f" ({comp_after['label']})"
             )
@@ -311,7 +311,7 @@ class LeadChangeService:
             events.append({
                 "user_id": lead["user_id"],
                 "event_type": "favorite_project_opportunity",
-                "materiality_key": f"fav-opp:{project_id}:{curr_min}:{curr_bono}",
+                "materiality_key": f"fav-opp:{project_id}:{_key_number(curr_min)}:{_key_number(curr_max)}:{_key_number(curr_bono)}",
                 "occurred_at": now_iso,
                 "project_id": project_id,
                 "project_name": project_name,
@@ -422,30 +422,39 @@ class LeadChangeService:
 def recalculate_favorite_compatibility(financial_data, precio_min_uf, bono_pie_pct=0):
     if not isinstance(financial_data, dict):
         financial_data = {}
-    result = financial_data.get("result") or financial_data.get("result_snapshot") or {}
-    if not isinstance(result, dict):
-        result = {}
-    indicators = result.get("financial_indicators") or {}
-    if not isinstance(indicators, dict):
-        indicators = {}
-    input_data = financial_data.get("input") or financial_data.get("input_snapshot") or financial_data
-    if not isinstance(input_data, dict):
-        input_data = {}
-    market_ctx = result.get("market_context") or {}
-    if not isinstance(market_ctx, dict):
-        market_ctx = {}
+    # Misma lectura que recalculateOpportunityCompatibility (opportunityRadar.js) y
+    # calcular_compatibilidad_oportunidad_uf (migración HU 31): si una cambia, las tres.
+    result = _dict_or_none(financial_data.get("result")) or _dict_or_none(financial_data.get("result_snapshot")) or financial_data
+    input_data = _dict_or_none(financial_data.get("input")) or _dict_or_none(financial_data.get("input_snapshot")) or financial_data
+    indicators = _dict_or_none(result.get("financial_indicators")) or _dict_or_none(financial_data.get("financial_indicators")) or {}
+    market_ctx = (
+        _dict_or_none(result.get("market_context"))
+        or _dict_or_none((_dict_or_none(indicators.get("capacidad_supuestos")) or {}).get("market_snapshot"))
+        or _dict_or_none(financial_data.get("market_context"))
+        or {}
+    )
 
-    capacidad_uf = _number(indicators.get("capacidad_compra_estimada_uf"))
-    if capacidad_uf is None:
-        capacidad_uf = _number(financial_data.get("capacidad_compra_estimada_uf"))
+    valor_uf = (
+        _number(market_ctx.get("uf_value"))
+        or _number(market_ctx.get("uf_value_clp"))
+        or _number(financial_data.get("uf_value_clp"))
+        or _number(input_data.get("uf_value_clp"))
+        or 39000.0
+    )
+    if valor_uf <= 0:
+        valor_uf = 39000.0
 
     ahorro_clp = _number(input_data.get("ahorro_disponible"))
     if ahorro_clp is None:
         ahorro_clp = _number(input_data.get("ahorro"))
+    if ahorro_clp is None:
+        ahorro_clp = _number(financial_data.get("ahorro_disponible"))
 
-    valor_uf = _number(market_ctx.get("uf_value")) or _number(financial_data.get("uf_value")) or 39000.0
-    if valor_uf <= 0:
-        valor_uf = 39000.0
+    capacidad_uf = _number(indicators.get("capacidad_compra_estimada_uf"))
+    if capacidad_uf is None:
+        capacidad_uf = _number(financial_data.get("capacidad_compra_estimada_uf"))
+    if capacidad_uf is None and ahorro_clp is not None and ahorro_clp > 0:
+        capacidad_uf = round(ahorro_clp / valor_uf / 0.1, 1)
 
     precio = _number(precio_min_uf)
     bono = max(0.0, min(30.0, _number(bono_pie_pct) or 0.0))
@@ -454,9 +463,9 @@ def recalculate_favorite_compatibility(financial_data, precio_min_uf, bono_pie_p
     pie_rec_rate = max(0.05, 0.20 - (bono / 100.0))
 
     ahorro_uf = round(ahorro_clp / valor_uf, 1) if ahorro_clp is not None else None
-    aporte_bono_uf = round((precio or 0.0) * (bono / 100.0), 1) if precio is not None else 0.0
+    aporte_bono_uf = round(precio * (bono / 100.0), 1) if precio is not None and precio > 0 else 0.0
     capacidad_efectiva_uf = round(capacidad_uf + aporte_bono_uf, 1) if capacidad_uf is not None else None
-    pie_min_requerido_uf = round((precio or 0.0) * pie_min_rate, 1) if precio is not None else 0.0
+    pie_min_requerido_uf = round(precio * pie_min_rate, 1) if precio is not None and precio > 0 else 0.0
 
     if capacidad_efectiva_uf is None or precio is None or precio <= 0:
         return {
@@ -502,6 +511,18 @@ def recalculate_favorite_compatibility(financial_data, precio_min_uf, bono_pie_p
         "brecha_uf": brecha_uf,
         "brecha_pie_uf": brecha_pie_uf,
     }
+
+
+def _dict_or_none(value):
+    return value if isinstance(value, dict) and value else None
+
+
+def _uf(value):
+    return f"{round(value or 0):,}".replace(",", ".")
+
+
+def _key_number(value):
+    return "" if value is None else f"{value:g}"
 
 
 def _project_reference(financial_data):

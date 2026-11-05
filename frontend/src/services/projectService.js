@@ -7,6 +7,51 @@ import { filterAssignedTo, filterAvailable, validateProject } from "./projectVal
 
 // Catálogo de proyectos inmobiliarios (HU 7) y condiciones comerciales (HU 31).
 // Proveedores activos: 'local' (sin Supabase) y 'supabase'.
+// El proveedor 'crm' está documentado pero NO implementado: la conexión real
+// es de HU 4 / Spike 2. Ver docs/crm-integration.md — el punto de enganche es
+// esta constante más una rama por función, sin tocar el contrato de retorno.
+//
+// ---------------------------------------------------------------------------
+// CONTRATO CONGELADO — lo consume HU 13 (matching). Copia normativa y notas
+// completas en docs/project-catalog-contract.md; los criterios de matching
+// están en Wiki ScoreLeads/research/spike1-e4-lead-project-matching-criteria.md.
+// Cambiar un nombre de campo aquí rompe una especificación ya congelada.
+//
+// getProjects({ inmobiliariaId }) y getAvailableProjects() devuelven:
+//   {
+//     id, inmobiliaria_id, inmobiliaria_nombre,
+//     nombre, comuna,
+//     tipo,                        // 'departamento' | 'casa'
+//     precio_min_uf, precio_max_uf,
+//     bono_pie_pct,                // HU 31 · 0..30, 0 = sin bono pie
+//     estado,                      // 'disponible' | 'en_construccion' | 'agotado'
+//     descripcion,                 // opcional, null si el admin no la cargó
+//     entrega_estimada,            // opcional, 'YYYY-MM' o null
+//     ejecutivos: [{ ejecutivo_id, email, nombre, estado, source }],
+//     created_at, updated_at
+//   }
+//
+// Enmienda aditiva (CATALOGO-UNICO, docs/stories/CATALOGO-UNICO/PLAN.md):
+// `descripcion` y `entrega_estimada` son OPCIONALES y llegan de la simulación,
+// que antes las leía de un mock. Ningún campo previo cambió de nombre ni de
+// tipo, así que el contrato congelado sigue siendo el mismo para HU 13.
+//
+// Enmienda aditiva HU 31: `bono_pie_pct` (número, 0 si no hay promoción). Igual
+// que la anterior, no renombra ni cambia el tipo de ningún campo previo.
+//
+// Notas para quien consuma esto:
+//  1. getAvailableProjects() excluye solo 'agotado' (HU 7 E4) y recorta
+//     ejecutivos a los 'vinculado'. 'en_construccion' SÍ se recomienda: la
+//     venta en verde es mercado real. El estado viaja para que HU 13 lo muestre.
+//  2. precio_min_uf == precio_max_uf es válido (proyecto de precio único).
+//     Evaluar la rama "capacidad >= precio_max -> sin penalización" ANTES de
+//     interpolar: (cap - min) / (max - min) divide por cero en ese caso.
+//  3. precio_min_uf = unidad disponible más barata; precio_max_uf = la más cara.
+//     Hoy los digita el admin; si más adelante se agrega un modelo de unidades
+//     pasan a derivarse (MIN/MAX) sin cambiar este contrato.
+//  4. Aquí NO se declaran constantes de capacidad (tope FOGAES, tasa, pie):
+//     la capacidad llega precalculada desde el backend (spike §8.3).
+// ---------------------------------------------------------------------------
 export const PROVIDER = isSupabaseDataConfigured ? "supabase" : "local";
 
 const CATALOG_KEY = "scoreleads_project_catalog";
@@ -101,6 +146,26 @@ function localTenant() {
   return readCatalog().inmobiliarias[0];
 }
 
+function buildProjectPayload(input) {
+  const { ok, errors } = validateProject(input);
+  if (!ok) throw new Error(Object.values(errors)[0]);
+  const bono = input.bono_pie_pct;
+  return {
+    inmobiliaria_id: input.inmobiliaria_id,
+    nombre: String(input.nombre).trim(),
+    comuna: input.comuna,
+    tipo: input.tipo,
+    precio_min_uf: Number(input.precio_min_uf),
+    precio_max_uf: Number(input.precio_max_uf),
+    bono_pie_pct: bono !== undefined && bono !== null && String(bono).trim() !== "" ? Number(bono) : 0,
+    estado: input.estado,
+    descripcion: String(input.descripcion ?? "").trim() || null,
+    entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
+  };
+}
+
+// Rama local de createProject/updateProject/getProjects. Exportada para que los
+// tests la ejerciten aunque haya un .env con Supabase (PROVIDER depende de eso).
 export const localCatalogProvider = {
   getTenantContext() {
     const tenant = localTenant();
@@ -118,25 +183,7 @@ export const localCatalogProvider = {
     return filterAssignedTo(proyectos, ejecutivo);
   },
   createProject(input) {
-    const { ok, errors } = validateProject(input);
-    if (!ok) throw new Error(Object.values(errors)[0]);
-    const payload = {
-      inmobiliaria_id: input.inmobiliaria_id,
-      nombre: String(input.nombre).trim(),
-      comuna: input.comuna,
-      tipo: input.tipo,
-      precio_min_uf: Number(input.precio_min_uf),
-      precio_max_uf: Number(input.precio_max_uf),
-      bono_pie_pct:
-        input.bono_pie_pct !== undefined &&
-        input.bono_pie_pct !== null &&
-        String(input.bono_pie_pct).trim() !== ""
-          ? Number(input.bono_pie_pct)
-          : 0,
-      estado: input.estado,
-      descripcion: String(input.descripcion ?? "").trim() || null,
-      entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
-    };
+    const payload = buildProjectPayload(input);
     const catalog = readCatalog();
     assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre);
     const now = new Date().toISOString();
@@ -147,25 +194,7 @@ export const localCatalogProvider = {
   },
   updateProject(id, input) {
     if (!id) throw new Error("ID de proyecto requerido.");
-    const { ok, errors } = validateProject(input);
-    if (!ok) throw new Error(Object.values(errors)[0]);
-    const payload = {
-      inmobiliaria_id: input.inmobiliaria_id,
-      nombre: String(input.nombre).trim(),
-      comuna: input.comuna,
-      tipo: input.tipo,
-      precio_min_uf: Number(input.precio_min_uf),
-      precio_max_uf: Number(input.precio_max_uf),
-      bono_pie_pct:
-        input.bono_pie_pct !== undefined &&
-        input.bono_pie_pct !== null &&
-        String(input.bono_pie_pct).trim() !== ""
-          ? Number(input.bono_pie_pct)
-          : 0,
-      estado: input.estado,
-      descripcion: String(input.descripcion ?? "").trim() || null,
-      entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
-    };
+    const payload = buildProjectPayload(input);
     const catalog = readCatalog();
     const index = catalog.proyectos.findIndex((item) => item.id === id);
     if (index === -1) throw new Error("Proyecto no encontrado.");
@@ -394,13 +423,7 @@ export async function assignAdmin(inmobiliariaId, email) {
 // ---------------------------------------------------------------
 
 export async function getProjects({ inmobiliariaId, ejecutivo } = {}) {
-  if (PROVIDER === "local") {
-    const catalog = readCatalog();
-    const proyectos = catalog.proyectos
-      .map((row) => buildLocalProject(catalog, row))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    return filterAssignedTo(proyectos, ejecutivo);
-  }
+  if (PROVIDER === "local") return localCatalogProvider.getProjects({ ejecutivo });
 
   const { error: resolveError } = await supabase.rpc("resolve_pending_executives");
   if (resolveError) logSupabaseError(resolveError);
@@ -442,36 +465,8 @@ export async function getAvailableProjects({ inmobiliariaId, ejecutivo } = {}) {
 }
 
 export async function createProject(input) {
-  const { ok, errors } = validateProject(input);
-  if (!ok) throw new Error(Object.values(errors)[0]);
-
-  const payload = {
-    inmobiliaria_id: input.inmobiliaria_id,
-    nombre: String(input.nombre).trim(),
-    comuna: input.comuna,
-    tipo: input.tipo,
-    precio_min_uf: Number(input.precio_min_uf),
-    precio_max_uf: Number(input.precio_max_uf),
-    bono_pie_pct:
-      input.bono_pie_pct !== undefined &&
-      input.bono_pie_pct !== null &&
-      String(input.bono_pie_pct).trim() !== ""
-        ? Number(input.bono_pie_pct)
-        : 0,
-    estado: input.estado,
-    descripcion: String(input.descripcion ?? "").trim() || null,
-    entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
-  };
-
-  if (PROVIDER === "local") {
-    const catalog = readCatalog();
-    assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre);
-    const now = new Date().toISOString();
-    const row = { ...payload, id: newId(), created_at: now, updated_at: now };
-    catalog.proyectos.push(row);
-    writeCatalog(catalog);
-    return buildLocalProject(catalog, row);
-  }
+  if (PROVIDER === "local") return localCatalogProvider.createProject(input);
+  const payload = buildProjectPayload(input);
 
   const { data, error } = await supabase
     .from("proyectos")
@@ -488,43 +483,9 @@ export async function createProject(input) {
 }
 
 export async function updateProject(id, input) {
+  if (PROVIDER === "local") return localCatalogProvider.updateProject(id, input);
   if (!id) throw new Error("ID de proyecto requerido.");
-  const { ok, errors } = validateProject(input);
-  if (!ok) throw new Error(Object.values(errors)[0]);
-
-  const payload = {
-    inmobiliaria_id: input.inmobiliaria_id,
-    nombre: String(input.nombre).trim(),
-    comuna: input.comuna,
-    tipo: input.tipo,
-    precio_min_uf: Number(input.precio_min_uf),
-    precio_max_uf: Number(input.precio_max_uf),
-    bono_pie_pct:
-      input.bono_pie_pct !== undefined &&
-      input.bono_pie_pct !== null &&
-      String(input.bono_pie_pct).trim() !== ""
-        ? Number(input.bono_pie_pct)
-        : 0,
-    estado: input.estado,
-    descripcion: String(input.descripcion ?? "").trim() || null,
-    entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
-  };
-
-  if (PROVIDER === "local") {
-    const catalog = readCatalog();
-    const index = catalog.proyectos.findIndex((item) => item.id === id);
-    if (index === -1) throw new Error("Proyecto no encontrado.");
-    assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre, id);
-    const previousRow = { ...catalog.proyectos[index] };
-    catalog.proyectos[index] = {
-      ...catalog.proyectos[index],
-      ...payload,
-      updated_at: new Date().toISOString(),
-    };
-    writeCatalog(catalog);
-    notifyLocalFavoriteOpportunities(previousRow, catalog.proyectos[index]);
-    return buildLocalProject(catalog, catalog.proyectos[index]);
-  }
+  const payload = buildProjectPayload(input);
 
   const { data, error } = await supabase
     .from("proyectos")
