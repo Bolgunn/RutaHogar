@@ -23,12 +23,16 @@ export function useLeads({ userId, profile }) {
   const [evaluations, setEvaluations] = useState([]);
   const [newHighLeadsCount, setNewHighLeadsCount] = useState(0);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(Boolean(userId));
+  const [loadedScope, setLoadedScope] = useState(null);
+  const scope = `${userId || ""}:${profile?.role || ""}`;
 
   const isStaff = isStaffRole(profile?.role);
 
   useEffect(() => {
     let active = true;
-    if (!userId) { setEvaluations([]); return; }
+    if (!userId) { setEvaluations([]); setLoading(false); return; }
+    setLoading(true);
 
     async function load() {
       try {
@@ -53,6 +57,8 @@ export function useLeads({ userId, profile }) {
       } catch (err) {
         console.error(err);
         if (active) setError("No pudimos cargar el historial. Revisa que las tablas de Supabase esten creadas.");
+      } finally {
+        if (active) { setLoading(false); setLoadedScope(scope); }
       }
     }
 
@@ -134,6 +140,7 @@ export function useLeads({ userId, profile }) {
     newHighLeadsCount,
     counts,
     error,
+    loading: Boolean(userId) && (loading || loadedScope !== scope),
     markLeadsSeen,
     dismissToastLocally,
     removeEvaluation,

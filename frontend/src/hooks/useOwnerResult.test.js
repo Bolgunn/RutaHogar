@@ -45,6 +45,36 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe("HU30 open result authority refresh", () => {
+  it("coalesces focus and visibility checks for the same individual tab return", async () => {
+    const individual = row({ evaluation_type: "individual", historical_visible_until: null });
+    const read = vi.fn().mockResolvedValue(bundle(individual));
+    const props = { ownerId: "owner", evaluation: individual, onRefreshEvaluation: read };
+    render(props); await flush(); render(props);
+    events.get("focus")(); await flush(); render(props);
+    events.get("visibilitychange")(); await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    events.get("focus")(); await flush();
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+  it("rechecks an individual result after visibility change without blanking its explanation", async () => {
+    const individual = row({ evaluation_type: "individual", historical_visible_until: null });
+    individual.result = { score: 60, ai_explanation: "Explicación conservada" };
+    const read = vi.fn().mockResolvedValueOnce(bundle(individual)).mockImplementationOnce(() => new Promise(() => {}));
+    const props = { ownerId: "owner", evaluation: individual, onRefreshEvaluation: read };
+    render(props); await flush(); render(props);
+    events.get("visibilitychange")(); await flush();
+    expect(render(props)).toMatchObject({ loading: false, refreshing: true, evaluation: individual });
+  });
+  it("uses the new saved individual evaluation instead of the previous result on the same account", async () => {
+    const first = row({ evaluation_type: "individual", historical_visible_until: null });
+    const read = vi.fn().mockResolvedValue(bundle(first));
+    render({ ownerId: "owner", evaluation: first, onRefreshEvaluation: read }); await flush();
+    const next = { ...first, id: "new-evaluation", result: { ai_explanation: "Nueva explicación" } };
+    const result = render({ ownerId: "owner", evaluation: next, onRefreshEvaluation: () => new Promise(() => {}) });
+    expect(result.evaluation).toBe(next);
+    expect(result.loading).toBe(false);
+  });
   it("re-reads at the server deadline, immediately removes old data and consumes redaction", async () => {
     let resolve;
     const read = vi.fn().mockResolvedValueOnce(bundle()).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));

@@ -1,8 +1,16 @@
 import { currentTrackingEvaluation } from "../lib/tracking/currentEvaluation";
 
 // This state lives only for the mounted owner view, never in browser storage.
-export function createOwnerResultSession({ ownerId, read, incorporate, onChange }) {
-  let state = { ownerId, evaluation: null, tracking: null, scoreChange: null, loading: true, updating: false, message: "", error: "" };
+export function canRetainOwnerResult(evaluation, ownerId) {
+  return Boolean(evaluation?.id && evaluation.user_id === ownerId
+    && evaluation.co_debtor?.evaluation_type === "individual"
+    && evaluation.co_debtor.visibility === "visible"
+    && !evaluation.input?.complemento_renta);
+}
+
+export function createOwnerResultSession({ ownerId, read, incorporate, onChange, initialEvaluation, initialTracking }) {
+  const initial = canRetainOwnerResult(initialEvaluation, ownerId) ? initialEvaluation : null;
+  let state = { ownerId, sourceEvaluationId: initialEvaluation?.id, evaluation: initial, tracking: initial ? initialTracking : null, scoreChange: null, loading: !initial, refreshing: false, updating: false, message: "", error: "" };
   let persistedRows = [];
   let comparisonIds = null;
   const scoreChange = () => {
@@ -25,18 +33,19 @@ export function createOwnerResultSession({ ownerId, read, incorporate, onChange 
     if (disposed) return Promise.resolve(null);
     if (reading && !force) return reading;
     const revision = ++readRevision;
+    const retain = !force && canRetainOwnerResult(state.evaluation, ownerId);
     persistedRows = [];
-    publish({ loading: true, evaluation: null, tracking: null, scoreChange: null, error: "" });
+    publish({ loading: !retain, refreshing: true, ...(retain ? {} : { evaluation: null, tracking: null }), scoreChange: null, error: "" });
     reading = Promise.resolve().then(() => disposed ? null : read()).then((bundle) => {
       if (disposed || revision !== readRevision) return null;
       const evaluation = currentTrackingEvaluation(bundle.tracking, bundle.evaluations, ownerId);
       persistedRows = bundle.evaluations || [];
       if (comparisonIds && comparisonIds[1] !== evaluation?.id) comparisonIds = null;
-      publish({ evaluation, tracking: bundle.tracking, loading: false, scoreChange: scoreChange() });
+      publish({ evaluation, tracking: bundle.tracking, loading: false, refreshing: false, scoreChange: scoreChange() });
       return evaluation;
     }).catch(() => {
       if (disposed || revision !== readRevision) return null;
-      publish({ evaluation: null, tracking: null, loading: false, error: "No pudimos actualizar tu evaluación. Reintenta para consultar los datos vigentes." });
+      publish({ ...(retain ? {} : { evaluation: null, tracking: null }), loading: false, refreshing: false, error: "No pudimos actualizar tu evaluación. Reintenta para consultar los datos vigentes." });
       return null;
     }).finally(() => { if (revision === readRevision) reading = null; });
     return reading;

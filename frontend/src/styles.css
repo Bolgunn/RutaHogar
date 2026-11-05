@@ -6457,8 +6457,14 @@ th {
   flex: 1;
   min-height: 0;
   padding: 24px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
+}
+
+.consent-body > * {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 
