@@ -7,6 +7,14 @@ import { getCurrentProjectGoal } from "../lib/projectGoalDisplay";
 import BankingChecklist from "./BankingChecklist";
 import AiExplanationBlock from "./AiExplanationBlock";
 import FieldTooltip from "./FieldTooltip";
+import GreenSavingsPlanner from "./GreenSavingsPlanner";
+import {
+  formatClpExact,
+  formatUfAmount,
+  getEffectiveGreenSavingsGoal,
+  resolveGreenPlannerUfReference,
+  resolveUnifiedTrackingGoal,
+} from "../services/greenSavingsPlannerService";
 
 function ProjectGoalSummary({ projectGoal }) {
   if (!projectGoal?.nombre) return null;
@@ -177,8 +185,10 @@ export default function FinancialTracking({
   onLogScoringEvent,
   onOpenMilestoneRegistration,
   onOpenProgress,
+  onSaveGreenSavingsGoal,
   onNavigate,
   successMessage,
+  initialUseGreenSavingsPlan = true,
 }) {
   const [planType, setPlanType] = useState(() => evaluation?.plan_type || null);
   const [acceptingPlan, setAcceptingPlan] = useState(false);
@@ -191,6 +201,27 @@ export default function FinancialTracking({
 
   const tracking = useMemo(() => buildFinancialTracking(evaluation, trackingState), [evaluation, trackingState]);
   const projectGoal = getCurrentProjectGoal(evaluation);
+  const [localGreenGoal, setLocalGreenGoal] = useState(null);
+  const [simulatedSchedule, setSimulatedSchedule] = useState(null);
+  const [useGreenSavingsPlan, setUseGreenSavingsPlan] = useState(initialUseGreenSavingsPlan);
+  const greenSavingsGoal = localGreenGoal || getEffectiveGreenSavingsGoal(evaluation, trackingState);
+
+  const ufRef = useMemo(
+    () => resolveGreenPlannerUfReference(evaluation, null),
+    [evaluation],
+  );
+
+  const unifiedGoal = useMemo(
+    () =>
+      resolveUnifiedTrackingGoal({
+        evaluation,
+        trackingState,
+        projectGoal,
+        ufValueClp: ufRef.ufValueClp,
+        activeSchedule: simulatedSchedule,
+      }),
+    [evaluation, trackingState, projectGoal, ufRef.ufValueClp, simulatedSchedule, greenSavingsGoal],
+  );
   const shouldShowHousingPlan = Boolean(evaluation?.input?.valor_propiedad && evaluation?.input?.ahorro_disponible);
 
   const adjustment = useMemo(
@@ -297,6 +328,36 @@ export default function FinancialTracking({
 
   const currentPlanMonths = planType === "acelerado" ? computedMesesAcelerado : computedMesesConservador;
   const currentPlanAhorro = planType === "acelerado" ? ahorro_mensual_acelerado : ahorro_mensual_conservador;
+  const conventionalCapacity = currentPlanAhorro;
+
+  // Unificación de variables cuando aplica venta en verde / meta periódica
+  const isGreenActive = Boolean(unifiedGoal.isApplicable && useGreenSavingsPlan);
+
+  // El monto total y la brecha del pie se mantienen anclados al proyecto objetivo
+  const effectivePieTotalClp = unifiedGoal.isApplicable ? unifiedGoal.pieTotalClp : pie_necesario;
+  const effectiveBrechaPie = unifiedGoal.isApplicable ? unifiedGoal.brechaPieClp : brecha_pie_minimo;
+  const effectivePieProgressPercent = unifiedGoal.isApplicable ? unifiedGoal.pieProgressPercent : pieProgressPercent;
+
+  // Solo se modifican el ahorro sugerido y el tiempo mínimo:
+  // Con plazo en verde activo: cuota fijada por la entrega inmobiliaria.
+  // Sin plazo en verde: cuota ordinaria según la capacidad mensual del usuario.
+  const effectivePlanAhorro = isGreenActive && unifiedGoal.cuotaMensualClp > 0
+    ? unifiedGoal.cuotaMensualClp
+    : currentPlanAhorro;
+
+  // Tiempo mínimo para cubrir la brecha del proyecto a tu ritmo:
+  const conventionalMonthsForProject = effectiveBrechaPie > 0 && currentPlanAhorro > 0
+    ? Math.ceil(effectiveBrechaPie / currentPlanAhorro)
+    : (effectiveBrechaPie > 0 ? 999 : 0);
+
+  // Validación de viabilidad: si el aporte requerido es positivo,
+  // una capacidad de ahorro cero o insuficiente hace el plan inviable (999 meses).
+  const isRequiredAportePositive = effectiveBrechaPie > 0 || (isGreenActive && unifiedGoal.cuotaMensualClp > 0);
+  const isConventionalPlanViable = conventionalCapacity > 0 || !isRequiredAportePositive;
+
+  const effectivePlanMonths = isGreenActive && unifiedGoal.plazoMeses > 0 && isConventionalPlanViable
+    ? unifiedGoal.plazoMeses
+    : (unifiedGoal.isApplicable ? conventionalMonthsForProject : currentPlanMonths);
 
   // Calculos de Deuda y Morosidad (E3)
   const currentDeudaMensual = Number(evaluation?.input?.deuda_mensual) || 0;
@@ -425,9 +486,15 @@ export default function FinancialTracking({
   }
 
   // Meta de tiempo dinamica según el plan seleccionado:
-  const effectiveDesiredMonths = planType === "acelerado"
+  const baseEffectiveDesiredMonths = planType === "acelerado"
     ? Math.max(1, computedMesesAcelerado)
     : baseDesiredMonths;
+
+  const effectiveDesiredMonths = isGreenActive && unifiedGoal.plazoMeses > 0 && isConventionalPlanViable
+    ? unifiedGoal.plazoMeses
+    : (unifiedGoal.isApplicable ? Math.max(1, conventionalMonthsForProject) : baseEffectiveDesiredMonths);
+
+  const isCapacityExceeded = isGreenActive && effectivePlanAhorro > 0 && (conventionalCapacity <= 0 || effectivePlanAhorro > conventionalCapacity);
 
 
 
@@ -569,12 +636,14 @@ export default function FinancialTracking({
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
               <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
-                Meta de Pie (10%)
+                {unifiedGoal.isApplicable
+                  ? `Meta de Pie (${Math.round((unifiedGoal.pieTotalUf / (unifiedGoal.propertyUf || 1)) * 100)}%${unifiedGoal.projectName ? " · " + unifiedGoal.projectName : ""})`
+                  : "Meta de Pie (10%)"}
               </h3>
               <div style={{ marginTop: "-0.2rem", marginRight: "-0.2rem" }}>
                 <CircularProgress
-                  percentage={pieProgressPercent}
-                  color={pieProgressPercent >= 100 ? "var(--color-success)" : "var(--color-primary)"}
+                  percentage={effectivePieProgressPercent}
+                  color={effectivePieProgressPercent >= 100 ? "var(--color-success)" : "var(--color-primary)"}
                   size={40}
                   stroke={4}
                 />
@@ -600,12 +669,17 @@ export default function FinancialTracking({
               <strong
                 style={{
                   fontSize: "1.05rem",
-                  color: brecha_pie_minimo === 0 ? "var(--color-success)" : "var(--color-warning)",
+                  color: effectiveBrechaPie === 0 ? "var(--color-success)" : "var(--color-warning)",
                 }}
               >
-                {formatCurrency(brecha_pie_minimo)}
+                {formatCurrency(effectiveBrechaPie)}
               </strong>
             </div>
+            {unifiedGoal.isApplicable && (
+              <p className="tracking-indicator-note" style={{ margin: "0.5rem 0 0 0", fontSize: "0.76rem" }}>
+                Pie total: <strong>{formatUfAmount(unifiedGoal.pieTotalUf)}</strong> ({formatCurrency(effectivePieTotalClp)} hoy){isGreenActive ? ` · ${unifiedGoal.plazoMeses} meses.` : "."}
+              </p>
+            )}
           </div>
 
           {/* Tarjeta 3.1: Morosidad */}
@@ -729,13 +803,67 @@ export default function FinancialTracking({
               flexDirection: "column",
             }}
           >
-            <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: "0 0 1rem 0" }}>Ahorro Pie</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem", gap: "0.5rem" }}>
+              <h3 style={{ fontSize: "1rem", color: "var(--color-neutral-600)", margin: 0 }}>
+                {isGreenActive ? "Ahorro Pie (Venta en Verde)" : "Ahorro Pie"}
+              </h3>
+              {unifiedGoal.isApplicable && (
+                <button
+                  type="button"
+                  data-testid="toggle-green-savings-mode"
+                  className="text-button compact-button"
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--color-primary)",
+                    padding: "0.1rem 0.35rem",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    background: "none",
+                    border: "none",
+                  }}
+                  onClick={() => setUseGreenSavingsPlan((prev) => !prev)}
+                >
+                  {isGreenActive ? "Ahorro sin plazo en verde" : "Ver plazo venta en verde"}
+                </button>
+              )}
+            </div>
 
-            {brecha_pie_minimo === 0 && totalSaneamientoRequerido === 0 ? (
+            {!isGreenActive && unifiedGoal.isApplicable && (
+              <div
+                data-testid="conventional-savings-notice"
+                style={{
+                  marginBottom: "0.75rem",
+                  padding: "0.45rem 0.6rem",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  fontSize: "0.78rem",
+                  color: "#475569",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <span>
+                  Ahorro a tu propio ritmo según tu capacidad mensual (sin exigir el plazo de {unifiedGoal.plazoMeses} meses).
+                </span>
+                <button
+                  type="button"
+                  className="text-button"
+                  style={{ fontSize: "0.76rem", whiteSpace: "nowrap", color: "var(--color-primary)", cursor: "pointer" }}
+                  onClick={() => setUseGreenSavingsPlan(true)}
+                >
+                  Volver a plazo en verde
+                </button>
+              </div>
+            )}
+
+            {effectiveBrechaPie === 0 && totalSaneamientoRequerido === 0 ? (
               <div style={{ color: "var(--color-success)", fontSize: "0.85rem", padding: "0.5rem", backgroundColor: "#f0fdf4", borderRadius: "6px", textAlign: "center" }}>
                 <strong>¡Objetivo listo para postular!</strong> Cumples con el pie y ratios bancarios.
               </div>
-            ) : currentPlanMonths >= 999 ? (
+            ) : effectivePlanMonths >= 999 ? (
               <div style={{ color: "var(--color-danger)", fontSize: "0.85rem", lineHeight: "1.3" }}>
                 <strong>Plan no viable temporalmente.</strong> Tu capacidad de ahorro proyectada es insuficiente. Prioriza reducir deudas o complementar renta.
               </div>
@@ -744,9 +872,16 @@ export default function FinancialTracking({
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
                   <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Ahorro sugerido:</span>
                   <strong style={{ fontSize: "1.05rem" }}>
-                    {brecha_pie_minimo === 0 ? "Lograda" : `${formatCurrency(currentPlanAhorro)}/m`}
+                    {effectiveBrechaPie === 0 ? "Lograda" : `${formatCurrency(effectivePlanAhorro)}/m`}
                   </strong>
                 </div>
+                {isGreenActive && unifiedGoal.cuotaMensualUf > 0 && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-0.2rem", marginBottom: "0.25rem" }}>
+                    <small style={{ color: "var(--color-neutral-600)", fontSize: "0.78rem" }}>
+                      ({formatUfAmount(unifiedGoal.cuotaMensualUf)} / mes)
+                    </small>
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -761,7 +896,7 @@ export default function FinancialTracking({
                 >
                   <span style={{ fontSize: "0.85rem", color: "var(--color-neutral-700)" }}>Tiempo mínimo pie:</span>
                   <strong style={{ fontSize: "1.05rem", color: "var(--color-primary)" }}>
-                    {formatMonthsToYears(currentPlanMonths)}
+                    {formatMonthsToYears(effectivePlanMonths)}
                   </strong>
                 </div>
 
@@ -782,24 +917,69 @@ export default function FinancialTracking({
                   </strong>
                 </div>
 
-
-
-                {/* Viabilidad Exitosa si está en tiempo */}
-                {currentPlanMonths <= 12 && currentPlanMonths <= effectiveDesiredMonths && (
-                  <div
-                    style={{
-                      color: "#166534",
-                      fontSize: "0.8rem",
-                      lineHeight: "1.25",
-                      padding: "0.4rem 0.6rem",
-                      backgroundColor: "#dcfce7",
-                      borderRadius: "6px",
-                      marginTop: "auto",
-                      textAlign: "center"
-                    }}
-                  >
-                    <strong>¡Viable a tiempo!</strong> Ahorrando lo sugerido alcanzarás la meta.
-                  </div>
+                {/* Sincronización con venta en verde y análisis de viabilidad */}
+                {isGreenActive ? (
+                  isCapacityExceeded ? (
+                    <div
+                      style={{
+                        color: "#92400e",
+                        fontSize: "0.8rem",
+                        lineHeight: "1.3",
+                        padding: "0.45rem 0.6rem",
+                        backgroundColor: "#fef3c7",
+                        border: "1px solid #fde68a",
+                        borderRadius: "6px",
+                        marginTop: "auto",
+                      }}
+                    >
+                      <div>
+                        <strong>⚠️ Exigencia de venta en verde:</strong> La cuota ({formatCurrency(effectivePlanAhorro)}/m) supera tu ahorro ordinario ({formatCurrency(conventionalCapacity)}/m). Para cumplir el plazo de {unifiedGoal.plazoMeses} meses, aporta mayor ahorro inicial o suma un codeudor.
+                      </div>
+                      <div style={{ marginTop: "0.4rem" }}>
+                        <button
+                          type="button"
+                          className="text-button"
+                          data-testid="btn-return-conventional-savings"
+                          style={{ fontSize: "0.76rem", color: "#92400e", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                          onClick={() => setUseGreenSavingsPlan(false)}
+                        >
+                          → Regresar al ahorro de pie a tu ritmo (sin plazo en verde)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        color: "#166534",
+                        fontSize: "0.8rem",
+                        lineHeight: "1.25",
+                        padding: "0.4rem 0.6rem",
+                        backgroundColor: "#dcfce7",
+                        borderRadius: "6px",
+                        marginTop: "auto",
+                        textAlign: "center"
+                      }}
+                    >
+                      <strong>¡Plan sincronizado!</strong> Cubre la cuota exigida por la inmobiliaria para la entrega en {unifiedGoal.plazoMeses} meses.
+                    </div>
+                  )
+                ) : (
+                  effectivePlanMonths <= 12 && effectivePlanMonths <= effectiveDesiredMonths && (
+                    <div
+                      style={{
+                        color: "#166534",
+                        fontSize: "0.8rem",
+                        lineHeight: "1.25",
+                        padding: "0.4rem 0.6rem",
+                        backgroundColor: "#dcfce7",
+                        borderRadius: "6px",
+                        marginTop: "auto",
+                        textAlign: "center"
+                      }}
+                    >
+                      <strong>¡Viable a tiempo!</strong> Ahorrando lo sugerido alcanzarás la meta.
+                    </div>
+                  )
                 )}
               </>
             )}
@@ -942,6 +1122,18 @@ export default function FinancialTracking({
          </div>
        )}
       </div>
+
+      <GreenSavingsPlanner
+        evaluation={evaluation}
+        trackingState={trackingState}
+        project={projectGoal}
+        onScheduleChange={setSimulatedSchedule}
+        onSaveGreenSavingsGoal={async (goalPayload) => {
+          setLocalGreenGoal(goalPayload);
+          setUseGreenSavingsPlan(true);
+          if (onSaveGreenSavingsGoal) await onSaveGreenSavingsGoal(goalPayload);
+        }}
+      />
 
       <section className="tracking-checklist-section" aria-label="Checklist bancario">
         <BankingChecklist evaluation={evaluation} onNavigate={onNavigate} />

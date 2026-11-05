@@ -774,3 +774,34 @@ export async function getPortalCommunes() {
   const rows = await fetchAllPortalRows("comuna", { priced: false });
   return [...new Set(rows.map((row) => row.comuna).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
 }
+
+// HU 29 E2: esquema de pago del pie en cuotas informado por la inmobiliaria.
+// Columna aditiva y opcional (no forma parte del contrato congelado de HU 13).
+// Se lee aparte para que el catálogo siga funcionando si la migración
+// 20261103090000_hu29_esquema_pie_inmobiliaria.sql aún no se aplica.
+export async function getProjectInstallmentScheme(projectId) {
+  if (!projectId) return null;
+  if (PROVIDER === "local") {
+    const project = readCatalog().proyectos.find((item) => String(item.id) === String(projectId));
+    if (!project) return null;
+    return {
+      esquema_pie_inmobiliaria: project.esquema_pie_inmobiliaria || null,
+      entrega_estimada: project.entrega_estimada || null,
+    };
+  }
+  const { data, error } = await supabase
+    .from("proyectos")
+    .select("esquema_pie_inmobiliaria, entrega_estimada")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) {
+    // 42703 = columna inexistente (migración pendiente): E2 queda sin datos, sin romper la vista.
+    if (error.code !== "42703") logSupabaseError(error);
+    return null;
+  }
+  if (!data) return null;
+  return {
+    esquema_pie_inmobiliaria: data.esquema_pie_inmobiliaria || null,
+    entrega_estimada: data.entrega_estimada || null,
+  };
+}

@@ -11,6 +11,12 @@ import {
 } from "../../lib/tracking/evolution";
 import { formatGoalValue, goalPresentation } from "../../lib/tracking/goalPresentation";
 import { formatFormValue } from "../../constants";
+import {
+  describeGreenSavingsGoalProgress,
+  formatClpExact,
+  formatUfAmount,
+  getEffectiveGreenSavingsGoal,
+} from "../../services/greenSavingsPlannerService";
 import UpdateFinancialDataForm from "./UpdateFinancialDataForm";
 import "./tracking.css";
 
@@ -334,7 +340,7 @@ export function activeBaselineForComparison(data) {
     : { ...baseline, evaluation: source?.evaluation };
 }
 
-export function ProgressView({ data, projection, projectionError = "", onRetryProjection, onConfirm, onUpdate, onOpenHistory, onOpenProject, busy = false }) {
+export function ProgressView({ data, evaluation = null, projection, projectionError = "", onRetryProjection, onConfirm, onUpdate, onOpenHistory, onOpenProject, busy = false }) {
   const series = evolutionSeries(data.active_line, data.baseline.target_project_snapshot);
   // The initial slot can have a replacement correction. Its active version,
   // not the immutable source event, is the baseline for score comparison.
@@ -350,6 +356,7 @@ export function ProgressView({ data, projection, projectionError = "", onRetryPr
   const shownFinancialHistory = financialHistoryRows(visibleSeries, financialHistoryExpanded);
   const hasMoreFinancialHistory = visibleSeries.length > FINANCIAL_HISTORY_PREVIEW_LIMIT;
   const goals = Array.isArray(data.goals) ? data.goals : [];
+  const greenSavingsGoal = getEffectiveGreenSavingsGoal(evaluation, data);
   const perform = async (operation) => {
     setActionError("");
     try { await operation(); } catch (failure) { setActionError(failure.message); }
@@ -454,6 +461,54 @@ export function ProgressView({ data, projection, projectionError = "", onRetryPr
       </article>;
       })}</div>
       {actionError && <p role="alert" className="warning-note">{actionError}</p>}
+      {greenSavingsGoal && (() => {
+        const greenProgress = describeGreenSavingsGoalProgress(greenSavingsGoal, data?.cutoff_at);
+        return (
+          <article className="progress-goal-card progress-goal-card--green" data-testid="progress-green-savings-goal">
+            <div className="progress-goal-card__head">
+              <div>
+                <h3>Meta de ahorro periódica — Pie en verde/blanco</h3>
+                <div className="progress-goal-card__statuses">
+                  <span className={`progress-status ${greenProgress?.finalizada ? "progress-status--cumplida" : "progress-status--en_progreso"}`}>
+                    {greenProgress
+                      ? greenProgress.finalizada
+                        ? `Plazo finalizado (${greenProgress.plazoMeses} meses)`
+                        : `En curso (mes ${greenProgress.mesActual} de ${greenProgress.plazoMeses})`
+                      : `En curso (${greenSavingsGoal.plazo_meses} meses)`}
+                  </span>
+                </div>
+              </div>
+              {greenProgress?.porcentajeEsperado != null && (
+                <div className="progress-goal-card__percentage">
+                  <strong>{greenProgress.porcentajeEsperado}%</strong>
+                  <span>esperado</span>
+                </div>
+              )}
+            </div>
+            <p className="progress-goal-card__description">
+              {greenSavingsGoal.project_name ? `${greenSavingsGoal.project_name} · ` : ""}
+              Ahorro mensual fijado para reunir el pie de {formatUfAmount(greenSavingsGoal.pie_total_uf)}.
+            </p>
+            {greenProgress?.porcentajeEsperado != null && (
+              <progress
+                max="100"
+                value={greenProgress.porcentajeEsperado}
+                aria-label="Avance esperado del ahorro para el pie"
+              />
+            )}
+            <dl className="progress-goal-values">
+              <div><dt>Cuota mensual (UF)</dt><dd>{formatUfAmount(greenSavingsGoal.cuota_mensual_uf)} / mes</dd></div>
+              <div><dt>Equivalente hoy (CLP)</dt><dd>{formatClpExact(greenSavingsGoal.cuota_mensual_clp)} / mes</dd></div>
+              <div><dt>Pie objetivo</dt><dd>{formatUfAmount(greenSavingsGoal.pie_total_uf)}</dd></div>
+            </dl>
+            {greenProgress && (
+              <p className="progress-goal-card__schedule">
+                Esperado al mes {greenProgress.mesActual}: {formatUfAmount(greenProgress.acumuladoEsperadoUf)} · Restante: {formatUfAmount(greenProgress.restanteEsperadoUf)}
+              </p>
+            )}
+          </article>
+        );
+      })()}
     </section>
 
     <UpdateFinancialDataForm snapshot={data.latest_effective_snapshot} previous={data.latest_event_id} onSubmit={onUpdate} />
@@ -632,7 +687,7 @@ export function TrackingHistoryView({ data, onCorrect, onBulkCorrect, busy = fal
   </section>;
 }
 
-export default function ProgressPage({ onOpenHistory, onOpenProject, onStartEvaluation, onChanged }) {
+export default function ProgressPage({ evaluation = null, onOpenHistory, onOpenProject, onStartEvaluation, onChanged }) {
   const [data, setData] = useState(null);
   const [projection, setProjection] = useState(null);
   const [projectionError, setProjectionError] = useState("");
@@ -669,7 +724,7 @@ export default function ProgressPage({ onOpenHistory, onOpenProject, onStartEval
       <p>La primera evaluación válida fijará el plan y sus metas originales.</p>
       <button className="primary-button" onClick={onStartEvaluation}>Realizar evaluación</button>
     </section>}
-    {data?.status === "active" && <ProgressView data={data} projection={projection} projectionError={projectionError} busy={busy}
+    {data?.status === "active" && <ProgressView data={data} evaluation={evaluation} projection={projection} projectionError={projectionError} busy={busy}
       onRetryProjection={() => setVersion((value) => value + 1)}
       onOpenHistory={onOpenHistory}
       onOpenProject={onOpenProject}

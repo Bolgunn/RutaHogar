@@ -34,6 +34,7 @@ export function buildProjectGoalInput(baseInput = {}, project = {}) {
       inmobiliaria: project.inmobiliaria || "",
       precio_min_uf: valorUf,
       precio_max_uf: Number(project.precio_max_uf) || valorUf,
+      esquema_pie_inmobiliaria: project.esquema_pie_inmobiliaria || null,
     },
     // Un proyecto en construcción corresponde a vivienda nueva para los
     // requisitos que dependen de esa condición, como FOGAES y Ley 21.748.

@@ -12,6 +12,8 @@ import {
   stripMoneyInput,
 } from "../services/housingSavingsPlanService";
 import { getCurrentMonthId, partitionMonths } from "../services/monthTimeline";
+import { getCurrentProjectGoal } from "../lib/projectGoalDisplay";
+import GreenSavingsPlanner from "./GreenSavingsPlanner";
 
 const pieTypeOptions = [
   { value: "minimo", label: "Pie mínimo (10%)" },
@@ -31,7 +33,15 @@ const planStatusClass = (status) => {
   return "status-pendiente";
 };
 
-export default function HousingSavingsPlan({ evaluation, onBack, initialPieType, onSaveHousingProgress, onLogScoringEvent }) {
+export default function HousingSavingsPlan({
+  evaluation,
+  trackingState = null,
+  onBack,
+  initialPieType,
+  onSaveHousingProgress,
+  onSaveGreenSavingsGoal = null,
+  onLogScoringEvent,
+}) {
   const [progressData, setProgressData] = useState(evaluation?.housing_plan?.progress || null);
   const [pieType, setPieType] = useState(initialPieType || "minimo");
   const [overrides, setOverrides] = useState({});
@@ -367,6 +377,13 @@ export default function HousingSavingsPlan({ evaluation, onBack, initialPieType,
 
         {realPlan.error && <div className="warning-note">{realPlan.error}</div>}
       </div>
+
+      <GreenSavingsPlanner
+        evaluation={evaluation}
+        trackingState={trackingState}
+        project={getCurrentProjectGoal(evaluation)}
+        onSaveGreenSavingsGoal={onSaveGreenSavingsGoal}
+      />
 
       {simPlan.monthsData.length > 0 && (
         <div className="housing-breakdown">

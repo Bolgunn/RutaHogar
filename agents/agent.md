@@ -46,6 +46,10 @@ cd frontend; npm install; npm run dev
 - No agregar HdU 5+ sin instrucción explícita.
 - No consultar datos financieros externos sin consentimiento explícito.
 
+## Historias del Sprint 3
+
+- **HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Verde/Blanco:** ✅ **Implementada (5 SP).** Criterios E1 a E4 completos (cálculo interactivo de cuotas en UF/CLP a valor hoy, contraste condicional con facilidades de inmobiliaria —tarjeta de crédito y pagarés notariales directos—, simulación de cobertura inflacionaria frente al alza de la UF y fijación de meta de ahorro periódica en el dashboard HU 13). Ver `docs/stories/HU29-planificador-metas-proyecto-verde-blanco/PLAN.md`.
+
 ## Tareas Pendientes
 
 - **HU 12 - Sistema de Derivación e Integración Comercial:** La fase de planificación está completada (ver `docs/stories/HU12/PLAN.md` y `KICKOFF.md`). Falta implementar la fase de *Build* (migración de DB para `crm_sync_status`, DB Webhook, y Edge Function `sync-crm-lead` conectada al CRM mock).

@@ -26,6 +26,32 @@ function preservePlanChoice(evaluation, evaluations) {
   };
 }
 
+// HU 29 E4: la meta de ahorro en verde es periódica y vive en el housing_plan de
+// la evaluación donde se fijó. Cada actualización mensual (HU 13) crea una
+// evaluación nueva sin esa anotación; sin este traspaso la meta desaparecería
+// del dashboard después del primer registro. Se conserva la meta más reciente
+// mientras siga apuntando al mismo proyecto objetivo (o no tenga proyecto).
+function goalTime(goal) {
+  const time = new Date(goal?.fixed_at || 0).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+export function preserveGreenSavingsGoal(evaluation, evaluations = []) {
+  if (!evaluation || evaluation.housing_plan?.green_savings_goal) return evaluation;
+  const targetProjectId = projectGoalId(evaluation);
+  const latestGoal = evaluations
+    .map((row) => row?.housing_plan?.green_savings_goal)
+    .filter((goal) => goal && Number(goal.cuota_mensual_uf) > 0)
+    .filter((goal) => goal.project_id == null || targetProjectId == null
+      || String(goal.project_id) === String(targetProjectId))
+    .sort((left, right) => goalTime(right) - goalTime(left))[0];
+  if (!latestGoal) return evaluation;
+  return {
+    ...evaluation,
+    housing_plan: { ...(evaluation.housing_plan || {}), green_savings_goal: latestGoal },
+  };
+}
+
 export function currentTrackingEvaluation(trackingState, evaluations = [], userId = null) {
   evaluations = evaluations.filter((row) => !userId || !row.user_id || row.user_id === userId);
   if (userId && trackingState?.baseline?.user_id && trackingState.baseline.user_id !== userId) return null;
@@ -38,8 +64,8 @@ export function currentTrackingEvaluation(trackingState, evaluations = [], userI
         result: trackingState.current_evaluation,
         co_debtor: trackingState.co_debtor || null,
       } : null);
-    return preservePlanChoice(current, evaluations);
+    return preserveGreenSavingsGoal(preservePlanChoice(current, evaluations), evaluations);
   }
   const latest = [...evaluations].sort((left, right) => new Date(right.created_at) - new Date(left.created_at))[0] || null;
-  return preservePlanChoice(latest, evaluations);
+  return preserveGreenSavingsGoal(preservePlanChoice(latest, evaluations), evaluations);
 }
