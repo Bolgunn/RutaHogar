@@ -2469,6 +2469,18 @@ returns jsonb language sql stable security definer set search_path = public as $
       'score', e.score,
       'financial_data', e.financial_data,
       'previous_evaluation', prev.previous_evaluation,
+      'watched_favorites', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'proyecto_id', pf.proyecto_id,
+          'notificar_cambios', pf.notificar_cambios,
+          'umbral_precio_min_uf', pf.umbral_precio_min_uf,
+          'umbral_precio_max_uf', pf.umbral_precio_max_uf,
+          'umbral_bono_pie_pct', pf.umbral_bono_pie_pct,
+          'alerta_activada_at', pf.alerta_activada_at
+        ) order by pf.proyecto_id)
+        from public.proyecto_favoritos pf
+        where pf.usuario_id = e.user_id and pf.notificar_cambios = true
+      ), '[]'::jsonb),
       'last_lead_change_email_at', (
         select max(n.sent_at)
         from public.lead_change_notifications n
@@ -8345,8 +8357,6 @@ begin
     raise exception 'invalid_import' using errcode = '22023';
   end if;
 
-  -- Dos filas con el mismo nombre apuntarían al mismo proyecto y cuál gana
-  -- sería arbitrario.
   if exists (
     select 1 from jsonb_array_elements(p_proyectos) as item
     group by lower(btrim(item ->> 'nombre'))
@@ -8358,11 +8368,8 @@ begin
   with upserted as (
     insert into public.proyectos as p (
       inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado,
-      descripcion, entrega_estimada
+      descripcion, entrega_estimada, bono_pie_pct
     )
-    -- Misma normalización que createProject/updateProject en
-    -- frontend/src/services/projectService.js (trim, vacío → null): si una cambia,
-    -- cambiar la otra.
     select
       v_tenant,
       btrim(r.nombre),
@@ -8372,11 +8379,15 @@ begin
       r.precio_max_uf,
       btrim(r.estado),
       nullif(btrim(r.descripcion), ''),
-      nullif(btrim(r.entrega_estimada), '')
+      nullif(btrim(r.entrega_estimada), ''),
+      coalesce(r.bono_pie_pct, existing.bono_pie_pct, 0)
     from jsonb_to_recordset(p_proyectos) as r(
       nombre text, comuna text, tipo text, precio_min_uf numeric, precio_max_uf numeric,
-      estado text, descripcion text, entrega_estimada text
+      estado text, descripcion text, entrega_estimada text, bono_pie_pct numeric
     )
+    left join public.proyectos existing
+      on existing.inmobiliaria_id = v_tenant
+     and lower(existing.nombre) = lower(btrim(r.nombre))
     on conflict (inmobiliaria_id, lower(nombre)) do update set
       nombre = excluded.nombre,
       comuna = excluded.comuna,
@@ -8384,10 +8395,9 @@ begin
       precio_min_uf = excluded.precio_min_uf,
       precio_max_uf = excluded.precio_max_uf,
       estado = excluded.estado,
-      -- Las columnas opcionales pueden faltar en el archivo o venir vacías: en
-      -- ese caso se conserva lo guardado en vez de borrarlo.
       descripcion = coalesce(excluded.descripcion, p.descripcion),
-      entrega_estimada = coalesce(excluded.entrega_estimada, p.entrega_estimada)
+      entrega_estimada = coalesce(excluded.entrega_estimada, p.entrega_estimada),
+      bono_pie_pct = excluded.bono_pie_pct
     returning (p.xmax = 0) as creado
   )
   select count(*) filter (where creado), count(*) filter (where not creado)
