@@ -31,6 +31,18 @@ class LeadChangeService:
                         continue
                     saved = self.repository.record_event(event)
                     saved_events.append(saved)
+                    if (
+                        event.get("event_type") == "favorite_project_opportunity"
+                        and hasattr(self.repository, "update_favorite_thresholds")
+                    ):
+                        payload = event.get("payload") or {}
+                        self.repository.update_favorite_thresholds(
+                            lead["user_id"],
+                            event.get("project_id"),
+                            payload.get("precio_min_actual_uf"),
+                            payload.get("precio_max_actual_uf"),
+                            payload.get("bono_pie_actual_pct", 0),
+                        )
                 if dry_run:
                     continue
                 unseen_events = self.repository.unseen_events(lead["user_id"])
@@ -53,6 +65,7 @@ class LeadChangeService:
             events.append(event)
         if event := self._uf_reachability_event(lead):
             events.append(event)
+        events.extend(self._favorite_opportunity_events(lead, projects))
         return events
 
     def _monthly_plan_event(self, lead):
@@ -206,6 +219,144 @@ class LeadChangeService:
             "source": "job",
         }
 
+    def _favorite_opportunity_events(self, lead, projects):
+        watched_favorites = lead.get("watched_favorites") or []
+        if not isinstance(watched_favorites, list) or not watched_favorites:
+            return []
+
+        projects_by_id = {
+            str(item.get("id")): item
+            for item in (projects or [])
+            if isinstance(item, dict) and item.get("id") is not None
+        }
+        financial_data = lead.get("financial_data") or {}
+        now_iso = self.clock().isoformat()
+        events = []
+
+        for favorite in watched_favorites:
+            if not isinstance(favorite, dict):
+                continue
+            if favorite.get("notificar_cambios") is False:
+                continue
+
+            project_id = favorite.get("proyecto_id") or favorite.get("project_id")
+            project = projects_by_id.get(str(project_id)) if project_id is not None else None
+            if not project:
+                project = {
+                    "id": project_id,
+                    "nombre": favorite.get("project_name"),
+                    "comuna": favorite.get("comuna"),
+                    "tipo": favorite.get("tipo"),
+                    "precio_min_uf": favorite.get("precio_min_uf"),
+                    "precio_max_uf": favorite.get("precio_max_uf"),
+                    "bono_pie_pct": favorite.get("bono_pie_pct", 0),
+                    "estado": favorite.get("estado", "disponible"),
+                }
+            if project.get("estado") == "agotado":
+                continue
+
+            curr_min = _number(project.get("precio_min_uf"))
+            curr_max = _number(project.get("precio_max_uf"))
+            curr_bono = _number(project.get("bono_pie_pct")) or 0.0
+
+            prev_min = _number(favorite.get("umbral_precio_min_uf"))
+            if prev_min is None:
+                prev_min = curr_min
+            prev_max = _number(favorite.get("umbral_precio_max_uf"))
+            if prev_max is None:
+                prev_max = curr_max
+            prev_bono = _number(favorite.get("umbral_bono_pie_pct")) or 0.0
+
+            price_dropped = (
+                (curr_min is not None and prev_min is not None and curr_min < prev_min)
+                or (curr_max is not None and prev_max is not None and curr_max < prev_max)
+            )
+            bono_increased = curr_bono > prev_bono
+
+            if not price_dropped and not bono_increased:
+                continue
+
+            comp_before = recalculate_favorite_compatibility(financial_data, prev_min, prev_bono)
+            comp_after = recalculate_favorite_compatibility(financial_data, curr_min, curr_bono)
+            project_name = project.get("nombre") or favorite.get("project_name") or "tu proyecto favorito"
+
+            if price_dropped and bono_increased:
+                title = f"Bajó el precio y se activó bono pie de {curr_bono:g}% en {project_name}"
+                summary = (
+                    f"{project_name} bajó desde {round(prev_min):,} UF a {round(curr_min):,} UF "
+                    f"y sumó un bono pie de {curr_bono:g}%. Tu compatibilidad referencial ahora es: {comp_after['label']}."
+                )
+            elif price_dropped:
+                title = f"Bajó el precio en tu favorito {project_name}"
+                summary = (
+                    f"{project_name} redujo su precio desde {round(prev_min):,} UF a {round(curr_min):,} UF. "
+                    f"Tu compatibilidad referencial ahora es: {comp_after['label']}."
+                )
+            else:
+                title = f"{project_name} activó un bono pie de {curr_bono:g}%"
+                summary = (
+                    f"Tu favorito {project_name} aplicó un bono pie de {curr_bono:g}% "
+                    f"(desde {round(curr_min or 0):,} UF). Tu compatibilidad referencial ahora es: {comp_after['label']}."
+                )
+
+            prev_label = f"Desde {round(prev_min or 0):,} UF" + (
+                f" · Bono pie {prev_bono:g}%" if prev_bono > 0 else " · Sin bono pie"
+            )
+            curr_label = (
+                f"Desde {round(curr_min or 0):,} UF"
+                + (f" · Bono pie {curr_bono:g}%" if curr_bono > 0 else " · Sin bono pie")
+                + f" ({comp_after['label']})"
+            )
+
+            events.append({
+                "user_id": lead["user_id"],
+                "event_type": "favorite_project_opportunity",
+                "materiality_key": f"fav-opp:{project_id}:{curr_min}:{curr_bono}",
+                "occurred_at": now_iso,
+                "project_id": project_id,
+                "project_name": project_name,
+                "tone": "positive",
+                "title": title,
+                "summary": summary,
+                "previous_value": {
+                    "label": prev_label,
+                    "precio_min_uf": prev_min,
+                    "precio_max_uf": prev_max,
+                    "bono_pie_pct": prev_bono,
+                    "compatibility_status": comp_before["status"],
+                    "compatibility_label": comp_before["label"],
+                },
+                "current_value": {
+                    "label": curr_label,
+                    "precio_min_uf": curr_min,
+                    "precio_max_uf": curr_max,
+                    "bono_pie_pct": curr_bono,
+                    "compatibility_status": comp_after["status"],
+                    "compatibility_label": comp_after["label"],
+                },
+                "payload": {
+                    "project_id": project_id,
+                    "project_name": project_name,
+                    "comuna": project.get("comuna"),
+                    "tipo": project.get("tipo"),
+                    "price_dropped": price_dropped,
+                    "bono_pie_increased": bono_increased,
+                    "precio_min_anterior_uf": prev_min,
+                    "precio_min_actual_uf": curr_min,
+                    "precio_max_anterior_uf": prev_max,
+                    "precio_max_actual_uf": curr_max,
+                    "descuento_uf": max(0.0, (prev_min or 0.0) - (curr_min or 0.0)),
+                    "bono_pie_anterior_pct": prev_bono,
+                    "bono_pie_actual_pct": curr_bono,
+                    "compatibility_before": comp_before,
+                    "compatibility_after": comp_after,
+                    "latest_evaluation_id": lead.get("latest_evaluation_id"),
+                },
+                "source": "catalog_update",
+            })
+
+        return events
+
     def _maybe_send_weekly_digest(self, lead, events):
         result = {"sent": 0, "skipped": 0}
         if os.environ.get("LEAD_CHANGES_EMAIL_ENABLED", "false").strip().lower() not in {"1", "true", "yes"}:
@@ -266,6 +417,91 @@ class LeadChangeService:
             "status": status,
             **extra,
         })
+
+
+def recalculate_favorite_compatibility(financial_data, precio_min_uf, bono_pie_pct=0):
+    if not isinstance(financial_data, dict):
+        financial_data = {}
+    result = financial_data.get("result") or financial_data.get("result_snapshot") or {}
+    if not isinstance(result, dict):
+        result = {}
+    indicators = result.get("financial_indicators") or {}
+    if not isinstance(indicators, dict):
+        indicators = {}
+    input_data = financial_data.get("input") or financial_data.get("input_snapshot") or financial_data
+    if not isinstance(input_data, dict):
+        input_data = {}
+    market_ctx = result.get("market_context") or {}
+    if not isinstance(market_ctx, dict):
+        market_ctx = {}
+
+    capacidad_uf = _number(indicators.get("capacidad_compra_estimada_uf"))
+    if capacidad_uf is None:
+        capacidad_uf = _number(financial_data.get("capacidad_compra_estimada_uf"))
+
+    ahorro_clp = _number(input_data.get("ahorro_disponible"))
+    if ahorro_clp is None:
+        ahorro_clp = _number(input_data.get("ahorro"))
+
+    valor_uf = _number(market_ctx.get("uf_value")) or _number(financial_data.get("uf_value")) or 39000.0
+    if valor_uf <= 0:
+        valor_uf = 39000.0
+
+    precio = _number(precio_min_uf)
+    bono = max(0.0, min(30.0, _number(bono_pie_pct) or 0.0))
+
+    pie_min_rate = max(0.05, 0.10 - (bono / 100.0))
+    pie_rec_rate = max(0.05, 0.20 - (bono / 100.0))
+
+    ahorro_uf = round(ahorro_clp / valor_uf, 1) if ahorro_clp is not None else None
+    aporte_bono_uf = round((precio or 0.0) * (bono / 100.0), 1) if precio is not None else 0.0
+    capacidad_efectiva_uf = round(capacidad_uf + aporte_bono_uf, 1) if capacidad_uf is not None else None
+    pie_min_requerido_uf = round((precio or 0.0) * pie_min_rate, 1) if precio is not None else 0.0
+
+    if capacidad_efectiva_uf is None or precio is None or precio <= 0:
+        return {
+            "status": "unknown",
+            "label": "Compatibilidad por confirmar",
+            "capacidad_base_uf": round(capacidad_uf, 1) if capacidad_uf is not None else None,
+            "capacidad_efectiva_uf": capacidad_efectiva_uf,
+            "aporte_bono_pie_uf": aporte_bono_uf,
+            "bono_pie_pct": bono,
+            "pie_minimo_requerido_uf": pie_min_requerido_uf,
+            "ahorro_estimado_uf": ahorro_uf,
+            "brecha_uf": None,
+            "brecha_pie_uf": None,
+        }
+
+    brecha_uf = max(0.0, round(precio - capacidad_efectiva_uf, 1))
+    brecha_pie_uf = max(0.0, round(pie_min_requerido_uf - ahorro_uf, 1)) if ahorro_uf is not None else 0.0
+
+    meets_capacity_strict = capacidad_efectiva_uf >= precio
+    meets_capacity_near = capacidad_efectiva_uf >= round(precio * 0.90, 1)
+    meets_pie_rec = True if ahorro_uf is None else (ahorro_uf >= round(precio * pie_rec_rate, 1))
+    meets_pie_min = True if ahorro_uf is None else (ahorro_uf >= pie_min_requerido_uf)
+
+    if meets_capacity_strict and meets_pie_rec:
+        status = "compatible"
+        label = "Compatible hoy"
+    elif meets_capacity_near and meets_pie_min:
+        status = "compatible_con_ajustes"
+        label = "Compatible con ajustes"
+    else:
+        status = "no_compatible"
+        label = "Aún fuera de alcance"
+
+    return {
+        "status": status,
+        "label": label,
+        "capacidad_base_uf": round(capacidad_uf, 1),
+        "capacidad_efectiva_uf": capacidad_efectiva_uf,
+        "aporte_bono_pie_uf": aporte_bono_uf,
+        "bono_pie_pct": bono,
+        "pie_minimo_requerido_uf": pie_min_requerido_uf,
+        "ahorro_estimado_uf": ahorro_uf,
+        "brecha_uf": brecha_uf,
+        "brecha_pie_uf": brecha_pie_uf,
+    }
 
 
 def _project_reference(financial_data):

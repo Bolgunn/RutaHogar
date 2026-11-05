@@ -1,9 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProjectEvaluationModal from "./ProjectEvaluationModal";
 import { buildSimulationContext } from "../lib/simulation/compatibility";
+import { formatOpportunityThresholdSummary } from "../lib/simulation/opportunityRadar";
 import { catalogProjectsToSimulation, formatDeliveryMonth, formatProjectPrice, portalProjectToCatalogCard } from "../lib/simulation/projectAdapter";
 import { getAvailableProjects, getPortalProjects } from "../services/projectService";
-import { addFavorite, getFavorites, removeFavorite } from "../services/favoritesService";
+import {
+  addFavorite,
+  getFavoriteAlerts,
+  getFavorites,
+  removeFavorite,
+  setFavoriteAlert,
+} from "../services/favoritesService";
 import { propertyLabels } from "../constants";
 import { PROJECT_SIMULATION_DISCLAIMER } from "../lib/simulation/copy";
 import { getCurrentProjectGoal, isCurrentProjectGoal, projectCompatibilityLabel } from "../lib/projectGoalDisplay";
@@ -109,7 +116,9 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [initialProjectUnavailable, setInitialProjectUnavailable] = useState(false);
   const [favorites, setFavorites] = useState([]);
+  const [favoriteAlerts, setFavoriteAlerts] = useState({});
   const [favoritesError, setFavoritesError] = useState("");
+  const [alertFeedback, setAlertFeedback] = useState("");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [propertyType, setPropertyType] = useState("todos");
   const [commune, setCommune] = useState("");
@@ -138,11 +147,16 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
   useEffect(() => {
     let active = true;
     setFavorites([]);
+    setFavoriteAlerts({});
     setFavoritesError("");
+    setAlertFeedback("");
     if (!userId) return undefined;
     getFavorites(userId).then((ids) => { if (active) setFavorites(ids); }).catch((cause) => {
       if (active) setFavoritesError(cause.message || "No se pudieron cargar tus favoritos.");
     });
+    getFavoriteAlerts(userId)
+      .then((alerts) => { if (active) setFavoriteAlerts(alerts || {}); })
+      .catch(() => {});
     return () => { active = false; };
   }, [userId]);
 
@@ -150,7 +164,15 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
     if (!userId) return false;
     const wasFavorite = favorites.includes(projectId);
     setFavoritesError("");
+    setAlertFeedback("");
     setFavorites((current) => wasFavorite ? current.filter((id) => id !== projectId) : current.includes(projectId) ? current : [...current, projectId]);
+    if (wasFavorite) {
+      setFavoriteAlerts((current) => {
+        const next = { ...current };
+        delete next[projectId];
+        return next;
+      });
+    }
     try {
       if (wasFavorite) await removeFavorite(userId, projectId);
       else await addFavorite(userId, projectId);
@@ -161,6 +183,60 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       return false;
     }
   }, [favorites, userId]);
+
+  const toggleFavoriteAlert = useCallback(async (project) => {
+    if (!userId || !project || project.origen === "portal") return false;
+    const projectId = favoriteIdOf(project);
+    const previousAlert = favoriteAlerts[projectId] || null;
+    const nextActive = !previousAlert?.notificar_cambios;
+    const minUf = Number(project.precio_min_uf ?? project.valor_uf) || null;
+    const maxUf = Number(project.precio_max_uf ?? minUf) || null;
+    const bonoPct = Number(project.bono_pie_pct) || 0;
+
+    setFavoritesError("");
+    setAlertFeedback("");
+
+    if (nextActive && !favorites.includes(projectId)) {
+      setFavorites((current) => (current.includes(projectId) ? current : [...current, projectId]));
+    }
+    setFavoriteAlerts((current) => ({
+      ...current,
+      [projectId]: {
+        usuario_id: userId,
+        proyecto_id: projectId,
+        notificar_cambios: nextActive,
+        umbral_precio_min_uf: minUf,
+        umbral_precio_max_uf: maxUf,
+        umbral_bono_pie_pct: bonoPct,
+      },
+    }));
+
+    try {
+      const saved = await setFavoriteAlert(userId, projectId, nextActive, project);
+      setFavoriteAlerts((current) => ({
+        ...current,
+        [projectId]: saved,
+      }));
+      if (nextActive) {
+        const umbralLabel = Math.round(Number(saved?.umbral_precio_min_uf ?? minUf ?? 0)).toLocaleString("es-CL");
+        setAlertFeedback(
+          `Notificaciones activadas para ${project.nombre}. Umbral registrado desde ${umbralLabel} UF${
+            (saved?.umbral_bono_pie_pct ?? bonoPct) > 0 ? ` y bono pie ${saved?.umbral_bono_pie_pct ?? bonoPct}%` : ""
+          }.`,
+        );
+      } else {
+        setAlertFeedback(`Notificaciones de cambios desactivadas para ${project.nombre}.`);
+      }
+      return true;
+    } catch (cause) {
+      setFavoriteAlerts((current) => ({
+        ...current,
+        ...(previousAlert ? { [projectId]: previousAlert } : { [projectId]: { notificar_cambios: false } }),
+      }));
+      setFavoritesError(cause.message || "No se pudo configurar la alerta para este proyecto.");
+      return false;
+    }
+  }, [favoriteAlerts, favorites, userId]);
 
   const context = useMemo(() => evaluationBase ? buildSimulationContext(evaluationBase, onboarding) : null, [evaluationBase, onboarding]);
   const ufValueClp = Number(context?.uf_value_clp) || 0;
@@ -248,6 +324,7 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       </div>
     </header>
     {favoritesError && <div className="warning-note">{favoritesError}</div>}
+    {alertFeedback && <div className="success-message" role="status">{alertFeedback}</div>}
     {initialProjectUnavailable && <div className="warning-note" role="status">
       El proyecto objetivo ya no está disponible en el catálogo. Puedes explorar las alternativas vigentes.
     </div>}
@@ -313,7 +390,11 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
         <ProjectsCarousel>
            {visibleProjects.map((project) => {
              const isPortal = project.origen === "portal";
-             const isFavorite = favorites.includes(favoriteIdOf(project));
+             const favId = favoriteIdOf(project);
+             const isFavorite = favorites.includes(favId);
+             const projectAlert = favoriteAlerts[favId] || null;
+             const isAlertActive = Boolean(projectAlert?.notificar_cambios);
+             const thresholdSummary = formatOpportunityThresholdSummary(projectAlert, project);
              const isCurrentGoal = isCurrentProjectGoal(project, currentGoalProject);
              return (
           <article className={`project-catalog-card ${isFavorite ? "is-favorite" : ""} ${isCurrentGoal ? "is-current-goal" : ""}`} key={project.id}>
@@ -324,12 +405,18 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
               aria-label={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
               aria-pressed={isFavorite}
               title={isFavorite ? "Quitar de favoritos" : "Guardar favorito"}
-              onClick={() => toggleFavorite(favoriteIdOf(project))}
+              onClick={() => toggleFavorite(favId)}
             >
               <i className={`ti ${isFavorite ? "ti-star-filled" : "ti-star"}`} aria-hidden="true" />
             </button>
           )}
-          <div className="project-catalog-card__top"><span>{project.tipo_vivienda || "Proyecto"}</span>{isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}</div>
+          <div className="project-catalog-card__top">
+            <span>{project.tipo_vivienda || "Proyecto"}</span>
+            {Number(project.bono_pie_pct) > 0 && (
+              <strong className="project-goal-badge">Bono pie {project.bono_pie_pct}%</strong>
+            )}
+            {isCurrentGoal && <strong className="project-goal-badge">Meta actual</strong>}
+          </div>
           <div className={`project-catalog-card__media ${isPortal && project.imagen_url ? "has-image" : "is-placeholder"}`}>
             {isPortal && project.imagen_url ? (
               <img src={project.imagen_url} alt={`Imagen de ${project.nombre}`} loading="lazy" />
@@ -343,6 +430,24 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
             <div className="project-catalog-card__meta"><span className={`project-catalog-card__status is-${project.estado || "unknown"}`}>{availabilityLabel(project.estado)}</span>{formatDeliveryMonth(project.entrega_estimada) && <span>Entrega {formatDeliveryMonth(project.entrega_estimada)}</span>}{project.inmobiliaria && <span className="project-catalog-card__developer">Inmobiliaria: {project.inmobiliaria}</span>}</div>
             <strong className="project-catalog-card__price">{formatProjectPrice(project)}</strong>
             <span className="project-catalog-card__range">{project.precio_max_uf !== project.precio_min_uf ? `Hasta ${project.precio_max_uf} UF` : "Precio referencial"}</span>
+            {userId && isFavorite && !isPortal && (
+              <div className="project-catalog-card__alert-control">
+                <button
+                  type="button"
+                  className={`secondary-button compact-button project-catalog-alert-button ${isAlertActive ? "is-active" : ""}`}
+                  aria-label="Notificar cambios"
+                  aria-pressed={isAlertActive}
+                  title={isAlertActive ? "Desactivar notificación de cambios" : "Activar alerta por baja de precio o bono pie"}
+                  onClick={() => toggleFavoriteAlert(project)}
+                >
+                  <i className={`ti ${isAlertActive ? "ti-bell-ringing" : "ti-bell"}`} aria-hidden="true" />
+                  <span>{isAlertActive ? "Notificar cambios (activa)" : "Notificar cambios"}</span>
+                </button>
+                {isAlertActive && thresholdSummary && (
+                  <small className="project-catalog-card__alert-threshold">{thresholdSummary}</small>
+                )}
+              </div>
+            )}
             {isPortal ? (
               <div className="project-catalog-card__actions">
                 {context
@@ -369,6 +474,6 @@ export default function ProjectsCatalog({ evaluationBase, frozenTrackingTarget, 
       <i className="ti ti-info-circle" aria-hidden="true" />
       <span>{PROJECT_SIMULATION_DISCLAIMER}</span>
     </div>
-    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} isFavorite={favorites.includes(selectedProject.id)} isCurrentGoal={currentGoalProject?.id === selectedProject.id} compatibilityStatus={selectedFrozenCompatibility} />}
+    {selectedProject && context && <ProjectEvaluationModal project={selectedProject} projects={projects} context={context} ufValueClp={ufValueClp} onboarding={onboarding} contactEmail={contactEmail} onClose={() => setSelectedProjectId("")} onSelectProject={setSelectedProjectId} onSetGoal={onSetGoal} onNavigate={onNavigate} onToggleFavorite={toggleFavorite} onToggleFavoriteAlert={toggleFavoriteAlert} favoriteAlert={favoriteAlerts[favoriteIdOf(selectedProject)] || null} isFavorite={favorites.includes(favoriteIdOf(selectedProject))} isCurrentGoal={currentGoalProject?.id === selectedProject.id} compatibilityStatus={selectedFrozenCompatibility} />}
   </section>;
 }

@@ -1,64 +1,66 @@
 import { supabase } from "../utils/supabase";
+import { evaluateFavoriteOpportunityChange } from "../lib/simulation/opportunityRadar";
+import { localProvider as favoritesLocalProvider } from "./favoritesService";
+import { recordLocalLeadChangeEvent } from "./leadChangeService";
 import { isSupabaseDataConfigured, logSupabaseError } from "./profileService";
 import { filterAssignedTo, filterAvailable, validateProject } from "./projectValidation";
 
-// Catálogo de proyectos inmobiliarios (HU 7).
+// Catálogo de proyectos inmobiliarios (HU 7) y condiciones comerciales (HU 31).
 // Proveedores activos: 'local' (sin Supabase) y 'supabase'.
-// El proveedor 'crm' está documentado pero NO implementado: la conexión real
-// es de HU 4 / Spike 2. Ver docs/crm-integration.md — el punto de enganche es
-// esta constante más una rama por función, sin tocar el contrato de retorno.
-//
-// ---------------------------------------------------------------------------
-// CONTRATO CONGELADO — lo consume HU 13 (matching). Copia normativa y notas
-// completas en docs/project-catalog-contract.md; los criterios de matching
-// están en Wiki ScoreLeads/research/spike1-e4-lead-project-matching-criteria.md.
-// Cambiar un nombre de campo aquí rompe una especificación ya congelada.
-//
-// getProjects({ inmobiliariaId }) y getAvailableProjects() devuelven:
-//   {
-//     id, inmobiliaria_id, inmobiliaria_nombre,
-//     nombre, comuna,
-//     tipo,                        // 'departamento' | 'casa'
-//     precio_min_uf, precio_max_uf,
-//     estado,                      // 'disponible' | 'en_construccion' | 'agotado'
-//     descripcion,                 // opcional, null si el admin no la cargó
-//     entrega_estimada,            // opcional, 'YYYY-MM' o null
-//     ejecutivos: [{ ejecutivo_id, email, nombre, estado, source }],
-//     created_at, updated_at
-//   }
-//
-// Enmienda aditiva (CATALOGO-UNICO, docs/stories/CATALOGO-UNICO/PLAN.md):
-// `descripcion` y `entrega_estimada` son OPCIONALES y llegan de la simulación,
-// que antes las leía de un mock. Ningún campo previo cambió de nombre ni de
-// tipo, así que el contrato congelado sigue siendo el mismo para HU 13.
-//
-// Notas para quien consuma esto:
-//  1. getAvailableProjects() excluye solo 'agotado' (HU 7 E4) y recorta
-//     ejecutivos a los 'vinculado'. 'en_construccion' SÍ se recomienda: la
-//     venta en verde es mercado real. El estado viaja para que HU 13 lo muestre.
-//  2. precio_min_uf == precio_max_uf es válido (proyecto de precio único).
-//     Evaluar la rama "capacidad >= precio_max -> sin penalización" ANTES de
-//     interpolar: (cap - min) / (max - min) divide por cero en ese caso.
-//  3. precio_min_uf = unidad disponible más barata; precio_max_uf = la más cara.
-//     Hoy los digita el admin; si más adelante se agrega un modelo de unidades
-//     pasan a derivarse (MIN/MAX) sin cambiar este contrato.
-//  4. Aquí NO se declaran constantes de capacidad (tope FOGAES, tasa, pie):
-//     la capacidad llega precalculada desde el backend (spike §8.3).
-// ---------------------------------------------------------------------------
 export const PROVIDER = isSupabaseDataConfigured ? "supabase" : "local";
 
 const CATALOG_KEY = "scoreleads_project_catalog";
+const LAST_EVALUATION_KEY = "scoreleads_last_evaluation";
 const LOCAL_INMOBILIARIA_NOMBRE = "Inmobiliaria Andes (demo)";
 
 const projectColumns =
-  "id, inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, estado, descripcion, entrega_estimada, created_at, updated_at";
+  "id, inmobiliaria_id, nombre, comuna, tipo, precio_min_uf, precio_max_uf, bono_pie_pct, estado, descripcion, entrega_estimada, created_at, updated_at";
 
 function newId() {
-  return window.crypto?.randomUUID ? window.crypto.randomUUID() : String(Date.now());
+  return globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now());
 }
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function readLocalLastEvaluation() {
+  try {
+    const raw = localStorage.getItem(LAST_EVALUATION_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function notifyLocalFavoriteOpportunities(previousRow, updatedRow) {
+  if (!updatedRow?.id) return;
+  const allAlertsByUser = favoritesLocalProvider.getAllAlerts();
+  const financialContext = readLocalLastEvaluation();
+
+  Object.entries(allAlertsByUser || {}).forEach(([userId, alertsByProject]) => {
+    const favoriteAlert = alertsByProject?.[updatedRow.id];
+    if (!favoriteAlert || !favoriteAlert.notificar_cambios) return;
+
+    const evaluation = evaluateFavoriteOpportunityChange({
+      favoriteAlert,
+      previousProject: previousRow,
+      updatedProject: updatedRow,
+      financialContext,
+      userId,
+    });
+
+    if (evaluation.triggered && evaluation.event) {
+      recordLocalLeadChangeEvent(evaluation.event);
+      if (evaluation.nextThresholds) {
+        favoritesLocalProvider.updateAlertThresholds(
+          userId,
+          updatedRow.id,
+          evaluation.nextThresholds,
+        );
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------
@@ -99,6 +101,87 @@ function localTenant() {
   return readCatalog().inmobiliarias[0];
 }
 
+export const localCatalogProvider = {
+  getTenantContext() {
+    const tenant = localTenant();
+    return {
+      inmobiliaria_id: tenant.id,
+      inmobiliaria_nombre: tenant.nombre,
+      isGlobalAdmin: false,
+    };
+  },
+  getProjects({ ejecutivo } = {}) {
+    const catalog = readCatalog();
+    const proyectos = catalog.proyectos
+      .map((row) => buildLocalProject(catalog, row))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return filterAssignedTo(proyectos, ejecutivo);
+  },
+  createProject(input) {
+    const { ok, errors } = validateProject(input);
+    if (!ok) throw new Error(Object.values(errors)[0]);
+    const payload = {
+      inmobiliaria_id: input.inmobiliaria_id,
+      nombre: String(input.nombre).trim(),
+      comuna: input.comuna,
+      tipo: input.tipo,
+      precio_min_uf: Number(input.precio_min_uf),
+      precio_max_uf: Number(input.precio_max_uf),
+      bono_pie_pct:
+        input.bono_pie_pct !== undefined &&
+        input.bono_pie_pct !== null &&
+        String(input.bono_pie_pct).trim() !== ""
+          ? Number(input.bono_pie_pct)
+          : 0,
+      estado: input.estado,
+      descripcion: String(input.descripcion ?? "").trim() || null,
+      entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
+    };
+    const catalog = readCatalog();
+    assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre);
+    const now = new Date().toISOString();
+    const row = { ...payload, id: newId(), created_at: now, updated_at: now };
+    catalog.proyectos.push(row);
+    writeCatalog(catalog);
+    return buildLocalProject(catalog, row);
+  },
+  updateProject(id, input) {
+    if (!id) throw new Error("ID de proyecto requerido.");
+    const { ok, errors } = validateProject(input);
+    if (!ok) throw new Error(Object.values(errors)[0]);
+    const payload = {
+      inmobiliaria_id: input.inmobiliaria_id,
+      nombre: String(input.nombre).trim(),
+      comuna: input.comuna,
+      tipo: input.tipo,
+      precio_min_uf: Number(input.precio_min_uf),
+      precio_max_uf: Number(input.precio_max_uf),
+      bono_pie_pct:
+        input.bono_pie_pct !== undefined &&
+        input.bono_pie_pct !== null &&
+        String(input.bono_pie_pct).trim() !== ""
+          ? Number(input.bono_pie_pct)
+          : 0,
+      estado: input.estado,
+      descripcion: String(input.descripcion ?? "").trim() || null,
+      entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
+    };
+    const catalog = readCatalog();
+    const index = catalog.proyectos.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error("Proyecto no encontrado.");
+    assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre, id);
+    const previousRow = { ...catalog.proyectos[index] };
+    catalog.proyectos[index] = {
+      ...catalog.proyectos[index],
+      ...payload,
+      updated_at: new Date().toISOString(),
+    };
+    writeCatalog(catalog);
+    notifyLocalFavoriteOpportunities(previousRow, catalog.proyectos[index]);
+    return buildLocalProject(catalog, catalog.proyectos[index]);
+  },
+};
+
 function buildLocalProject(catalog, row) {
   const inmobiliaria = catalog.inmobiliarias.find((item) => item.id === row.inmobiliaria_id);
   return {
@@ -110,6 +193,7 @@ function buildLocalProject(catalog, row) {
     tipo: row.tipo,
     precio_min_uf: Number(row.precio_min_uf),
     precio_max_uf: Number(row.precio_max_uf),
+    bono_pie_pct: Number(row.bono_pie_pct) || 0,
     estado: row.estado,
     descripcion: row.descripcion || null,
     entrega_estimada: row.entrega_estimada || null,
@@ -160,7 +244,6 @@ async function fetchExecutiveNames(ejecutivoIds) {
 
   const { data, error } = await supabase.rpc("list_staff_names", { p_ids: ids });
   if (error) {
-    // Sólo llegan nombres del propio equipo: de cualquier otro se muestra el correo y listo.
     logSupabaseError(error);
     return {};
   }
@@ -189,6 +272,7 @@ function buildRemoteProject(row, assignments, namesById, inmobiliariaNames) {
     tipo: row.tipo,
     precio_min_uf: Number(row.precio_min_uf),
     precio_max_uf: Number(row.precio_max_uf),
+    bono_pie_pct: Number(row.bono_pie_pct) || 0,
     estado: row.estado,
     descripcion: row.descripcion || null,
     entrega_estimada: row.entrega_estimada || null,
@@ -309,10 +393,6 @@ export async function assignAdmin(inmobiliariaId, email) {
 // Proyectos — contrato congelado para HU 13
 // ---------------------------------------------------------------
 
-// `ejecutivo` ({ id, email }) acota el catálogo a los proyectos asignados a ese
-// ejecutivo comercial. Contra Supabase la policy ya lo hace en la base; se
-// filtra igual porque el proveedor local no tiene RLS. El admin no lo pasa: ve
-// su tenant. Van id y correo porque la policy acepta cualquiera de los dos.
 export async function getProjects({ inmobiliariaId, ejecutivo } = {}) {
   if (PROVIDER === "local") {
     const catalog = readCatalog();
@@ -322,7 +402,6 @@ export async function getProjects({ inmobiliariaId, ejecutivo } = {}) {
     return filterAssignedTo(proyectos, ejecutivo);
   }
 
-  // Vincula ejecutivos que ya crearon su cuenta desde la última carga.
   const { error: resolveError } = await supabase.rpc("resolve_pending_executives");
   if (resolveError) logSupabaseError(resolveError);
 
@@ -357,9 +436,6 @@ export async function getProjects({ inmobiliariaId, ejecutivo } = {}) {
   return filterAssignedTo(projects, ejecutivo);
 }
 
-// E4: fuente de datos del matching (HU 13) — excluye 'agotado' y ejecutivos pendientes.
-// El recorte por ejecutivo ocurre antes de filterAvailable, que borra los
-// vínculos 'pendiente' del arreglo `ejecutivos`.
 export async function getAvailableProjects({ inmobiliariaId, ejecutivo } = {}) {
   const projects = await getProjects({ inmobiliariaId, ejecutivo });
   return filterAvailable(projects);
@@ -376,6 +452,12 @@ export async function createProject(input) {
     tipo: input.tipo,
     precio_min_uf: Number(input.precio_min_uf),
     precio_max_uf: Number(input.precio_max_uf),
+    bono_pie_pct:
+      input.bono_pie_pct !== undefined &&
+      input.bono_pie_pct !== null &&
+      String(input.bono_pie_pct).trim() !== ""
+        ? Number(input.bono_pie_pct)
+        : 0,
     estado: input.estado,
     descripcion: String(input.descripcion ?? "").trim() || null,
     entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
@@ -417,6 +499,12 @@ export async function updateProject(id, input) {
     tipo: input.tipo,
     precio_min_uf: Number(input.precio_min_uf),
     precio_max_uf: Number(input.precio_max_uf),
+    bono_pie_pct:
+      input.bono_pie_pct !== undefined &&
+      input.bono_pie_pct !== null &&
+      String(input.bono_pie_pct).trim() !== ""
+        ? Number(input.bono_pie_pct)
+        : 0,
     estado: input.estado,
     descripcion: String(input.descripcion ?? "").trim() || null,
     entrega_estimada: String(input.entrega_estimada ?? "").trim() || null,
@@ -427,12 +515,14 @@ export async function updateProject(id, input) {
     const index = catalog.proyectos.findIndex((item) => item.id === id);
     if (index === -1) throw new Error("Proyecto no encontrado.");
     assertLocalNameAvailable(catalog, payload.inmobiliaria_id, payload.nombre, id);
+    const previousRow = { ...catalog.proyectos[index] };
     catalog.proyectos[index] = {
       ...catalog.proyectos[index],
       ...payload,
       updated_at: new Date().toISOString(),
     };
     writeCatalog(catalog);
+    notifyLocalFavoriteOpportunities(previousRow, catalog.proyectos[index]);
     return buildLocalProject(catalog, catalog.proyectos[index]);
   }
 
@@ -506,7 +596,6 @@ export async function deleteProject(id) {
   const { error } = await supabase.from("proyectos").delete().eq("id", id);
   if (error) {
     logSupabaseError(error);
-    // lead_project_commercial_stage protege el proyecto con ON DELETE RESTRICT.
     if (error.code === "23503") {
       throw new Error("Este proyecto tiene historial comercial y no se puede eliminar; márcalo como agotado.");
     }
@@ -515,9 +604,6 @@ export async function deleteProject(id) {
   return true;
 }
 
-// HU 25: carga masiva. `proyectos` ya viene validado por lib/catalog/projectImport;
-// importar_proyectos() lo escribe en una transacción, todo o nada, con los
-// permisos de quien llama y siempre en la inmobiliaria de la sesión.
 export async function importProjects(proyectos) {
   if (PROVIDER === "local") {
     throw new Error("La carga masiva requiere Supabase configurado.");
@@ -592,8 +678,6 @@ export async function assignExecutive(projectId, email, origen) {
   if (!correo.includes("@")) throw new Error("Ingresa un correo válido.");
 
   if (PROVIDER === "local") {
-    // Un solo tenant local: la regla de vínculo cruzado no aplica y la
-    // asignación queda vinculada de inmediato (solo se guarda el correo).
     const catalog = readCatalog();
     if (!catalog.proyectos.some((item) => item.id === projectId)) {
       throw new Error("Proyecto no encontrado.");
@@ -661,10 +745,6 @@ export async function unassignExecutive(projectId, email, origen) {
 // Avisos de Portal Inmobiliario (HU 19) para la sección Proyectos
 // ---------------------------------------------------------------
 
-// Todos los avisos con precio, informen o no inmobiliaria: así el total coincide con el
-// catálogo que busca el portal. No forman parte del contrato congelado de arriba: viven
-// en public.proyectos_rag y no tienen ejecutivos. PostgREST entrega como máximo 1000
-// filas por petición, por eso se pagina.
 const PORTAL_PAGE_SIZE = 1000;
 
 async function fetchAllPortalRows(columns, { priced }) {
@@ -689,8 +769,6 @@ export async function getPortalProjects() {
   return fetchAllPortalRows("id, nombre, comuna, tipo_vivienda, valor_uf, precio_desde, estado, inmobiliaria, url, imagen_url", { priced: true });
 }
 
-// Comunas con avisos en el catálogo, para el filtro del portal: la búsqueda no exige
-// precio, así que aquí tampoco.
 export async function getPortalCommunes() {
   if (PROVIDER === "local") return [];
   const rows = await fetchAllPortalRows("comuna", { priced: false });

@@ -263,6 +263,7 @@ const parseIntegerInput = (value) => {
 
 const changeTypeLabels = {
   project_compatible_unlocked: "Proyecto compatible",
+  favorite_project_opportunity: "Oportunidad en favorito",
   score_band_improved: "Mejora de score",
   monthly_plan_summary: "Resumen mensual",
   uf_reachability_crossed: "Cambio de alcance",
@@ -271,6 +272,7 @@ const changeTypeLabels = {
 
 const changeTypeIcons = {
   project_compatible_unlocked: "ti-home-check",
+  favorite_project_opportunity: "ti-bell-ringing",
   score_band_improved: "ti-trending-up",
   monthly_plan_summary: "ti-calendar-stats",
   uf_reachability_crossed: "ti-currency-dollar",
@@ -323,6 +325,7 @@ const quickUpdateFields = quickUpdateStages.flatMap((stage) => stage.fields.map(
 
 const suggestedFieldByEventType = {
   project_compatible_unlocked: "ahorro_disponible",
+  favorite_project_opportunity: "ahorro_disponible",
   score_band_improved: "deuda_mensual",
   monthly_plan_summary: "ahorro_disponible",
   uf_reachability_crossed: "ahorro_disponible",
@@ -370,6 +373,7 @@ const groupLeadChanges = (changes = []) => {
 
 const leadChangeGroupSummary = {
   project_compatible_unlocked: "Nuevas alternativas aparecen dentro de tu alcance referencial.",
+  favorite_project_opportunity: "Uno o más de tus proyectos favoritos con alerta activa bajaron de precio o aplicaron bono pie.",
   score_band_improved: "Hay señales de que una nueva evaluación podría mejorar tu tramo referencial.",
   monthly_plan_summary: "Tienes recordatorios de revisión mensual para mantener tu plan actualizado.",
   uf_reachability_crossed: "Cambió tu alcance referencial frente a uno o más objetivos.",
@@ -378,6 +382,29 @@ const leadChangeGroupSummary = {
 
 function LeadChangeDetail({ change }) {
   const hasDelta = change.previous_value != null || change.current_value != null;
+  if (change.event_type === "favorite_project_opportunity") {
+    const compBefore = change.payload?.compatibility_before?.label || change.previous_value?.compatibility_label;
+    const compAfter = change.payload?.compatibility_after?.label || change.current_value?.compatibility_label;
+    return (
+      <div className="home-change-card__explain">
+        <strong>Oportunidad detectada en tu proyecto favorito</strong>
+        <p>
+          {change.project_name
+            ? `${change.project_name} mejoró sus condiciones comerciales en el catálogo y recalculamos tu compatibilidad referencial.`
+            : "Un proyecto favorito con alerta activa mejoró sus condiciones comerciales."}
+        </p>
+        {hasDelta && (
+          <dl className="home-change-card__delta">
+            <div><dt>Umbral anterior</dt><dd>{formatChangeValue(change.previous_value)}</dd></div>
+            <div><dt>Condición actual</dt><dd>{formatChangeValue(change.current_value)}</dd></div>
+            {compBefore && compAfter && (
+              <div><dt>Compatibilidad</dt><dd>{`${compBefore} → ${compAfter}`}</dd></div>
+            )}
+          </dl>
+        )}
+      </div>
+    );
+  }
   if (change.event_type === "score_band_improved") {
     return (
       <div className="home-change-card__explain">

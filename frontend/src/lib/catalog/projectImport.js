@@ -23,12 +23,17 @@ export const IMPORT_COLUMNS = [
   { key: "entrega_estimada", required: false, ayuda: "Mes de entrega en formato AAAA-MM.", ejemplo: "2027-06" },
 ];
 
+// HU 31: columna comercial opcional `bono_pie_pct` aceptada en cargas masivas
+// sin romper la plantilla base de 8 columnas de HU 25.
+export const OPTIONAL_IMPORT_COLUMNS = ["bono_pie_pct"];
+
 const COLUMN_KEYS = IMPORT_COLUMNS.map((column) => column.key);
+const ACCEPTED_COLUMN_KEYS = [...COLUMN_KEYS, ...OPTIONAL_IMPORT_COLUMNS];
 const PRICE_KEYS = ["precio_min_uf", "precio_max_uf"];
 
 // Separador y BOM que Excel en configuración chilena abre en columnas y con tildes.
 export function buildImportTemplate() {
-  return `﻿${COLUMN_KEYS.join(";")}\r\n`;
+  return `\uFEFF${COLUMN_KEYS.join(";")}\r\n`;
 }
 
 // "CSV (delimitado por comas)" de Excel en Windows se guarda en Windows-1252,
@@ -44,7 +49,7 @@ export function decodeImportFile(buffer) {
 function fold(value) {
   return String(value ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
 }
@@ -74,7 +79,7 @@ function detectDelimiter(text) {
 // RFC 4180. Cada registro es una fila de la planilla: un salto de línea dentro
 // de comillas no abre fila nueva, igual que en Excel.
 export function parseCsv(input) {
-  const text = String(input ?? "").replace(/^﻿/, "");
+  const text = String(input ?? "").replace(/^\uFEFF/, "");
   const delimiter = detectDelimiter(text);
   const records = [];
   let cells = [];
@@ -129,7 +134,7 @@ export function parseImportNumber(raw) {
   const value = raw
     .replace(/\s+/g, "")
     .replace(/^(\$|uf|clp|u\.f\.)/i, "")
-    .replace(/(\$|uf|clp|u\.f\.)$/i, "");
+    .replace(/(\$|uf|clp|u\.f\.|%)$/i, "");
   if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(value) || /^\d+(,\d+)?$/.test(value)) {
     return Number(value.replace(/\./g, "").replace(",", "."));
   }
@@ -173,6 +178,8 @@ function normalizeRow(values, inmobiliariaId) {
     const raw = text(key);
     return raw ? matchCanonical(raw, options) ?? raw : "";
   };
+  const hasBonoPie =
+    "bono_pie_pct" in values && text("bono_pie_pct") !== "";
   return {
     inmobiliaria_id: inmobiliariaId,
     nombre: text("nombre"),
@@ -183,6 +190,7 @@ function normalizeRow(values, inmobiliariaId) {
     precio_max_uf: parseImportNumber(values.precio_max_uf),
     descripcion: text("descripcion"),
     entrega_estimada: text("entrega_estimada"),
+    ...(hasBonoPie ? { bono_pie_pct: parseImportNumber(values.bono_pie_pct) } : {}),
   };
 }
 
@@ -194,7 +202,11 @@ function rowErrors(values, input) {
       errors[key] = `«${raw}» no es un monto válido. Escribe solo cifras, por ejemplo 3500, 3.500 o 3.500,5.`;
     }
   }
-  return COLUMN_KEYS.filter((key) => errors[key]).map((key) => ({ columna: key, mensaje: errors[key] }));
+  const rawBono = cellText(values.bono_pie_pct, "bono_pie_pct");
+  if (rawBono && Number.isNaN(input.bono_pie_pct)) {
+    errors.bono_pie_pct = `«${rawBono}» no es un porcentaje válido para bono pie (0 a 30).`;
+  }
+  return ACCEPTED_COLUMN_KEYS.filter((key) => errors[key]).map((key) => ({ columna: key, mensaje: errors[key] }));
 }
 
 function emptyAnalysis(fileErrors, warnings = []) {
@@ -227,7 +239,7 @@ export function analyzeProjectRecords(records, { inmobiliariaId, existingProject
   header.forEach((cell, index) => {
     const key = foldKey(cell);
     if (!key) return;
-    if (!COLUMN_KEYS.includes(key)) {
+    if (!ACCEPTED_COLUMN_KEYS.includes(key)) {
       warnings.push(
         key === "inmobiliaria_id" || key === "inmobiliaria"
           ? `Se ignoró la columna «${cell}»: los proyectos siempre se cargan en la inmobiliaria de tu sesión.`
@@ -309,8 +321,8 @@ export function analyzeProjectImport(text, options) {
   return analyzeProjectRecords(parseCsv(text).records, options);
 }
 
-// Lo que recibe importar_proyectos(): los ocho campos del catálogo. El tenant
-// no viaja en las filas; lo decide la sesión.
+// Lo que recibe importar_proyectos(): los ocho campos del catálogo (más bono_pie_pct si viene en la planilla).
+// El tenant no viaja en las filas; lo decide la sesión.
 export function toImportPayload(analysis) {
   return analysis.rows.map(({ input }) => ({
     nombre: input.nombre,
@@ -321,5 +333,6 @@ export function toImportPayload(analysis) {
     estado: input.estado,
     descripcion: input.descripcion || null,
     entrega_estimada: input.entrega_estimada || null,
+    ...(Number.isFinite(input.bono_pie_pct) ? { bono_pie_pct: input.bono_pie_pct } : {}),
   }));
 }

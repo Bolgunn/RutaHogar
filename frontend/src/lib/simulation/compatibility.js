@@ -206,10 +206,16 @@ export function evaluateScenario(input = {}, scenario, capacidad = null) {
   const savingsUf = ufValueClp > 0 ? savings / ufValueClp : 0;
   const { income, debt } = getIncomeForCapacity(input);
   const dividend = getDividendForScenario(input, scenario);
-  const pieMinimo = Math.round(valueClp * MIN_DOWN_PAYMENT_RATE);
-  const pieRecomendado = Math.round(valueClp * RECOMMENDED_DOWN_PAYMENT_RATE);
-  const pieMinimoUf = valueUf * MIN_DOWN_PAYMENT_RATE;
-  const pieRecomendadoUf = valueUf * RECOMMENDED_DOWN_PAYMENT_RATE;
+  const bonoPiePct = Math.max(0, Math.min(30, toNumber(scenario?.bonoPiePct ?? scenario?.project?.bono_pie_pct)));
+  const bonoPieRate = bonoPiePct / 100;
+  const effectiveMinDownPaymentRate =
+    bonoPieRate > 0 ? Math.max(0.05, MIN_DOWN_PAYMENT_RATE - bonoPieRate) : MIN_DOWN_PAYMENT_RATE;
+  const effectiveRecommendedDownPaymentRate =
+    bonoPieRate > 0 ? Math.max(0.05, RECOMMENDED_DOWN_PAYMENT_RATE - bonoPieRate) : RECOMMENDED_DOWN_PAYMENT_RATE;
+  const pieMinimo = Math.round(valueClp * effectiveMinDownPaymentRate);
+  const pieRecomendado = Math.round(valueClp * effectiveRecommendedDownPaymentRate);
+  const pieMinimoUf = valueUf * effectiveMinDownPaymentRate;
+  const pieRecomendadoUf = valueUf * effectiveRecommendedDownPaymentRate;
   const gapMinimo = Math.max(pieMinimo - savings, 0);
   const gapRecomendado = Math.max(pieRecomendado - savings, 0);
   const gapMinimoUf = ufValueClp > 0 ? gapMinimo / ufValueClp : 0;
@@ -218,12 +224,13 @@ export function evaluateScenario(input = {}, scenario, capacidad = null) {
     ? capacidad.dividendoMaximoClp
     : Math.round(income * PRUDENT_DIVIDEND_RATE);
   const debtRatio = income > 0 ? debt / income : 0;
+  const bonoClpBoost = bonoPieRate > 0 ? Math.round(valueClp * bonoPieRate) : 0;
   const maxByMinDownPayment = capacidad
-    ? capacidad.maxValueClp
+    ? capacidad.maxValueClp + bonoClpBoost
     : savings > 0
-      ? savings / MIN_DOWN_PAYMENT_RATE
+      ? savings / effectiveMinDownPaymentRate
       : 0;
-  const maxByRecommendedDownPayment = savings > 0 ? savings / RECOMMENDED_DOWN_PAYMENT_RATE : 0;
+  const maxByRecommendedDownPayment = savings > 0 ? savings / effectiveRecommendedDownPaymentRate : 0;
   const status = buildStatus({
     input,
     income,

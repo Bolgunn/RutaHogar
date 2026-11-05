@@ -4,6 +4,7 @@ import {
   evaluateScenario,
   projectToScenario,
 } from "../lib/simulation/compatibility";
+import { formatOpportunityThresholdSummary } from "../lib/simulation/opportunityRadar";
 import { formatProjectPrice } from "../lib/simulation/projectAdapter";
 import { CLP_FORMATTER } from "../services/financialTracking";
 import { propertyLabels } from "../constants";
@@ -38,6 +39,8 @@ export default function ProjectEvaluationModal({
   onSetGoal,
   onNavigate,
   onToggleFavorite,
+  onToggleFavoriteAlert,
+  favoriteAlert = null,
   isFavorite,
   isCurrentGoal,
   compatibilityStatus,
@@ -75,9 +78,6 @@ export default function ProjectEvaluationModal({
     hasTrackingVerdict ? { ...localEvaluation, status: compatibilityStatus } : localEvaluation
   ), [compatibilityStatus, hasTrackingVerdict, localEvaluation]);
   const alternatives = useMemo(() => {
-    // Tracking already decided the target project's compatibility. Its payload
-    // does not include alternative/gap details, so do not mix in local advice
-    // calculated for a potentially different verdict.
     if (hasTrackingVerdict || evaluation.status === "Compatible") return [];
     return buildAccessibleAlternatives(
       projects.filter((item) => item.id !== project.id),
@@ -87,9 +87,9 @@ export default function ProjectEvaluationModal({
     ).slice(0, 3);
   }, [context, evaluation.status, hasTrackingVerdict, onboarding, project.id, projects]);
   const isCompatible = evaluation.status === "Compatible";
-  // Los avisos del portal no están en public.proyectos: favoritos, contacto con
-  // ejecutivo y meta del plan dependen de esa tabla, así que solo se enlaza el aviso.
   const isPortal = project.origen === "portal";
+  const isAlertActive = Boolean(favoriteAlert?.notificar_cambios);
+  const thresholdSummary = formatOpportunityThresholdSummary(favoriteAlert, project);
 
   const handleInterest = async (contactExecutive) => {
     setActionError("");
@@ -155,6 +155,9 @@ export default function ProjectEvaluationModal({
           <div><dt>Valor desde</dt><dd>{formatProjectPrice(project)}</dd></div>
           <div><dt>Pie mínimo</dt><dd>{formatClp(evaluation.pieMinimo)}</dd></div>
           <div><dt>Dividendo estimado</dt><dd>{formatClp(evaluation.dividend)}</dd></div>
+          {Number(project.bono_pie_pct) > 0 && (
+            <div><dt>Bono pie activo</dt><dd>{project.bono_pie_pct}%</dd></div>
+          )}
         </dl>
       </div>
       {alternatives.length > 0 && <div className="project-evaluation-modal__alternatives">
@@ -169,6 +172,23 @@ export default function ProjectEvaluationModal({
       </div> : goalSuccess ? <div className="project-evaluation-modal__message is-success"><p>Meta financiera actualizada. Vuelve a revisar Subsidios y tu plan de mejora para ver cómo se ajustan a este proyecto.</p><button type="button" className="primary-button" onClick={() => onNavigate?.("subsidios")}>Revisar subsidios</button><button type="button" className="secondary-button" onClick={() => onNavigate?.("tracking")}>Revisar plan de mejora</button><button type="button" className="text-button" onClick={onClose}>Seguir explorando proyectos</button></div> : interestStatus ? <div className="project-evaluation-modal__message is-success"><p>{interestStatus}</p><button type="button" className="secondary-button" onClick={onClose}>Volver al catálogo</button></div> : <div className="project-evaluation-modal__actions">
         {actionError && <div className="project-evaluation-modal__message is-error"><p>{actionError}</p></div>}
         <button type="button" className="primary-button" onClick={() => handleInterest(isCompatible)}>{isCompatible ? "Solicitar contacto" : isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}</button>
+        {isFavorite && onToggleFavoriteAlert && (
+          <div className="project-evaluation-modal__alert-box">
+            <button
+              type="button"
+              className={`secondary-button ${isAlertActive ? "is-active" : ""}`}
+              aria-label="Notificar cambios"
+              aria-pressed={isAlertActive}
+              onClick={() => onToggleFavoriteAlert(project)}
+            >
+              <i className={`ti ${isAlertActive ? "ti-bell-ringing" : "ti-bell"}`} aria-hidden="true" />
+              <span>{isAlertActive ? "Notificar cambios (activa)" : "Notificar cambios"}</span>
+            </button>
+            {isAlertActive && thresholdSummary && (
+              <p className="project-evaluation-modal__context">{thresholdSummary}</p>
+            )}
+          </div>
+        )}
         {isCurrentGoal ? <div className="project-current-goal-notice"><i className="ti ti-circle-check" aria-hidden="true" /><span>Este proyecto ya es tu preferencia de última evaluación.</span></div> : <button
           type="button"
           className={`secondary-button project-goal-confirm-button ${confirmGoalChange ? "is-confirming" : ""}`}

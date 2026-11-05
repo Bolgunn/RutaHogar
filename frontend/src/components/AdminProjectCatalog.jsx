@@ -44,6 +44,7 @@ const emptyForm = {
   estado: "disponible",
   precio_min_uf: "",
   precio_max_uf: "",
+  bono_pie_pct: "0",
   descripcion: "",
   entrega_estimada: "",
 };
@@ -305,6 +306,7 @@ export default function AdminProjectCatalog() {
       estado: project.estado,
       precio_min_uf: String(project.precio_min_uf),
       precio_max_uf: String(project.precio_max_uf),
+      bono_pie_pct: String(project.bono_pie_pct ?? 0),
       descripcion: project.descripcion || "",
       entrega_estimada: project.entrega_estimada || "",
     });
@@ -789,7 +791,14 @@ export default function AdminProjectCatalog() {
                       <td data-label="Proyecto" className="admin-project-table__name"><div className="admin-project-row-identity"><span className="admin-row-icon" aria-hidden="true"><i className={project.tipo === "casa" ? "ti ti-home" : "ti ti-building"} /></span><strong>{project.nombre}</strong></div></td>
                       <td data-label="Comuna">{project.comuna}</td>
                       <td data-label="Tipo">{tipoProyectoLabels[project.tipo] || project.tipo}</td>
-                      <td data-label="Rango UF"><strong className="admin-project-row-price">{formatUfRange(project)}</strong></td>
+                      <td data-label="Rango UF">
+                        <strong className="admin-project-row-price">{formatUfRange(project)}</strong>
+                        {Number(project.bono_pie_pct) > 0 && (
+                          <span className="admin-tag admin-tag--soft" style={{ marginLeft: "0.4rem" }}>
+                            Bono pie {project.bono_pie_pct}%
+                          </span>
+                        )}
+                      </td>
                       <td data-label="Estado">
                         <span className={`status-pill ${estadoProyectoPillClass[project.estado] || ""}`}>
                           {estadoProyectoLabels[project.estado] || project.estado}
@@ -1308,6 +1317,26 @@ export default function AdminProjectCatalog() {
                     />
                     {projectSubmitAttempted && formErrors.entrega_estimada && (
                       <span className="field-warning">{formErrors.entrega_estimada}</span>
+                    )}
+                  </div>
+
+                  <div className="field-wrap admin-project-form__bono-pie">
+                    <div className="field-label-row">
+                      <label htmlFor="admin-project-bono-pie">Bono pie (%)</label>
+                      <FieldTooltip text="Porcentaje de apoyo comercial al pie ofrecido por la inmobiliaria (0% a 30%). Al activarlo o aumentarlo, se recalcula la compatibilidad de los leads que tengan alerta activa sobre este proyecto." />
+                    </div>
+                    <input
+                      id="admin-project-bono-pie"
+                      type="number"
+                      min="0"
+                      max="30"
+                      step="0.5"
+                      value={form.bono_pie_pct}
+                      onChange={(event) => updateField("bono_pie_pct", event.target.value)}
+                      placeholder="0"
+                    />
+                    {projectSubmitAttempted && formErrors.bono_pie_pct && (
+                      <span className="field-warning">{formErrors.bono_pie_pct}</span>
                     )}
                   </div>
 
