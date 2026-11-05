@@ -56,8 +56,11 @@ export default function AssistantWidget({
   token = null,
   profile = null,
   onNavigate = null,
+  onNavigateAssistant = null,
+  onFocusField = null,
   onOpenArticle = null,
 }) {
+  const effectiveNavigate = onNavigateAssistant || onNavigate;
   const isUserAuthenticated = Boolean(
     (profile && profile.role && profile.role !== "anon") ||
     (role && role !== "anon") ||
@@ -179,6 +182,8 @@ export default function AssistantWidget({
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const prevMessagesLenRef = useRef(messages.length);
+  const prevIsTypingRef = useRef(isTyping);
 
   // Persist messages whenever they change
   useEffect(() => {
@@ -271,10 +276,23 @@ export default function AssistantWidget({
         (t) => t.status === "abierto" || t.status === "en_proceso" || t.status === "en_curso"
       );
       const latest = active || sorted[0];
-      setActiveTicket(latest || null);
+      setActiveTicket((prev) => {
+        if (!latest) return null;
+        if (
+          prev &&
+          prev.id === latest.id &&
+          prev.status === latest.status &&
+          prev.user_feedback === latest.user_feedback &&
+          prev.admin_reply === latest.admin_reply
+        ) {
+          return prev;
+        }
+        return latest;
+      });
 
       setMessages((prev) => {
         let updated = [...prev];
+        let didMutate = false;
         const isFresh = updated.length === 1 && updated[0].id === "welcome";
 
         // Restore context if conversation was clean but active ticket exists
@@ -293,6 +311,7 @@ export default function AssistantWidget({
             ticketStatus: latest.status,
             feedback: "helpful",
           });
+          didMutate = true;
         }
 
         let hasNewAdminReply = false;
@@ -338,13 +357,23 @@ export default function AssistantWidget({
                 );
 
                 if (existingIndex >= 0) {
-                  updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    ...adminMsg,
-                  };
+                  const existing = updated[existingIndex];
+                  if (
+                    existing.content !== adminMsg.content ||
+                    existing.ticketStatus !== adminMsg.ticketStatus ||
+                    existing.userFeedback !== adminMsg.userFeedback ||
+                    existing.isLatestAdminTurn !== adminMsg.isLatestAdminTurn
+                  ) {
+                    updated[existingIndex] = {
+                      ...existing,
+                      ...adminMsg,
+                    };
+                    didMutate = true;
+                  }
                 } else {
                   updated.push(adminMsg);
                   hasNewAdminReply = true;
+                  didMutate = true;
                 }
               } else if (turn.role === "user") {
                 const userReplyId = `user-reply-${t.id}-${idx}`;
@@ -365,12 +394,17 @@ export default function AssistantWidget({
                 );
 
                 if (existingIndex >= 0) {
-                  updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    ...userMsg,
-                  };
+                  const existing = updated[existingIndex];
+                  if (existing.content !== userMsg.content) {
+                    updated[existingIndex] = {
+                      ...existing,
+                      ...userMsg,
+                    };
+                    didMutate = true;
+                  }
                 } else {
                   updated.push(userMsg);
+                  didMutate = true;
                 }
               }
             });
@@ -407,10 +441,12 @@ export default function AssistantWidget({
                   ...updated[existingIndex],
                   ...adminMsg,
                 };
+                didMutate = true;
               }
             } else {
               updated.push(adminMsg);
               hasNewAdminReply = true;
+              didMutate = true;
             }
           }
         }
@@ -419,7 +455,7 @@ export default function AssistantWidget({
           setHasUnread(true);
         }
 
-        return updated;
+        return didMutate ? updated : prev;
       });
     } catch (err) {
       console.warn("[AssistantWidget] syncTicketsAndReplies error:", err);
@@ -453,13 +489,23 @@ export default function AssistantWidget({
   useEffect(() => {
     if (isOpen) {
       setHasUnread(false);
-      setTimeout(() => inputRef.current?.focus(), 150);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 150);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, ticketModalOpen, authModalOpen]);
+    const addedNewMessage = messages.length > prevMessagesLenRef.current;
+    const startedTyping = !prevIsTypingRef.current && isTyping;
+    prevMessagesLenRef.current = messages.length;
+    prevIsTypingRef.current = isTyping;
+
+    if (addedNewMessage || startedTyping) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isTyping]);
 
   const handleSend = async (textToSend) => {
     const text = (textToSend || inputText).trim();
@@ -770,25 +816,26 @@ export default function AssistantWidget({
     if (!action) return;
 
     if (action.type === "focus_field" && action.field_id) {
+      if (onFocusField) {
+        onFocusField(action);
+        return;
+      }
+
       const el = document.getElementById(action.field_id);
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.focus();
-        el.classList.add("assistant-field-pulse");
-        setTimeout(() => el.classList.remove("assistant-field-pulse"), 2500);
-      } else {
-        const stepName = action.step ? `Paso ${action.step}` : "el formulario";
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `system-hint-${Date.now()}`,
-            role: "assistant",
-            content: `📍 El campo "${action.label || action.field_id}" se encuentra en el ${stepName}. Avanza al paso indicado en la pantalla para completarlo.`,
-          },
-        ]);
+        const pulseTarget =
+          el.type === "checkbox" && el.closest(".pre-wizard-check-row")
+            ? el.closest(".pre-wizard-check-row")
+            : el;
+        pulseTarget.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (typeof el.focus === "function") el.focus();
+        pulseTarget.classList.add("assistant-field-pulse");
+        setTimeout(() => pulseTarget.classList.remove("assistant-field-pulse"), 2500);
+      } else if (effectiveNavigate) {
+        effectiveNavigate("evaluate");
       }
-    } else if (action.type === "navigate" && action.target && onNavigate) {
-      onNavigate(action.target);
+    } else if (action.type === "navigate" && action.target && effectiveNavigate) {
+      effectiveNavigate(action.target);
     }
   };
 
@@ -798,11 +845,11 @@ export default function AssistantWidget({
     if (link.type === "academy" && link.articleId) {
       if (onOpenArticle) {
         onOpenArticle(link.articleId);
-      } else if (onNavigate) {
-        onNavigate("academia", { articleId: link.articleId });
+      } else if (effectiveNavigate) {
+        effectiveNavigate("academia", { articleId: link.articleId });
       }
-    } else if ((link.type === "navigate" || link.target || link.route) && onNavigate) {
-      onNavigate(link.target || link.route);
+    } else if ((link.type === "navigate" || link.target || link.route) && effectiveNavigate) {
+      effectiveNavigate(link.target || link.route);
     } else if (link.url) {
       window.open(link.url, "_blank", "noopener,noreferrer");
     }
@@ -918,7 +965,9 @@ export default function AssistantWidget({
                 title="Minimizar asistente"
                 aria-label="Minimizar asistente"
               >
-                ✕
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="18" height="18">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
             </div>
           </div>
@@ -1254,8 +1303,8 @@ export default function AssistantWidget({
               disabled={!inputText.trim() || isTyping}
               aria-label="Enviar mensaje"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" width="18" height="18">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 5l7 7-7 7" />
               </svg>
             </button>
           </form>
@@ -1422,8 +1471,8 @@ export default function AssistantWidget({
                       className="assistant-btn-primary"
                       onClick={() => {
                         setAuthModalOpen(false);
-                        if (onNavigate) {
-                          onNavigate("login");
+                        if (effectiveNavigate) {
+                          effectiveNavigate("login");
                         }
                       }}
                     >

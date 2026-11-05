@@ -75,4 +75,78 @@ describe("HU13 current evaluation for Plan de mejora", () => {
 
     expect(currentTrackingEvaluation(tracking, [accepted, later], "owner")).toBe(later);
   });
+
+  describe("HU29 E4: green savings goal carry-over", () => {
+    const greenGoal = {
+      type: "pie_en_verde_blanco",
+      project_id: "project-a",
+      cuota_mensual_uf: 25,
+      cuota_mensual_clp: 962500,
+      plazo_meses: 18,
+      pie_total_uf: 450,
+      fixed_at: "2026-04-15T12:00:00Z",
+    };
+
+    it("inherits green_savings_goal onto a newer evaluation for the same target project", () => {
+      const evaluation1 = {
+        id: "eval-1",
+        created_at: "2026-04-15T12:00:00Z",
+        plan_type: "acelerado",
+        input: { project_goal: { id: "project-a" } },
+        housing_plan: { green_savings_goal: greenGoal },
+      };
+      const evaluation2 = {
+        id: "eval-2",
+        created_at: "2026-05-15T12:00:00Z",
+        input: { project_goal: { id: "project-a" } },
+        housing_plan: {},
+      };
+      const tracking = {
+        status: "active",
+        current_evaluation_id: "eval-2",
+        current_evaluation: { score: 75 },
+      };
+
+      const result = currentTrackingEvaluation(tracking, [evaluation1, evaluation2], "owner");
+      expect(result.id).toBe("eval-2");
+      expect(result.housing_plan.green_savings_goal).toEqual(greenGoal);
+    });
+
+    it("does not inherit green_savings_goal when target project differs", () => {
+      const evaluation1 = {
+        id: "eval-1",
+        created_at: "2026-04-15T12:00:00Z",
+        input: { project_goal: { id: "project-a" } },
+        housing_plan: { green_savings_goal: greenGoal },
+      };
+      const evaluation2 = {
+        id: "eval-2",
+        created_at: "2026-05-15T12:00:00Z",
+        input: { project_goal: { id: "project-diff" } },
+        housing_plan: {},
+      };
+      const tracking = {
+        status: "active",
+        current_evaluation_id: "eval-2",
+        current_evaluation: { score: 75 },
+      };
+
+      const result = currentTrackingEvaluation(tracking, [evaluation1, evaluation2], "owner");
+      expect(result.housing_plan?.green_savings_goal).toBeUndefined();
+    });
+
+    it("preserves an existing green_savings_goal if the evaluation already defines one", () => {
+      const existingGoal = { ...greenGoal, cuota_mensual_uf: 30 };
+      const evaluation = {
+        id: "eval-1",
+        created_at: "2026-04-15T12:00:00Z",
+        input: { project_goal: { id: "project-a" } },
+        housing_plan: { green_savings_goal: existingGoal },
+      };
+      const tracking = { status: "active", current_evaluation_id: "eval-1" };
+
+      const result = currentTrackingEvaluation(tracking, [evaluation], "owner");
+      expect(result.housing_plan.green_savings_goal.cuota_mensual_uf).toBe(30);
+    });
+  });
 });

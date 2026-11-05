@@ -1,4 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap");
 @import url("/brand/rutahogar/rutahogar-brand.css");
 
 * {
@@ -21212,6 +21212,376 @@ section-heading {
   .cm-hbar { grid-template-columns: 150px 1fr 70px; }
 }
 
+
+/* ==========================================================================
+   HU 29: Planificador Interactivo de Metas de Ahorro para Compras en Verde / Blanco
+   ========================================================================== */
+.green-savings-planner {
+  margin-top: var(--rh-space-6, 2rem);
+  padding: clamp(20px, 3vw, 32px);
+  background-color: var(--rh-surface, #ffffff);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-lg, 16px);
+  box-shadow: var(--rh-shadow-sm, 0 2px 8px rgba(11, 26, 46, 0.06));
+}
+
+.green-savings-planner .section-heading {
+  margin-bottom: var(--rh-space-5, 1.5rem);
+}
+
+.green-savings-planner .section-heading .eyebrow {
+  color: var(--rh-gold-dark, #B8912E);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+}
+
+.green-savings-planner .section-heading h2 {
+  color: var(--rh-navy, #132B4A);
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.green-savings-planner .section-heading > p,
+.green-planner-p-justified {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  line-height: 1.6;
+  color: var(--rh-text-secondary, #5A6A7E);
+  margin-bottom: 0;
+}
+
+.green-planner__project-badge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 14px;
+  background-color: var(--rh-surface-alt, #F5F3EF);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-sm, 8px);
+  font-size: 0.875rem;
+  color: var(--rh-text, #1A2332);
+}
+
+.green-planner__project-badge strong {
+  color: var(--rh-navy, #132B4A);
+}
+
+.green-planner__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: var(--rh-space-4, 1rem);
+  margin-bottom: var(--rh-space-5, 1.5rem);
+}
+
+.green-planner__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.green-planner__field label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--rh-navy, #132B4A);
+}
+
+.green-planner__field input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--rh-font-mono, monospace);
+  font-size: 1rem;
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-sm, 8px);
+  background-color: var(--rh-surface, #ffffff);
+  color: var(--rh-text, #1A2332);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.green-planner__field input:focus {
+  outline: none;
+  border-color: var(--rh-yellow, #D4A843);
+  box-shadow: var(--rh-focus-ring, 0 0 0 3px rgba(212, 168, 67, 0.35));
+}
+
+.green-planner__btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.green-planner__btn-group button {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.8125rem;
+  border-radius: var(--rh-radius-sm, 8px);
+  transition: all 0.2s ease;
+}
+
+.green-planner__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: var(--rh-space-4, 1rem);
+}
+
+.green-planner__metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-md, 12px);
+  background-color: var(--rh-surface-alt, #F5F3EF);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.green-planner__metric-card:hover {
+  box-shadow: var(--rh-shadow-sm, 0 2px 8px rgba(11, 26, 46, 0.06));
+}
+
+.green-planner__metric-card.is-highlight {
+  background-color: rgba(19, 43, 74, 0.04);
+  border-color: rgba(19, 43, 74, 0.25);
+  border-left: 4px solid var(--rh-navy, #132B4A);
+}
+
+.green-planner__metric-card .metric-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--rh-text-muted, #8A96A6);
+  margin-bottom: 6px;
+}
+
+.green-planner__metric-card .metric-val {
+  font-family: var(--rh-font-mono, monospace);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--rh-navy, #132B4A);
+  margin-bottom: 4px;
+}
+
+.green-planner__metric-card .metric-note {
+  font-size: 0.8125rem;
+  color: var(--rh-text-secondary, #5A6A7E);
+  line-height: 1.4;
+}
+
+.green-planner__assumptions {
+  padding: 14px 18px;
+  background-color: var(--rh-surface-alt, #F5F3EF);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-sm, 8px);
+  font-size: 0.85rem;
+  color: var(--rh-text-secondary, #5A6A7E);
+  margin-bottom: var(--rh-space-5, 1.5rem);
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.55;
+}
+
+.green-planner__assumptions strong {
+  color: var(--rh-navy, #132B4A);
+}
+
+.green-planner__schedule-details {
+  margin-bottom: var(--rh-space-5, 1.5rem);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-radius: var(--rh-radius-md, 12px);
+  padding: 14px 18px;
+  background-color: var(--rh-surface, #ffffff);
+}
+
+.green-planner__schedule-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--rh-navy, #132B4A);
+  user-select: none;
+}
+
+.green-developer-comparison {
+  margin-top: var(--rh-space-5, 1.5rem);
+  margin-bottom: var(--rh-space-5, 1.5rem);
+  padding: clamp(16px, 2.5vw, 24px);
+  background-color: var(--rh-surface-alt, #F5F3EF);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  border-left: 4px solid var(--rh-yellow, #D4A843);
+  border-radius: var(--rh-radius-md, 12px);
+}
+
+.green-developer-comparison .section-heading {
+  margin-bottom: 14px;
+}
+
+.green-developer-comparison .section-heading h3 {
+  color: var(--rh-navy, #132B4A);
+  margin: 4px 0 8px 0;
+}
+
+.green-developer-comparison .section-heading p {
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.6;
+  color: var(--rh-text-secondary, #5A6A7E);
+}
+
+.green-developer-comparison table td,
+.green-inflation-protection table td {
+  vertical-align: top;
+}
+
+.green-inflation-protection {
+  margin-top: var(--rh-space-5, 1.5rem);
+  margin-bottom: var(--rh-space-5, 1.5rem);
+  padding: clamp(16px, 2.5vw, 24px);
+  background-color: #F4F8F5;
+  border: 1px solid #CDE5D5;
+  border-left: 4px solid var(--rh-success, #2D8A4E);
+  border-radius: var(--rh-radius-md, 12px);
+}
+
+.green-inflation-protection .section-heading {
+  margin-bottom: 14px;
+}
+
+.green-inflation-protection .section-heading h3 {
+  color: var(--rh-navy, #132B4A);
+  margin: 4px 0 8px 0;
+}
+
+.green-inflation-protection .section-heading p {
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.6;
+  color: var(--rh-text-secondary, #5A6A7E);
+}
+
+.green-inflation-protection .tracking-footnote {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: var(--rh-text-secondary, #5A6A7E);
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.55;
+}
+
+.green-goal-connection {
+  margin-top: var(--rh-space-5, 1.5rem);
+  padding: clamp(16px, 2.5vw, 24px);
+  background-color: var(--rh-blue-light, #E8EDF5);
+  border: 1px solid rgba(19, 43, 74, 0.18);
+  border-left: 4px solid var(--rh-navy, #132B4A);
+  border-radius: var(--rh-radius-md, 12px);
+}
+
+.green-goal-connection__layout {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.green-goal-connection__info {
+  flex: 1 1 340px;
+}
+
+.green-goal-connection__info h3 {
+  color: var(--rh-navy, #132B4A);
+  margin: 4px 0 8px 0;
+}
+
+.green-goal-connection__info p {
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.6;
+  color: var(--rh-text-secondary, #5A6A7E);
+  margin: 0;
+}
+
+.green-goal-connection__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.green-goal-connection__actions select {
+  padding: 8px 12px;
+  border-radius: var(--rh-radius-sm, 8px);
+  border: 1px solid var(--rh-border, #E8E5DF);
+  background-color: var(--rh-surface, #ffffff);
+  color: var(--rh-text, #1A2332);
+}
+
+.green-planner-table-cell-justified {
+  text-align: justify;
+  text-justify: inter-word;
+  line-height: 1.45;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .green-planner__controls {
+    grid-template-columns: 1fr;
+  }
+  .green-planner__metrics {
+    grid-template-columns: 1fr;
+  }
+  .green-goal-connection__layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* HU 29 E2: celdas comparativas */
+.green-planner-cell-sub {
+  margin-top: 3px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--rh-text-secondary, #5A6A7E);
+}
+
+.green-planner-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--rh-radius-full, 999px);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.green-planner-badge.is-own {
+  background: var(--rh-score-alto-bg, #E8F5EC);
+  color: var(--rh-success, #2D8A4E);
+}
+
+.green-planner-badge.is-developer {
+  background: rgba(19, 43, 74, 0.08);
+  color: var(--rh-navy, #132B4A);
+}
+
+.green-planner-delta {
+  font-family: var(--rh-font-mono, monospace);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.green-planner-delta.is-up { color: var(--rh-danger, #B83232); }
+.green-planner-delta.is-down { color: var(--rh-success, #2D8A4E); }
+.green-planner-delta.is-neutral {
+  font-family: var(--rh-font, sans-serif);
+  font-weight: 600;
+  color: var(--rh-text-muted, #8A96A6);
+}
 /* HU23: private document upload and current backing, aligned with profile cards. */
 .profile-card--documents {
   border-top: 3px solid #9bafc3;

@@ -143,38 +143,113 @@ def build_reply_html(
 
 
 class SupportEmailClient:
+    SANDBOX_FALLBACK_FROM = "RutaHogar <onboarding@resend.dev>"
+
     def __init__(self, http_client: Optional[httpx.Client] = None):
         self.api_key = os.environ.get("RESEND_API_KEY", "").strip()
-        # Fall back to onboarding@resend.dev (Resend default sandbox) to prevent 403 unverified domain failures
-        self.from_email = os.environ.get(
-            "SUPPORT_FROM_EMAIL",
-            os.environ.get(
-                "FEEDBACK_FROM_EMAIL",
-                os.environ.get("RESEND_FROM_EMAIL", "RutaHogar <onboarding@resend.dev>"),
-            ),
-        ).strip()
-        self.notification_recipient = os.environ.get(
-            "SUPPORT_NOTIFICATION_EMAIL",
-            os.environ.get("FEEDBACK_TO_EMAIL", "onboarding@resend.dev"),
-        ).strip()
+        self.from_email = self._resolve_from_email()
+        raw_recipient = (
+            os.environ.get("SUPPORT_NOTIFICATION_EMAIL", "").strip()
+            or os.environ.get("FEEDBACK_TO_EMAIL", "").strip()
+        )
+        # Never use onboarding@resend.dev as a recipient: Resend treats it as a test sink
+        # that returns 200 OK while discarding the email, causing false "Enviado" status.
+        self.notification_recipients = self._parse_recipients(raw_recipient)
+        self.notification_recipient = (
+            self.notification_recipients[0] if self.notification_recipients else ""
+        )
         self.http_client = http_client
+
+    @classmethod
+    def _resolve_from_email(cls) -> str:
+        candidates = [
+            os.environ.get("SUPPORT_FROM_EMAIL", "").strip(),
+            os.environ.get("RUTAHOGAR_EMAIL_FROM", "").strip(),
+            os.environ.get("FEEDBACK_FROM_EMAIL", "").strip(),
+            os.environ.get("RESEND_FROM_EMAIL", "").strip(),
+        ]
+        for candidate in candidates:
+            if candidate and "onboarding@resend.dev" not in candidate.lower():
+                return candidate
+        return "RutaHogar <novedades@rutahogar.cl>"
+
+    @staticmethod
+    def _parse_recipients(raw: Optional[str]) -> List[str]:
+        if not raw:
+            return []
+        normalized = raw.replace(";", ",")
+        result: List[str] = []
+        seen = set()
+        for part in normalized.split(","):
+            email = part.strip()
+            low = email.lower()
+            if not email or "@" not in email or low == "onboarding@resend.dev":
+                continue
+            if low not in seen:
+                seen.add(low)
+                result.append(email)
+        return result
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key and self.from_email and self.notification_recipient)
+        return bool(self.api_key and self.from_email)
+
+    def _post_email_with_fallback(
+        self,
+        client: httpx.Client,
+        headers: Dict[str, str],
+        to_emails: List[str],
+        subject: str,
+        html_body: str,
+    ) -> httpx.Response:
+        payload = {
+            "from": self.from_email,
+            "to": to_emails,
+            "subject": subject,
+            "html": html_body,
+        }
+        response = client.post("https://api.resend.com/emails", headers=headers, json=payload)
+        # If the configured domain is not verified in this Resend account, retry with Resend sandbox sender
+        if (
+            response.status_code == 403
+            and "onboarding@resend.dev" not in self.from_email.lower()
+            and "verify" in response.text.lower()
+            and "domain" in response.text.lower()
+        ):
+            fallback_payload = {
+                **payload,
+                "from": self.SANDBOX_FALLBACK_FROM,
+            }
+            response = client.post(
+                "https://api.resend.com/emails", headers=headers, json=fallback_payload
+            )
+        return response
 
     def send_ticket_notification(
         self,
         ticket: Dict[str, Any],
         user_name: str,
         user_email: str,
+        recipient_emails: Optional[List[str]] = None,
     ) -> Tuple[bool, Optional[str]]:
-        """Sends email notification to staff.
+        """Sends email notification to staff / global admins.
 
         Returns (True, None) on success or (False, error_code) on failure.
         """
         if not self.is_configured:
             return False, "email_not_configured"
+
+        combined_recipients: List[str] = []
+        seen_emails = set()
+        for candidate in (recipient_emails or []) + self.notification_recipients:
+            for parsed in self._parse_recipients(candidate):
+                low = parsed.lower()
+                if low not in seen_emails:
+                    seen_emails.add(low)
+                    combined_recipients.append(parsed)
+
+        if not combined_recipients:
+            return False, "recipient_email_missing"
 
         ticket_id = str(ticket.get("id", ""))
         code = str(ticket.get("code") or ticket_id[:8].upper())
@@ -199,13 +274,6 @@ class SupportEmailClient:
             created_at=created_at,
         )
 
-        payload = {
-            "from": self.from_email,
-            "to": [self.notification_recipient],
-            "subject": email_subject,
-            "html": html_body,
-        }
-
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -213,24 +281,39 @@ class SupportEmailClient:
 
         try:
             client = self.http_client or httpx.Client(timeout=10.0)
+            any_sent = False
+            last_err_detail: Optional[str] = None
             try:
-                response = client.post("https://api.resend.com/emails", headers=headers, json=payload)
+                for recipient in combined_recipients:
+                    response = self._post_email_with_fallback(
+                        client=client,
+                        headers=headers,
+                        to_emails=[recipient],
+                        subject=email_subject,
+                        html_body=html_body,
+                    )
+                    if response.status_code >= 400:
+                        err_detail = "email_provider_rejected"
+                        try:
+                            res_json = response.json()
+                            msg = res_json.get("message") or res_json.get("name") or response.text
+                            err_detail = f"resend_{response.status_code}: {msg}"
+                        except Exception:
+                            err_detail = f"resend_{response.status_code}: {response.text[:120]}"
+                        print(
+                            f"[support_email] Resend returned status {response.status_code} for {recipient}: {err_detail}",
+                            flush=True,
+                        )
+                        last_err_detail = err_detail
+                    else:
+                        any_sent = True
             finally:
                 if self.http_client is None:
                     client.close()
 
-            if response.status_code >= 400:
-                err_detail = "email_provider_rejected"
-                try:
-                    res_json = response.json()
-                    msg = res_json.get("message") or res_json.get("name") or response.text
-                    err_detail = f"resend_{response.status_code}: {msg}"
-                except Exception:
-                    err_detail = f"resend_{response.status_code}: {response.text[:120]}"
-                print(f"[support_email] Resend returned status {response.status_code}: {err_detail}", flush=True)
-                return False, err_detail
-
-            return True, None
+            if any_sent:
+                return True, None
+            return False, last_err_detail or "email_provider_rejected"
         except httpx.HTTPError as e:
             print(f"[support_email] HTTP error calling Resend: {e}", flush=True)
             return False, "email_provider_unavailable"
@@ -270,13 +353,6 @@ class SupportEmailClient:
             replied_at=replied_at,
         )
 
-        payload = {
-            "from": self.from_email,
-            "to": [recipient],
-            "subject": email_subject,
-            "html": html_body,
-        }
-
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -285,7 +361,13 @@ class SupportEmailClient:
         try:
             client = self.http_client or httpx.Client(timeout=10.0)
             try:
-                response = client.post("https://api.resend.com/emails", headers=headers, json=payload)
+                response = self._post_email_with_fallback(
+                    client=client,
+                    headers=headers,
+                    to_emails=[recipient],
+                    subject=email_subject,
+                    html_body=html_body,
+                )
             finally:
                 if self.http_client is None:
                     client.close()

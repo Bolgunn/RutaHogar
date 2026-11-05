@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.assistant.router import resolve_authenticated_user
-from app.assistant.support_email import build_ticket_html
+from app.assistant.support_email import SupportEmailClient, build_ticket_html
 from app.assistant.tickets import (
     CreateTicketRequest,
     TicketService,
@@ -633,6 +633,92 @@ class TestSupportTickets(unittest.TestCase):
             json={"feedback": "helpful"},
         )
         self.assertEqual(fb_res.status_code, 404)
+
+    def test_support_email_never_fakes_success_to_onboarding_sink_without_real_recipient(self):
+        mock_http = MagicMock()
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "re_test_key",
+                "SUPPORT_NOTIFICATION_EMAIL": "",
+                "FEEDBACK_TO_EMAIL": "",
+            },
+        ):
+            client = SupportEmailClient(http_client=mock_http)
+            sent, err = client.send_ticket_notification(
+                ticket={"id": "t-1", "code": "T1", "subject": "Hola", "message": "Msg"},
+                user_name="Test",
+                user_email="test@correo.cl",
+                recipient_emails=[],
+            )
+            self.assertFalse(sent)
+            self.assertEqual(err, "recipient_email_missing")
+            self.assertFalse(mock_http.post.called)
+
+    def test_create_ticket_resolves_multiple_global_admin_emails_from_supabase(self):
+        mock_db = MagicMock()
+
+        def fake_get(url, headers=None, params=None):
+            res = MagicMock(status_code=200)
+            if url.endswith("/rest/v1/support_tickets"):
+                res.json.return_value = []
+            elif url.endswith("/rest/v1/profiles"):
+                res.json.return_value = [{"id": "admin-1"}, {"id": "admin-2"}]
+            elif url.endswith("/auth/v1/admin/users/admin-1"):
+                res.json.return_value = {"email": "admin1@rutahogar.cl"}
+            elif url.endswith("/auth/v1/admin/users/admin-2"):
+                res.json.return_value = {"email": "admin2@rutahogar.cl"}
+            else:
+                res.json.return_value = []
+            return res
+
+        mock_db.get.side_effect = fake_get
+        mock_db.post.return_value = MagicMock(
+            status_code=201,
+            json=lambda: [
+                {"id": "99990000-aaaa", "status": "abierto", "created_at": "2026-11-04T12:00:00Z"}
+            ],
+        )
+        mock_db.patch.return_value = MagicMock(status_code=200)
+
+        mock_resend_http = MagicMock()
+        mock_resend_http.post.return_value = MagicMock(
+            status_code=200,
+            text='{"id":"re_1"}',
+            json=lambda: {"id": "re_1"},
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "SUPABASE_URL": "https://fake.supabase.co",
+                "SUPABASE_SECRET_KEY": "fake-secret-key",
+                "RESEND_API_KEY": "re_live_123",
+                "SUPPORT_NOTIFICATION_EMAIL": "",
+                "FEEDBACK_TO_EMAIL": "",
+            },
+        ):
+            email_client = SupportEmailClient(http_client=mock_resend_http)
+            res = TicketService.create_ticket(
+                user_id="user-1",
+                role="usuario",
+                user_name="Cliente",
+                user_email="cliente@correo.cl",
+                inmobiliaria_id=None,
+                request=CreateTicketRequest(
+                    subject="Prueba admins",
+                    message="Hola admins",
+                    client_request_id="req-multi-admin-001",
+                ),
+                db_client=mock_db,
+                email_client=email_client,
+            )
+
+        self.assertIsNotNone(res.notified_at)
+        self.assertIsNone(res.notification_error)
+        self.assertEqual(mock_resend_http.post.call_count, 2)
+        sent_to = [c.kwargs["json"]["to"] for c in mock_resend_http.post.call_args_list]
+        self.assertEqual(sent_to, [["admin1@rutahogar.cl"], ["admin2@rutahogar.cl"]])
 
 
 if __name__ == "__main__":

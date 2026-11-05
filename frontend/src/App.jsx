@@ -2018,6 +2018,53 @@ function Application({ initialAuth, onAuthAccepted }) {
     });
   };
 
+  const handleSaveGreenSavingsGoal = async (goalPayload) => {
+    if (!currentEvaluation || !goalPayload) return null;
+
+    const nextHousingPlan = {
+      ...(currentEvaluation.housing_plan || {}),
+      green_savings_goal: goalPayload,
+    };
+    const optimisticEvaluation = {
+      ...currentEvaluation,
+      housing_plan: nextHousingPlan,
+    };
+
+    setEvaluations((prev) =>
+      prev.map((item) =>
+        item.id === currentEvaluation.id ? optimisticEvaluation : item,
+      ),
+    );
+
+    try {
+      const updatedEvaluation = await saveHousingPlanProgress(
+        currentEvaluation.id,
+        userId || profile?.email || "local-user",
+        nextHousingPlan,
+      );
+      if (updatedEvaluation) {
+        setEvaluations((prev) =>
+          prev.map((item) =>
+            item.id === currentEvaluation.id ? updatedEvaluation : item,
+          ),
+        );
+      }
+    } catch (err) {
+      // HU 29 E4: no se anuncia como fijada en la cuenta una meta que no se
+      // persistió. Se revierte el estado optimista y el planificador informa que
+      // la meta quedó solo en este dispositivo.
+      console.warn("No se pudo persistir la meta de ahorro en verde:", err);
+      setEvaluations((prev) =>
+        prev.map((item) =>
+          item.id === currentEvaluation.id ? currentEvaluation : item,
+        ),
+      );
+      throw err;
+    }
+
+    return goalPayload;
+  };
+
   const handleSaveHousingProgress = async (progressData) => {
     if (!currentEvaluation) return;
 
@@ -2163,6 +2210,80 @@ function Application({ initialAuth, onAuthAccepted }) {
   if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
   if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
+  const handleAssistantNavigate = (targetPage, options = {}) => {
+    if (targetPage === "evaluate") {
+      if (!profile) {
+        navigateToPage(anonOnboarding ? "anon-evaluate" : "anon-onboarding", options);
+        return;
+      }
+      setStartingNewEvaluation(true);
+      navigateToPage(onboardingCompleted ? "evaluate" : "onboarding", options);
+      return;
+    }
+    if (targetPage === "login" || targetPage === "auth") {
+      navigateToPage("auth", options);
+      return;
+    }
+    navigateToPage(targetPage, options);
+  };
+
+  const handleAssistantFocusField = (action) => {
+    if (!action) return;
+    const fieldId = action.field_id;
+    const targetStep = Number(action.step) || null;
+
+    if (targetStep === 1 || fieldId === "birth_day") {
+      if (!profile) {
+        if (page === "anon-evaluate") {
+          setScoreFormDraft((prev) => ({ ...(prev || {}), currentStep: 1 }));
+        } else if (page !== "anon-onboarding") {
+          navigateToPage("anon-onboarding");
+        }
+      } else if (page !== "onboarding") {
+        navigateToPage("onboarding");
+      }
+    } else {
+      const effectiveStep = targetStep && targetStep >= 2 && targetStep <= 4 ? targetStep : 2;
+      setScoreFormDraft((prev) => ({
+        ...(prev || {}),
+        currentStep: effectiveStep,
+      }));
+      if (!profile) {
+        if (page !== "anon-evaluate") {
+          navigateToPage("anon-evaluate");
+        }
+      } else {
+        setStartingNewEvaluation(true);
+        if (page !== "evaluate") {
+          navigateToPage("evaluate");
+        }
+      }
+    }
+
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("rutahogar:assistant-focus-field", {
+          detail: { fieldId, step: targetStep },
+        })
+      );
+      if (fieldId) {
+        const el = document.getElementById(fieldId);
+        if (el) {
+          const targetToHighlight =
+            el.type === "checkbox" && el.closest(".pre-wizard-check-row")
+              ? el.closest(".pre-wizard-check-row")
+              : el;
+          targetToHighlight.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus?.();
+          targetToHighlight.classList.add("assistant-field-pulse");
+          window.setTimeout(() => {
+            targetToHighlight.classList.remove("assistant-field-pulse");
+          }, 2500);
+        }
+      }
+    }, 100);
+  };
+
   const assistantNode = (
     <AssistantWidget
       key={profile?.id || "anon"}
@@ -2171,6 +2292,8 @@ function Application({ initialAuth, onAuthAccepted }) {
       profile={profile}
       token={auth?.session?.access_token || auth?.session?.token || null}
       onNavigate={navigateToPage}
+      onNavigateAssistant={handleAssistantNavigate}
+      onFocusField={handleAssistantFocusField}
       onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
     />
   );
@@ -2616,6 +2739,7 @@ function Application({ initialAuth, onAuthAccepted }) {
           />
         ) : page === "tracking" && profile.role === roles.user ? (
         <FinancialTracking
+          onSaveGreenSavingsGoal={handleSaveGreenSavingsGoal}
           onRetryExplanation={handleRetryAiExplanation}
           evaluation={currentEvaluation}
           trackingState={trackingState}
@@ -2630,6 +2754,7 @@ function Application({ initialAuth, onAuthAccepted }) {
         />
       ) : ["progress", "register-milestone", "monthly-plan"].includes(page) && profile.role === roles.user ? (
         <ProgressPage
+          evaluation={currentEvaluation}
           onOpenHistory={() => navigateToPage("progress-history")}
           onOpenProject={(projectId) => navigateToPage("projects", { projectId })}
           onStartEvaluation={startEvaluation}
@@ -2641,6 +2766,8 @@ function Application({ initialAuth, onAuthAccepted }) {
         />
       ) : page === "housing-plan" && profile.role === roles.user ? (
         <HousingSavingsPlan
+          trackingState={trackingState}
+          onSaveGreenSavingsGoal={handleSaveGreenSavingsGoal}
           evaluation={currentEvaluation}
           initialPieType={housingInitialPieType}
           onBack={() => navigateToPage("tracking")}

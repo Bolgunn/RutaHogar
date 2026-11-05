@@ -72,6 +72,71 @@ def format_transcript_for_storage(
 
 class TicketService:
     @staticmethod
+    def _supabase_service_headers(supabase_key: str) -> Dict[str, str]:
+        headers = {
+            "apikey": supabase_key,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+        if not supabase_key.startswith("sb_secret_"):
+            headers["Authorization"] = f"Bearer {supabase_key}"
+        return headers
+
+    @staticmethod
+    def _resolve_global_admin_emails(
+        client: httpx.Client,
+        supabase_url: str,
+        headers: Dict[str, str],
+    ) -> List[str]:
+        """Resolves the email addresses of all global RutaHogar administrators (`role = 'admin'` and `inmobiliaria_id IS NULL`)."""
+        emails: List[str] = []
+        seen = set()
+        try:
+            prof_res = client.get(
+                f"{supabase_url}/rest/v1/profiles",
+                headers=headers,
+                params={
+                    "role": "eq.admin",
+                    "inmobiliaria_id": "is.null",
+                    "select": "id,onboarding_data",
+                },
+            )
+            if prof_res.status_code != 200:
+                return []
+            admin_profiles = prof_res.json()
+            if not isinstance(admin_profiles, list):
+                return []
+
+            for prof in admin_profiles[:15]:
+                if not isinstance(prof, dict):
+                    continue
+                admin_id = prof.get("id")
+                email_candidate = None
+                if admin_id:
+                    try:
+                        auth_res = client.get(
+                            f"{supabase_url}/auth/v1/admin/users/{admin_id}",
+                            headers=headers,
+                        )
+                        if auth_res.status_code == 200:
+                            auth_data = auth_res.json()
+                            if isinstance(auth_data, dict):
+                                email_candidate = (auth_data.get("email") or "").strip()
+                    except Exception:
+                        pass
+                if not email_candidate and isinstance(prof.get("onboarding_data"), dict):
+                    email_candidate = (prof["onboarding_data"].get("email") or "").strip()
+
+                if email_candidate and "@" in email_candidate:
+                    low = email_candidate.lower()
+                    if low not in seen:
+                        seen.add(low)
+                        emails.append(email_candidate)
+        except Exception:
+            pass
+        return emails
+
+    @staticmethod
     def create_ticket(
         user_id: str,
         role: str,
@@ -102,12 +167,7 @@ class TicketService:
 
         # If Supabase is configured, use it
         if supabase_url and supabase_key:
-            headers = {
-                "apikey": supabase_key,
-                "Authorization": f"Bearer {supabase_key}",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            }
+            headers = TicketService._supabase_service_headers(supabase_key)
 
             client = db_client or httpx.Client(timeout=10.0)
             try:
@@ -201,7 +261,12 @@ class TicketService:
                 ticket_id = ticket_row["id"]
                 code = ticket_id[:8].upper()
 
-                # 3. Best-effort email notification
+                # 3. Best-effort email notification to all global admins + configured support inbox
+                admin_emails = TicketService._resolve_global_admin_emails(
+                    client=client,
+                    supabase_url=supabase_url,
+                    headers=headers,
+                )
                 mailer = email_client or SupportEmailClient()
                 sent, email_err = mailer.send_ticket_notification(
                     ticket={
@@ -216,6 +281,7 @@ class TicketService:
                     },
                     user_name=user_name,
                     user_email=user_email,
+                    recipient_emails=admin_emails,
                 )
 
                 notified_at_val = datetime.now(timezone.utc).isoformat() if sent else None
@@ -329,12 +395,7 @@ class TicketService:
         user_name = None
 
         if supabase_url and supabase_key:
-            headers = {
-                "apikey": supabase_key,
-                "Authorization": f"Bearer {supabase_key}",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            }
+            headers = TicketService._supabase_service_headers(supabase_key)
 
             client = db_client or httpx.Client(timeout=10.0)
             try:
@@ -366,6 +427,15 @@ class TicketService:
                         if prof_res.status_code == 200 and prof_res.json():
                             p = prof_res.json()[0]
                             user_name = user_name or p.get("full_name")
+                    except Exception:
+                        pass
+                    try:
+                        auth_res = client.get(
+                            f"{supabase_url}/auth/v1/admin/users/{ticket_data['user_id']}",
+                            headers=headers,
+                        )
+                        if auth_res.status_code == 200 and isinstance(auth_res.json(), dict):
+                            user_email = (auth_res.json().get("email") or "").strip() or None
                     except Exception:
                         pass
 
@@ -486,12 +556,7 @@ class TicketService:
         )
 
         if supabase_url and supabase_key:
-            headers = {
-                "apikey": supabase_key,
-                "Authorization": f"Bearer {supabase_key}",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            }
+            headers = TicketService._supabase_service_headers(supabase_key)
             client = db_client or httpx.Client(timeout=10.0)
             try:
                 # 1. Fetch current ticket to verify existence and ownership
