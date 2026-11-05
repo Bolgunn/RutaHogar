@@ -11,6 +11,7 @@ function toNumber(value) {
 }
 
 const DESCRIPCION_MAX_LENGTH = 500;
+const BONO_PIE_MAX_PCT = 30;
 
 // 'YYYY-MM'. Espejo exacto de proyectos_entrega_estimada_check en
 // 20260827_proyectos_campos_comerciales.sql.
@@ -74,6 +75,18 @@ export function validateProject(input = {}) {
 
   if (entregaEstimada && !entregaEstimadaPattern.test(entregaEstimada)) {
     errors.entrega_estimada = "Usa el formato AAAA-MM, con un mes entre 01 y 12.";
+  }
+
+  // HU 31: Bono pie % opcional (0% a 30%).
+  if (
+    input.bono_pie_pct !== undefined &&
+    input.bono_pie_pct !== null &&
+    String(input.bono_pie_pct).trim() !== ""
+  ) {
+    const bonoPie = toNumber(input.bono_pie_pct);
+    if (!Number.isFinite(bonoPie) || bonoPie < 0 || bonoPie > BONO_PIE_MAX_PCT) {
+      errors.bono_pie_pct = `El bono pie debe estar entre 0 % y ${BONO_PIE_MAX_PCT} %.`;
+    }
   }
 
   return { ok: Object.keys(errors).length === 0, errors };

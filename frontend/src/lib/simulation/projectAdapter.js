@@ -20,6 +20,7 @@ export function catalogProjectToSimulation(project) {
 
   const precioMin = Number(project.precio_min_uf) || 0;
   const precioMax = Number(project.precio_max_uf) || precioMin;
+  const bonoPiePct = Number(project.bono_pie_pct) || 0;
 
   return {
     id: project.id,
@@ -33,6 +34,7 @@ export function catalogProjectToSimulation(project) {
     entrega_estimada: project.entrega_estimada || "",
     inmobiliaria: project.inmobiliaria_nombre || "",
     estado: project.estado,
+    ...(bonoPiePct > 0 ? { bono_pie_pct: bonoPiePct } : {}),
   };
 }
 
