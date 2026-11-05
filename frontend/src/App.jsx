@@ -976,6 +976,7 @@ function Application({ initialAuth, onAuthAccepted }) {
   );
   const [result, setResult] = useState(null);
   const [resultSaved, setResultSaved] = useState(null);
+  const [aiExplanationPending, setAiExplanationPending] = useState(false);
   // Permite saber, al resolverse un guardado lento, si el resultado visible
   // sigue siendo el que originó ese guardado.
   const resultRef = useRef(null);
@@ -1079,6 +1080,7 @@ function Application({ initialAuth, onAuthAccepted }) {
     newHighLeadsCount,
     counts,
     error: leadsError,
+    loading: evaluationsLoading,
     markLeadsSeen,
     dismissToastLocally,
     removeEvaluation,
@@ -1088,6 +1090,7 @@ function Application({ initialAuth, onAuthAccepted }) {
   const visibleError = currentError && currentError !== dismissedError ? currentError : "";
 
   const userEvaluations = profile ? evaluations : [];
+  const evaluationSetKey = userEvaluations.map(evaluation => evaluation.id).sort().join(",");
   const currentEvaluation = currentTrackingEvaluation(trackingState, userEvaluations, userId);
   const [scoreUpdateFeedback, setScoreUpdateFeedback] = useState(null);
   const [scoreUpdateFocus, setScoreUpdateFocus] = useState(null);
@@ -1107,7 +1110,7 @@ function Application({ initialAuth, onAuthAccepted }) {
         .catch(() => { if (active) setDataError("No se pudo cargar el seguimiento vigente."); });
     }
     return () => { active = false; };
-  }, [userId, profile?.role, evaluations, trackingRevision]);
+  }, [userId, profile?.role, evaluationSetKey, trackingRevision]);
   const refreshStaffEvaluations = async () => {
     try { setEvaluations(await getEvaluations(userId, profile?.role)); }
     catch { setDataError("La configuración se guardó, pero no se pudo actualizar la bandeja de leads."); }
@@ -1319,37 +1322,6 @@ function Application({ initialAuth, onAuthAccepted }) {
   useEffect(() => {
     setDismissedError("");
   }, [currentError]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadEvaluations() {
-      if (!userId) {
-        setEvaluations([]);
-        return;
-      }
-
-      try {
-        setDataError("");
-        const storedEvaluations = await getEvaluations(userId, profile?.role);
-        if (active) setEvaluations(storedEvaluations);
-      } catch (err) {
-        console.error(err);
-        if (active)
-          setDataError(
-            profile?.role === roles.user
-              ? "No pudimos cargar tu historial en este momento. Por favor, recarga la página o intenta más tarde."
-              : "No pudimos cargar las evaluaciones del panel. Los datos pueden estar incompletos. Recarga la página o intenta más tarde.",
-          );
-      }
-    }
-
-    loadEvaluations();
-
-    return () => {
-      active = false;
-    };
-  }, [userId]);
 
   // Regenera los textos de IA de una precalificación vía /score/explain.
   // El resumen y la guía comercial quedan disponibles para la mesa de leads.
@@ -1874,6 +1846,7 @@ function Application({ initialAuth, onAuthAccepted }) {
       setResultSaved(null);
 
       navigateToPage("recommendations");
+      setAiExplanationPending(true);
 
       setDataError("");
       if (isSupabaseDataConfigured && !auth.session) {
@@ -1889,6 +1862,9 @@ function Application({ initialAuth, onAuthAccepted }) {
         result: resultSnapshot,
         channel: getChannel(),
       });
+      if (savedEvaluation.narrative_save_failed) {
+        setDataError("Tu precalificación se guardó, pero no pudimos conservar la explicación IA. Puedes reintentar la explicación desde el resultado.");
+      }
 
       setEvaluations((prev) => {
         const entry = { ...savedEvaluation, created_at: savedEvaluation.created_at || new Date().toISOString() };
@@ -1931,6 +1907,8 @@ function Application({ initialAuth, onAuthAccepted }) {
       setDataError(
         "Tu precalificación finalizó, pero hubo un problema al guardarla en tu historial. Si el problema persiste, vuelve a iniciar sesión.",
       );
+    } finally {
+      if (resultRef.current === resultSnapshot) setAiExplanationPending(false);
     }
   };
 
@@ -2311,19 +2289,21 @@ function Application({ initialAuth, onAuthAccepted }) {
     }, 100);
   };
 
-  const assistantNode = (
+  const assistantToken = auth?.session?.access_token || auth?.session?.token || null;
+  const assistantNode = profile?.role === roles.user && assistantToken
+    && !["auth", "signup-offer", "set-password"].includes(page) ? (
     <AssistantWidget
       key={profile?.id || "anon"}
       screenId={page}
       role={profile?.role || "anon"}
       profile={profile}
-      token={auth?.session?.access_token || auth?.session?.token || null}
+      token={assistantToken}
       onNavigate={navigateToPage}
       onNavigateAssistant={handleAssistantNavigate}
       onFocusField={handleAssistantFocusField}
       onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
     />
-  );
+  ) : null;
 
   if (page === "landing") {
     const openDashboard = () => navigateToPage(getInitialPageForProfile(profile));
@@ -2630,6 +2610,10 @@ function Application({ initialAuth, onAuthAccepted }) {
                 )}
 
               </>
+            ) : evaluationsLoading ? (
+              <section className="home-history-loading" role="status" aria-live="polite"><h2>Estamos preparando tu resumen</h2><p>Consultando tu última precalificación…</p></section>
+            ) : leadsError ? (
+              <p role="alert">No pudimos comprobar tu historial. Recarga la página para volver a intentarlo.</p>
             ) : (
               <UserHomeOverview evaluation={null} summary={homeProfileSummary} onNavigate={navigateToPage} onStartEvaluation={startEvaluation} />
             )}
@@ -2811,6 +2795,7 @@ function Application({ initialAuth, onAuthAccepted }) {
           key={userId || "preview"}
           ownerId={userId}
           onRefreshEvaluation={refreshEvaluationView}
+          explanationPending={aiExplanationPending && Boolean(result)}
           evaluation={result && resultSaved !== true ? { result, input: null, onboarding: userOnboarding } : currentEvaluation}
           onStartEvaluation={startEvaluation}
           onNavigate={navigateToPage}

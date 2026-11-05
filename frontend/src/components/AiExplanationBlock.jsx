@@ -15,6 +15,7 @@ export default function AiExplanationBlock({
   renderText,
   onRetry,
   actionLabel = "Intentar de nuevo",
+  pending = false,
 }) {
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
@@ -25,6 +26,10 @@ export default function AiExplanationBlock({
         {renderText ? renderText(text) : <p>{text}</p>}
       </div>
     );
+  }
+
+  if (pending) {
+    return <div className="academy-ai-retry" role="status" aria-live="polite"><span className="academy-spinner" aria-hidden="true" /><p>Generando y guardando tu explicación IA…</p></div>;
   }
 
   const handleRetry = async () => {

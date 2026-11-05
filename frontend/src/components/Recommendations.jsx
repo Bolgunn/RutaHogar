@@ -123,7 +123,7 @@ export default function Recommendations(props) {
     }} /></>;
 }
 
-export function RecommendationsView({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, ownerResult = {}, scoreUpdate }) {
+export function RecommendationsView({ evaluation, trackingState, onStartEvaluation, onNavigate, onRetryExplanation, ownerResult = {}, scoreUpdate, explanationPending = false }) {
   const data = useMemo(() => buildRecommendations(evaluation), [evaluation]);
   const adjustment = useMemo(() => getClassificationAdjustment(data), [data]);
   const factors = useMemo(() => getUserResultFactors(data), [data]);
@@ -189,7 +189,7 @@ export function RecommendationsView({ evaluation, trackingState, onStartEvaluati
           </div>
           <div className="recommendation-score-ai-card__explanation">
             <h2 className="results-ai-title"><i className="ti ti-sparkles" aria-hidden="true"></i> Explicación con IA</h2>
-            <AiExplanationBlock text={evaluation?.result?.ai_explanation} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation ? async () => { await onRetryExplanation(); await ownerResult.refresh?.(); } : undefined} />
+            <AiExplanationBlock text={evaluation?.result?.ai_explanation} pending={explanationPending} renderText={(text) => <p><LinkedText text={text} onOpenArticle={openInAcademy} /></p>} onRetry={onRetryExplanation ? async () => { const saved = await onRetryExplanation(evaluation); if (saved) await ownerResult.refresh?.(); return saved; } : undefined} />
           </div>
         </section>
 

@@ -18,6 +18,7 @@ import {
 } from "../utils/helpers";
 import { formatPhone, normalizePhone, onlyPhoneDigits, PHONE_ERROR_MESSAGE } from "../utils/phone";
 import { normalizeDisplayText } from "../utils/text";
+import { formatRut } from "../utils/rut";
 
 const objetivoLabels = {
   comprar_ahora: "Comprar ahora",
@@ -749,6 +750,10 @@ export default function ProfilePage({ profile, onboarding, evaluations, onSaveOn
               <div>
                 <dt>Nombre</dt>
                 <dd>{profile?.full_name || "Sin nombre"}</dd>
+              </div>
+              <div>
+                <dt>RUT</dt>
+                <dd>{formatRut(profile?.rut) || "No registrado"}</dd>
               </div>
               <div>
                 <dt>Correo</dt>

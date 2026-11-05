@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import axios from "axios";
 import { normalizeDisplayList, normalizeDisplayText, normalizeImprovementPlan, sanitizeAiText } from "../utils/text";
 import { ensureUserProfile, getAuthenticatedUser, logSupabaseError } from "./profileService";
 import { isStaffRole } from "../lib/roles";
@@ -189,10 +190,40 @@ export async function createEvaluation(userId, evaluationPayload) {
   // Client score is a preview only. The authenticated backend calculates the saved result.
   const saved = await appendTrackingEvent(command, { expectedUserId: user.id });
   const evaluation = saved.evaluation;
-  return normalizeEvaluation({
+  const row = {
     id: evaluation.id, user_id: user.id, created_at: command.effective_at,
     financial_data: { input: evaluation.snapshot, result: evaluation.result, provenance: evaluation.provenance },
-  });
+  };
+  // Narratives are annotations, not part of the immutable financial calculation.
+  const pickNarrative = source => Object.fromEntries(["ai_explanation", "executive_summary", "commercial_guidance"]
+    .map(key => [key, sanitizeAiText(source?.[key])]).filter(([, text]) => Boolean(text)));
+  const previewScore = evaluationPayload.result?.adjusted_score ?? evaluationPayload.result?.score;
+  const savedScore = evaluation.result?.adjusted_score ?? evaluation.result?.score;
+  const matchesPreview = Number.isFinite(previewScore) && previewScore === savedScore;
+  let narrative = matchesPreview ? pickNarrative(evaluationPayload.result) : {};
+  // A successful financial response need not contain AI text. Generate it once
+  // for this newly committed evaluation, never from a result-page read.
+  if (!narrative.ai_explanation) {
+    try {
+      const apiBase = String(import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL
+        || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "")).replace(/\/$/, "");
+      const response = await axios.post(`${apiBase}/score/explain`, { ...evaluation.snapshot, scope: "all" }, { timeout: 45000 });
+      if (response.data?.score !== savedScore) throw new Error("explanation_score_mismatch");
+      narrative = { ...narrative, ...pickNarrative(response.data) };
+    } catch {
+      // Keep the committed score available even when the AI provider is down.
+    }
+  }
+  if (Object.keys(narrative).length) {
+    try {
+      await annotateEvaluation(evaluation.id, "narrative", narrative);
+      row.financial_data.result = { ...evaluation.result, ...narrative };
+    } catch {
+      // A failed annotation must not turn an already saved score into a failed save.
+      return { ...normalizeEvaluation(row), narrative_save_failed: true };
+    }
+  }
+  return { ...normalizeEvaluation(row), ...(!narrative.ai_explanation ? { narrative_save_failed: true } : {}) };
 }
 
 export function applyEvaluationAnnotations(row, annotations) {

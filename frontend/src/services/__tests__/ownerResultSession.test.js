@@ -32,6 +32,35 @@ describe("HU30 normalized projection", () => {
 });
 
 describe("HU30 explicit incorporation and privacy lifecycle", () => {
+  it("keeps an individual result and its AI explanation mounted during a background read", async () => {
+    const individual = row({ input: { complemento_renta: false }, result: { score: 60, ai_explanation: "Texto ya generado" }, co_debtor: { evaluation_type: "individual", visibility: "visible" } });
+    const pending = deferred();
+    const { session } = setup({ initialEvaluation: individual, read: () => pending.promise });
+    const reading = session.refresh();
+    expect(session.getState()).toMatchObject({ loading: false, refreshing: true, evaluation: individual });
+    pending.resolve(bundle(individual));
+    await reading;
+    expect(session.getState()).toMatchObject({ loading: false, refreshing: false, evaluation: individual });
+  });
+  it("does not retain a supplied individual result belonging to another account", () => {
+    const { session } = setup({ initialEvaluation: row({ user_id: "other", co_debtor: { evaluation_type: "individual" } }) });
+    expect(session.getState()).toMatchObject({ loading: true, evaluation: null });
+  });
+  it("keeps only the safe individual result after a failed background check and reports the failure", async () => {
+    const individual = row({ co_debtor: { evaluation_type: "individual", visibility: "visible" } });
+    const { session } = setup({ initialEvaluation: individual, read: vi.fn().mockRejectedValue(new Error("offline")) });
+    await session.refresh();
+    expect(session.getState()).toMatchObject({ evaluation: individual, loading: false, refreshing: false });
+    expect(session.getState().error).toContain("Reintenta");
+  });
+  it("clears even an individual result for a forced privacy refresh", async () => {
+    const individual = row({ co_debtor: { evaluation_type: "individual", visibility: "visible" } });
+    const pending = deferred();
+    const { session } = setup({ initialEvaluation: individual, read: () => pending.promise });
+    const reading = session.refresh({ force: true });
+    expect(session.getState()).toMatchObject({ loading: true, evaluation: null });
+    pending.resolve(bundle()); await reading;
+  });
   it("reads current authority without triggering a financial update", async () => {
     const { session, incorporate } = setup(); await session.refresh();
     expect(session.getState().evaluation).toEqual(row());
