@@ -70,6 +70,7 @@ function BirthDateField({ name, value, placeholder, ariaLabel, maxLength, option
         name={name}
         value={value}
         onChange={onChange}
+        id={name}
         onFocus={() => onOpen(name)}
         onBlur={onBlur}
         inputMode="numeric"
@@ -326,6 +327,39 @@ export default function ScoreForm({
       currentStep,
     });
   }, [birthFields, currentStep, displayValues, dividendWasManuallyEdited, form, onDraftChange]);
+
+  useEffect(() => {
+    const handleAssistantFocus = (event) => {
+      const { fieldId, step } = event?.detail || {};
+      const numericStep = Number(step);
+      if (Number.isFinite(numericStep) && numericStep >= 1 && numericStep <= 4) {
+        if (numericStep === 1 && !needsBirthDate) {
+          setCurrentStep(2);
+        } else {
+          setCurrentStep(numericStep);
+        }
+      }
+      if (fieldId) {
+        window.setTimeout(() => {
+          const el = document.getElementById(fieldId);
+          if (el) {
+            const targetToHighlight =
+              el.type === "checkbox" && el.closest(".pre-wizard-check-row")
+                ? el.closest(".pre-wizard-check-row")
+                : el;
+            targetToHighlight.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.focus?.();
+            targetToHighlight.classList.add("assistant-field-pulse");
+            window.setTimeout(() => {
+              targetToHighlight.classList.remove("assistant-field-pulse");
+            }, 2500);
+          }
+        }, 100);
+      }
+    };
+    window.addEventListener("rutahogar:assistant-focus-field", handleAssistantFocus);
+    return () => window.removeEventListener("rutahogar:assistant-focus-field", handleAssistantFocus);
+  }, [needsBirthDate]);
 
   const debtExceedsIncome =
     form.ingreso_mensual !== "" &&
@@ -1459,7 +1493,7 @@ export default function ScoreForm({
           <div className="pre-wizard-divider" />
 
           <label className="pre-wizard-check-row">
-            <input type="checkbox" name="complemento_renta" checked={form.complemento_renta} onChange={handleChange} />
+            <input type="checkbox" id="complemento_renta" name="complemento_renta" checked={form.complemento_renta} onChange={handleChange} />
             <span>Complementar renta con una persona</span>
           </label>
 
@@ -1589,7 +1623,7 @@ export default function ScoreForm({
           <div className="pre-wizard-divider" />
 
           <label className="pre-wizard-check-row">
-            <input type="checkbox" name="declara_patrimonio" checked={form.declara_patrimonio} onChange={handleChange} />
+            <input type="checkbox" id="declara_patrimonio" name="declara_patrimonio" checked={form.declara_patrimonio} onChange={handleChange} />
             <span>Declarar patrimonio (Vehículos, Inmuebles, etc.)</span>
           </label>
 
@@ -1718,6 +1752,7 @@ export default function ScoreForm({
             </button>
             <button
               type="submit"
+              id="calcular_precalificacion"
               className="pre-wizard-btn-submit"
               disabled={loading || debtExceedsIncome || !consentGranted || !hasMarketReference}
             >

@@ -2210,6 +2210,80 @@ function Application({ initialAuth, onAuthAccepted }) {
   if (page === "co-debtor-invitation") return <CoDebtorInvitationPage />;
   if (page === "co-debtor-management") return <CoDebtorManagementPage />;
 
+  const handleAssistantNavigate = (targetPage, options = {}) => {
+    if (targetPage === "evaluate") {
+      if (!profile) {
+        navigateToPage(anonOnboarding ? "anon-evaluate" : "anon-onboarding", options);
+        return;
+      }
+      setStartingNewEvaluation(true);
+      navigateToPage(onboardingCompleted ? "evaluate" : "onboarding", options);
+      return;
+    }
+    if (targetPage === "login" || targetPage === "auth") {
+      navigateToPage("auth", options);
+      return;
+    }
+    navigateToPage(targetPage, options);
+  };
+
+  const handleAssistantFocusField = (action) => {
+    if (!action) return;
+    const fieldId = action.field_id;
+    const targetStep = Number(action.step) || null;
+
+    if (targetStep === 1 || fieldId === "birth_day") {
+      if (!profile) {
+        if (page === "anon-evaluate") {
+          setScoreFormDraft((prev) => ({ ...(prev || {}), currentStep: 1 }));
+        } else if (page !== "anon-onboarding") {
+          navigateToPage("anon-onboarding");
+        }
+      } else if (page !== "onboarding") {
+        navigateToPage("onboarding");
+      }
+    } else {
+      const effectiveStep = targetStep && targetStep >= 2 && targetStep <= 4 ? targetStep : 2;
+      setScoreFormDraft((prev) => ({
+        ...(prev || {}),
+        currentStep: effectiveStep,
+      }));
+      if (!profile) {
+        if (page !== "anon-evaluate") {
+          navigateToPage("anon-evaluate");
+        }
+      } else {
+        setStartingNewEvaluation(true);
+        if (page !== "evaluate") {
+          navigateToPage("evaluate");
+        }
+      }
+    }
+
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("rutahogar:assistant-focus-field", {
+          detail: { fieldId, step: targetStep },
+        })
+      );
+      if (fieldId) {
+        const el = document.getElementById(fieldId);
+        if (el) {
+          const targetToHighlight =
+            el.type === "checkbox" && el.closest(".pre-wizard-check-row")
+              ? el.closest(".pre-wizard-check-row")
+              : el;
+          targetToHighlight.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.focus?.();
+          targetToHighlight.classList.add("assistant-field-pulse");
+          window.setTimeout(() => {
+            targetToHighlight.classList.remove("assistant-field-pulse");
+          }, 2500);
+        }
+      }
+    }, 100);
+  };
+
   const assistantNode = (
     <AssistantWidget
       key={profile?.id || "anon"}
@@ -2218,6 +2292,8 @@ function Application({ initialAuth, onAuthAccepted }) {
       profile={profile}
       token={auth?.session?.access_token || auth?.session?.token || null}
       onNavigate={navigateToPage}
+      onNavigateAssistant={handleAssistantNavigate}
+      onFocusField={handleAssistantFocusField}
       onOpenArticle={(articleId) => navigateToPage("academia", { articleId })}
     />
   );

@@ -333,7 +333,7 @@ export default function AdminSupportTickets() {
                           title={
                             t.notification_error === "email_not_configured"
                               ? "Aviso email no configurado (RESEND_API_KEY no definida). El ticket está guardado."
-                              : `Aviso email: ${t.notification_error}`
+                              : t.notification_error === "recipient_email_missing" ? "No se encontraron correos destinatarios de administrador ni SUPPORT_NOTIFICATION_EMAIL." : `Aviso email: ${t.notification_error}`
                           }
                         >
                           ⚠ Pendiente
