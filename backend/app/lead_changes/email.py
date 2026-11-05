@@ -97,6 +97,8 @@ def build_subject(event):
         return f"Algo cambio para {project}: revisa tu resumen mensual"
     if event.get("event_type") == "project_compatible_unlocked":
         return f"Aparecio una nueva oportunidad para {project}"
+    if event.get("event_type") == "favorite_project_opportunity":
+        return f"Nueva oportunidad comercial en tu favorito {project}"
     if event.get("event_type") == "score_band_improved":
         return f"Tu perfil podria mejorar para {project}"
     if event.get("event_type") == "uf_reachability_crossed":
@@ -152,6 +154,7 @@ def _render_group(event_type, items):
     if len(items) > 1:
         summary = {
             "project_compatible_unlocked": "Hay nuevas alternativas compatibles con tus datos disponibles.",
+            "favorite_project_opportunity": "Tus proyectos favoritos con alerta activa registraron bajas de precio o nuevos bonos pie.",
             "score_band_improved": "Registramos cambios favorables en tu perfil referencial.",
             "monthly_plan_summary": "Tienes nuevos resúmenes para revisar el avance de tu plan.",
             "uf_reachability_crossed": "Registramos cambios en el alcance referencial de tu objetivo.",
@@ -171,6 +174,7 @@ def _render_event(event):
 def _event_type_label(event_type):
     return {
         "project_compatible_unlocked": "Proyecto compatible",
+        "favorite_project_opportunity": "Oportunidad en favorito",
         "score_band_improved": "Mejora referencial",
         "monthly_plan_summary": "Resumen mensual",
         "uf_reachability_crossed": "Cambio de alcance",

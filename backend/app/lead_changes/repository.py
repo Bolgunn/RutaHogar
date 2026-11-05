@@ -72,11 +72,26 @@ class LeadChangeRepository:
 
     def available_projects(self):
         rows = self.request("GET", "/rest/v1/proyectos", params={
-            "select": "id,inmobiliaria_id,nombre,comuna,tipo,precio_min_uf,precio_max_uf,estado",
+            "select": "id,inmobiliaria_id,nombre,comuna,tipo,precio_min_uf,precio_max_uf,bono_pie_pct,estado",
             "estado": "neq.agotado",
             "order": "nombre.asc",
         }) or []
         return rows
+
+    def update_favorite_thresholds(self, user_id, proyecto_id, precio_min_uf, precio_max_uf, bono_pie_pct=0):
+        return self.request(
+            "PATCH",
+            "/rest/v1/proyecto_favoritos",
+            params={
+                "usuario_id": f"eq.{user_id}",
+                "proyecto_id": f"eq.{proyecto_id}",
+            },
+            payload={
+                "umbral_precio_min_uf": precio_min_uf,
+                "umbral_precio_max_uf": precio_max_uf,
+                "umbral_bono_pie_pct": bono_pie_pct,
+            },
+        )
 
 
 class _Borrowed:

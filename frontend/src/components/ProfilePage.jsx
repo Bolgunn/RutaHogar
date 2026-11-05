@@ -69,6 +69,7 @@ const componentScoreLabels = {
 
 const leadChangePreferenceTypes = [
   ["project_compatible_unlocked", "Proyecto compatible", "Avisos cuando aparece una alternativa dentro de tu alcance referencial."],
+  ["favorite_project_opportunity", "Oportunidad en favorito", "Alertas cuando un proyecto favorito con campana activa baja su precio en UF o aplica un bono pie."],
   ["score_band_improved", "Mejora referencial", "Señales de que una nueva evaluación podría mejorar tu tramo."],
   ["monthly_plan_summary", "Resumen mensual", "Recordatorios para revisar si tus datos o brechas cambiaron."],
   ["uf_reachability_crossed", "Cambio de alcance", "Cambios en alcance referencial frente a objetivos o UF."],
