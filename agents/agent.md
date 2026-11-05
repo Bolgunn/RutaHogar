@@ -48,7 +48,8 @@ cd frontend; npm install; npm run dev
 
 ## Historias del Sprint 3
 
-- **HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Verde/Blanco:** ✅ **Implementada (5 SP).** Criterios E1 a E4 completos (cálculo interactivo de cuotas en UF/CLP a valor hoy, contraste condicional con facilidades de inmobiliaria —tarjeta de crédito y pagarés notariales directos—, simulación de cobertura inflacionaria frente al alza de la UF y fijación de meta de ahorro periódica en el dashboard HU 13). Ver `docs/stories/HU29-planificador-metas-proyecto-verde-blanco/PLAN.md`.
+- **HU 31 - Radar de Oportunidades y Alertas por Variación de Condiciones de Mercado:** ✅ **Implementada (3 SP).** Criterios E1 y E2 completos (campana interactiva "Notificar cambios" sobre favoritos con registro de umbrales actuales de precio en UF y bono pie vía RPC `configurar_alerta_favorito`, columna aditiva `bono_pie_pct` en catálogo, trigger `proyectos_evaluar_alertas_favoritos` que detecta rebajas de precio o promociones comerciales en edición manual y carga masiva HU 25, módulo puro `opportunityRadar.js` y `LeadChangeService` para recálculo de compatibilidad del lead, tarjeta de notificación en "Lo que cambió desde tu última visita" y switch de preferencia en perfil). Migración aplicada en producción, PR #183 abierto a `develop`. Ver `docs/stories/HU31-radar-oportunidades-alertas/PLAN.md`.
+- **HU 29 - Planificador Interactivo de Metas de Ahorro para Compras en Verde/Blanco:** ✅ **Implementada (5 SP).** Criterios E1 a E4 completos (cálculo interactivo de cuotas en UF/CLP a valor hoy, contraste condicional con facilidades de inmobiliaria —tarjeta de crédito y pagarés notariales directos—, simulación de cobertura inflacionaria frente al alza de la UF y fijación de meta de ahorro periódica en el dashboard HU 13). Mergeada en `develop` (PR #181). Ver `docs/stories/HU29-planificador-metas-proyecto-verde-blanco/PLAN.md`.
 
 ## Tareas Pendientes
 
